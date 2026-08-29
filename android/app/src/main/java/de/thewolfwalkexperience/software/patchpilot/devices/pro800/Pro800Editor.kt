@@ -1,6 +1,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import android.util.Log
+import de.thewolfwalkexperience.software.patchpilot.BuildConfig
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
@@ -206,12 +207,15 @@ class Pro800Editor(
         // The name field as written and as stored, side by side. A name that comes back
         // different is either the instrument declining a character or this app mis-encoding one,
         // and only the bytes distinguish those - the same reason SysExExchange logs a reply it
-        // rejects rather than just timing out.
-        Log.d(
-            TAG,
-            "$displayId name field: wrote ${nameFieldHex(program)} ('$expectName') " +
-                "read ${nameFieldHex(readBack)} ('${readBack.name}')",
-        )
+        // rejects rather than just timing out. Debug-only: this is preset content, not
+        // diagnostics anyone needs from a release build's logcat.
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                TAG,
+                "$displayId name field: wrote ${nameFieldHex(program)} ('$expectName') " +
+                    "read ${nameFieldHex(readBack)} ('${readBack.name}')",
+            )
+        }
 
         val common = minOf(readBack.dense.size, program.dense.size)
         if (!readBack.dense.copyOf(common).contentEquals(program.dense.copyOf(common))) {

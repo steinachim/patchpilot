@@ -38,7 +38,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -51,6 +51,9 @@ android {
 
     buildFeatures {
         compose = true
+        // Generates BuildConfig.DEBUG, used to gate protocol/preset logging (see
+        // Pro800Editor.kt, SysExExchange.kt) so it never reaches a release logcat.
+        buildConfig = true
     }
 
     packaging {

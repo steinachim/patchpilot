@@ -1,6 +1,7 @@
 package de.thewolfwalkexperience.software.patchpilot.midi
 
 import android.util.Log
+import de.thewolfwalkexperience.software.patchpilot.BuildConfig
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
 import kotlinx.coroutines.CoroutineScope
@@ -99,7 +100,7 @@ class SysExExchange(
                     //
                     // Gated on there being no subscriber, which is what makes it quiet: during a
                     // 400-slot scan every dump has one, so this logs none of them.
-                    if (messages.subscriptionCount.value == 0) {
+                    if (BuildConfig.DEBUG && messages.subscriptionCount.value == 0) {
                         Log.d(TAG, "unsolicited ${it.size}B ${it.prefixHex()}")
                     }
                     messages.emit(it)
