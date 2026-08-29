@@ -157,7 +157,7 @@ class SysExExchange(
                                 // timeout alone. Logging the first bytes of a non-match is what
                                 // separates "the instrument said something we did not expect"
                                 // from "the instrument said nothing".
-                                if (!matched) {
+                                if (!matched && BuildConfig.DEBUG) {
                                     Log.d(TAG, "'$what': ignoring ${message.size}B reply ${message.prefixHex()}")
                                 }
                             }
@@ -248,7 +248,7 @@ class SysExExchange(
                 val awaited = async(start = CoroutineStart.UNDISPATCHED) {
                     this@SysExExchange.messages.first { message ->
                         matches(message).also { matched ->
-                            if (!matched) {
+                            if (!matched && BuildConfig.DEBUG) {
                                 Log.d(TAG, "'$what': ignoring ${message.size}B reply ${message.prefixHex()}")
                             }
                         }

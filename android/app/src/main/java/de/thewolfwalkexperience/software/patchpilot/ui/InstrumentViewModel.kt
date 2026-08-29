@@ -216,8 +216,21 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         // Lives for the ViewModel's whole lifetime, same as the rest of its state - cancelled by
         // viewModelScope on onCleared() like everything else here, with no separate teardown to
         // remember.
+        //
+        // Guarded, unlike most of this class's fire-and-forget launches: viewModelScope installs
+        // no CoroutineExceptionHandler, and this is the one place here whose very first suspension
+        // point is a registerReceiver() call that can fail for reasons outside this app's control
+        // (a restrictive OEM build, say). Losing detach detection is a small regression; taking
+        // the whole process down at startup over it is not - the same reasoning that already
+        // wraps every USB reader loop elsewhere (see UsbMidiBulkTransport).
         viewModelScope.launch {
-            connectionManager.deviceDetachEvents().collect { device -> handleUsbDetach(device) }
+            try {
+                connectionManager.deviceDetachEvents().collect { device -> handleUsbDetach(device) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't listen for USB detach events; a physical unplug will only be noticed when the next operation fails", e)
+            }
         }
     }
 
