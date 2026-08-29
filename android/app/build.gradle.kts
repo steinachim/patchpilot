@@ -1,4 +1,16 @@
 import org.gradle.api.tasks.Copy
+import java.util.Properties
+
+// Release signing credentials live in local.properties (gitignored, never committed) rather than
+// in this file, so the keystore path/passwords aren't checked into git. A debug build or a
+// contributor without a keystore still gets a working `assembleRelease` output - it's just
+// unsigned - so this stays an empty Properties() rather than failing the build eagerly.
+val releaseSigningProps = Properties().apply {
+    val localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) {
+        localPropsFile.inputStream().use { load(it) }
+    }
+}
 
 plugins {
     // No `kotlin.android` plugin: AGP 9 provides Kotlin support itself, and applying the
@@ -33,13 +45,28 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "0.9"
+    }
+
+    signingConfigs {
+        // Only registered when local.properties actually has the four RELEASE_* keys, so
+        // `assembleRelease` still works (producing an unsigned APK) for a contributor without a
+        // keystore, rather than failing the whole build eagerly.
+        if (releaseSigningProps.getProperty("RELEASE_STORE_FILE") != null) {
+            create("release") {
+                storeFile = rootProject.file(releaseSigningProps.getProperty("RELEASE_STORE_FILE"))
+                storePassword = releaseSigningProps.getProperty("RELEASE_STORE_PASSWORD")
+                keyAlias = releaseSigningProps.getProperty("RELEASE_KEY_ALIAS")
+                keyPassword = releaseSigningProps.getProperty("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 
