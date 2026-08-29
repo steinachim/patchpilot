@@ -140,6 +140,7 @@
     <string name="connect_failed_demo">Failed to start demo mode</string>
     <string name="connect_permission_denied">Permission was denied for %1$s.</string>
     <string name="connect_usb_permission_denied">USB permission was denied for %1$s.</string>
+    <string name="connect_opening_device_unplugged">%1$s was unplugged before the connection finished.</string>
     <string name="listing_unknown_error">Unknown error</string>
     <string name="listing_reading_presets">Reading the preset list\u2026</string>
     <string name="debug_regression_starting">Starting\u2026</string>

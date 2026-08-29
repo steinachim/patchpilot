@@ -79,6 +79,13 @@ sealed interface PickerEntry {
     }
 }
 
+/** The physical device a row refers to, in the same form [UsbConnectionManager.deviceDetachEvents]
+ * reports a detach in - what [InstrumentViewModel.handleUsbDetach] matches a picker row against. */
+private fun PickerEntry.physicalKey(): String = when (this) {
+    is PickerEntry.Known -> candidate.physicalKey
+    is PickerEntry.Unknown -> device.physicalKey()
+}
+
 /** Mirrors the states a connection attempt moves through, made explicit for the UI. */
 sealed class ConnectionState {
     data object Disconnected : ConnectionState()
@@ -190,6 +197,15 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
     private var connectedPhysicalKey: String? = null
 
     /**
+     * [Candidate.physicalKey]/[UsbDevice.physicalKey] of whatever device a connect attempt is
+     * currently mid-flight on - i.e. whatever [ConnectionState.Opening] is waiting for - or null.
+     * Set right before entering that state and cleared on every way out of it, so
+     * [handleUsbDetach] can fail an attempt fast if the device it is opening (most often waiting
+     * on a permission dialog that will now never come) is unplugged before it finishes.
+     */
+    private var openingPhysicalKey: String? = null
+
+    /**
      * Serialises every read-then-write against [instrument] with [forceReconnect]'s teardown.
      *
      * Without this, a rename/move/delete/copy/regression-test/report already in flight when the
@@ -235,29 +251,46 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     /**
-     * Reacts to a physical USB detach - closes the session if (and only if) the device that just
-     * went away is the one this session is actually using, then leaves the app on
-     * [ConnectionState.DeviceLost] rather than re-scanning.
+     * Reacts to a physical USB detach, in whichever of three shapes the session is currently in:
+     * closes an active session if the device that went away is the one it is actually using
+     * ([ConnectionState.DeviceLost]); fails a connect attempt still waiting on that same device
+     * ([ConnectionState.Opening], most often stuck on a permission dialog that can now never
+     * arrive) rather than leaving it hung forever; or, sitting on
+     * [ConnectionState.DeviceSelection], drops the matching row so it cannot be tapped into
+     * either of the above.
      *
      * **Ignores everything else.** Every device Android has ever seen fires this same broadcast on
      * unplug - a USB keyboard, a charger-only cable's far end, another recognised instrument still
-     * sitting in [ConnectionState.DeviceSelection] but never opened - and none of those should so
-     * much as flicker the connected session.
+     * sitting unselected in the picker - and none of those should so much as flicker whatever this
+     * session is doing.
      */
     private fun handleUsbDetach(device: UsbDevice) {
-        val key = connectedPhysicalKey ?: return
-        if (device.physicalKey() != key) return
-        val name = connected()?.identity?.name
-            ?: (state.value as? ConnectionState.AdvisoryWarning)?.instrument?.identity?.name
-            ?: device.displayLabel()
-        // Whatever connect attempt might be mid-flight (unlikely - connectedPhysicalKey is only
-        // set once one has already succeeded - but forceReconnect() from onResume could overlap
-        // this) must not be allowed to overwrite DeviceLost with a stale Connected/Error right
-        // after it is set below.
-        connectJob?.cancel()
-        viewModelScope.launch {
-            teardownCurrentInstrument()
-            _state.value = ConnectionState.DeviceLost(name)
+        val detachedKey = device.physicalKey()
+        if (detachedKey == connectedPhysicalKey) {
+            val name = connected()?.identity?.name
+                ?: (state.value as? ConnectionState.AdvisoryWarning)?.instrument?.identity?.name
+                ?: device.displayLabel()
+            // Whatever connect attempt might be mid-flight (unlikely - connectedPhysicalKey is
+            // only set once one has already succeeded - but forceReconnect() from onResume could
+            // overlap this) must not be allowed to overwrite DeviceLost with a stale
+            // Connected/Error right after it is set below.
+            connectJob?.cancel()
+            viewModelScope.launch {
+                teardownCurrentInstrument()
+                _state.value = ConnectionState.DeviceLost(name)
+            }
+            return
+        }
+        if (detachedKey == openingPhysicalKey) {
+            openingPhysicalKey = null
+            connectJob?.cancel()
+            _state.value = ConnectionState.Error(str(R.string.connect_opening_device_unplugged, device.displayLabel()))
+            return
+        }
+        val picker = state.value as? ConnectionState.DeviceSelection ?: return
+        val remaining = picker.entries.filterNot { it.physicalKey() == detachedKey }
+        if (remaining.size != picker.entries.size) {
+            _state.value = picker.copy(entries = remaining)
         }
     }
 
@@ -320,14 +353,17 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
     /** Opens a recognized candidate on whichever bus found it and builds its family's instrument. */
     private suspend fun connectCandidate(candidate: Candidate) {
         val descriptor = requireNotNull(candidate.descriptor) { "candidate is not a known instrument" }
+        openingPhysicalKey = candidate.physicalKey
         _state.value = ConnectionState.Opening(candidate.displayName, candidate.bus)
         val transport = try {
             discoveryFor(candidate).open(candidate)
         } catch (e: SecurityException) {
+            openingPhysicalKey = null
             _state.value =
                 ConnectionState.Error(str(R.string.connect_permission_denied, candidate.displayName))
             return
         }
+        openingPhysicalKey = null
         val built = InstrumentRegistry.create(getApplication(), descriptor, transport)
         built.connect()
         instrumentMutex.withLock {
@@ -457,11 +493,14 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         displayName: String,
         factory: (UsbBulkTransport) -> NordInstrument,
     ) {
+        openingPhysicalKey = usbDevice.physicalKey()
         _state.value = ConnectionState.Opening(displayName, Bus.USB)
         if (!connectionManager.requestPermission(usbDevice)) {
+            openingPhysicalKey = null
             _state.value = ConnectionState.Error(str(R.string.connect_usb_permission_denied, displayName))
             return
         }
+        openingPhysicalKey = null
 
         val transport = connectionManager.openTransport(usbDevice)
         val built = factory(transport)
