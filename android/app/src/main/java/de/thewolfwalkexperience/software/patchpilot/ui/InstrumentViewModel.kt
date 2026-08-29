@@ -125,6 +125,17 @@ sealed class ConnectionState {
      * second connect.
      */
     data class AdvisoryWarning(val instrument: Instrument, val message: String) : ConnectionState()
+
+    /**
+     * The instrument this session was using was physically unplugged.
+     *
+     * A dedicated state rather than folding back into [Disconnected]: ConnectScreen auto-connects
+     * from [Disconnected] on its own, which would silently latch onto a different instrument that
+     * happens to still be attached - the opposite of what someone who watched their own instrument
+     * go dark wants. Landing here instead means nothing reconnects until they explicitly ask for a
+     * new search.
+     */
+    data class DeviceLost(val instrumentName: String) : ConnectionState()
 }
 
 /**
@@ -170,6 +181,15 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
     private var instrument: Instrument? = null
 
     /**
+     * [Candidate.physicalKey]/[UsbDevice.physicalKey] of whatever [instrument] is currently
+     * connected to, or null (nothing connected, or connected over a bus with no backing
+     * `UsbDevice` at all - demo mode). Captured at connect time so a later physical detach can be
+     * matched to *this* session's device rather than to whatever else Android happens to report
+     * unplugging elsewhere on the bus - see [handleUsbDetach].
+     */
+    private var connectedPhysicalKey: String? = null
+
+    /**
      * Serialises every read-then-write against [instrument] with [forceReconnect]'s teardown.
      *
      * Without this, a rename/move/delete/copy/regression-test/report already in flight when the
@@ -191,6 +211,42 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
     // Set by disconnect(showPicker = true) - the user backed out of a session on purpose and
     // asked to choose again, so the next connect() must not silently reconnect a lone device.
     private var forcePickerOnNextConnect = false
+
+    init {
+        // Lives for the ViewModel's whole lifetime, same as the rest of its state - cancelled by
+        // viewModelScope on onCleared() like everything else here, with no separate teardown to
+        // remember.
+        viewModelScope.launch {
+            connectionManager.deviceDetachEvents().collect { device -> handleUsbDetach(device) }
+        }
+    }
+
+    /**
+     * Reacts to a physical USB detach - closes the session if (and only if) the device that just
+     * went away is the one this session is actually using, then leaves the app on
+     * [ConnectionState.DeviceLost] rather than re-scanning.
+     *
+     * **Ignores everything else.** Every device Android has ever seen fires this same broadcast on
+     * unplug - a USB keyboard, a charger-only cable's far end, another recognised instrument still
+     * sitting in [ConnectionState.DeviceSelection] but never opened - and none of those should so
+     * much as flicker the connected session.
+     */
+    private fun handleUsbDetach(device: UsbDevice) {
+        val key = connectedPhysicalKey ?: return
+        if (device.physicalKey() != key) return
+        val name = connected()?.identity?.name
+            ?: (state.value as? ConnectionState.AdvisoryWarning)?.instrument?.identity?.name
+            ?: device.displayLabel()
+        // Whatever connect attempt might be mid-flight (unlikely - connectedPhysicalKey is only
+        // set once one has already succeeded - but forceReconnect() from onResume could overlap
+        // this) must not be allowed to overwrite DeviceLost with a stale Connected/Error right
+        // after it is set below.
+        connectJob?.cancel()
+        viewModelScope.launch {
+            teardownCurrentInstrument()
+            _state.value = ConnectionState.DeviceLost(name)
+        }
+    }
 
     /**
      * Runs one connection attempt, unless another is already in flight.
@@ -263,6 +319,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         built.connect()
         instrumentMutex.withLock {
             instrument = built
+            connectedPhysicalKey = candidate.physicalKey
             _setupQuestion.value = built.setup?.question
         }
         _state.value = connectedOrAdvisory(built)
@@ -402,7 +459,10 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         // has no Program category at all is exactly the sort this path exists to survive. A
         // catalog device keeps its configured bounds untouched.
         built.applyDerivedBankLayoutIfUnknown(displayName)
-        instrumentMutex.withLock { instrument = built }
+        instrumentMutex.withLock {
+            instrument = built
+            connectedPhysicalKey = usbDevice.physicalKey()
+        }
         _state.value = connectedOrAdvisory(built)
         startIndex()
     }
@@ -430,7 +490,10 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         launchConnect(failureMessage = str(R.string.connect_failed_demo)) {
             val demo = DemoInstrument()
             demo.connect()
-            instrumentMutex.withLock { instrument = demo }
+            instrumentMutex.withLock {
+                instrument = demo
+                connectedPhysicalKey = null
+            }
             _state.value = ConnectionState.Connected(demo)
             startIndex()
         }
@@ -446,9 +509,17 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      *
      * True while nothing is connected: that resume is a rescan, and it is how an instrument
      * plugged in while the app was away gets picked up.
+     *
+     * False on [ConnectionState.DeviceLost]: that state exists specifically so nothing reconnects
+     * until the warning is acted on, and a resume-triggered rescan would defeat it exactly as
+     * surely as ConnectScreen's own auto-connect would (see that state's own doc comment).
      */
     val shouldRebuildOnResume: Boolean
-        get() = (state.value as? ConnectionState.Connected)?.instrument?.rebuildOnResume ?: true
+        get() = when (val s = state.value) {
+            is ConnectionState.Connected -> s.instrument.rebuildOnResume
+            is ConnectionState.DeviceLost -> false
+            else -> true
+        }
 
     /** [ConnectionState.Connected], or the advisory gate where the instrument raised one. */
     private fun connectedOrAdvisory(built: Instrument): ConnectionState =
@@ -524,6 +595,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         instrumentMutex.withLock {
             closeQuietly(instrument)
             instrument = null
+            connectedPhysicalKey = null
             _setupQuestion.value = null
         }
     }

@@ -80,6 +80,8 @@
     <string name="action_disconnect">Disconnect</string>
     <string name="connect_unknown_title">Unknown device</string>
     <string name="connect_unknown_warning">This is not a recognized instrument and is not supported by this app. Continuing is at your own risk.</string>
+    <string name="connect_device_lost_title">Instrument disconnected</string>
+    <string name="connect_device_lost_message">%1$s was unplugged.</string>
 
     <!-- Presets screen. -->
     <string name="programs_filter_hint">Filter by name</string>

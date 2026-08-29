@@ -236,6 +236,19 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                     Text(it, color = MaterialTheme.colorScheme.error)
                 }
             }
+            is ConnectionState.DeviceLost -> {
+                Text(
+                    stringResource(R.string.connect_device_lost_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.connect_device_lost_message, s.instrumentName),
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry_search)) }
+            }
             is ConnectionState.UnknownDeviceWarning -> {
                 Text(stringResource(R.string.connect_unknown_title), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))

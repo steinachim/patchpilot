@@ -12,6 +12,9 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import de.thewolfwalkexperience.software.patchpilot.transport.AndroidUsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
@@ -108,6 +111,41 @@ class UsbConnectionManager(private val context: Context) {
         return AndroidUsbBulkTransport(
             connection, usbInterface, endpointOutAddress = endpointOut, endpointInAddress = endpointIn,
         )
+    }
+
+    /**
+     * Emits every USB device Android reports as physically detached while collected - lets a
+     * caller tell "the instrument this session is using just went away" from "some unrelated USB
+     * event happened on the bus" by comparing the emitted device against whatever it is using.
+     *
+     * **Needs no signature-level protection**, unlike [requestPermission]'s receiver.
+     * `ACTION_USB_DEVICE_DETACHED` is a system broadcast the framework's own USB host stack sends
+     * on a real unplug - not one this app triggers itself via a `PendingIntent` another app could
+     * impersonate - so there is nothing here for a spoofed broadcast to fake convincingly enough
+     * to matter: the caller re-checks the reported device against the session actually in use
+     * rather than trusting the broadcast's mere arrival.
+     */
+    fun deviceDetachEvents(): Flow<UsbDevice> = callbackFlow {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context, intent: Intent) {
+                if (intent.action != UsbManager.ACTION_USB_DEVICE_DETACHED) return
+                val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+                }
+                if (device != null) trySend(device)
+            }
+        }
+        val filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(receiver, filter)
+        }
+        awaitClose { context.unregisterReceiver(receiver) }
     }
 }
 

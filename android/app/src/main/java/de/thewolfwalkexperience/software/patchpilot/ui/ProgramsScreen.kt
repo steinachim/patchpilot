@@ -231,6 +231,7 @@ private fun ConnectionState.rendersOnProgramsScreen(): Boolean = when (this) {
     is ConnectionState.DeviceSelection,
     is ConnectionState.UnknownDeviceWarning,
     is ConnectionState.AdvisoryWarning,
+    is ConnectionState.DeviceLost,
     -> false
 }
 
