@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Every string the user can read.
+
+  Extracted from inline Kotlin literals on 2026-08-21. Not for localization -
+  this is a single-purpose tool with one language - but because a string in a
+  resource is one somebody can find, review and change without reading Compose,
+  and because a wording change stops being a code change.
+
+  What is deliberately NOT here: the messages the instrument layer raises
+  (`devices/*`), which explain a protocol condition and are written to be read by
+  whoever is holding the phone. Those stay next to the condition that produces
+  them - moving them here would put the wording two files away from the code that
+  decides when it applies, and they are the one kind of message where that
+  distance costs something.
+
+  Naming: `action_*` for buttons, `<screen>_*` for text belonging to one screen,
+  `cd_*` for content descriptions, which are read aloud rather than displayed.
+-->
+<resources>
+    <string name="app_name">Patch Pilot</string>
+
+    <!-- Buttons and menu items, shared across screens. -->
+    <string name="action_cancel">Cancel</string>
+    <!-- Shown when the instrument's own state stops an operation the app can offer to fix,
+         e.g. a Motif XS in Performance mode ignoring a voice selection. -->
+    <string name="programs_blocked_title">The instrument is not ready</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_rename">Rename</string>
+    <string name="action_copy">Copy to…</string>
+    <string name="action_share">Share</string>
+    <string name="action_clear_filter">Clear filter</string>
+    <string name="action_continue_anyway">Continue anyway</string>
+    <string name="action_retry_search">Retry search</string>
+    <string name="action_try_demo">Try demo mode</string>
+    <string name="action_use_this_channel">Use this channel</string>
+
+    <!-- Content descriptions: spoken by a screen reader, never shown. -->
+    <string name="cd_back">Back</string>
+    <string name="cd_refresh">Re-read from instrument</string>
+    <string name="cd_row_options">Options for %1$s</string>
+    <string name="cd_reorder">Reorder %1$s</string>
+    <string name="cd_reorder_unavailable">Reordering is unavailable until the listing finishes</string>
+    <string name="cd_copy_destination">Copy into %1$s</string>
+    <string name="cd_settings">Settings</string>
+
+    <!-- Settings screen: currently just the theme picker. -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_theme_heading">Appearance</string>
+    <string name="settings_theme_default">System Default</string>
+    <string name="settings_theme_default_description">Follows your device\'s light/dark setting and wallpaper colours.</string>
+    <string name="settings_theme_steampunk">Steampunk</string>
+    <string name="settings_theme_steampunk_description">Brass, copper and mechanical dials — a fixed dark look.</string>
+    <string name="settings_legal_heading">Legal</string>
+    <string name="settings_open_source_licenses">Open Source Licenses</string>
+    <string name="licenses_title">Open Source Licenses</string>
+    <string name="licenses_patchpilot_license">GNU General Public License v3.0</string>
+    <string name="licenses_apache_license">Apache License, Version 2.0</string>
+    <string name="licenses_ofl_license">SIL Open Font License 1.1</string>
+    <string name="licenses_group_patchpilot">Patch Pilot</string>
+    <string name="licenses_group_androidx">AndroidX, Jetpack Compose, Kotlin, kotlinx</string>
+    <string name="licenses_group_cinzel">Cinzel (font)</string>
+    <string name="licenses_group_share_tech_mono">Share Tech Mono (font)</string>
+
+    <!-- Connect screen. -->
+    <string name="connect_idle">Not connected.</string>
+    <string name="connect_searching">Looking for an instrument…</string>
+    <string name="connect_connected">Connected to %1$s</string>
+    <string name="connect_firmware">Firmware: %1$s</string>
+    <string name="connect_multiple_found">More than one instrument is connected.</string>
+    <string name="connect_one_found">An instrument is connected.</string>
+    <string name="connect_pick_one">Select the one to use:</string>
+    <string name="connect_none_found">No supported instrument was found.</string>
+    <string name="connect_supported_heading">Supported instruments:</string>
+    <string name="connect_pick_unknown">Select a connected USB device to try anyway:</string>
+    <string name="connect_entry_known">Recognised — %1$s</string>
+    <string name="connect_entry_unknown">Not recognised</string>
+    <string name="connect_advisory_title">Untested firmware</string>
+    <string name="action_disconnect">Disconnect</string>
+    <string name="connect_unknown_title">Unknown device</string>
+    <string name="connect_unknown_warning">This is not a recognized instrument and is not supported by this app. Continuing is at your own risk.</string>
+
+    <!-- Presets screen. -->
+    <string name="programs_filter_hint">Filter by name</string>
+    <string name="programs_show_empty">Show empty slots</string>
+    <string name="programs_bank_header">Bank %1$s</string>
+    <string name="programs_slot_empty">Empty</string>
+    <string name="programs_no_presets">This instrument reports no presets.</string>
+    <string name="programs_no_matches">No presets match \"%1$s\".</string>
+    <string name="programs_share_report">Share device details</string>
+    <string name="share_reading_device">Reading device\u2026</string>
+    <string name="programs_shared_as">Shared as %1$s.</string>
+    <string name="programs_file_name">File name</string>
+    <string name="programs_json_suffix">.json</string>
+    <string name="programs_txt_suffix">.txt</string>
+    <string name="programs_new_name">New name</string>
+    <string name="programs_name_counter">%1$d / %2$d</string>
+    <string name="programs_rename_title">Rename %1$s</string>
+    <string name="programs_delete_title">Delete %1$s?</string>
+    <!--
+      Two forms because a named preset and an empty slot warrant different
+      sentences, and "erases  on the instrument" is what one string with an
+      optional name produces when the name is absent.
+    -->
+    <string name="programs_delete_body">This erases %1$s on the instrument.</string>
+    <string name="programs_delete_body_named">This erases %1$s (\"%2$s\") on the instrument.</string>
+    <string name="programs_copy_title">Copy %1$s to…</string>
+    <string name="programs_error">Error: %1$s</string>
+
+    <!--
+      What the progress line says while an operation runs. Each is also the phrase the failure
+      message and the log line are built from, with the ellipsis trimmed - so "Selecting A:1:1\u2026"
+      becomes "Selecting A:1:1 failed." rather than the lowercase second copy these used to carry.
+    -->
+    <string name="programs_busy_selecting">Selecting %1$s\u2026</string>
+    <string name="programs_busy_deleting">Deleting %1$s\u2026</string>
+    <string name="programs_busy_renaming">Renaming %1$s\u2026</string>
+    <string name="programs_busy_copying">Copying %1$s to %2$s\u2026</string>
+    <string name="programs_busy_moving">Moving %1$s to %2$s\u2026</string>
+    <string name="programs_busy_swapping">Swapping %1$s and %2$s\u2026</string>
+    <string name="programs_busy_applying_fix">Changing the instrument\'s state\u2026</string>
+    <string name="programs_operation_failed">%1$s failed.</string>
+
+    <!--
+      What an operation reports back once it has succeeded. These sit here rather than beside the
+      operation because they are the app's own words about what it did, not an instrument's
+      description of a protocol condition - which is the line the header above draws.
+    -->
+    <string name="result_moved">Moved %1$s to %2$s.</string>
+    <string name="result_swapped">Swapped %1$s and %2$s.</string>
+    <string name="result_renamed">Preset %1$s has been renamed to %2$s.</string>
+    <string name="result_copied">Copied %1$s to %2$s as \"%3$s\".</string>
+    <string name="result_deleted">Preset %1$s has been deleted.</string>
+
+    <!-- Connection failures the app itself raises, as opposed to ones an instrument reports. -->
+    <string name="connect_failed">Failed to connect</string>
+    <string name="connect_failed_demo">Failed to start demo mode</string>
+    <string name="connect_permission_denied">Permission was denied for %1$s.</string>
+    <string name="connect_usb_permission_denied">USB permission was denied for %1$s.</string>
+    <string name="listing_unknown_error">Unknown error</string>
+    <string name="listing_reading_presets">Reading the preset list\u2026</string>
+    <string name="debug_regression_starting">Starting\u2026</string>
+
+    <!-- Fallback label for a remedy the family offered without naming its button. -->
+    <string name="programs_blocked_action_default">Fix it</string>
+
+    <!-- Shown while nothing is connected - briefly, mid-reconnect, and never for long: a
+         ProgramsScreen that lands on a settled failure/choice state hands off to ConnectScreen
+         instead of sitting here (see ProgramsScreen's session-lost effect). Says so rather than
+         naming a screen, since a bug that manages to strand this title here should not also
+         read as an unrelated screen name. -->
+    <string name="programs_title_fallback">Not Connected</string>
+
+    <!--
+      What a delete actually does, which differs by family: a Nord empties the slot with one
+      command, while a Pro-800 and a Motif XS overwrite it with an initialised preset.
+    -->
+    <string name="programs_delete_effect_emulated">The preset is overwritten with an empty one. This app cannot undo it.</string>
+    <string name="programs_delete_effect_native">The instrument empties the slot. This app cannot undo it.</string>
+
+    <!--
+      Debug menu: hidden behind five taps on the instrument name, so nothing here
+      is ever read by somebody who has not gone looking for it.
+    -->
+    <string name="debug_title">Debug</string>
+    <string name="debug_report_body">Reads everything configuration details off the instrument and shares it as JSON. Nothing is written.</string>
+    <string name="debug_report_action">Generate device report</string>
+    <string name="debug_regression_body">Runs every operation this instrument supports and reports what worked. Edits are made against a copy the test creates and deletes again; where no free slot exists, it asks first.</string>
+    <string name="debug_regression_action">Run regression test</string>
+    <string name="debug_regression_running">Running the regression test…</string>
+    <string name="debug_regression_share">Share regression report</string>
+    <string name="debug_regression_back">Back to the debug menu</string>
+    <string name="debug_confirm_select_title">Check the instrument</string>
+    <string name="debug_confirm_select_body">The instrument was told to load %1$s. Is that what it is showing now?</string>
+    <string name="debug_confirm_select_yes">Yes, it is showing that</string>
+    <string name="debug_confirm_select_no">No, it is not</string>
+    <string name="debug_confirm_occupied_title">Test against a stored preset?</string>
+    <string name="debug_confirm_occupied_body">%1$s, so rename, move and swap can only be tested on a preset you actually have. Each one is undone immediately afterwards and checked, but if the instrument fails halfway a preset may be left renamed or in the wrong slot. Nothing will be deleted either way.\n\nDecline to skip these three tests.</string>
+    <string name="debug_confirm_occupied_reason_no_slot">There is no free slot to make a scratch copy in</string>
+    <string name="debug_confirm_occupied_reason_no_copy">This instrument has no way to copy a preset</string>
+    <string name="debug_confirm_occupied_yes">Test on a stored preset</string>
+
+    <!--
+      One slot failing is not the same as the scan failing, which is why this is
+      a count rather than an error: the other 415 are still worth showing.
+    -->
+    <plurals name="programs_unreadable_slots">
+        <item quantity="one">%1$d slot could not be read.</item>
+        <item quantity="other">%1$d slots could not be read.</item>
+    </plurals>
+</resources>

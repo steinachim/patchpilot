@@ -1,0 +1,12 @@
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/.kotlin/
+
+# Generated at build time from devices/*.json - never hand-edit.
+android/app/src/main/assets/
+
+.DS_Store

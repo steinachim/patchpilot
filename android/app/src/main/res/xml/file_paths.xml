@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Exposes only cacheDir/shared, where Sharing.kt writes the report currently being shared
+     (see AndroidManifest.xml's FileProvider). That directory is cleared before each share, so
+     it holds exactly one file - nothing else in the app needs to be reachable via a content://
+     Uri, and the path deliberately no longer spans the whole cache. The name must stay in step
+     with SHARE_DIR in Sharing.kt. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="shared" path="shared/" />
+</paths>

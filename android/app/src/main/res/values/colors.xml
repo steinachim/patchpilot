@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sampled from patchpilot_icon.png's own background fill, so the adaptive icon's
+         background layer blends seamlessly with the foreground artwork (see
+         mipmap-anydpi-v26/ic_launcher.xml) regardless of which mask shape a launcher applies. -->
+    <color name="ic_launcher_background">#1B2432</color>
+</resources>

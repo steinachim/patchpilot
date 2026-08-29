@@ -1,0 +1,273 @@
+{
+  "$schema": "./nord_devices.schema.json",
+  "schemaVersion": 1,
+  "contentVersionScales": {
+    "ns2p": 1,
+    "ns2s": 1,
+    "ns2l": 1,
+    "ns2y": 1
+  },
+  "programCategories": {
+    "0": "Acoustic",
+    "1": "Bass",
+    "2": "Wind",
+    "3": "Drum/Perc",
+    "4": "Fantasy",
+    "5": "FX",
+    "6": "Lead",
+    "7": "Organ",
+    "8": "Pad",
+    "9": "Piano",
+    "10": "Guitar/Plucked",
+    "11": "String",
+    "12": "Synth",
+    "13": "Vocal",
+    "14": "User",
+    "15": "User 2",
+    "16": "User 3",
+    "17": "None",
+    "18": "B3",
+    "19": "Farf",
+    "20": "Vx",
+    "21": "Grand",
+    "22": "Upright",
+    "23": "EPiano",
+    "24": "Wurl",
+    "25": "Clav/Hps",
+    "26": "Pipe",
+    "27": "Clavinet",
+    "28": "Harpsichord",
+    "29": "EGrand",
+    "30": "Arpeggio",
+    "31": "Pedal",
+    "32": "Split",
+    "33": "ClkSync",
+    "34": "Brass",
+    "35": "Sequence",
+    "36": "Accordion/Harm",
+    "37": "Wind",
+    "38": "Orchestral",
+    "39": "Keys",
+    "40": "Misc",
+    "41": "Combi",
+    "42": "Guitar",
+    "43": "User",
+    "44": "Synth Bass",
+    "45": "Synth Classic",
+    "46": "Synth Pad",
+    "47": "Wind/Brass Solo",
+    "48": "Strings Solo",
+    "49": "Synth Strings",
+    "50": "Mellotron",
+    "51": "Synth Piano",
+    "52": "Synth Brass",
+    "53": "Soft B3"
+  },
+  "sampleCategories": {
+    "0": {
+      "name": "Undefined",
+      "short": "Undef",
+      "subCategories": {
+        "0": ""
+      }
+    },
+    "1": {
+      "name": "Bass",
+      "short": "Bass",
+      "subCategories": {
+        "0": "",
+        "1": "Acoustic",
+        "2": "Electric",
+        "3": "Synth"
+      }
+    },
+    "2": {
+      "name": "Drums",
+      "short": "Drums",
+      "subCategories": {
+        "0": "",
+        "1": "Acoustic",
+        "2": "Electric",
+        "3": "Loops"
+      }
+    },
+    "3": {
+      "name": "Accordion/Harm",
+      "short": "Accord/Harm",
+      "subCategories": {
+        "0": "",
+        "1": "Accordion",
+        "2": "Harmonica",
+        "3": "Organ"
+      }
+    },
+    "4": {
+      "name": "Effects",
+      "short": "FX",
+      "subCategories": {
+        "0": ""
+      }
+    },
+    "5": {
+      "name": "Guitar/Plucked",
+      "short": "Gtr/Pluck",
+      "subCategories": {
+        "0": "",
+        "1": "Acoustic",
+        "2": "Electric",
+        "3": "Traditional"
+      }
+    },
+    "6": {
+      "name": "Organ",
+      "short": "Organ",
+      "subCategories": {
+        "0": "",
+        "1": "Pipe",
+        "2": "Transistor",
+        "3": "Tonewheel"
+      }
+    },
+    "7": {
+      "name": "Percussion",
+      "short": "Perc",
+      "subCategories": {
+        "0": "",
+        "1": "Tuned",
+        "2": "Percussive"
+      }
+    },
+    "8": {
+      "name": "Piano",
+      "short": "Piano",
+      "subCategories": {
+        "0": "",
+        "1": "Acoustic",
+        "2": "Electric",
+        "3": "Synth"
+      }
+    },
+    "9": {
+      "name": "Strings",
+      "short": "Strings",
+      "subCategories": {
+        "0": "",
+        "1": "Solo",
+        "2": "Ensemble",
+        "3": "Analog"
+      }
+    },
+    "10": {
+      "name": "Synth",
+      "short": "Syn",
+      "subCategories": {
+        "0": "Misc",
+        "1": "Pad",
+        "2": "FX",
+        "3": "Bass",
+        "4": "Classic",
+        "5": "Rhythmic",
+        "6": "Brass",
+        "7": "Lead"
+      }
+    },
+    "11": {
+      "name": "Choir",
+      "short": "Choir",
+      "subCategories": {
+        "0": "",
+        "1": "Solo",
+        "2": "Ensemble"
+      }
+    },
+    "12": {
+      "name": "Brass",
+      "short": "Brass",
+      "subCategories": {
+        "0": "",
+        "1": "Solo",
+        "2": "Ensemble"
+      }
+    },
+    "13": {
+      "name": "Orchestral",
+      "short": "Orchest",
+      "subCategories": {
+        "0": ""
+      }
+    },
+    "14": {
+      "name": "Misc",
+      "short": "Misc",
+      "subCategories": {
+        "0": ""
+      }
+    },
+    "15": {
+      "name": "User",
+      "short": "User",
+      "subCategories": {
+        "0": ""
+      }
+    },
+    "16": {
+      "name": "Mellotron",
+      "short": "Mello",
+      "subCategories": {
+        "0": ""
+      }
+    },
+    "17": {
+      "name": "Rhythmic",
+      "short": "Rhythm",
+      "subCategories": {
+        "0": ""
+      }
+    },
+    "18": {
+      "name": "Wind",
+      "short": "Wind",
+      "subCategories": {
+        "0": "",
+        "1": "Solo",
+        "2": "Ensemble"
+      }
+    }
+  },
+  "devices": [
+    {
+      "id": "nord_grand",
+      "name": "Nord Grand",
+      "vendorId": 4092,
+      "productId": 43,
+      "maxBankLetter": "P",
+      "maxGroup": 5,
+      "slotsPerGroup": 5,
+      "maxDisplayTextLen": 16,
+      "maxProgramNameLen": 16,
+      "supportedFirmwareVersions": [168],
+      "programCategoryIds": [0, 1, 2, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 17, 21, 22, 23, 24, 27, 28, 30],
+      "programCategoryNameOverrides": {
+        "23": "EPiano1",
+        "24": "EPiano2"
+      }
+    },
+    {
+      "id": "nord_stage_2ex",
+      "name": "Nord Stage 2 EX",
+      "vendorId": 4092,
+      "productId": 33,
+      "maxBankLetter": "D",
+      "maxGroup": 20,
+      "slotsPerGroup": 5,
+      "maxDisplayTextLen": 16,
+      "maxProgramNameLen": 16,
+      "supportedFirmwareVersions": [300],
+      "programCategoryIds": [0, 1, 2, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 17, 21, 22, 23, 24, 27, 28, 30],
+      "programCategoryNameOverrides": {
+        "23": "EPiano1",
+        "24": "EPiano2"
+      }
+    }
+  ]
+}

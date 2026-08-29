@@ -1,0 +1,134 @@
+package de.thewolfwalkexperience.software.patchpilot.ui.theme
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+
+/**
+ * Everything a screen needs to draw itself differently per [AppTheme], gathered behind one
+ * interface instead of an `if (theme == AppTheme.Steampunk)` at each call site.
+ *
+ * This is deliberately *not* where `ColorScheme`/`Typography`/`Shapes` live - those are
+ * `MaterialTheme`-level tokens, already centralised in the one `when (appTheme)` in
+ * [PatchPilotTheme], and every stock Material component (buttons, dialogs, menus, the destructive
+ * Delete styling) already gets them for free. This interface exists only for the handful of
+ * things a token swap alone cannot produce: bespoke composables (a pressure gauge standing in for
+ * a spinner) and bespoke decoration (a riveted frame, a mechanical slot bezel) that used to be a
+ * `Boolean` read off the raw `AppTheme` value and a branch, scattered across `ConnectScreen`,
+ * `ProgramsScreen`, `AppScaffold` and `MainActivity`.
+ *
+ * **Adding a third theme** means implementing this interface once (see [SteampunkThemeStyle] for
+ * the shape of it) and mapping it in [AppTheme.style] below - no screen file changes, since they
+ * only ever read [LocalThemeStyle.current] and never the raw [AppTheme] value.
+ */
+interface ThemeStyle {
+    /** The preset row's drag handle glyph - decorative, the row itself carries the a11y label. */
+    val dragHandleGlyph: String
+
+    /** The screen-level frame/border decoration, if this theme draws one. */
+    fun screenFrame(base: Modifier): Modifier
+
+    /** The app-wide background texture, applied once at the root ([MainActivity]'s `Surface`). */
+    fun screenTexture(base: Modifier): Modifier
+
+    /** The bezel behind a preset row's handle glyph, sized to fit the existing handle column. */
+    fun slotBezel(base: Modifier, occupied: Boolean): Modifier
+
+    /** The panel treatment for one preset row, including drag/drop-target highlighting. */
+    fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean): Modifier
+
+    /** The decoration for the bank fast-scroll rail (`BankIndex`). */
+    fun railDecoration(base: Modifier): Modifier
+
+    /** Stands in for a bare spinner while the connect screen is searching for/opening a device. */
+    @Composable
+    fun ProgressIndicator(modifier: Modifier = Modifier)
+
+    /** One candidate in the connect screen's device picker. */
+    @Composable
+    fun DeviceRow(label: String, sublabel: String, onClick: () -> Unit, modifier: Modifier = Modifier)
+
+    /** A bank caption row in the preset list (e.g. "Bank A"). */
+    @Composable
+    fun BankHeader(text: String, modifier: Modifier = Modifier)
+}
+
+/**
+ * Plain Material, unchanged from before this app had a second theme: every function here either
+ * hands back [base] untouched or renders the stock component it always rendered.
+ */
+object DefaultThemeStyle : ThemeStyle {
+    override val dragHandleGlyph = "⠿"
+
+    override fun screenFrame(base: Modifier) = base
+    override fun screenTexture(base: Modifier) = base
+    override fun slotBezel(base: Modifier, occupied: Boolean) = base
+    override fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean) = base
+    override fun railDecoration(base: Modifier) = base
+
+    @Composable
+    override fun ProgressIndicator(modifier: Modifier) {
+        CircularProgressIndicator(modifier)
+    }
+
+    @Composable
+    override fun DeviceRow(label: String, sublabel: String, onClick: () -> Unit, modifier: Modifier) {
+        OutlinedButton(onClick = onClick, modifier = modifier) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(label)
+                Text(
+                    sublabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+
+    @Composable
+    override fun BankHeader(text: String, modifier: Modifier) {
+        // A plain background color isn't enough to set the header apart from its neighbors -
+        // alternating row shading means those rows are surfaceVariant half the time, the same
+        // color the header itself uses. The dividers give a seam that's visible regardless of
+        // which shade landed on either side.
+        Column(modifier.fillMaxWidth()) {
+            HorizontalDivider()
+            Text(
+                text,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+            HorizontalDivider()
+        }
+    }
+}
+
+/** [ThemeStyle] for the currently active [AppTheme]. */
+val AppTheme.style: ThemeStyle
+    get() = when (this) {
+        AppTheme.Default -> DefaultThemeStyle
+        AppTheme.Steampunk -> SteampunkThemeStyle
+    }
+
+/**
+ * The active [ThemeStyle], provided by [PatchPilotTheme]. Defaults to [DefaultThemeStyle] so a
+ * composable previewed or tested outside it degrades to the plain look rather than crashing on a
+ * missing provider.
+ */
+val LocalThemeStyle = compositionLocalOf<ThemeStyle> { DefaultThemeStyle }
