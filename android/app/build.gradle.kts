@@ -101,6 +101,29 @@ android {
     }
 }
 
+// Falls back to "unknown" rather than failing the build for a checkout with no .git (e.g. a
+// source tarball) - only the debug APK's file name depends on this, nothing else does.
+val gitCommitHash: String = try {
+    providers.exec { commandLine("git", "rev-parse", "--short", "HEAD") }.standardOutput.asText.get().trim()
+} catch (e: Exception) {
+    "unknown"
+}
+
+// APK output names identify the app and build on their own, since that's the file attached to
+// GitHub Releases or shared ad hoc - AGP's default app-release.apk/app-debug.apk don't.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set(output.versionName.map { "patchpilot-v$it.apk" })
+        }
+    }
+    onVariants(selector().withBuildType("debug")) { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set("patchpilot-debug-$gitCommitHash.apk")
+        }
+    }
+}
+
 dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
