@@ -49,6 +49,16 @@ class MotifXsInstrument(
     private val config: MotifXsConfig,
     /** What [PresetEditor.delete] and [PresetEditor.move] write over a cleared slot, per kind of voice. */
     private val blanks: MotifXsBlanks,
+    /**
+     * The catalog entry's id and name, e.g. `"yamaha_motif_xs6"` / `"Yamaha Motif XS6"`.
+     *
+     * Constructor parameters rather than fields on [MotifXsConfig], because this class also has
+     * to be buildable with no catalog entry at all - the JVM tests do exactly that, from a
+     * hand-written [MotifXsConfig] - so they default to a generic placeholder rather than being
+     * required.
+     */
+    private val descriptorId: String = "yamaha_motif_xs",
+    private val catalogName: String = "Yamaha Motif XS",
 ) : Instrument, PresetBrowser {
 
     /**
@@ -84,9 +94,9 @@ class MotifXsInstrument(
 
     override val identity: InstrumentIdentity
         get() = InstrumentIdentity(
-            descriptorId = config.descriptorId,
+            descriptorId = descriptorId,
             family = FAMILY,
-            name = config.name,
+            name = catalogName,
             firmwareVersion = firmware,
             // USB, not MIDI. This instrument exposes no MIDIStreaming interface and gets no
             // MIDI port at all, so its catalog entry is a `usb` match and UsbHostDiscovery is what
@@ -94,7 +104,7 @@ class MotifXsInstrument(
             // "MIDI" here for as long as the match had been USB, and nothing could notice while
             // this was a string.
             bus = Bus.USB,
-            stableKey = "motifxs:${config.descriptorId}",
+            stableKey = "motifxs:$descriptorId",
         )
 
     override val rebuildOnResume: Boolean get() = exchange.rebuildOnResume

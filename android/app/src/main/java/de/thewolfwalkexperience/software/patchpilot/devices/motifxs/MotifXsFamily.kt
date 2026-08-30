@@ -105,14 +105,16 @@ data class MotifXsBank(
  * different Motif XS - or a Motif XF - may lay its memory out differently. Correcting it should
  * be a catalog edit, not a code change.
  *
+ * **Carries no id or name.** Those belong to [InstrumentDescriptor], which [MotifXsFamily.create]
+ * already has on hand and passes straight to [MotifXsInstrument] - putting them here too would
+ * only be a second place for the same two strings to drift apart.
+ *
  * [banks] defaults to empty here rather than being required, because a device entry in the
  * catalog is free to omit it and inherit [resolvedConfig]'s shared one instead - see there for
  * why the XS6/7/8 do.
  */
 @Serializable
 data class MotifXsConfig(
-    val descriptorId: String = "yamaha_motif_xs",
-    val name: String = "Yamaha Motif XS",
     /** The device number in the SysEx status byte. This app always uses 0; whether the
      * instrument answers others is untested. */
     val deviceNumber: Int = 0,
@@ -205,7 +207,7 @@ object MotifXsFamily : InstrumentFamily {
         val midi = midiOver(transport, descriptor, scope)
         val config = resolvedConfig(catalog.load(context).familyConfig, descriptor.familyConfig, catalog.format)
         require(config.banks.isNotEmpty()) {
-            "${config.name} has no banks configured; the catalog entry is incomplete."
+            "${descriptor.name} has no banks configured; the catalog entry is incomplete."
         }
         return MotifXsInstrument(
             // Three attempts, not the default two. A dropped message on this bus is ordinary
@@ -223,6 +225,8 @@ object MotifXsFamily : InstrumentFamily {
                 normal = context.assets.open(BLANK_NORMAL).use { it.readBytes() },
                 drum = context.assets.open(BLANK_DRUM).use { it.readBytes() },
             ),
+            descriptorId = descriptor.id,
+            catalogName = descriptor.name,
         )
     }
 

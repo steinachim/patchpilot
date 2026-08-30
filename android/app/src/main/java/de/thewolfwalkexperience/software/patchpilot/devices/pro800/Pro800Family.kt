@@ -17,17 +17,25 @@ import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 private const val CATALOG_ASSET = "behringer_pro800.json"
 
 /**
- * The per-model configuration this family needs - the typed form of an
- * [InstrumentDescriptor.familyConfig] block.
+ * The per-model configuration this family needs - the typed form of a [FamilyCatalog.familyConfig]
+ * block.
  *
  * Everything here is Pro-800-specific and none of it exists on a Nord, which is exactly why it
  * lives in an opaque block rather than in the shared descriptor: a flat cross-family schema would
  * carry these as five more mostly-null columns.
+ *
+ * **Read from the catalog's top-level familyConfig, not the device's.** There is exactly one
+ * Pro-800 catalog entry (see [Pro800Family]'s own doc), so there is no second device for a
+ * per-device block to ever need to differ from - unlike the Motif XS catalog's shared bank table,
+ * this has no per-device override to fall back past, which is why [Pro800Family.create] decodes it
+ * straight off [FamilyCatalog.familyConfig] with no merge step.
+ *
+ * **Carries no id or name.** Those belong to [InstrumentDescriptor], which [Pro800Family.create]
+ * already has on hand and passes straight to [Pro800Instrument] - putting them here too would
+ * only be a second place for the same two strings to drift apart.
  */
 @Serializable
 data class Pro800Config(
-    val descriptorId: String = "behringer_pro800",
-    val name: String = "Behringer Pro-800",
     val bankCount: Int = 4,
     val slotsPerBank: Int = 100,
     val slotDigits: Int = 2,
@@ -78,10 +86,15 @@ object Pro800Family : InstrumentFamily {
     ): Instrument {
         val midi = transport as? MidiTransport
             ?: error("A Pro-800 speaks MIDI SysEx, not ${transport::class.simpleName}.")
-        val config = catalog.format.decodeFromJsonElement(Pro800Config.serializer(), descriptor.familyConfig)
+        val config = catalog.format.decodeFromJsonElement(Pro800Config.serializer(), catalog.load(context).familyConfig)
         // The exchange owns the collector draining this transport, so its scope has to outlive
         // any single operation. It ends when the transport is closed and the instrument with it.
         val scope = transportScope(descriptor.name)
-        return Pro800Instrument(SysExExchange(midi, scope), config)
+        return Pro800Instrument(
+            SysExExchange(midi, scope),
+            config,
+            descriptorId = descriptor.id,
+            catalogName = descriptor.name,
+        )
     }
 }

@@ -40,6 +40,16 @@ private const val TAG = "Pro800Instrument"
 class Pro800Instrument(
     private val exchange: SysExExchange,
     private val config: Pro800Config,
+    /**
+     * The catalog entry's id and name.
+     *
+     * Constructor parameters rather than fields on [Pro800Config], because this class also has
+     * to be buildable with no catalog entry at all - the JVM tests do exactly that, from a
+     * hand-written [Pro800Config] - so they default to a generic placeholder rather than being
+     * required.
+     */
+    private val descriptorId: String = "behringer_pro800",
+    private val catalogName: String = "Behringer Pro-800",
 ) : Instrument, PresetBrowser, PresetSelector, PresetTransfer {
 
     /**
@@ -54,7 +64,7 @@ class Pro800Instrument(
     )
 
     private var firmware: String = UNKNOWN_FIRMWARE
-    private var deviceName: String = config.name
+    private var deviceName: String = catalogName
 
     /**
      * The channel selection is sent on, resolved at connect time from the instrument's own
@@ -74,12 +84,12 @@ class Pro800Instrument(
 
     override val identity: InstrumentIdentity
         get() = InstrumentIdentity(
-            descriptorId = config.descriptorId,
+            descriptorId = descriptorId,
             family = FAMILY,
             name = deviceName,
             firmwareVersion = firmware,
             bus = Bus.MIDI,
-            stableKey = "pro800:${config.descriptorId}",
+            stableKey = "pro800:$descriptorId",
         )
 
     override val rebuildOnResume: Boolean get() = exchange.rebuildOnResume
@@ -130,7 +140,7 @@ class Pro800Instrument(
 
     /** Read-only, and the source of the sample fixtures used in tests - see [Pro800Reporter]. */
     override val report: DeviceReporter = Pro800Reporter(exchange, layout) {
-        Pro800ReportIdentity(deviceName, firmware, config.descriptorId)
+        Pro800ReportIdentity(deviceName, firmware, descriptorId)
     }
 
     /**
@@ -139,7 +149,7 @@ class Pro800Instrument(
      * something true to show.
      */
     override suspend fun connect() {
-        deviceName = queryDeviceName() ?: config.name
+        deviceName = queryDeviceName() ?: catalogName
         firmware = queryFirmware() ?: UNKNOWN_FIRMWARE
         validateFirmware()
         resolveSendChannel()

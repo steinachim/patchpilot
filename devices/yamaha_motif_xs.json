@@ -61,10 +61,6 @@
         "endpointOut": 1,
         "endpointIn": 130,
         "midiCable": 3
-      },
-      "familyConfig": {
-        "descriptorId": "yamaha_motif_xs6",
-        "name": "Yamaha Motif XS6"
       }
     },
     {
@@ -78,10 +74,6 @@
         "endpointOut": 1,
         "endpointIn": 130,
         "midiCable": 3
-      },
-      "familyConfig": {
-        "descriptorId": "yamaha_motif_xs7",
-        "name": "Yamaha Motif XS7"
       }
     },
     {
@@ -95,10 +87,6 @@
         "endpointOut": 1,
         "endpointIn": 130,
         "midiCable": 3
-      },
-      "familyConfig": {
-        "descriptorId": "yamaha_motif_xs8",
-        "name": "Yamaha Motif XS8"
       }
     }
   ]

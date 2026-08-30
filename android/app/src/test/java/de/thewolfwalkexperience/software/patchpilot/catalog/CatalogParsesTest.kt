@@ -53,7 +53,7 @@ class CatalogParsesTest {
         assertEquals("pro800", catalog.family)
         val descriptor = catalog.devices.single()
         assertTrue(descriptor.match is DeviceMatch.MidiIdentity)
-        val config = json.decodeFromJsonElement(Pro800Config.serializer(), descriptor.familyConfig)
+        val config = json.decodeFromJsonElement(Pro800Config.serializer(), catalog.familyConfig)
         assertEquals(4, config.bankCount)
         assertEquals(100, config.slotsPerBank)
     }
