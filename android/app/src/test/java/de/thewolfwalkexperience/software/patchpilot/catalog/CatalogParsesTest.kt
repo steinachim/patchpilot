@@ -1,6 +1,7 @@
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
+import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.resolvedConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Config
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -33,6 +34,19 @@ class CatalogParsesTest {
     private fun catalog(name: String): FamilyCatalog =
         json.decodeFromString(FamilyCatalog.serializer(), catalogDir.resolve(name).readText())
 
+    /** The XS6 entry specifically - the family's other tests below are shape checks shared by
+     * XS6/7/8, and pin their assertions to the model that was actually captured. */
+    private fun motifXs6(): InstrumentDescriptor =
+        catalog("yamaha_motif_xs.json").devices.single { it.id == "yamaha_motif_xs6" }
+
+    /** XS6's resolved config - banks included, whichever of the device entry or the catalog's
+     * shared familyConfig they actually came from. See [resolvedConfig]. */
+    private fun motifXs6Config(): MotifXsConfig {
+        val catalog = catalog("yamaha_motif_xs.json")
+        val descriptor = catalog.devices.single { it.id == "yamaha_motif_xs6" }
+        return resolvedConfig(catalog.familyConfig, descriptor.familyConfig, json)
+    }
+
     @Test
     fun `the Pro-800 catalog decodes into its family config`() {
         val catalog = catalog("behringer_pro800.json")
@@ -48,8 +62,7 @@ class CatalogParsesTest {
     fun `the Motif XS catalog decodes into its family config`() {
         val catalog = catalog("yamaha_motif_xs.json")
         assertEquals("motifxs", catalog.family)
-        val descriptor = catalog.devices.single()
-        val config = json.decodeFromJsonElement(MotifXsConfig.serializer(), descriptor.familyConfig)
+        val config = motifXs6Config()
 
         // The four **user** banks. The instrument has eleven factory banks too, fully mapped, but
         // they are deliberately not in the app's catalog yet: nothing calls
@@ -81,10 +94,7 @@ class CatalogParsesTest {
      */
     @Test
     fun `each bank carries a panel label and a rail label`() {
-        val config = json.decodeFromJsonElement(
-            MotifXsConfig.serializer(),
-            catalog("yamaha_motif_xs.json").devices.single().familyConfig,
-        )
+        val config = motifXs6Config()
         assertEquals(
             listOf("USER 1", "USER 2", "USER 3", "USER DR"),
             config.banks.map { it.displayLabel },
@@ -104,10 +114,7 @@ class CatalogParsesTest {
      */
     @Test
     fun `every catalogued bank is indexed by default`() {
-        val config = json.decodeFromJsonElement(
-            MotifXsConfig.serializer(),
-            catalog("yamaha_motif_xs.json").devices.single().familyConfig,
-        )
+        val config = motifXs6Config()
         assertTrue(config.banks.all { it.indexByDefault })
         assertTrue(config.banks.none { it.readOnly })
     }
@@ -129,13 +136,58 @@ class CatalogParsesTest {
      */
     @Test
     fun `the Motif XS is matched on the USB bus, on cable 3`() {
-        val match = catalog("yamaha_motif_xs.json").devices.single().match as DeviceMatch.Usb
+        val match = motifXs6().match as DeviceMatch.Usb
         assertEquals(0x0499, match.vendorId)
         assertEquals(0x1042, match.productId)
         assertEquals(3, match.midiCable)
         // Bulk OUT is 0x01 here, not the Nord vendor interface's 0x03.
         assertEquals(0x01, match.endpointOut)
         assertEquals(0x82, match.endpointIn)
+    }
+
+    /**
+     * The XS7 and XS8 sit at the two product ids adjacent to the confirmed XS6 - `0x1043`/`0x1044`
+     * next to `0x1042` - per Yamaha's own Windows USB-MIDI driver package (structurally identical
+     * `yum1043.inf`/`yum1044.inf` beside the confirmed `yum1042.inf`) and its precedent of
+     * assigning sequential product ids by keybed size across the two prior Motif generations. The
+     * shared "MOTIF XS6/7/8 MIDI Implementation Chart" documents an identical SysEx protocol for
+     * all three - they differ only in the Identity Reply's family member code, which this app does
+     * not use to distinguish models (see docs/PROTOCOLS.md) - so the catalog carries the same bank
+     * map and endpoints as the XS6, changing only id, name, and USB product id.
+     */
+    @Test
+    fun `the XS7 and XS8 are matched on the product ids adjacent to the confirmed XS6`() {
+        val catalog = catalog("yamaha_motif_xs.json")
+        val devices = catalog.devices
+        assertEquals(
+            listOf("yamaha_motif_xs6", "yamaha_motif_xs7", "yamaha_motif_xs8"),
+            devices.map { it.id },
+        )
+
+        val byId = devices.associateBy { it.id }
+        val xs7 = byId.getValue("yamaha_motif_xs7").match as DeviceMatch.Usb
+        val xs8 = byId.getValue("yamaha_motif_xs8").match as DeviceMatch.Usb
+        assertEquals(0x0499, xs7.vendorId)
+        assertEquals(0x1043, xs7.productId)
+        assertEquals(0x0499, xs8.vendorId)
+        assertEquals(0x1044, xs8.productId)
+
+        // Everything but the model-identifying fields should be the XS6's, since the protocol is
+        // shared across the family.
+        val xs6 = motifXs6()
+        for (id in listOf("yamaha_motif_xs7", "yamaha_motif_xs8")) {
+            val sibling = byId.getValue(id)
+            val siblingMatch = sibling.match as DeviceMatch.Usb
+            val xs6Match = xs6.match as DeviceMatch.Usb
+            assertEquals(xs6Match.midiCable, siblingMatch.midiCable)
+            assertEquals(xs6Match.endpointOut, siblingMatch.endpointOut)
+            assertEquals(xs6Match.endpointIn, siblingMatch.endpointIn)
+
+            val siblingConfig = resolvedConfig(catalog.familyConfig, sibling.familyConfig, json)
+            val xs6Config = resolvedConfig(catalog.familyConfig, xs6.familyConfig, json)
+            assertEquals(xs6Config.banks, siblingConfig.banks)
+            assertEquals(xs6Config.deviceNumber, siblingConfig.deviceNumber)
+        }
     }
 
     /** A probe must be a read-only enquiry. Both families use a universal or documented identity

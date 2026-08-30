@@ -6,7 +6,7 @@ Per-instrument catalogs. One file per instrument family, named for what it holds
 |---|---|---|
 | `nord_devices.json` | every supported Nord model | its own native shape |
 | `behringer_pro800.json` | one Behringer Pro-800 | the generic `FamilyCatalog` shape |
-| `yamaha_motif_xs.json` | one Yamaha Motif XS | the generic `FamilyCatalog` shape |
+| `yamaha_motif_xs.json` | the Yamaha Motif XS6/XS7/XS8 family | the generic `FamilyCatalog` shape |
 
 `nord_devices.schema.json` documents `nord_devices.json`'s shape (also usable directly with any JSON Schema validator/editor plugin). `blanks/` holds binary payloads the Motif XS family writes to erase a slot — see `blanks/README.md`.
 

@@ -29,7 +29,7 @@ class UnknownDevicePolicyTest {
     private val catalog = listOf(
         usb("nord_grand", "nord", clavia, 1),
         usb("nord_stage_2_ex", "nord", clavia, 2),
-        usb("yamaha_motif_xs", "motifxs", yamaha, 4162),
+        usb("yamaha_motif_xs6", "motifxs", yamaha, 4162),
         usb("behringer_pro800", "pro800", behringer, 4703),
     )
 

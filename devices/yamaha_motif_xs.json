@@ -1,12 +1,59 @@
 {
   "family": "motifxs",
   "schemaVersion": 1,
-  "familyConfig": {},
+  "familyConfig": {
+    "banks": [
+      {
+        "label": "USR1",
+        "displayLabel": "USER 1",
+        "shortLabel": "U1",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 10,
+        "readOnly": false,
+        "indexByDefault": true,
+        "selectLsb": 8
+      },
+      {
+        "label": "USR2",
+        "displayLabel": "USER 2",
+        "shortLabel": "U2",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 11,
+        "readOnly": false,
+        "indexByDefault": true,
+        "selectLsb": 9
+      },
+      {
+        "label": "USR3",
+        "displayLabel": "USER 3",
+        "shortLabel": "U3",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 12,
+        "readOnly": false,
+        "indexByDefault": true,
+        "selectLsb": 10
+      },
+      {
+        "label": "DRUM",
+        "displayLabel": "USER DR",
+        "shortLabel": "U DR",
+        "slotCount": 32,
+        "addressHi": 12,
+        "addressMid": 40,
+        "readOnly": false,
+        "indexByDefault": true,
+        "selectLsb": 40
+      }
+    ]
+  },
   "devices": [
     {
-      "id": "yamaha_motif_xs",
+      "id": "yamaha_motif_xs6",
       "family": "motifxs",
-      "name": "Yamaha Motif XS",
+      "name": "Yamaha Motif XS6",
       "match": {
         "type": "usb",
         "vendorId": 1177,
@@ -16,55 +63,42 @@
         "midiCable": 3
       },
       "familyConfig": {
-        "descriptorId": "yamaha_motif_xs",
-        "name": "Yamaha Motif XS",
-        "deviceNumber": 0,
-        "banks": [
-          {
-            "label": "USR1",
-            "displayLabel": "USER 1",
-            "shortLabel": "U1",
-            "slotCount": 128,
-            "addressHi": 12,
-            "addressMid": 10,
-            "readOnly": false,
-            "indexByDefault": true,
-            "selectLsb": 8
-          },
-          {
-            "label": "USR2",
-            "displayLabel": "USER 2",
-            "shortLabel": "U2",
-            "slotCount": 128,
-            "addressHi": 12,
-            "addressMid": 11,
-            "readOnly": false,
-            "indexByDefault": true,
-            "selectLsb": 9
-          },
-          {
-            "label": "USR3",
-            "displayLabel": "USER 3",
-            "shortLabel": "U3",
-            "slotCount": 128,
-            "addressHi": 12,
-            "addressMid": 12,
-            "readOnly": false,
-            "indexByDefault": true,
-            "selectLsb": 10
-          },
-          {
-            "label": "DRUM",
-            "displayLabel": "USER DR",
-            "shortLabel": "U DR",
-            "slotCount": 32,
-            "addressHi": 12,
-            "addressMid": 40,
-            "readOnly": false,
-            "indexByDefault": true,
-            "selectLsb": 40
-          }
-        ]
+        "descriptorId": "yamaha_motif_xs6",
+        "name": "Yamaha Motif XS6"
+      }
+    },
+    {
+      "id": "yamaha_motif_xs7",
+      "family": "motifxs",
+      "name": "Yamaha Motif XS7",
+      "match": {
+        "type": "usb",
+        "vendorId": 1177,
+        "productId": 4163,
+        "endpointOut": 1,
+        "endpointIn": 130,
+        "midiCable": 3
+      },
+      "familyConfig": {
+        "descriptorId": "yamaha_motif_xs7",
+        "name": "Yamaha Motif XS7"
+      }
+    },
+    {
+      "id": "yamaha_motif_xs8",
+      "family": "motifxs",
+      "name": "Yamaha Motif XS8",
+      "match": {
+        "type": "usb",
+        "vendorId": 1177,
+        "productId": 4164,
+        "endpointOut": 1,
+        "endpointIn": 130,
+        "midiCable": 3
+      },
+      "familyConfig": {
+        "descriptorId": "yamaha_motif_xs8",
+        "name": "Yamaha Motif XS8"
       }
     }
   ]

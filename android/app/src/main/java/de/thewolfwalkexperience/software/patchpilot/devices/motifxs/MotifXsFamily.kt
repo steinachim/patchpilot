@@ -15,6 +15,8 @@ import de.thewolfwalkexperience.software.patchpilot.transport.UsbMidiBulkTranspo
 import de.thewolfwalkexperience.software.patchpilot.transport.transportScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 
 private const val CATALOG_ASSET = "yamaha_motif_xs.json"
@@ -102,6 +104,10 @@ data class MotifXsBank(
  * The bank table is data rather than code because it is the part most likely to be wrong: a
  * different Motif XS - or a Motif XF - may lay its memory out differently. Correcting it should
  * be a catalog edit, not a code change.
+ *
+ * [banks] defaults to empty here rather than being required, because a device entry in the
+ * catalog is free to omit it and inherit [resolvedConfig]'s shared one instead - see there for
+ * why the XS6/7/8 do.
  */
 @Serializable
 data class MotifXsConfig(
@@ -112,6 +118,29 @@ data class MotifXsConfig(
     val deviceNumber: Int = 0,
     val banks: List<MotifXsBank> = emptyList(),
 )
+
+/**
+ * A device's [MotifXsConfig], with [MotifXsConfig.banks] filled in from the catalog's shared
+ * [catalogFamilyConfig] when [deviceFamilyConfig] does not carry its own.
+ *
+ * **Why a fallback rather than always reading the shared one.** The XS6, XS7 and XS8 are the same
+ * instrument electrically - same memory map, same endpoints, same cable - confirmed against the
+ * vendor's own driver package (see `CatalogParsesTest`), so their bank table would otherwise be
+ * copied three times in the catalog for no reason but which product id it sits next to. A device
+ * that turns out to lay its memory out differently - a Motif XF, say - still overrides it by
+ * simply giving its own catalog entry a `banks` array; nothing here special-cases that, the
+ * per-device one just wins because it is checked first.
+ */
+internal fun resolvedConfig(
+    catalogFamilyConfig: JsonObject,
+    deviceFamilyConfig: JsonObject,
+    format: Json,
+): MotifXsConfig {
+    val own = format.decodeFromJsonElement(MotifXsConfig.serializer(), deviceFamilyConfig)
+    if (own.banks.isNotEmpty()) return own
+    val shared = format.decodeFromJsonElement(MotifXsConfig.serializer(), catalogFamilyConfig)
+    return own.copy(banks = shared.banks)
+}
 
 /**
  * The payload written over a slot to erase it, one per kind of voice.
@@ -174,7 +203,7 @@ object MotifXsFamily : InstrumentFamily {
     ): Instrument {
         val scope = transportScope(descriptor.name)
         val midi = midiOver(transport, descriptor, scope)
-        val config = catalog.format.decodeFromJsonElement(MotifXsConfig.serializer(), descriptor.familyConfig)
+        val config = resolvedConfig(catalog.load(context).familyConfig, descriptor.familyConfig, catalog.format)
         require(config.banks.isNotEmpty()) {
             "${config.name} has no banks configured; the catalog entry is incomplete."
         }

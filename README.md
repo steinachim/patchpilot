@@ -7,7 +7,7 @@ PatchPilot is a native Android app for browsing, organizing, and editing presets
 - Nord Stage 2EX
 - Nord Grand
 - Behringer Pro-800
-- Yamaha Motif XS (only XS6 tested, device identification might need updates for XS7/8)
+- Yamaha Motif XS6/XS7/XS8 (only the XS6 tested against real hardware; XS7/XS8 USB product IDs are inferred from Yamaha's driver files and sequential-PID precedent, not yet confirmed on an actual unit)
 
 Each instrument connects over USB (directly, or via USB-MIDI where the instrument supports it).
 
