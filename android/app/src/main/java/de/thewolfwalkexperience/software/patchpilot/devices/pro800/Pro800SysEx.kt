@@ -56,17 +56,33 @@ object Pro800SysEx {
     /** A program dump. Also the *write* command, with the data appended. */
     const val TYPE_DUMP = 0x78
 
-    /**
-     * **Destructive, and named here on purpose.**
-     *
-     * `0x7D` is a factory reset with no confirmation and no undo. It has no UI path and is never
-     * sent; any raw-message tool must demand a typed confirmation before sending it.
-     *
-     * Naming it here rather than leaving it an unlabelled number is deliberate: an undocumented
-     * destructive command is easy to send by accident precisely because nothing marks it as
-     * dangerous.
-     */
+    // ---- Hazards: named on purpose, sent never (except 0x32 with parameter 0x00) ----
+    //
+    // **An unnamed hazard gets rediscovered by whoever probes next, and gets rediscovered by
+    // *sending* it.** That is not hypothetical on either family this app speaks to: a blind sweep
+    // of 0x50 below blanked the name of every occupied preset in a Pro-800's library, and the Nord
+    // side lost 202 programs to an equally unlabelled sub-opcode. Naming each one, saying what it
+    // does and where it was measured, is what stops the next person finding out the same way.
+    //
+    // None of these has a UI path, and nothing in this app sends any of them - the one exception
+    // being 0x32 with parameter 0x00, which is the documented preset reload (see [reloadPreset]).
+    // Any raw-message tool built on this object must demand a typed confirmation first.
+
+    /** **Factory reset. No confirmation from the instrument, and no undo.** */
     const val TYPE_FACTORY_RESET = 0x7D
+
+    /**
+     * Reboots the instrument into its bootloader - **at parameter [BOOTLOADER_PARAM] and nowhere
+     * else**.
+     *
+     * The display reads `boot`, the panel stops responding and the USB device re-enumerates; only
+     * a power cycle brings it back, which it then does with presets and firmware intact. Not a
+     * crash, and **not a range**: a sweep of every other parameter from `0x00` to `0x3F`, plus
+     * `0x40`, `0x60` and `0x7F`, answered a plain OK status and did nothing at all. That is exactly
+     * what makes it dangerous to probe - the type looks inert until one specific value.
+     */
+    const val TYPE_UNKNOWN_03 = 0x03
+    const val BOOTLOADER_PARAM = 0x30
 
     /**
      * Reset mode. **Parameter `0x00` is the preset reload, and it is the only safe parameter.**
@@ -81,6 +97,39 @@ object Pro800SysEx {
      * to the parameter, not to the type, so nothing here may send this with anything but `0x00`.
      */
     const val TYPE_RESET_MODE = 0x32
+
+    /**
+     * Writes both MIDI channel fields, and **its parameter is a flag rather than a value**.
+     *
+     * `0x00` sets RX and TX to DIP-switch mode; anything else writes `MIDI RX Channel` = 249, which
+     * is outside the field's range - and every out-of-range value makes the instrument **deaf to
+     * all channel-voice MIDI**: notes, Program Changes and CC alike.
+     *
+     * Milder than the rest of these: nothing is lost, and the recovery is an ordinary settings
+     * write, which needs no channel. It is named because the failure is completely silent, and
+     * because a sweep will produce it - a host that sends this simply stops the synth answering
+     * notes, with nothing on the wire to say why.
+     */
+    const val TYPE_CHANNEL_WRITE = 0x0E
+
+    /**
+     * Writes preset name bytes directly. **It is not a rename, and must not be used as one.**
+     *
+     * A blind sweep of it with no payload blanked the name of every occupied preset in a library -
+     * persisting through a power cycle, visible on the instrument's own display, recovered only by
+     * a factory reset.
+     *
+     * It is unusable even when sent correctly. A name written this way reads back one character
+     * short through a `0x77` dump while the display is right, or reads back right while the display
+     * renders a stray glyph, depending on the trailing NUL; and 14 characters is its ceiling rather
+     * than the name field's actual 16, with a 15th character that survives a power cycle and
+     * appears in no dump. It writes name bytes without the record-length bookkeeping `0x77` reports
+     * from, so the two stay permanently out of step. Behringer's own editor does not use it either.
+     *
+     * [Pro800Editor] renames the way that leaves the record consistent: a `0x77` read, a patch of
+     * the name field, and a `0x78` write of the whole record.
+     */
+    const val TYPE_SET_NAME = 0x50
 
     /**
      * Programs occupy 0..399; the settings block lives at 510 (`7E 03` as LSB/MSB) and must never
