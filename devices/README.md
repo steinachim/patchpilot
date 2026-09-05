@@ -7,8 +7,11 @@ Per-instrument catalogs. One file per instrument family, named for what it holds
 | `nord_devices.json` | every supported Nord model | its own native shape |
 | `behringer_pro800.json` | one Behringer Pro-800 | the generic `FamilyCatalog` shape |
 | `yamaha_motif_xs.json` | the Yamaha Motif XS6/XS7/XS8 family | the generic `FamilyCatalog` shape |
+| `motifxs_factory_voices.json` | the Motif XS's 1,217 factory voice names | its own shape (bank → slot → name) |
 
 `nord_devices.schema.json` documents `nord_devices.json`'s shape (also usable directly with any JSON Schema validator/editor plugin). `blanks/` holds binary payloads the Motif XS family writes to erase a slot — see `blanks/README.md`.
+
+`motifxs_factory_voices.json` is the one file here that is **transcribed rather than measured**: its names come from Yamaha's own Data List spreadsheets, not from an instrument this project has talked to. It exists because the eleven read-only banks never change and reading them over MIDI costs about seven and a half minutes, so the browser's Factory listing names them from here and issues no round trips at all. It is display text the app never transmits, which is why it does not fall under `blanks/README.md`'s rule that this project never invents bytes for a wire — a wrong entry here is a wrong label, not a malformed write. The browser says where the names came from, and the hidden debug screen can read one bank off a real instrument and diff it against this file. `MotifXsFactoryVoicesTest` pins its bank labels and slot counts against `yamaha_motif_xs.json`, so the two cannot drift apart silently.
 
 Everything below concerns `nord_devices.json` specifically.
 

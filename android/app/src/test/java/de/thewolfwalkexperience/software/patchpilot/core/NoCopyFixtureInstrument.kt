@@ -64,7 +64,7 @@ class NoCopyFixtureInstrument : Instrument, PresetBrowser, PresetSelector, Prese
      * partially-loaded list rendering this fixture is also meant to exercise has something to
      * render partially.
      */
-    override fun index(): Flow<IndexUpdate> = flow {
+    override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
         val all = library.slots(layout)
         all.chunked(BATCH).forEachIndexed { batchIndex, batch ->
             delay(BATCH_DELAY_MS)

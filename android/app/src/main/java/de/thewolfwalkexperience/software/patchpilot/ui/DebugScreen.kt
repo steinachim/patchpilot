@@ -89,6 +89,33 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
         }
     }
 
+    // The factory-name check: which bank the result belongs to, whether a read is running, and
+    // what it found. Deliberately not `rememberSaveable` like the regression run - a two-minute
+    // read is not worth resuming across process death, and a stale verdict would be worse than
+    // none. The bank is kept because checking PRE1 and then PRE2 would otherwise leave a verdict
+    // on screen with nothing saying which bank earned it.
+    var verifyBank by remember { mutableStateOf<String?>(null) }
+    var verifyProgress by remember { mutableStateOf<String?>(null) }
+    var verifyResult by remember { mutableStateOf<List<String>?>(null) }
+    val factoryBanks = remember(viewModel.canVerifyFactoryNames) { viewModel.factoryBanks() }
+
+    fun onVerifyFactoryNames(bank: Int) {
+        scope.launch {
+            error = null
+            verifyResult = null
+            verifyProgress = context.getString(R.string.debug_verify_starting)
+            try {
+                verifyResult = viewModel.verifyFactoryNames(bank) { step -> verifyProgress = step }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = e.message
+            } finally {
+                verifyProgress = null
+            }
+        }
+    }
+
     fun onRunRegressionTest() {
         scope.launch {
             error = null
@@ -164,6 +191,56 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.debug_regression_action))
+                    }
+                    // Only where there is a shipped name table to check, which today means a
+                    // Motif XS. Read-only throughout: it issues dump requests and writes nothing,
+                    // which is why it needs none of the regression test's confirmations.
+                    if (viewModel.canVerifyFactoryNames) {
+                        Spacer(Modifier.height(24.dp))
+                        Text(
+                            stringResource(R.string.debug_verify_body),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        factoryBanks.forEach { (bank, label) ->
+                            OutlinedButton(
+                                onClick = { verifyBank = label; onVerifyFactoryNames(bank) },
+                                enabled = verifyProgress == null && !sharer.isRunning,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(stringResource(R.string.debug_verify_action, label))
+                            }
+                        }
+                        verifyProgress?.let { step ->
+                            Spacer(Modifier.height(8.dp))
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            Spacer(Modifier.height(4.dp))
+                            Text(step, style = MaterialTheme.typography.bodySmall)
+                        }
+                        verifyResult?.let { mismatches ->
+                            Spacer(Modifier.height(8.dp))
+                            if (mismatches.isEmpty()) {
+                                Text(
+                                    stringResource(R.string.debug_verify_ok, verifyBank.orEmpty()),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            } else {
+                                Text(
+                                    stringResource(
+                                        R.string.debug_verify_mismatches,
+                                        verifyBank.orEmpty(), mismatches.size,
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                // Every one of them, not a count. A mismatch means the shipped
+                                // table is wrong, and the only useful next step is knowing which
+                                // slot and what the instrument actually calls it.
+                                mismatches.forEach {
+                                    Text(it, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
                     }
                 }
                 is RegressionRunState.Running -> {

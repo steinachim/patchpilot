@@ -118,6 +118,20 @@ data class BankSpec(
      * unreadable. Defaults to [label], so an instrument whose labels already fit says nothing.
      */
     val shortLabel: String = label,
+    /**
+     * Whether the instrument refuses writes here - true for a factory bank.
+     *
+     * **On the bank rather than on [PresetSlot], deliberately.** A row-level flag would have to be
+     * set at every construction site in every family, and the one that forgot would default to
+     * "writable" - failing in the direction that offers a Delete the instrument will reject.
+     * Read-only-ness is a property of the *bank* in every family that has one, so stating it once
+     * on the layout means nothing downstream can forget it: which addresses a copy may target and
+     * which rows offer an edit both derive from here.
+     *
+     * It is also what separates [PresetScope.USER] from [PresetScope.FACTORY] - a read-only bank
+     * is a factory bank - so there is no second field to keep inverted against this one.
+     */
+    val readOnly: Boolean = false,
 )
 
 /**

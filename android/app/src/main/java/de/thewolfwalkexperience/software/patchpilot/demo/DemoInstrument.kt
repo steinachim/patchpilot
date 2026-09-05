@@ -8,6 +8,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
@@ -72,8 +73,12 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
 
     // ---- PresetBrowser ----
 
-    /** One batch, like a real Nord - no artificial progress/delay to simulate here. */
-    override fun index(): Flow<IndexUpdate> = flow {
+    /**
+     * One batch, like a real Nord - no artificial progress/delay to simulate here.
+     *
+     * [scope] is ignored; the demo library declares only [PresetScope.USER].
+     */
+    override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
         emit(IndexUpdate.Slots(library.slots(layout)))
         emit(IndexUpdate.Complete)
     }

@@ -1,0 +1,4945 @@
+{
+  "family": "motifxs",
+  "schemaVersion": 1,
+  "description": "Factory (read-only) voice names, by bank and 1-based slot - PRE1-PRE8, GM, PREDR and GMDR, the banks not stored in a .X0E backup's DVCE chunk (see docs/docs/PROTOCOLS.md). Generated from the Yamaha Motif XS Data List spreadsheets, not reverse-engineered.",
+  "source": [
+    "Yamaha's Motif XS Data List, normal_voice_list.xls (PRE1-PRE8, GM)",
+    "Yamaha's Motif XS Data List, drum_voice_list.xls (PREDR, GMDR)"
+  ],
+  "banks": [
+    {
+      "label": "PRE1",
+      "slotCount": 128,
+      "voices": [
+        {
+          "slot": 1,
+          "name": "Full Concert Grand"
+        },
+        {
+          "slot": 2,
+          "name": "Rock Grand Piano"
+        },
+        {
+          "slot": 3,
+          "name": "Mellow Grand Piano"
+        },
+        {
+          "slot": 4,
+          "name": "Glasgow"
+        },
+        {
+          "slot": 5,
+          "name": "Romantic Piano"
+        },
+        {
+          "slot": 6,
+          "name": "Aggressive Grand"
+        },
+        {
+          "slot": 7,
+          "name": "Tacky"
+        },
+        {
+          "slot": 8,
+          "name": "House Piano"
+        },
+        {
+          "slot": 9,
+          "name": "Old and Squashed"
+        },
+        {
+          "slot": 10,
+          "name": "Ballad Key"
+        },
+        {
+          "slot": 11,
+          "name": "80s Layer"
+        },
+        {
+          "slot": 12,
+          "name": "Ballad Stack"
+        },
+        {
+          "slot": 13,
+          "name": "Piano Back"
+        },
+        {
+          "slot": 14,
+          "name": "Piano & Strings"
+        },
+        {
+          "slot": 15,
+          "name": "Piano & Ooh Choir"
+        },
+        {
+          "slot": 16,
+          "name": "Monaural Grand MW"
+        },
+        {
+          "slot": 17,
+          "name": "Old Blues"
+        },
+        {
+          "slot": 18,
+          "name": "1968"
+        },
+        {
+          "slot": 19,
+          "name": "CP 1979"
+        },
+        {
+          "slot": 20,
+          "name": "CP70 Chorus"
+        },
+        {
+          "slot": 21,
+          "name": "Journey"
+        },
+        {
+          "slot": 22,
+          "name": "Vintage'74"
+        },
+        {
+          "slot": 23,
+          "name": "R&B Soft"
+        },
+        {
+          "slot": 24,
+          "name": "Early 70's"
+        },
+        {
+          "slot": 25,
+          "name": "Soft Case"
+        },
+        {
+          "slot": 26,
+          "name": "Crunchy Comp"
+        },
+        {
+          "slot": 27,
+          "name": "Vintage Case"
+        },
+        {
+          "slot": 28,
+          "name": "Hard Vintage"
+        },
+        {
+          "slot": 29,
+          "name": "Sweetness MW+AS2"
+        },
+        {
+          "slot": 30,
+          "name": "Phaser Vintage"
+        },
+        {
+          "slot": 31,
+          "name": "Vintage Phase"
+        },
+        {
+          "slot": 32,
+          "name": "Early Fusion"
+        },
+        {
+          "slot": 33,
+          "name": "Neo Soul MW+AS1"
+        },
+        {
+          "slot": 34,
+          "name": "1983 MW+AS1"
+        },
+        {
+          "slot": 35,
+          "name": "Contempo"
+        },
+        {
+          "slot": 36,
+          "name": "Clicky Dyno MW+AS2"
+        },
+        {
+          "slot": 37,
+          "name": "Dyno Straight MW+AS2"
+        },
+        {
+          "slot": 38,
+          "name": "Dyno Chorus MW+AS2"
+        },
+        {
+          "slot": 39,
+          "name": "80s Boosted"
+        },
+        {
+          "slot": 40,
+          "name": "Chorus Hard"
+        },
+        {
+          "slot": 41,
+          "name": "Max Tine"
+        },
+        {
+          "slot": 42,
+          "name": "Bell Chorus"
+        },
+        {
+          "slot": 43,
+          "name": "Drive EP AS1"
+        },
+        {
+          "slot": 44,
+          "name": "Vinyl EP AS1"
+        },
+        {
+          "slot": 45,
+          "name": "Natural Wurli"
+        },
+        {
+          "slot": 46,
+          "name": "Wurli EP Bright"
+        },
+        {
+          "slot": 47,
+          "name": "Wurli Distortion AS1"
+        },
+        {
+          "slot": 48,
+          "name": "Phaze Wurli"
+        },
+        {
+          "slot": 49,
+          "name": "DX-7"
+        },
+        {
+          "slot": 50,
+          "name": "Bell DX"
+        },
+        {
+          "slot": 51,
+          "name": "DX Woody"
+        },
+        {
+          "slot": 52,
+          "name": "Full Tine"
+        },
+        {
+          "slot": 53,
+          "name": "DX Mellow"
+        },
+        {
+          "slot": 54,
+          "name": "DX Crisp"
+        },
+        {
+          "slot": 55,
+          "name": "DX Celesta EP"
+        },
+        {
+          "slot": 56,
+          "name": "DX Pluck EP"
+        },
+        {
+          "slot": 57,
+          "name": "DX-7 II AS1"
+        },
+        {
+          "slot": 58,
+          "name": "GS Tines AF1&2"
+        },
+        {
+          "slot": 59,
+          "name": "Galaxy DX"
+        },
+        {
+          "slot": 60,
+          "name": "TX816 Bell Piano"
+        },
+        {
+          "slot": 61,
+          "name": "Marimba DX"
+        },
+        {
+          "slot": 62,
+          "name": "DX5-Zero"
+        },
+        {
+          "slot": 63,
+          "name": "Hybrid EP"
+        },
+        {
+          "slot": 64,
+          "name": "Mixed Up"
+        },
+        {
+          "slot": 65,
+          "name": "Dyno Wurli"
+        },
+        {
+          "slot": 66,
+          "name": "Analog Piano"
+        },
+        {
+          "slot": 67,
+          "name": "AhrAmI"
+        },
+        {
+          "slot": 68,
+          "name": "Electro Piano"
+        },
+        {
+          "slot": 69,
+          "name": "Transistor Piano"
+        },
+        {
+          "slot": 70,
+          "name": "EP Pad"
+        },
+        {
+          "slot": 71,
+          "name": "DX Pad"
+        },
+        {
+          "slot": 72,
+          "name": "Dyno Choir"
+        },
+        {
+          "slot": 73,
+          "name": "Vintage Clavi"
+        },
+        {
+          "slot": 74,
+          "name": "Super Clavi"
+        },
+        {
+          "slot": 75,
+          "name": "Stereo Clavi"
+        },
+        {
+          "slot": 76,
+          "name": "Hollow Clavi"
+        },
+        {
+          "slot": 77,
+          "name": "Nu Phasing"
+        },
+        {
+          "slot": 78,
+          "name": "Touch Clavi"
+        },
+        {
+          "slot": 79,
+          "name": "Pedal Wah Clavi FC2"
+        },
+        {
+          "slot": 80,
+          "name": "Pulse Clavi"
+        },
+        {
+          "slot": 81,
+          "name": "Guitarpsichord"
+        },
+        {
+          "slot": 82,
+          "name": "Hipsichord"
+        },
+        {
+          "slot": 83,
+          "name": "16 + 8 + 5&1/3"
+        },
+        {
+          "slot": 84,
+          "name": "Jazz 2nd Perc + C3"
+        },
+        {
+          "slot": 85,
+          "name": "First 3 w/Perc"
+        },
+        {
+          "slot": 86,
+          "name": "Slow Jam"
+        },
+        {
+          "slot": 87,
+          "name": "Cool Cat"
+        },
+        {
+          "slot": 88,
+          "name": "Jazzy 1"
+        },
+        {
+          "slot": 89,
+          "name": "Jazzy 2"
+        },
+        {
+          "slot": 90,
+          "name": "Jazzy Chorus"
+        },
+        {
+          "slot": 91,
+          "name": "On Road AS1"
+        },
+        {
+          "slot": 92,
+          "name": "Progressy"
+        },
+        {
+          "slot": 93,
+          "name": "Rocky AS2"
+        },
+        {
+          "slot": 94,
+          "name": "Crunchy AS2"
+        },
+        {
+          "slot": 95,
+          "name": "1972 AS1"
+        },
+        {
+          "slot": 96,
+          "name": "Glassy AF1"
+        },
+        {
+          "slot": 97,
+          "name": "Clean"
+        },
+        {
+          "slot": 98,
+          "name": "All Bars Perc AF1&2"
+        },
+        {
+          "slot": 99,
+          "name": "Rotor Vibrato"
+        },
+        {
+          "slot": 100,
+          "name": "Vib Chorus AF1"
+        },
+        {
+          "slot": 101,
+          "name": "Soulemn"
+        },
+        {
+          "slot": 102,
+          "name": "Mellow AS2"
+        },
+        {
+          "slot": 103,
+          "name": "Fully"
+        },
+        {
+          "slot": 104,
+          "name": "FullDraw/CVibrato"
+        },
+        {
+          "slot": 105,
+          "name": "Even Out"
+        },
+        {
+          "slot": 106,
+          "name": "Harmonic Hole"
+        },
+        {
+          "slot": 107,
+          "name": "A Few Wheels"
+        },
+        {
+          "slot": 108,
+          "name": "Left Manual"
+        },
+        {
+          "slot": 109,
+          "name": "Draw Control"
+        },
+        {
+          "slot": 110,
+          "name": "Stop Rotar"
+        },
+        {
+          "slot": 111,
+          "name": "Clean Noise"
+        },
+        {
+          "slot": 112,
+          "name": "Walking Bass"
+        },
+        {
+          "slot": 113,
+          "name": "Greasy"
+        },
+        {
+          "slot": 114,
+          "name": "Swishie"
+        },
+        {
+          "slot": 115,
+          "name": "Solo Percussion AF2"
+        },
+        {
+          "slot": 116,
+          "name": "PercussionVibratoAF2"
+        },
+        {
+          "slot": 117,
+          "name": "Tiny Combo Bars 1"
+        },
+        {
+          "slot": 118,
+          "name": "Tiny Combo Bars 2"
+        },
+        {
+          "slot": 119,
+          "name": "Panther"
+        },
+        {
+          "slot": 120,
+          "name": "1967 Keys"
+        },
+        {
+          "slot": 121,
+          "name": "YD-45C"
+        },
+        {
+          "slot": 122,
+          "name": "Diamond Head"
+        },
+        {
+          "slot": 123,
+          "name": "Early Bird"
+        },
+        {
+          "slot": 124,
+          "name": "Moet"
+        },
+        {
+          "slot": 125,
+          "name": "Bollinger"
+        },
+        {
+          "slot": 126,
+          "name": "Vinyl Organ"
+        },
+        {
+          "slot": 127,
+          "name": "Alternator"
+        },
+        {
+          "slot": 128,
+          "name": "Flying Rhythm Bars"
+        }
+      ]
+    },
+    {
+      "label": "PRE2",
+      "slotCount": 128,
+      "voices": [
+        {
+          "slot": 1,
+          "name": "Roundabout"
+        },
+        {
+          "slot": 2,
+          "name": "Tradi"
+        },
+        {
+          "slot": 3,
+          "name": "Petit"
+        },
+        {
+          "slot": 4,
+          "name": "Fluty"
+        },
+        {
+          "slot": 5,
+          "name": "Fluty Pipe"
+        },
+        {
+          "slot": 6,
+          "name": "St. Peter"
+        },
+        {
+          "slot": 7,
+          "name": "St. Paul AF1&2"
+        },
+        {
+          "slot": 8,
+          "name": "Impromptu"
+        },
+        {
+          "slot": 9,
+          "name": "Mixture"
+        },
+        {
+          "slot": 10,
+          "name": "Reed Split"
+        },
+        {
+          "slot": 11,
+          "name": "Medieval MW"
+        },
+        {
+          "slot": 12,
+          "name": "Breath Pipe"
+        },
+        {
+          "slot": 13,
+          "name": "Reedy Pipe"
+        },
+        {
+          "slot": 14,
+          "name": "Sunday"
+        },
+        {
+          "slot": 15,
+          "name": "Accordions AF1&2"
+        },
+        {
+          "slot": 16,
+          "name": "Soft Marimba"
+        },
+        {
+          "slot": 17,
+          "name": "Vibes Bow MW"
+        },
+        {
+          "slot": 18,
+          "name": "Twinkle"
+        },
+        {
+          "slot": 19,
+          "name": "Stick Bell"
+        },
+        {
+          "slot": 20,
+          "name": "Ice Bells"
+        },
+        {
+          "slot": 21,
+          "name": "Bell Ice"
+        },
+        {
+          "slot": 22,
+          "name": "Stack Bell"
+        },
+        {
+          "slot": 23,
+          "name": "J-Pop"
+        },
+        {
+          "slot": 24,
+          "name": "Chorus Bell"
+        },
+        {
+          "slot": 25,
+          "name": "Handbell"
+        },
+        {
+          "slot": 26,
+          "name": "Bell Chiff"
+        },
+        {
+          "slot": 27,
+          "name": "Sako Bell"
+        },
+        {
+          "slot": 28,
+          "name": "Nice Bell"
+        },
+        {
+          "slot": 29,
+          "name": "Noisy Bell"
+        },
+        {
+          "slot": 30,
+          "name": "Pop Bells & Pad MW"
+        },
+        {
+          "slot": 31,
+          "name": "Going To Heaven"
+        },
+        {
+          "slot": 32,
+          "name": "Digibox"
+        },
+        {
+          "slot": 33,
+          "name": "Nibelungen"
+        },
+        {
+          "slot": 34,
+          "name": "Wood Bell"
+        },
+        {
+          "slot": 35,
+          "name": "Marimbell"
+        },
+        {
+          "slot": 36,
+          "name": "Synth Steel Drum"
+        },
+        {
+          "slot": 37,
+          "name": "Gamelan"
+        },
+        {
+          "slot": 38,
+          "name": "Ethnic Dream"
+        },
+        {
+          "slot": 39,
+          "name": "Mystic Bowl"
+        },
+        {
+          "slot": 40,
+          "name": "Mbira"
+        },
+        {
+          "slot": 41,
+          "name": "Glass Mbira"
+        },
+        {
+          "slot": 42,
+          "name": "Island Bell"
+        },
+        {
+          "slot": 43,
+          "name": "Tibetan"
+        },
+        {
+          "slot": 44,
+          "name": "Rimba Bells"
+        },
+        {
+          "slot": 45,
+          "name": "Lost in Asia"
+        },
+        {
+          "slot": 46,
+          "name": "Coconuts Random"
+        },
+        {
+          "slot": 47,
+          "name": "Kodo"
+        },
+        {
+          "slot": 48,
+          "name": "Timpani/Bell/Glocken"
+        },
+        {
+          "slot": 49,
+          "name": "Orc Percussion"
+        },
+        {
+          "slot": 50,
+          "name": "Classical AF1&2"
+        },
+        {
+          "slot": 51,
+          "name": "High Tension AF1&2"
+        },
+        {
+          "slot": 52,
+          "name": "Sao Paulo"
+        },
+        {
+          "slot": 53,
+          "name": "Barcelona"
+        },
+        {
+          "slot": 54,
+          "name": "Nylon Slide Vel"
+        },
+        {
+          "slot": 55,
+          "name": "Nylon Harmonics Vel"
+        },
+        {
+          "slot": 56,
+          "name": "Classical 12 Strings"
+        },
+        {
+          "slot": 57,
+          "name": "Hip-Hop Nylon Guitar"
+        },
+        {
+          "slot": 58,
+          "name": "Steel String AF1&2"
+        },
+        {
+          "slot": 59,
+          "name": "Old Strings AF1&2"
+        },
+        {
+          "slot": 60,
+          "name": "Steel Slide Vel"
+        },
+        {
+          "slot": 61,
+          "name": "Mute & Slide Vel"
+        },
+        {
+          "slot": 62,
+          "name": "Steel Harmonics Vel"
+        },
+        {
+          "slot": 63,
+          "name": "Hip-Hop Steel Guitar"
+        },
+        {
+          "slot": 64,
+          "name": "Hi Strings"
+        },
+        {
+          "slot": 65,
+          "name": "Two Acoustics"
+        },
+        {
+          "slot": 66,
+          "name": "2 Steel Strings"
+        },
+        {
+          "slot": 67,
+          "name": "Big 12 Strings"
+        },
+        {
+          "slot": 68,
+          "name": "Airy 12 AF1&2"
+        },
+        {
+          "slot": 69,
+          "name": "Wide 12 strings AF1"
+        },
+        {
+          "slot": 70,
+          "name": "12Strings Mono"
+        },
+        {
+          "slot": 71,
+          "name": "Clean El & Ac 1"
+        },
+        {
+          "slot": 72,
+          "name": "Clean El & Ac 2"
+        },
+        {
+          "slot": 73,
+          "name": "Clean El & Ac 3"
+        },
+        {
+          "slot": 74,
+          "name": "Strange 12"
+        },
+        {
+          "slot": 75,
+          "name": "Jazzy Pick"
+        },
+        {
+          "slot": 76,
+          "name": "Melodic Jazz"
+        },
+        {
+          "slot": 77,
+          "name": "Fat Oil Jazz AF1&2"
+        },
+        {
+          "slot": 78,
+          "name": "Touch Wah AF1"
+        },
+        {
+          "slot": 79,
+          "name": "Baby AF1"
+        },
+        {
+          "slot": 80,
+          "name": "Good Night"
+        },
+        {
+          "slot": 81,
+          "name": "Dynamic Clean AF1&2"
+        },
+        {
+          "slot": 82,
+          "name": "Single Coil Chorus"
+        },
+        {
+          "slot": 83,
+          "name": "Distant"
+        },
+        {
+          "slot": 84,
+          "name": "Some Hair"
+        },
+        {
+          "slot": 85,
+          "name": "Clean Slide Vel"
+        },
+        {
+          "slot": 86,
+          "name": "Hit It Hard AS2"
+        },
+        {
+          "slot": 87,
+          "name": "Paddy Clean"
+        },
+        {
+          "slot": 88,
+          "name": "Bluesy Clean Legato"
+        },
+        {
+          "slot": 89,
+          "name": "Dual Coil '65"
+        },
+        {
+          "slot": 90,
+          "name": "Dual Coil Amp AS1"
+        },
+        {
+          "slot": 91,
+          "name": "Roto Guitar MW"
+        },
+        {
+          "slot": 92,
+          "name": "Dual Coil Slide Vel"
+        },
+        {
+          "slot": 93,
+          "name": "Dual Coil Slap Vel"
+        },
+        {
+          "slot": 94,
+          "name": "Dual Coil 80s Clean"
+        },
+        {
+          "slot": 95,
+          "name": "Dual Coil Rotary"
+        },
+        {
+          "slot": 96,
+          "name": "Electric 12Strings"
+        },
+        {
+          "slot": 97,
+          "name": "Rotator AF1&2"
+        },
+        {
+          "slot": 98,
+          "name": "Middy Tremolo"
+        },
+        {
+          "slot": 99,
+          "name": "Retro Flanger"
+        },
+        {
+          "slot": 100,
+          "name": "Vintage Strum"
+        },
+        {
+          "slot": 101,
+          "name": "Spanky"
+        },
+        {
+          "slot": 102,
+          "name": "Rockabilly"
+        },
+        {
+          "slot": 103,
+          "name": "2 Electrics AF1&2"
+        },
+        {
+          "slot": 104,
+          "name": "Light Blues AF1&2"
+        },
+        {
+          "slot": 105,
+          "name": "Dual Coil Semi Clean"
+        },
+        {
+          "slot": 106,
+          "name": "Chorus Dist AF1&2"
+        },
+        {
+          "slot": 107,
+          "name": "Tex Boogie"
+        },
+        {
+          "slot": 108,
+          "name": "59 Combo AF1&2"
+        },
+        {
+          "slot": 109,
+          "name": "Alternative Rocker"
+        },
+        {
+          "slot": 110,
+          "name": "Overdrive Mute&Harmo"
+        },
+        {
+          "slot": 111,
+          "name": "Crunched Up 376"
+        },
+        {
+          "slot": 112,
+          "name": "Dynamic Amp AS1"
+        },
+        {
+          "slot": 113,
+          "name": "Chuggin' Guitar"
+        },
+        {
+          "slot": 114,
+          "name": "Chugga"
+        },
+        {
+          "slot": 115,
+          "name": "Small Amp AS1"
+        },
+        {
+          "slot": 116,
+          "name": "Metal Mute AS2"
+        },
+        {
+          "slot": 117,
+          "name": "DistortionMute&Harmo"
+        },
+        {
+          "slot": 118,
+          "name": "Cool Drive AS1"
+        },
+        {
+          "slot": 119,
+          "name": "Hard Drive AS1&2"
+        },
+        {
+          "slot": 120,
+          "name": "Hard Ramp AS1&2"
+        },
+        {
+          "slot": 121,
+          "name": "Heavy Drive"
+        },
+        {
+          "slot": 122,
+          "name": "No.1 GTR AS1&2"
+        },
+        {
+          "slot": 123,
+          "name": "Snake Finger"
+        },
+        {
+          "slot": 124,
+          "name": "Dual Coil Blue Lead"
+        },
+        {
+          "slot": 125,
+          "name": "Over The Top"
+        },
+        {
+          "slot": 126,
+          "name": "Voodooman"
+        },
+        {
+          "slot": 127,
+          "name": "Killer Whammy"
+        },
+        {
+          "slot": 128,
+          "name": "Latin Lover"
+        }
+      ]
+    },
+    {
+      "label": "PRE3",
+      "slotCount": 128,
+      "voices": [
+        {
+          "slot": 1,
+          "name": "Oct FuzzPedalWah FC2"
+        },
+        {
+          "slot": 2,
+          "name": "DualCoilLeadWah FC2"
+        },
+        {
+          "slot": 3,
+          "name": "DualCoilHarmonicsVel"
+        },
+        {
+          "slot": 4,
+          "name": "Crunchy Guitar"
+        },
+        {
+          "slot": 5,
+          "name": "Beater AS2"
+        },
+        {
+          "slot": 6,
+          "name": "HIP Mute"
+        },
+        {
+          "slot": 7,
+          "name": "Pedal Steel"
+        },
+        {
+          "slot": 8,
+          "name": "DualCoil80sCleanMute"
+        },
+        {
+          "slot": 9,
+          "name": "Mid Drive (2handGtr)"
+        },
+        {
+          "slot": 10,
+          "name": "HardRocker(2handGtr)"
+        },
+        {
+          "slot": 11,
+          "name": "ToughTube (2handGtr)"
+        },
+        {
+          "slot": 12,
+          "name": "DriveWah (2handGtr)"
+        },
+        {
+          "slot": 13,
+          "name": "Resonator Guitar"
+        },
+        {
+          "slot": 14,
+          "name": "Velo Growl"
+        },
+        {
+          "slot": 15,
+          "name": "GrooveAcoustic AF1&2"
+        },
+        {
+          "slot": 16,
+          "name": "Upright"
+        },
+        {
+          "slot": 17,
+          "name": "Prec Flat Wound"
+        },
+        {
+          "slot": 18,
+          "name": "Round Wound"
+        },
+        {
+          "slot": 19,
+          "name": "Active P"
+        },
+        {
+          "slot": 20,
+          "name": "Mid Range Finger"
+        },
+        {
+          "slot": 21,
+          "name": "Active TRB"
+        },
+        {
+          "slot": 22,
+          "name": "Passive BB AF1&2"
+        },
+        {
+          "slot": 23,
+          "name": "Vintage JB AF1&2"
+        },
+        {
+          "slot": 24,
+          "name": "StraightFinger AF1&2"
+        },
+        {
+          "slot": 25,
+          "name": "JB Flat Wound AF1&2"
+        },
+        {
+          "slot": 26,
+          "name": "Finger PBs AF1"
+        },
+        {
+          "slot": 27,
+          "name": "Prec Amped AF1"
+        },
+        {
+          "slot": 28,
+          "name": "Finger Bass Amp AF1"
+        },
+        {
+          "slot": 29,
+          "name": "Fret Buzzy"
+        },
+        {
+          "slot": 30,
+          "name": "Small Cabinet"
+        },
+        {
+          "slot": 31,
+          "name": "Simple Pick"
+        },
+        {
+          "slot": 32,
+          "name": "Pick Open"
+        },
+        {
+          "slot": 33,
+          "name": "Pick Mute"
+        },
+        {
+          "slot": 34,
+          "name": "Pick Pull"
+        },
+        {
+          "slot": 35,
+          "name": "Straight Pick AF1&2"
+        },
+        {
+          "slot": 36,
+          "name": "Velo Bass"
+        },
+        {
+          "slot": 37,
+          "name": "Slap Switch"
+        },
+        {
+          "slot": 38,
+          "name": "Fretless Dry"
+        },
+        {
+          "slot": 39,
+          "name": "Fretless Solo"
+        },
+        {
+          "slot": 40,
+          "name": "PBassFingerDist AF1"
+        },
+        {
+          "slot": 41,
+          "name": "Fuzz Bass AF1AS1"
+        },
+        {
+          "slot": 42,
+          "name": "Gnarly Bass"
+        },
+        {
+          "slot": 43,
+          "name": "BaCement"
+        },
+        {
+          "slot": 44,
+          "name": "Dist Tama Bass"
+        },
+        {
+          "slot": 45,
+          "name": "5th Fuzz Bass"
+        },
+        {
+          "slot": 46,
+          "name": "Chili Bass"
+        },
+        {
+          "slot": 47,
+          "name": "Big Cabinet"
+        },
+        {
+          "slot": 48,
+          "name": "Hybrid Bass 1"
+        },
+        {
+          "slot": 49,
+          "name": "Hybrid Bass 2"
+        },
+        {
+          "slot": 50,
+          "name": "3 VCOs"
+        },
+        {
+          "slot": 51,
+          "name": "Brain Bass AF1&2"
+        },
+        {
+          "slot": 52,
+          "name": "Lo Boy AF1&2 AS1&2"
+        },
+        {
+          "slot": 53,
+          "name": "Dark Bass"
+        },
+        {
+          "slot": 54,
+          "name": "RnBass RB"
+        },
+        {
+          "slot": 55,
+          "name": "Fundamental"
+        },
+        {
+          "slot": 56,
+          "name": "Fat Sine Resonance"
+        },
+        {
+          "slot": 57,
+          "name": "Moon Bass"
+        },
+        {
+          "slot": 58,
+          "name": "More Fatty"
+        },
+        {
+          "slot": 59,
+          "name": "Chill Out Bass AF1"
+        },
+        {
+          "slot": 60,
+          "name": "Growler"
+        },
+        {
+          "slot": 61,
+          "name": "Smacked"
+        },
+        {
+          "slot": 62,
+          "name": "boooooooooom"
+        },
+        {
+          "slot": 63,
+          "name": "Biting"
+        },
+        {
+          "slot": 64,
+          "name": "Boogie A LegatoAF1RB"
+        },
+        {
+          "slot": 65,
+          "name": "Uni Punch"
+        },
+        {
+          "slot": 66,
+          "name": "Noise Bass"
+        },
+        {
+          "slot": 67,
+          "name": "Single Oscillator"
+        },
+        {
+          "slot": 68,
+          "name": "Unison"
+        },
+        {
+          "slot": 69,
+          "name": "Long Spit AF2"
+        },
+        {
+          "slot": 70,
+          "name": "Big Bass"
+        },
+        {
+          "slot": 71,
+          "name": "Bass&Comp!"
+        },
+        {
+          "slot": 72,
+          "name": "Rave Blade"
+        },
+        {
+          "slot": 73,
+          "name": "Plastic Bass"
+        },
+        {
+          "slot": 74,
+          "name": "Funky Resonance RB"
+        },
+        {
+          "slot": 75,
+          "name": "Phat Three"
+        },
+        {
+          "slot": 76,
+          "name": "Needle Bass"
+        },
+        {
+          "slot": 77,
+          "name": "Acidd"
+        },
+        {
+          "slot": 78,
+          "name": "Boom Bass AF1"
+        },
+        {
+          "slot": 79,
+          "name": "West Coast"
+        },
+        {
+          "slot": 80,
+          "name": "Wazzo"
+        },
+        {
+          "slot": 81,
+          "name": "Fast PWM Bass"
+        },
+        {
+          "slot": 82,
+          "name": "Bass Pedal"
+        },
+        {
+          "slot": 83,
+          "name": "Oxide"
+        },
+        {
+          "slot": 84,
+          "name": "Bowngo"
+        },
+        {
+          "slot": 85,
+          "name": "Wide Synth Bass"
+        },
+        {
+          "slot": 86,
+          "name": "Dry Synth Bass"
+        },
+        {
+          "slot": 87,
+          "name": "Kick Bass Legato"
+        },
+        {
+          "slot": 88,
+          "name": "Keep Dancin' AS2"
+        },
+        {
+          "slot": 89,
+          "name": "Velo Master"
+        },
+        {
+          "slot": 90,
+          "name": "Wah Bass"
+        },
+        {
+          "slot": 91,
+          "name": "Pulse Step AF1"
+        },
+        {
+          "slot": 92,
+          "name": "Phat Step AS1&2"
+        },
+        {
+          "slot": 93,
+          "name": "Octave Analog"
+        },
+        {
+          "slot": 94,
+          "name": "Sync Bass"
+        },
+        {
+          "slot": 95,
+          "name": "Sync Big"
+        },
+        {
+          "slot": 96,
+          "name": "Puncher AS1"
+        },
+        {
+          "slot": 97,
+          "name": "Dark Comp AF1&2"
+        },
+        {
+          "slot": 98,
+          "name": "Simple Bass AS2"
+        },
+        {
+          "slot": 99,
+          "name": "Fat Sine"
+        },
+        {
+          "slot": 100,
+          "name": "Kompressor"
+        },
+        {
+          "slot": 101,
+          "name": "Dark Uni"
+        },
+        {
+          "slot": 102,
+          "name": "Fight Bass"
+        },
+        {
+          "slot": 103,
+          "name": "Byon Bass"
+        },
+        {
+          "slot": 104,
+          "name": "One Voice"
+        },
+        {
+          "slot": 105,
+          "name": "Pro-Attack AF1"
+        },
+        {
+          "slot": 106,
+          "name": "Bobby Bass"
+        },
+        {
+          "slot": 107,
+          "name": "Trance Bass AS2"
+        },
+        {
+          "slot": 108,
+          "name": "Short Sequence Bass"
+        },
+        {
+          "slot": 109,
+          "name": "Lately"
+        },
+        {
+          "slot": 110,
+          "name": "Faaat Pulse"
+        },
+        {
+          "slot": 111,
+          "name": "Short PWM Bass"
+        },
+        {
+          "slot": 112,
+          "name": "Hyper Velocity AF1"
+        },
+        {
+          "slot": 113,
+          "name": "Deep Point"
+        },
+        {
+          "slot": 114,
+          "name": "Pulse Stop"
+        },
+        {
+          "slot": 115,
+          "name": "Oh Bee Bass"
+        },
+        {
+          "slot": 116,
+          "name": "Booming Bass"
+        },
+        {
+          "slot": 117,
+          "name": "Army Bass"
+        },
+        {
+          "slot": 118,
+          "name": "Punchy Drone RB"
+        },
+        {
+          "slot": 119,
+          "name": "Dee Tune"
+        },
+        {
+          "slot": 120,
+          "name": "Chorus Pulse"
+        },
+        {
+          "slot": 121,
+          "name": "Sweeper"
+        },
+        {
+          "slot": 122,
+          "name": "Old House Organ"
+        },
+        {
+          "slot": 123,
+          "name": "Data Run"
+        },
+        {
+          "slot": 124,
+          "name": "Sharp 3o3"
+        },
+        {
+          "slot": 125,
+          "name": "Short 3o3 Saw"
+        },
+        {
+          "slot": 126,
+          "name": "Acid Fun AS1"
+        },
+        {
+          "slot": 127,
+          "name": "Compu Bass"
+        },
+        {
+          "slot": 128,
+          "name": "Squeaker Bass"
+        }
+      ]
+    },
+    {
+      "label": "PRE4",
+      "slotCount": 128,
+      "voices": [
+        {
+          "slot": 1,
+          "name": "Violin Solo 1"
+        },
+        {
+          "slot": 2,
+          "name": "Violin Solo 2 AF1"
+        },
+        {
+          "slot": 3,
+          "name": "Viola Solo 1"
+        },
+        {
+          "slot": 4,
+          "name": "Viola Solo 2 AF1"
+        },
+        {
+          "slot": 5,
+          "name": "Cello Solo"
+        },
+        {
+          "slot": 6,
+          "name": "Cello Duo AF1"
+        },
+        {
+          "slot": 7,
+          "name": "Contrabass Solo"
+        },
+        {
+          "slot": 8,
+          "name": "Contrabass Solo2 AF1"
+        },
+        {
+          "slot": 9,
+          "name": "Quartet"
+        },
+        {
+          "slot": 10,
+          "name": "Small Section"
+        },
+        {
+          "slot": 11,
+          "name": "Small Ensemble"
+        },
+        {
+          "slot": 12,
+          "name": "Almighty"
+        },
+        {
+          "slot": 13,
+          "name": "Medium Section"
+        },
+        {
+          "slot": 14,
+          "name": "Medium Hall"
+        },
+        {
+          "slot": 15,
+          "name": "Medium Large Section"
+        },
+        {
+          "slot": 16,
+          "name": "Quick Bows"
+        },
+        {
+          "slot": 17,
+          "name": "Aggressive AF1"
+        },
+        {
+          "slot": 18,
+          "name": "Large Section"
+        },
+        {
+          "slot": 19,
+          "name": "Octave Ensemble"
+        },
+        {
+          "slot": 20,
+          "name": "Full Chamber"
+        },
+        {
+          "slot": 21,
+          "name": "Stryngs"
+        },
+        {
+          "slot": 22,
+          "name": "Dynamik Bow"
+        },
+        {
+          "slot": 23,
+          "name": "Symphonic Pizzicato"
+        },
+        {
+          "slot": 24,
+          "name": "Plucky Pizzicato"
+        },
+        {
+          "slot": 25,
+          "name": "Octave Pizzes"
+        },
+        {
+          "slot": 26,
+          "name": "Tremolo Strings 1"
+        },
+        {
+          "slot": 27,
+          "name": "TremoloStrings Small"
+        },
+        {
+          "slot": 28,
+          "name": "Spicato Large"
+        },
+        {
+          "slot": 29,
+          "name": "Disco AF1"
+        },
+        {
+          "slot": 30,
+          "name": "Ens Mix"
+        },
+        {
+          "slot": 31,
+          "name": "Lush"
+        },
+        {
+          "slot": 32,
+          "name": "Back Ground"
+        },
+        {
+          "slot": 33,
+          "name": "Romantic"
+        },
+        {
+          "slot": 34,
+          "name": "Warm Back"
+        },
+        {
+          "slot": 35,
+          "name": "Stringy"
+        },
+        {
+          "slot": 36,
+          "name": "Big Strings"
+        },
+        {
+          "slot": 37,
+          "name": "PWM Strings"
+        },
+        {
+          "slot": 38,
+          "name": "Mourn Strings"
+        },
+        {
+          "slot": 39,
+          "name": "VP Soft"
+        },
+        {
+          "slot": 40,
+          "name": "PWM Simple"
+        },
+        {
+          "slot": 41,
+          "name": "Glassy Rezonant"
+        },
+        {
+          "slot": 42,
+          "name": "Superstrings"
+        },
+        {
+          "slot": 43,
+          "name": "Light Pad"
+        },
+        {
+          "slot": 44,
+          "name": "Noble Pad"
+        },
+        {
+          "slot": 45,
+          "name": "Warm Big"
+        },
+        {
+          "slot": 46,
+          "name": "Sentimental"
+        },
+        {
+          "slot": 47,
+          "name": "Analog Sweep"
+        },
+        {
+          "slot": 48,
+          "name": "Phase Strings AS1"
+        },
+        {
+          "slot": 49,
+          "name": "Octave Strings"
+        },
+        {
+          "slot": 50,
+          "name": "JP Strings"
+        },
+        {
+          "slot": 51,
+          "name": "3Oscillators Vintage"
+        },
+        {
+          "slot": 52,
+          "name": "Silver Strings"
+        },
+        {
+          "slot": 53,
+          "name": "String Machine"
+        },
+        {
+          "slot": 54,
+          "name": "3 Octave Strings"
+        },
+        {
+          "slot": 55,
+          "name": "Trance Introduction"
+        },
+        {
+          "slot": 56,
+          "name": "Mystic Trance"
+        },
+        {
+          "slot": 57,
+          "name": "F.Horn + Strings"
+        },
+        {
+          "slot": 58,
+          "name": "Wood Winds + Strings"
+        },
+        {
+          "slot": 59,
+          "name": "ElectricViolin AF1&2"
+        },
+        {
+          "slot": 60,
+          "name": "Tron Violin"
+        },
+        {
+          "slot": 61,
+          "name": "Tron Strings"
+        },
+        {
+          "slot": 62,
+          "name": "Tape Strings AS2"
+        },
+        {
+          "slot": 63,
+          "name": "Orchestronic"
+        },
+        {
+          "slot": 64,
+          "name": "Vinyltron"
+        },
+        {
+          "slot": 65,
+          "name": "Analog Strings"
+        },
+        {
+          "slot": 66,
+          "name": "Analog Ensemble"
+        },
+        {
+          "slot": 67,
+          "name": "Pizz-o-matic"
+        },
+        {
+          "slot": 68,
+          "name": "Ambient Pizza"
+        },
+        {
+          "slot": 69,
+          "name": "Beauty Harp"
+        },
+        {
+          "slot": 70,
+          "name": "Stereo Harp"
+        },
+        {
+          "slot": 71,
+          "name": "Trumpet 1 AF1"
+        },
+        {
+          "slot": 72,
+          "name": "Tp Romantic Legato"
+        },
+        {
+          "slot": 73,
+          "name": "Classical Trumpet"
+        },
+        {
+          "slot": 74,
+          "name": "Baby Trumpet AF1"
+        },
+        {
+          "slot": 75,
+          "name": "Bright Trumpet AF1"
+        },
+        {
+          "slot": 76,
+          "name": "Tp Soft Jazz Legato"
+        },
+        {
+          "slot": 77,
+          "name": "Legend Mute AF1"
+        },
+        {
+          "slot": 78,
+          "name": "Jazzy Flugel AF1"
+        },
+        {
+          "slot": 79,
+          "name": "Trumpet Section"
+        },
+        {
+          "slot": 80,
+          "name": "Trombone 1 AF1"
+        },
+        {
+          "slot": 81,
+          "name": "Blown Bone Legato"
+        },
+        {
+          "slot": 82,
+          "name": "Bright Trombone AF1"
+        },
+        {
+          "slot": 83,
+          "name": "New Orleans Trombone"
+        },
+        {
+          "slot": 84,
+          "name": "French Horn AF1"
+        },
+        {
+          "slot": 85,
+          "name": "French Horn Solo"
+        },
+        {
+          "slot": 86,
+          "name": "BassTuba(Bb)"
+        },
+        {
+          "slot": 87,
+          "name": "Euphonium"
+        },
+        {
+          "slot": 88,
+          "name": "Bony Section"
+        },
+        {
+          "slot": 89,
+          "name": "French Horn Section"
+        },
+        {
+          "slot": 90,
+          "name": "F.Horn + Trombone"
+        },
+        {
+          "slot": 91,
+          "name": "F.Hrn + Trmbn + Trp"
+        },
+        {
+          "slot": 92,
+          "name": "Orchestra Brass"
+        },
+        {
+          "slot": 93,
+          "name": "Movie Horns"
+        },
+        {
+          "slot": 94,
+          "name": "Symphonic"
+        },
+        {
+          "slot": 95,
+          "name": "Smooth Brass"
+        },
+        {
+          "slot": 96,
+          "name": "SoftBrss mp-mf AF1&2"
+        },
+        {
+          "slot": 97,
+          "name": "Dynamic Brass AF1&2"
+        },
+        {
+          "slot": 98,
+          "name": "Accent mf-fall AF1&2"
+        },
+        {
+          "slot": 99,
+          "name": "Small Brass Section"
+        },
+        {
+          "slot": 100,
+          "name": "Medium Brass Section"
+        },
+        {
+          "slot": 101,
+          "name": "Lots O' Brass"
+        },
+        {
+          "slot": 102,
+          "name": "Bright Section"
+        },
+        {
+          "slot": 103,
+          "name": "Power Section"
+        },
+        {
+          "slot": 104,
+          "name": "Shiny Brass"
+        },
+        {
+          "slot": 105,
+          "name": "Big Brass AF1&2"
+        },
+        {
+          "slot": 106,
+          "name": "Sforzando AF1&2"
+        },
+        {
+          "slot": 107,
+          "name": "Soft Brass & Sax"
+        },
+        {
+          "slot": 108,
+          "name": "Big Band"
+        },
+        {
+          "slot": 109,
+          "name": "Sax Big Band"
+        },
+        {
+          "slot": 110,
+          "name": "Velo Falls"
+        },
+        {
+          "slot": 111,
+          "name": "Hybrid Section"
+        },
+        {
+          "slot": 112,
+          "name": "Hybrid Bright"
+        },
+        {
+          "slot": 113,
+          "name": "Hybrid Brass Swell"
+        },
+        {
+          "slot": 114,
+          "name": "T Brass"
+        },
+        {
+          "slot": 115,
+          "name": "Lo-fi AS1&2"
+        },
+        {
+          "slot": 116,
+          "name": "Quiet Brass"
+        },
+        {
+          "slot": 117,
+          "name": "Big Syn"
+        },
+        {
+          "slot": 118,
+          "name": "Thinth"
+        },
+        {
+          "slot": 119,
+          "name": "XP Brass Stereo"
+        },
+        {
+          "slot": 120,
+          "name": "Simple Saw Brass"
+        },
+        {
+          "slot": 121,
+          "name": "Brassy"
+        },
+        {
+          "slot": 122,
+          "name": "Kustom"
+        },
+        {
+          "slot": 123,
+          "name": "After 1984"
+        },
+        {
+          "slot": 124,
+          "name": "Finale"
+        },
+        {
+          "slot": 125,
+          "name": "Huge CS80"
+        },
+        {
+          "slot": 126,
+          "name": "CS-90"
+        },
+        {
+          "slot": 127,
+          "name": "Ob Soft"
+        },
+        {
+          "slot": 128,
+          "name": "Ob Horns"
+        }
+      ]
+    },
+    {
+      "label": "PRE5",
+      "slotCount": 128,
+      "voices": [
+        {
+          "slot": 1,
+          "name": "Slow PWM Brass"
+        },
+        {
+          "slot": 2,
+          "name": "Soft 5th Brass"
+        },
+        {
+          "slot": 3,
+          "name": "Soprano Legato"
+        },
+        {
+          "slot": 4,
+          "name": "Soprano Soft AF1"
+        },
+        {
+          "slot": 5,
+          "name": "Alto Vib Legato"
+        },
+        {
+          "slot": 6,
+          "name": "Alto Legato"
+        },
+        {
+          "slot": 7,
+          "name": "Alto"
+        },
+        {
+          "slot": 8,
+          "name": "Tenor Dynamic AF1"
+        },
+        {
+          "slot": 9,
+          "name": "Tenor Soft Legato"
+        },
+        {
+          "slot": 10,
+          "name": "Velo Growl Legato"
+        },
+        {
+          "slot": 11,
+          "name": "Tenor Growl AF1"
+        },
+        {
+          "slot": 12,
+          "name": "Baritone"
+        },
+        {
+          "slot": 13,
+          "name": "Hip Bari"
+        },
+        {
+          "slot": 14,
+          "name": "Tenor Section"
+        },
+        {
+          "slot": 15,
+          "name": "Sax Octave Section"
+        },
+        {
+          "slot": 16,
+          "name": "Mixed Sax Section"
+        },
+        {
+          "slot": 17,
+          "name": "Flute Legato"
+        },
+        {
+          "slot": 18,
+          "name": "Sweet Flute AF1"
+        },
+        {
+          "slot": 19,
+          "name": "Wood Flute"
+        },
+        {
+          "slot": 20,
+          "name": "Oboe 1 AF1"
+        },
+        {
+          "slot": 21,
+          "name": "Sweet Oboe Legato"
+        },
+        {
+          "slot": 22,
+          "name": "Oboe Soft Legato"
+        },
+        {
+          "slot": 23,
+          "name": "Clarinet 1 AF1"
+        },
+        {
+          "slot": 24,
+          "name": "JazzyClarinet Legato"
+        },
+        {
+          "slot": 25,
+          "name": "Bassoon 1 AF1"
+        },
+        {
+          "slot": 26,
+          "name": "Irish Pipe Legato"
+        },
+        {
+          "slot": 27,
+          "name": "2 Flutes"
+        },
+        {
+          "slot": 28,
+          "name": "Flute & Clari"
+        },
+        {
+          "slot": 29,
+          "name": "2 Oboes & Bassoon"
+        },
+        {
+          "slot": 30,
+          "name": "WoodWind Quartet"
+        },
+        {
+          "slot": 31,
+          "name": "Gentle Harp"
+        },
+        {
+          "slot": 32,
+          "name": "Woody Harp"
+        },
+        {
+          "slot": 33,
+          "name": "Bluz Distort"
+        },
+        {
+          "slot": 34,
+          "name": "Campfire"
+        },
+        {
+          "slot": 35,
+          "name": "Tron Flute"
+        },
+        {
+          "slot": 36,
+          "name": "Flootz"
+        },
+        {
+          "slot": 37,
+          "name": "Huge Lead"
+        },
+        {
+          "slot": 38,
+          "name": "Bleep Lead AF2"
+        },
+        {
+          "slot": 39,
+          "name": "Detuned Vintage"
+        },
+        {
+          "slot": 40,
+          "name": "Space Lead"
+        },
+        {
+          "slot": 41,
+          "name": "Dual Square Lead"
+        },
+        {
+          "slot": 42,
+          "name": "Vintage Sync"
+        },
+        {
+          "slot": 43,
+          "name": "Dirty Hook"
+        },
+        {
+          "slot": 44,
+          "name": "Nu Mini"
+        },
+        {
+          "slot": 45,
+          "name": "ProgressiveRock Lead"
+        },
+        {
+          "slot": 46,
+          "name": "Lucky"
+        },
+        {
+          "slot": 47,
+          "name": "Opening"
+        },
+        {
+          "slot": 48,
+          "name": "Rap Lead 1"
+        },
+        {
+          "slot": 49,
+          "name": "Mini Soft"
+        },
+        {
+          "slot": 50,
+          "name": "Feeling"
+        },
+        {
+          "slot": 51,
+          "name": "Early Lead"
+        },
+        {
+          "slot": 52,
+          "name": "Funky Pulse"
+        },
+        {
+          "slot": 53,
+          "name": "Mr. Finger"
+        },
+        {
+          "slot": 54,
+          "name": "Singleline"
+        },
+        {
+          "slot": 55,
+          "name": "Soft RnB"
+        },
+        {
+          "slot": 56,
+          "name": "Wind Synth"
+        },
+        {
+          "slot": 57,
+          "name": "Broken Sine RBAS1"
+        },
+        {
+          "slot": 58,
+          "name": "Duck Lead"
+        },
+        {
+          "slot": 59,
+          "name": "In da Night"
+        },
+        {
+          "slot": 60,
+          "name": "Mayday MW"
+        },
+        {
+          "slot": 61,
+          "name": "On D Line"
+        },
+        {
+          "slot": 62,
+          "name": "Early Soloist"
+        },
+        {
+          "slot": 63,
+          "name": "Heterodyne"
+        },
+        {
+          "slot": 64,
+          "name": "Classic 5th"
+        },
+        {
+          "slot": 65,
+          "name": "Vintage Saw"
+        },
+        {
+          "slot": 66,
+          "name": "Mini Three"
+        },
+        {
+          "slot": 67,
+          "name": "Phat Dino"
+        },
+        {
+          "slot": 68,
+          "name": "Dynamic Mini"
+        },
+        {
+          "slot": 69,
+          "name": "PWM Lead"
+        },
+        {
+          "slot": 70,
+          "name": "Pulse Wound"
+        },
+        {
+          "slot": 71,
+          "name": "Think Sync"
+        },
+        {
+          "slot": 72,
+          "name": "Punch Lead"
+        },
+        {
+          "slot": 73,
+          "name": "Bright Saw"
+        },
+        {
+          "slot": 74,
+          "name": "Trojan"
+        },
+        {
+          "slot": 75,
+          "name": "Wood Panel"
+        },
+        {
+          "slot": 76,
+          "name": "Push Ahead"
+        },
+        {
+          "slot": 77,
+          "name": "Eight"
+        },
+        {
+          "slot": 78,
+          "name": "Sync Power"
+        },
+        {
+          "slot": 79,
+          "name": "Glisten Lead"
+        },
+        {
+          "slot": 80,
+          "name": "Big Drone"
+        },
+        {
+          "slot": 81,
+          "name": "Screameemy"
+        },
+        {
+          "slot": 82,
+          "name": "Flange Filter"
+        },
+        {
+          "slot": 83,
+          "name": "Sutra"
+        },
+        {
+          "slot": 84,
+          "name": "Free LFO"
+        },
+        {
+          "slot": 85,
+          "name": "Rap Lead 2"
+        },
+        {
+          "slot": 86,
+          "name": "Space Power Lead"
+        },
+        {
+          "slot": 87,
+          "name": "Nyquist"
+        },
+        {
+          "slot": 88,
+          "name": "Digimetal"
+        },
+        {
+          "slot": 89,
+          "name": "Saw destroy"
+        },
+        {
+          "slot": 90,
+          "name": "Vinalog saw"
+        },
+        {
+          "slot": 91,
+          "name": "Mady SQU"
+        },
+        {
+          "slot": 92,
+          "name": "Low Undulation"
+        },
+        {
+          "slot": 93,
+          "name": "Impact"
+        },
+        {
+          "slot": 94,
+          "name": "Talk Mod"
+        },
+        {
+          "slot": 95,
+          "name": "Digital Gangsta"
+        },
+        {
+          "slot": 96,
+          "name": "Plastic Squeeze"
+        },
+        {
+          "slot": 97,
+          "name": "Pinz Lead"
+        },
+        {
+          "slot": 98,
+          "name": "Dancy Saw Lead"
+        },
+        {
+          "slot": 99,
+          "name": "Buzz Around"
+        },
+        {
+          "slot": 100,
+          "name": "Xtreme Wheel"
+        },
+        {
+          "slot": 101,
+          "name": "Supertrance"
+        },
+        {
+          "slot": 102,
+          "name": "Poly Hook"
+        },
+        {
+          "slot": 103,
+          "name": "HPF Dance"
+        },
+        {
+          "slot": 104,
+          "name": "Tekk Glide"
+        },
+        {
+          "slot": 105,
+          "name": "Growl Tekk"
+        },
+        {
+          "slot": 106,
+          "name": "Plucked Chordz"
+        },
+        {
+          "slot": 107,
+          "name": "Chordz"
+        },
+        {
+          "slot": 108,
+          "name": "Cool Body"
+        },
+        {
+          "slot": 109,
+          "name": "Twist Sync"
+        },
+        {
+          "slot": 110,
+          "name": "TEKIE"
+        },
+        {
+          "slot": 111,
+          "name": "Sonix"
+        },
+        {
+          "slot": 112,
+          "name": "Big Skid Hook Lead 1"
+        },
+        {
+          "slot": 113,
+          "name": "Big Skid Hook Lead 2"
+        },
+        {
+          "slot": 114,
+          "name": "Porta Queen"
+        },
+        {
+          "slot": 115,
+          "name": "Vicious Dogs"
+        },
+        {
+          "slot": 116,
+          "name": "Saw Pad"
+        },
+        {
+          "slot": 117,
+          "name": "Dark Modulation Pad"
+        },
+        {
+          "slot": 118,
+          "name": "Dark Light"
+        },
+        {
+          "slot": 119,
+          "name": "Ambient Synthpad"
+        },
+        {
+          "slot": 120,
+          "name": "5th Lite"
+        },
+        {
+          "slot": 121,
+          "name": "Smooth BPF Sweep"
+        },
+        {
+          "slot": 122,
+          "name": "High Wire"
+        },
+        {
+          "slot": 123,
+          "name": "Trance MW"
+        },
+        {
+          "slot": 124,
+          "name": "Xtreme Sweep"
+        },
+        {
+          "slot": 125,
+          "name": "Nu WarmPad"
+        },
+        {
+          "slot": 126,
+          "name": "5th Atmosphere"
+        },
+        {
+          "slot": 127,
+          "name": "Dim"
+        },
+        {
+          "slot": 128,
+          "name": "Simple Air"
+        }
+      ]
+    },
+    {
+      "label": "PRE6",
+      "slotCount": 128,
+      "voices": [
+        {
+          "slot": 1,
+          "name": "Nature Sine"
+        },
+        {
+          "slot": 2,
+          "name": "Analog"
+        },
+        {
+          "slot": 3,
+          "name": "Perc Pad"
+        },
+        {
+          "slot": 4,
+          "name": "Dark Atmo Pad"
+        },
+        {
+          "slot": 5,
+          "name": "Dark Organ Pad"
+        },
+        {
+          "slot": 6,
+          "name": "Soft Brassy"
+        },
+        {
+          "slot": 7,
+          "name": "Road to Nowhere"
+        },
+        {
+          "slot": 8,
+          "name": "Sweep Strings"
+        },
+        {
+          "slot": 9,
+          "name": "Brass Motion Pad"
+        },
+        {
+          "slot": 10,
+          "name": "Luminous"
+        },
+        {
+          "slot": 11,
+          "name": "Mother Ship"
+        },
+        {
+          "slot": 12,
+          "name": "Warm Backing Pad"
+        },
+        {
+          "slot": 13,
+          "name": "Feather"
+        },
+        {
+          "slot": 14,
+          "name": "Pan Sphere"
+        },
+        {
+          "slot": 15,
+          "name": "Square"
+        },
+        {
+          "slot": 16,
+          "name": "Shaper"
+        },
+        {
+          "slot": 17,
+          "name": "Early Digital"
+        },
+        {
+          "slot": 18,
+          "name": "Dramana"
+        },
+        {
+          "slot": 19,
+          "name": "Dream Shift"
+        },
+        {
+          "slot": 20,
+          "name": "Remote Space"
+        },
+        {
+          "slot": 21,
+          "name": "Fathoms"
+        },
+        {
+          "slot": 22,
+          "name": "SY22 2007"
+        },
+        {
+          "slot": 23,
+          "name": "Mother Earth"
+        },
+        {
+          "slot": 24,
+          "name": "Landing Pad"
+        },
+        {
+          "slot": 25,
+          "name": "The Breath"
+        },
+        {
+          "slot": 26,
+          "name": "Humanity"
+        },
+        {
+          "slot": 27,
+          "name": "Vowel Pad"
+        },
+        {
+          "slot": 28,
+          "name": "Feather Pad"
+        },
+        {
+          "slot": 29,
+          "name": "Slow Attack Pad"
+        },
+        {
+          "slot": 30,
+          "name": "Hi Brite"
+        },
+        {
+          "slot": 31,
+          "name": "Pad & Syn"
+        },
+        {
+          "slot": 32,
+          "name": "Cosmic Swell Pad"
+        },
+        {
+          "slot": 33,
+          "name": "Sweet Flange"
+        },
+        {
+          "slot": 34,
+          "name": "Waterfall"
+        },
+        {
+          "slot": 35,
+          "name": "Phase Pad"
+        },
+        {
+          "slot": 36,
+          "name": "Pure Synth"
+        },
+        {
+          "slot": 37,
+          "name": "Pearls"
+        },
+        {
+          "slot": 38,
+          "name": "Flange Wall"
+        },
+        {
+          "slot": 39,
+          "name": "Tornado"
+        },
+        {
+          "slot": 40,
+          "name": "Ice Rink"
+        },
+        {
+          "slot": 41,
+          "name": "Turbulence"
+        },
+        {
+          "slot": 42,
+          "name": "Bell Pad"
+        },
+        {
+          "slot": 43,
+          "name": "Paradise"
+        },
+        {
+          "slot": 44,
+          "name": "Yellow River"
+        },
+        {
+          "slot": 45,
+          "name": "Love Me"
+        },
+        {
+          "slot": 46,
+          "name": "Frozen Pad"
+        },
+        {
+          "slot": 47,
+          "name": "Pensive"
+        },
+        {
+          "slot": 48,
+          "name": "Space Vocals"
+        },
+        {
+          "slot": 49,
+          "name": "Haah Pad"
+        },
+        {
+          "slot": 50,
+          "name": "Oooh Pad"
+        },
+        {
+          "slot": 51,
+          "name": "Back in Itopian"
+        },
+        {
+          "slot": 52,
+          "name": "Strings & Choir"
+        },
+        {
+          "slot": 53,
+          "name": "Angel Eyes"
+        },
+        {
+          "slot": 54,
+          "name": "Glass Choir"
+        },
+        {
+          "slot": 55,
+          "name": "Nativity"
+        },
+        {
+          "slot": 56,
+          "name": "Seraphim"
+        },
+        {
+          "slot": 57,
+          "name": "Analog Shine"
+        },
+        {
+          "slot": 58,
+          "name": "Cosmic Gate"
+        },
+        {
+          "slot": 59,
+          "name": "Catching Wild Horses"
+        },
+        {
+          "slot": 60,
+          "name": "High Pass Gate"
+        },
+        {
+          "slot": 61,
+          "name": "Rhythmic Filterpad 1"
+        },
+        {
+          "slot": 62,
+          "name": "Rhythmic Filterpad 2"
+        },
+        {
+          "slot": 63,
+          "name": "P5 Resonance Comp"
+        },
+        {
+          "slot": 64,
+          "name": "P5 Analog Punch"
+        },
+        {
+          "slot": 65,
+          "name": "Cool Trance"
+        },
+        {
+          "slot": 66,
+          "name": ">Attack<"
+        },
+        {
+          "slot": 67,
+          "name": "Club Finger"
+        },
+        {
+          "slot": 68,
+          "name": "Wobbly RB"
+        },
+        {
+          "slot": 69,
+          "name": "Ana Dayz"
+        },
+        {
+          "slot": 70,
+          "name": "Airy Nylon"
+        },
+        {
+          "slot": 71,
+          "name": "Progressive Attack"
+        },
+        {
+          "slot": 72,
+          "name": "Oracle"
+        },
+        {
+          "slot": 73,
+          "name": "Big Comp"
+        },
+        {
+          "slot": 74,
+          "name": "Rezz Punch"
+        },
+        {
+          "slot": 75,
+          "name": "Resonant Clavi"
+        },
+        {
+          "slot": 76,
+          "name": "Straight RB"
+        },
+        {
+          "slot": 77,
+          "name": "Psych Noise"
+        },
+        {
+          "slot": 78,
+          "name": "Squiffy Misbehaving"
+        },
+        {
+          "slot": 79,
+          "name": "Lektro Codes"
+        },
+        {
+          "slot": 80,
+          "name": "Hard FM Keys"
+        },
+        {
+          "slot": 81,
+          "name": "W Phaser"
+        },
+        {
+          "slot": 82,
+          "name": "DPCM Attack"
+        },
+        {
+          "slot": 83,
+          "name": "Talk"
+        },
+        {
+          "slot": 84,
+          "name": "Digy_SEQ"
+        },
+        {
+          "slot": 85,
+          "name": "Nerve Nasty"
+        },
+        {
+          "slot": 86,
+          "name": "Ring_Zplus"
+        },
+        {
+          "slot": 87,
+          "name": "Trance Attack"
+        },
+        {
+          "slot": 88,
+          "name": "Tekno Attack AF1&2"
+        },
+        {
+          "slot": 89,
+          "name": "PWM Percussion"
+        },
+        {
+          "slot": 90,
+          "name": "Stabby"
+        },
+        {
+          "slot": 91,
+          "name": "Detroit Stab"
+        },
+        {
+          "slot": 92,
+          "name": "Corrado"
+        },
+        {
+          "slot": 93,
+          "name": "Synthetique"
+        },
+        {
+          "slot": 94,
+          "name": "Noiz Rezz"
+        },
+        {
+          "slot": 95,
+          "name": "Tuxedo"
+        },
+        {
+          "slot": 96,
+          "name": "Queens"
+        },
+        {
+          "slot": 97,
+          "name": "Hip Voice"
+        },
+        {
+          "slot": 98,
+          "name": "GX1"
+        },
+        {
+          "slot": 99,
+          "name": "Night Watch"
+        },
+        {
+          "slot": 100,
+          "name": "Pluck Bells"
+        },
+        {
+          "slot": 101,
+          "name": "Power Dance Chords"
+        },
+        {
+          "slot": 102,
+          "name": "Hyper Trance"
+        },
+        {
+          "slot": 103,
+          "name": "Cosmic Psyche"
+        },
+        {
+          "slot": 104,
+          "name": "Chillin' Chords"
+        },
+        {
+          "slot": 105,
+          "name": "Dirty Chordz"
+        },
+        {
+          "slot": 106,
+          "name": "Wild Horses"
+        },
+        {
+          "slot": 107,
+          "name": "Sixpack AF1&2"
+        },
+        {
+          "slot": 108,
+          "name": "Percussive Chords"
+        },
+        {
+          "slot": 109,
+          "name": "Chordmaster"
+        },
+        {
+          "slot": 110,
+          "name": "In the Mirror"
+        },
+        {
+          "slot": 111,
+          "name": "Come together!"
+        },
+        {
+          "slot": 112,
+          "name": "Happy Hour"
+        },
+        {
+          "slot": 113,
+          "name": "Recycling"
+        },
+        {
+          "slot": 114,
+          "name": "Digital Dreaming"
+        },
+        {
+          "slot": 115,
+          "name": "Carpenter's Wife"
+        },
+        {
+          "slot": 116,
+          "name": "Electronic Games"
+        },
+        {
+          "slot": 117,
+          "name": "Dancing Waves"
+        },
+        {
+          "slot": 118,
+          "name": "Hit Factory"
+        },
+        {
+          "slot": 119,
+          "name": "Freaky Loop"
+        },
+        {
+          "slot": 120,
+          "name": "Mr. Wah!"
+        },
+        {
+          "slot": 121,
+          "name": "Chill Comp 1"
+        },
+        {
+          "slot": 122,
+          "name": "Chill Comp 2"
+        },
+        {
+          "slot": 123,
+          "name": "Kalimboidal"
+        },
+        {
+          "slot": 124,
+          "name": "Bippus"
+        },
+        {
+          "slot": 125,
+          "name": "Virtuoso Sequencia"
+        },
+        {
+          "slot": 126,
+          "name": "Fat Saw Arpeggio"
+        },
+        {
+          "slot": 127,
+          "name": "Trancious Line"
+        },
+        {
+          "slot": 128,
+          "name": "Metal Plate"
+        }
+      ]
+    },
+    {
+      "label": "PRE7",
+      "slotCount": 128,
+      "voices": [
+        {
+          "slot": 1,
+          "name": "Fifth Dancer"
+        },
+        {
+          "slot": 2,
+          "name": "Percussive Sequence"
+        },
+        {
+          "slot": 3,
+          "name": "Simply Faaat"
+        },
+        {
+          "slot": 4,
+          "name": "Bright Dance"
+        },
+        {
+          "slot": 5,
+          "name": "Quadro Tune"
+        },
+        {
+          "slot": 6,
+          "name": "Champ"
+        },
+        {
+          "slot": 7,
+          "name": "Men In Yellow"
+        },
+        {
+          "slot": 8,
+          "name": "Metamorphosis"
+        },
+        {
+          "slot": 9,
+          "name": "Perplex"
+        },
+        {
+          "slot": 10,
+          "name": "Outer Planet"
+        },
+        {
+          "slot": 11,
+          "name": "Industrial"
+        },
+        {
+          "slot": 12,
+          "name": "Space Walking"
+        },
+        {
+          "slot": 13,
+          "name": "Scraper"
+        },
+        {
+          "slot": 14,
+          "name": "SE_02 <Zero Two>"
+        },
+        {
+          "slot": 15,
+          "name": "Talking Machines"
+        },
+        {
+          "slot": 16,
+          "name": "Tobi Mage"
+        },
+        {
+          "slot": 17,
+          "name": "Bitzz MW"
+        },
+        {
+          "slot": 18,
+          "name": "Thexism"
+        },
+        {
+          "slot": 19,
+          "name": "In My Head"
+        },
+        {
+          "slot": 20,
+          "name": "Toda"
+        },
+        {
+          "slot": 21,
+          "name": "Water Tank"
+        },
+        {
+          "slot": 22,
+          "name": "Auto Trapeze"
+        },
+        {
+          "slot": 23,
+          "name": "Harpist's Nightmare"
+        },
+        {
+          "slot": 24,
+          "name": "Find Newgt!"
+        },
+        {
+          "slot": 25,
+          "name": "Nile River"
+        },
+        {
+          "slot": 26,
+          "name": "New Age Atmo"
+        },
+        {
+          "slot": 27,
+          "name": "Wind Blows"
+        },
+        {
+          "slot": 28,
+          "name": "Fire!"
+        },
+        {
+          "slot": 29,
+          "name": "Scratching Machine"
+        },
+        {
+          "slot": 30,
+          "name": "Goa Psyche"
+        },
+        {
+          "slot": 31,
+          "name": "Wait For Bad Weather"
+        },
+        {
+          "slot": 32,
+          "name": "Reverse The Audio"
+        },
+        {
+          "slot": 33,
+          "name": "Radio Static"
+        },
+        {
+          "slot": 34,
+          "name": "Modifier X"
+        },
+        {
+          "slot": 35,
+          "name": "Surveillance"
+        },
+        {
+          "slot": 36,
+          "name": "Noise FX"
+        },
+        {
+          "slot": 37,
+          "name": "Sample&Hold Vintage"
+        },
+        {
+          "slot": 38,
+          "name": "Lazerzz"
+        },
+        {
+          "slot": 39,
+          "name": "uhohhrr"
+        },
+        {
+          "slot": 40,
+          "name": "On The Fritz"
+        },
+        {
+          "slot": 41,
+          "name": "Scratch Thing MW"
+        },
+        {
+          "slot": 42,
+          "name": "Trash Can Lid Band"
+        },
+        {
+          "slot": 43,
+          "name": "Piston Engine"
+        },
+        {
+          "slot": 44,
+          "name": "Waka Waka Noize"
+        },
+        {
+          "slot": 45,
+          "name": "Argentina"
+        },
+        {
+          "slot": 46,
+          "name": "Gate of Eden"
+        },
+        {
+          "slot": 47,
+          "name": "Wave Journey"
+        },
+        {
+          "slot": 48,
+          "name": "Whispering Ghosts"
+        },
+        {
+          "slot": 49,
+          "name": "Nighttrain to Munich"
+        },
+        {
+          "slot": 50,
+          "name": "Morning Dew"
+        },
+        {
+          "slot": 51,
+          "name": "Calling Mr. Reso"
+        },
+        {
+          "slot": 52,
+          "name": "2 Switches to Heaven"
+        },
+        {
+          "slot": 53,
+          "name": "Cell Division"
+        },
+        {
+          "slot": 54,
+          "name": "Jumping Needle"
+        },
+        {
+          "slot": 55,
+          "name": "SEKAI-ISAN"
+        },
+        {
+          "slot": 56,
+          "name": "Setsunai AF2"
+        },
+        {
+          "slot": 57,
+          "name": "Week End"
+        },
+        {
+          "slot": 58,
+          "name": "Dragonfly"
+        },
+        {
+          "slot": 59,
+          "name": "TiRiPAD"
+        },
+        {
+          "slot": 60,
+          "name": "Cluster"
+        },
+        {
+          "slot": 61,
+          "name": "Xtreme Rezz"
+        },
+        {
+          "slot": 62,
+          "name": "Bit Space"
+        },
+        {
+          "slot": 63,
+          "name": "My Reality"
+        },
+        {
+          "slot": 64,
+          "name": "Waterproof"
+        },
+        {
+          "slot": 65,
+          "name": "Magnetics"
+        },
+        {
+          "slot": 66,
+          "name": "Sand"
+        },
+        {
+          "slot": 67,
+          "name": "Felicity"
+        },
+        {
+          "slot": 68,
+          "name": "Vibrancy"
+        },
+        {
+          "slot": 69,
+          "name": "Metalflake"
+        },
+        {
+          "slot": 70,
+          "name": "Radio Venus"
+        },
+        {
+          "slot": 71,
+          "name": "Elec Blue"
+        },
+        {
+          "slot": 72,
+          "name": "Chyo Ethno"
+        },
+        {
+          "slot": 73,
+          "name": "Metal Shaper"
+        },
+        {
+          "slot": 74,
+          "name": "Calculator"
+        },
+        {
+          "slot": 75,
+          "name": "konjoh BEAM"
+        },
+        {
+          "slot": 76,
+          "name": "Blizzard"
+        },
+        {
+          "slot": 77,
+          "name": "SINGING BOWL"
+        },
+        {
+          "slot": 78,
+          "name": "Vektris"
+        },
+        {
+          "slot": 79,
+          "name": "Metalvox Pad"
+        },
+        {
+          "slot": 80,
+          "name": "Refraction"
+        },
+        {
+          "slot": 81,
+          "name": "Philanger"
+        },
+        {
+          "slot": 82,
+          "name": "Slippery Ambience"
+        },
+        {
+          "slot": 83,
+          "name": "Ellipsotron"
+        },
+        {
+          "slot": 84,
+          "name": "Envelope"
+        },
+        {
+          "slot": 85,
+          "name": "Whatsis"
+        },
+        {
+          "slot": 86,
+          "name": "Pearl Collection"
+        },
+        {
+          "slot": 87,
+          "name": "Four Dimensions"
+        },
+        {
+          "slot": 88,
+          "name": "Hallucination"
+        },
+        {
+          "slot": 89,
+          "name": "Arctic Sequence"
+        },
+        {
+          "slot": 90,
+          "name": "Drifting"
+        },
+        {
+          "slot": 91,
+          "name": "Electraid"
+        },
+        {
+          "slot": 92,
+          "name": "Bed Time Story"
+        },
+        {
+          "slot": 93,
+          "name": "Clearing"
+        },
+        {
+          "slot": 94,
+          "name": "Long HiPa"
+        },
+        {
+          "slot": 95,
+          "name": "Quad Swell"
+        },
+        {
+          "slot": 96,
+          "name": "New Stab"
+        },
+        {
+          "slot": 97,
+          "name": "Vinyl Hit"
+        },
+        {
+          "slot": 98,
+          "name": "Hit Me"
+        },
+        {
+          "slot": 99,
+          "name": "Ambient Bite"
+        },
+        {
+          "slot": 100,
+          "name": "Green Valley"
+        },
+        {
+          "slot": 101,
+          "name": "Everlasting Glory"
+        },
+        {
+          "slot": 102,
+          "name": "Thinking of You"
+        },
+        {
+          "slot": 103,
+          "name": "Festival of Harmony"
+        },
+        {
+          "slot": 104,
+          "name": "Paris at Night"
+        },
+        {
+          "slot": 105,
+          "name": "On my Way to UK"
+        },
+        {
+          "slot": 106,
+          "name": "Chillin' Ibiza"
+        },
+        {
+          "slot": 107,
+          "name": "Heavens Door"
+        },
+        {
+          "slot": 108,
+          "name": "Cocktail"
+        },
+        {
+          "slot": 109,
+          "name": "Vanilla"
+        },
+        {
+          "slot": 110,
+          "name": "Ibiza Groove"
+        },
+        {
+          "slot": 111,
+          "name": "Nylon Chill"
+        },
+        {
+          "slot": 112,
+          "name": "Xtreme Harp"
+        },
+        {
+          "slot": 113,
+          "name": "Trancing in the Rain"
+        },
+        {
+          "slot": 114,
+          "name": "Gated Detune"
+        },
+        {
+          "slot": 115,
+          "name": "Gated Choir"
+        },
+        {
+          "slot": 116,
+          "name": "Exotic"
+        },
+        {
+          "slot": 117,
+          "name": "Syncscraper"
+        },
+        {
+          "slot": 118,
+          "name": "Ethnotic"
+        },
+        {
+          "slot": 119,
+          "name": "ComSat"
+        },
+        {
+          "slot": 120,
+          "name": "Investikator"
+        },
+        {
+          "slot": 121,
+          "name": "Monkey Bars"
+        },
+        {
+          "slot": 122,
+          "name": "Chilltrancer"
+        },
+        {
+          "slot": 123,
+          "name": "Random Beatz"
+        },
+        {
+          "slot": 124,
+          "name": "Electro Hood"
+        },
+        {
+          "slot": 125,
+          "name": "My Subwoofers"
+        },
+        {
+          "slot": 126,
+          "name": "Mister Sinister"
+        },
+        {
+          "slot": 127,
+          "name": "Polyrhythm"
+        },
+        {
+          "slot": 128,
+          "name": "Blood Flow"
+        }
+      ]
+    },
+    {
+      "label": "PRE8",
+      "slotCount": 128,
+      "voices": [
+        {
+          "slot": 1,
+          "name": "On The Verge"
+        },
+        {
+          "slot": 2,
+          "name": "Droid"
+        },
+        {
+          "slot": 3,
+          "name": "Worker Ant"
+        },
+        {
+          "slot": 4,
+          "name": "Chopp Lingo"
+        },
+        {
+          "slot": 5,
+          "name": "Vinyl Beatnik"
+        },
+        {
+          "slot": 6,
+          "name": "Drop Zone ARP"
+        },
+        {
+          "slot": 7,
+          "name": "Particle"
+        },
+        {
+          "slot": 8,
+          "name": "Simple Arp"
+        },
+        {
+          "slot": 9,
+          "name": "Cyber Cycle"
+        },
+        {
+          "slot": 10,
+          "name": "BollogPuls"
+        },
+        {
+          "slot": 11,
+          "name": "Octopus"
+        },
+        {
+          "slot": 12,
+          "name": "Electronic Beatz"
+        },
+        {
+          "slot": 13,
+          "name": "Dreamin' of You"
+        },
+        {
+          "slot": 14,
+          "name": "Brothers & Sisters"
+        },
+        {
+          "slot": 15,
+          "name": "Pizza No.1"
+        },
+        {
+          "slot": 16,
+          "name": "Electronix"
+        },
+        {
+          "slot": 17,
+          "name": "TekkNow"
+        },
+        {
+          "slot": 18,
+          "name": "Hollow Sequence"
+        },
+        {
+          "slot": 19,
+          "name": "Icicle"
+        },
+        {
+          "slot": 20,
+          "name": "Jegog"
+        },
+        {
+          "slot": 21,
+          "name": "Octo Strobe 1"
+        },
+        {
+          "slot": 22,
+          "name": "Octo Strobe 2"
+        },
+        {
+          "slot": 23,
+          "name": "Random Waves"
+        },
+        {
+          "slot": 24,
+          "name": "Semar"
+        },
+        {
+          "slot": 25,
+          "name": "Trailing Headlights"
+        },
+        {
+          "slot": 26,
+          "name": "Dream Winds"
+        },
+        {
+          "slot": 27,
+          "name": "Kemence"
+        },
+        {
+          "slot": 28,
+          "name": "Kemen Wet"
+        },
+        {
+          "slot": 29,
+          "name": "Yayli"
+        },
+        {
+          "slot": 30,
+          "name": "Kawala"
+        },
+        {
+          "slot": 31,
+          "name": "Santur"
+        },
+        {
+          "slot": 32,
+          "name": "Baglama"
+        },
+        {
+          "slot": 33,
+          "name": "Kotoun"
+        },
+        {
+          "slot": 34,
+          "name": "Kanun"
+        },
+        {
+          "slot": 35,
+          "name": "Bouzuki"
+        },
+        {
+          "slot": 36,
+          "name": "Oud Tremolo Vel"
+        },
+        {
+          "slot": 37,
+          "name": "SazFeeze"
+        },
+        {
+          "slot": 38,
+          "name": "Where Am I?"
+        },
+        {
+          "slot": 39,
+          "name": "Sakura"
+        },
+        {
+          "slot": 40,
+          "name": "Nomad"
+        },
+        {
+          "slot": 41,
+          "name": "Pluk-o-dy"
+        },
+        {
+          "slot": 42,
+          "name": "Tambura"
+        },
+        {
+          "slot": 43,
+          "name": "Sitar MW"
+        },
+        {
+          "slot": 44,
+          "name": "Tabla Zone"
+        },
+        {
+          "slot": 45,
+          "name": "Udu"
+        },
+        {
+          "slot": 46,
+          "name": "Djembe"
+        },
+        {
+          "slot": 47,
+          "name": "Dhol"
+        },
+        {
+          "slot": 48,
+          "name": "Khol"
+        },
+        {
+          "slot": 49,
+          "name": "Ney"
+        },
+        {
+          "slot": 50,
+          "name": "Zurna"
+        },
+        {
+          "slot": 51,
+          "name": "Pungi"
+        },
+        {
+          "slot": 52,
+          "name": "Shehnai 1"
+        },
+        {
+          "slot": 53,
+          "name": "Didgeridoo"
+        },
+        {
+          "slot": 54,
+          "name": "Snake Charmer"
+        },
+        {
+          "slot": 55,
+          "name": "Mythic Flute"
+        },
+        {
+          "slot": 56,
+          "name": "Ethnology"
+        },
+        {
+          "slot": 57,
+          "name": "Oztralian"
+        },
+        {
+          "slot": 58,
+          "name": "8Z Destruct"
+        },
+        {
+          "slot": 59,
+          "name": "8Z Jarrin"
+        },
+        {
+          "slot": 60,
+          "name": "8Z Romps"
+        },
+        {
+          "slot": 61,
+          "name": "8Z Glitch"
+        },
+        {
+          "slot": 62,
+          "name": "8Z Oxidized"
+        },
+        {
+          "slot": 63,
+          "name": "8Z D&B Machine"
+        },
+        {
+          "slot": 64,
+          "name": "8Z Down Tempo"
+        },
+        {
+          "slot": 65,
+          "name": "8Z Early Lo-Fi"
+        },
+        {
+          "slot": 66,
+          "name": "8Z Noize Xpress"
+        },
+        {
+          "slot": 67,
+          "name": "8Z Trance Basics"
+        },
+        {
+          "slot": 68,
+          "name": "8Z Reverse Beatz"
+        },
+        {
+          "slot": 69,
+          "name": "8Z Crush Dance"
+        },
+        {
+          "slot": 70,
+          "name": "8Z Heavy Hearts"
+        },
+        {
+          "slot": 71,
+          "name": "8Z Chilly Breakz"
+        },
+        {
+          "slot": 72,
+          "name": "8Z Gated Beatz"
+        },
+        {
+          "slot": 73,
+          "name": "8Z Hip Hop Shakers"
+        },
+        {
+          "slot": 74,
+          "name": "8Z Blip Hop"
+        },
+        {
+          "slot": 75,
+          "name": "8Z Nasty Glitch"
+        },
+        {
+          "slot": 76,
+          "name": "8Z Scratch"
+        },
+        {
+          "slot": 77,
+          "name": "8Z Tod"
+        },
+        {
+          "slot": 78,
+          "name": "8Z Psychedelic 1"
+        },
+        {
+          "slot": 79,
+          "name": "8Z Psychedelic 2"
+        },
+        {
+          "slot": 80,
+          "name": "8Z Dub Element"
+        },
+        {
+          "slot": 81,
+          "name": "Mega Nylon"
+        },
+        {
+          "slot": 82,
+          "name": "Mega Steel"
+        },
+        {
+          "slot": 83,
+          "name": "Mega 12 Steel"
+        },
+        {
+          "slot": 84,
+          "name": "Mega 60s Clean"
+        },
+        {
+          "slot": 85,
+          "name": "Mega 60s ChorusCombo"
+        },
+        {
+          "slot": 86,
+          "name": "Mega 60s Tremolo"
+        },
+        {
+          "slot": 87,
+          "name": "Mega 60s Blues Tone"
+        },
+        {
+          "slot": 88,
+          "name": "Mega 60s Phaser"
+        },
+        {
+          "slot": 89,
+          "name": "Mega 60s Tube Tone"
+        },
+        {
+          "slot": 90,
+          "name": "Mega 60s Dist Stack"
+        },
+        {
+          "slot": 91,
+          "name": "Mega 60s Road House"
+        },
+        {
+          "slot": 92,
+          "name": "Mega 60s Small Blues"
+        },
+        {
+          "slot": 93,
+          "name": "Mega 60s Pedal Wah"
+        },
+        {
+          "slot": 94,
+          "name": "Mega 60s VCM T.Wah"
+        },
+        {
+          "slot": 95,
+          "name": "Mega 60s T.Wah&Dist"
+        },
+        {
+          "slot": 96,
+          "name": "Mega 60s Jet Flanger"
+        },
+        {
+          "slot": 97,
+          "name": "Mega 1coil Clean"
+        },
+        {
+          "slot": 98,
+          "name": "Mega 1coil Chorus"
+        },
+        {
+          "slot": 99,
+          "name": "Mega 1coil Tremolo"
+        },
+        {
+          "slot": 100,
+          "name": "Mega 1coil BluesTone"
+        },
+        {
+          "slot": 101,
+          "name": "Mega 1coil Phaser"
+        },
+        {
+          "slot": 102,
+          "name": "Mega 1coil Tube Tone"
+        },
+        {
+          "slot": 103,
+          "name": "Mega 1coil Tube Amp1"
+        },
+        {
+          "slot": 104,
+          "name": "Mega 1coil Tube Amp2"
+        },
+        {
+          "slot": 105,
+          "name": "Mega 1coil Roadhouse"
+        },
+        {
+          "slot": 106,
+          "name": "Mega 1coil VCM T.Wah"
+        },
+        {
+          "slot": 107,
+          "name": "Mega 60s Clean Delay"
+        },
+        {
+          "slot": 108,
+          "name": "Mega 60s Slap Clean"
+        },
+        {
+          "slot": 109,
+          "name": "Mega 60s Slap Dist"
+        },
+        {
+          "slot": 110,
+          "name": "Mega 1coil SlapClean"
+        },
+        {
+          "slot": 111,
+          "name": "Mega 1coil Slap Dist"
+        },
+        {
+          "slot": 112,
+          "name": "Mega1coilSlpPedalWah"
+        },
+        {
+          "slot": 113,
+          "name": "Mega Ovdr Distortion"
+        },
+        {
+          "slot": 114,
+          "name": "Mega Ovdr Fuzz"
+        },
+        {
+          "slot": 115,
+          "name": "Mega Acoustic Bass"
+        },
+        {
+          "slot": 116,
+          "name": "Mega Finger+Harmonic"
+        },
+        {
+          "slot": 117,
+          "name": "Mega Fretless Bass"
+        },
+        {
+          "slot": 118,
+          "name": "Mega Pick Open Amped"
+        },
+        {
+          "slot": 119,
+          "name": "Mega Pick Mute Amped"
+        },
+        {
+          "slot": 120,
+          "name": "Mega Slap Bass"
+        },
+        {
+          "slot": 121,
+          "name": "Mega Finger+Slap"
+        },
+        {
+          "slot": 122,
+          "name": "Mega Finger+Pull Amp"
+        },
+        {
+          "slot": 123,
+          "name": "Mega Pick Open Mute"
+        },
+        {
+          "slot": 124,
+          "name": "Mega Pick OpMt Dark"
+        },
+        {
+          "slot": 125,
+          "name": "Vocoder with Delay"
+        },
+        {
+          "slot": 126,
+          "name": "Funky Vocoder"
+        },
+        {
+          "slot": 127,
+          "name": "Vocoder Pad 1"
+        },
+        {
+          "slot": 128,
+          "name": "Vocoder Pad 2"
+        }
+      ]
+    },
+    {
+      "label": "GM",
+      "slotCount": 128,
+      "voices": [
+        {
+          "slot": 1,
+          "name": "Concert Grand Piano"
+        },
+        {
+          "slot": 2,
+          "name": "Rock Brite Piano"
+        },
+        {
+          "slot": 3,
+          "name": "CP 2007"
+        },
+        {
+          "slot": 4,
+          "name": "Honkytonk"
+        },
+        {
+          "slot": 5,
+          "name": "E.Piano 1"
+        },
+        {
+          "slot": 6,
+          "name": "E.Piano 2"
+        },
+        {
+          "slot": 7,
+          "name": "Harpsichord"
+        },
+        {
+          "slot": 8,
+          "name": "Brite Clavi"
+        },
+        {
+          "slot": 9,
+          "name": "Celesta"
+        },
+        {
+          "slot": 10,
+          "name": "Glocken"
+        },
+        {
+          "slot": 11,
+          "name": "Music Box"
+        },
+        {
+          "slot": 12,
+          "name": "Vibes"
+        },
+        {
+          "slot": 13,
+          "name": "Marimba"
+        },
+        {
+          "slot": 14,
+          "name": "Xylophone"
+        },
+        {
+          "slot": 15,
+          "name": "Tubular Bell"
+        },
+        {
+          "slot": 16,
+          "name": "Dulcimer"
+        },
+        {
+          "slot": 17,
+          "name": "Draw Organ"
+        },
+        {
+          "slot": 18,
+          "name": "Percussive Organ"
+        },
+        {
+          "slot": 19,
+          "name": "Rock Organ"
+        },
+        {
+          "slot": 20,
+          "name": "Church Organ"
+        },
+        {
+          "slot": 21,
+          "name": "Reed Organ"
+        },
+        {
+          "slot": 22,
+          "name": "Accordion"
+        },
+        {
+          "slot": 23,
+          "name": "Harmonica"
+        },
+        {
+          "slot": 24,
+          "name": "Tango Accordion"
+        },
+        {
+          "slot": 25,
+          "name": "Nylon Guitar"
+        },
+        {
+          "slot": 26,
+          "name": "Steel Guitar"
+        },
+        {
+          "slot": 27,
+          "name": "Jazz Guitar"
+        },
+        {
+          "slot": 28,
+          "name": "Clean Guitar"
+        },
+        {
+          "slot": 29,
+          "name": "Mute Guitar"
+        },
+        {
+          "slot": 30,
+          "name": "Overdrive Guitar"
+        },
+        {
+          "slot": 31,
+          "name": "Distortion Guitar"
+        },
+        {
+          "slot": 32,
+          "name": "Guitar Harmonics"
+        },
+        {
+          "slot": 33,
+          "name": "Acoustic Bass"
+        },
+        {
+          "slot": 34,
+          "name": "Finger Bass"
+        },
+        {
+          "slot": 35,
+          "name": "Pick Bass"
+        },
+        {
+          "slot": 36,
+          "name": "Fretless Bass"
+        },
+        {
+          "slot": 37,
+          "name": "Slap Bass 1"
+        },
+        {
+          "slot": 38,
+          "name": "Slap Bass 2 vel"
+        },
+        {
+          "slot": 39,
+          "name": "Synth Bass 1"
+        },
+        {
+          "slot": 40,
+          "name": "Synth Bass 2"
+        },
+        {
+          "slot": 41,
+          "name": "Violin"
+        },
+        {
+          "slot": 42,
+          "name": "Viola"
+        },
+        {
+          "slot": 43,
+          "name": "Cello"
+        },
+        {
+          "slot": 44,
+          "name": "Contrabass"
+        },
+        {
+          "slot": 45,
+          "name": "Tremolo Strings 2"
+        },
+        {
+          "slot": 46,
+          "name": "Pizzicato"
+        },
+        {
+          "slot": 47,
+          "name": "Harp"
+        },
+        {
+          "slot": 48,
+          "name": "Timpani + Cymbal"
+        },
+        {
+          "slot": 49,
+          "name": "Strings Section 1"
+        },
+        {
+          "slot": 50,
+          "name": "Strings Section 2"
+        },
+        {
+          "slot": 51,
+          "name": "Synth Strings 1"
+        },
+        {
+          "slot": 52,
+          "name": "Synth Strings 2"
+        },
+        {
+          "slot": 53,
+          "name": "Aah Choir"
+        },
+        {
+          "slot": 54,
+          "name": "Ooh Choir"
+        },
+        {
+          "slot": 55,
+          "name": "Syn Voice"
+        },
+        {
+          "slot": 56,
+          "name": "Orchestra Hit"
+        },
+        {
+          "slot": 57,
+          "name": "Trumpet 2"
+        },
+        {
+          "slot": 58,
+          "name": "Trombone 2"
+        },
+        {
+          "slot": 59,
+          "name": "Tuba"
+        },
+        {
+          "slot": 60,
+          "name": "Mute Trumpet"
+        },
+        {
+          "slot": 61,
+          "name": "French Horns"
+        },
+        {
+          "slot": 62,
+          "name": "Brass Section"
+        },
+        {
+          "slot": 63,
+          "name": "Synth Brass 1"
+        },
+        {
+          "slot": 64,
+          "name": "Synth Brass 2"
+        },
+        {
+          "slot": 65,
+          "name": "Soprano Sax"
+        },
+        {
+          "slot": 66,
+          "name": "Alto Sax"
+        },
+        {
+          "slot": 67,
+          "name": "Tenor Sax"
+        },
+        {
+          "slot": 68,
+          "name": "Baritone Sax"
+        },
+        {
+          "slot": 69,
+          "name": "Oboe 2"
+        },
+        {
+          "slot": 70,
+          "name": "English Horn"
+        },
+        {
+          "slot": 71,
+          "name": "Bassoon 2"
+        },
+        {
+          "slot": 72,
+          "name": "Clarinet 2"
+        },
+        {
+          "slot": 73,
+          "name": "Piccolo"
+        },
+        {
+          "slot": 74,
+          "name": "Flute"
+        },
+        {
+          "slot": 75,
+          "name": "Recorder"
+        },
+        {
+          "slot": 76,
+          "name": "Panflute"
+        },
+        {
+          "slot": 77,
+          "name": "Bottle"
+        },
+        {
+          "slot": 78,
+          "name": "Shakuhachi"
+        },
+        {
+          "slot": 79,
+          "name": "Whistle"
+        },
+        {
+          "slot": 80,
+          "name": "Ocarina"
+        },
+        {
+          "slot": 81,
+          "name": "Square Lead"
+        },
+        {
+          "slot": 82,
+          "name": "Saw Lead"
+        },
+        {
+          "slot": 83,
+          "name": "Calliope Lead"
+        },
+        {
+          "slot": 84,
+          "name": "Chiff Lead"
+        },
+        {
+          "slot": 85,
+          "name": "Charan Lead"
+        },
+        {
+          "slot": 86,
+          "name": "Voice Lead"
+        },
+        {
+          "slot": 87,
+          "name": "Fifth Lead"
+        },
+        {
+          "slot": 88,
+          "name": "Bass & Lead"
+        },
+        {
+          "slot": 89,
+          "name": "New Age Pad"
+        },
+        {
+          "slot": 90,
+          "name": "Warm Pad"
+        },
+        {
+          "slot": 91,
+          "name": "Poly Synth Pad"
+        },
+        {
+          "slot": 92,
+          "name": "Choir Pad"
+        },
+        {
+          "slot": 93,
+          "name": "Bowed Pad"
+        },
+        {
+          "slot": 94,
+          "name": "Metal Pad"
+        },
+        {
+          "slot": 95,
+          "name": "Halo Pad"
+        },
+        {
+          "slot": 96,
+          "name": "Sweep Pad"
+        },
+        {
+          "slot": 97,
+          "name": "Rain Pad"
+        },
+        {
+          "slot": 98,
+          "name": "Sound Track"
+        },
+        {
+          "slot": 99,
+          "name": "Crystal"
+        },
+        {
+          "slot": 100,
+          "name": "Atmosphere"
+        },
+        {
+          "slot": 101,
+          "name": "Brightness"
+        },
+        {
+          "slot": 102,
+          "name": "Goblin"
+        },
+        {
+          "slot": 103,
+          "name": "Echoes"
+        },
+        {
+          "slot": 104,
+          "name": "Sci-Fi"
+        },
+        {
+          "slot": 105,
+          "name": "Sitar"
+        },
+        {
+          "slot": 106,
+          "name": "Banjo"
+        },
+        {
+          "slot": 107,
+          "name": "Shamisen"
+        },
+        {
+          "slot": 108,
+          "name": "Koto"
+        },
+        {
+          "slot": 109,
+          "name": "Kalimba"
+        },
+        {
+          "slot": 110,
+          "name": "Bagpipe"
+        },
+        {
+          "slot": 111,
+          "name": "Fiddle"
+        },
+        {
+          "slot": 112,
+          "name": "Shehnai 2"
+        },
+        {
+          "slot": 113,
+          "name": "Tinkle Bell"
+        },
+        {
+          "slot": 114,
+          "name": "Agogo"
+        },
+        {
+          "slot": 115,
+          "name": "Steel Drum"
+        },
+        {
+          "slot": 116,
+          "name": "Woodblock"
+        },
+        {
+          "slot": 117,
+          "name": "Taiko Drum"
+        },
+        {
+          "slot": 118,
+          "name": "Melodic Tom"
+        },
+        {
+          "slot": 119,
+          "name": "Synth Drum"
+        },
+        {
+          "slot": 120,
+          "name": "Reverse Cymbal"
+        },
+        {
+          "slot": 121,
+          "name": "Fret Noise"
+        },
+        {
+          "slot": 122,
+          "name": "Breath Noiz"
+        },
+        {
+          "slot": 123,
+          "name": "Seashore"
+        },
+        {
+          "slot": 124,
+          "name": "Tweet"
+        },
+        {
+          "slot": 125,
+          "name": "Telephone"
+        },
+        {
+          "slot": 126,
+          "name": "Helicopter"
+        },
+        {
+          "slot": 127,
+          "name": "Applause"
+        },
+        {
+          "slot": 128,
+          "name": "Gunshot"
+        }
+      ]
+    },
+    {
+      "label": "PREDR",
+      "slotCount": 64,
+      "voices": [
+        {
+          "slot": 1,
+          "name": "Power Standard Kit 1"
+        },
+        {
+          "slot": 2,
+          "name": "Power Standard Kit 2"
+        },
+        {
+          "slot": 3,
+          "name": "Hyper Standard Kit"
+        },
+        {
+          "slot": 4,
+          "name": "Dry Standard Kit"
+        },
+        {
+          "slot": 5,
+          "name": "Modern Rock Kit"
+        },
+        {
+          "slot": 6,
+          "name": "Rock Stereo Kit 1"
+        },
+        {
+          "slot": 7,
+          "name": "Rock Stereo Kit 2"
+        },
+        {
+          "slot": 8,
+          "name": "Nu Hip Hop Kit 1"
+        },
+        {
+          "slot": 9,
+          "name": "Nu Hip Hop Kit 2"
+        },
+        {
+          "slot": 10,
+          "name": "Hip Hop Kit 1"
+        },
+        {
+          "slot": 11,
+          "name": "Hip Hop Kit 2"
+        },
+        {
+          "slot": 12,
+          "name": "Hip Hop Kit 3"
+        },
+        {
+          "slot": 13,
+          "name": "Hip Hop Kit 4"
+        },
+        {
+          "slot": 14,
+          "name": "Hip Stick Kit 1"
+        },
+        {
+          "slot": 15,
+          "name": "Hip Stick Kit 2"
+        },
+        {
+          "slot": 16,
+          "name": "R&B Kit 1"
+        },
+        {
+          "slot": 17,
+          "name": "R&B Kit 2"
+        },
+        {
+          "slot": 18,
+          "name": "R&B Kit 3"
+        },
+        {
+          "slot": 19,
+          "name": "Trance Kit"
+        },
+        {
+          "slot": 20,
+          "name": "Psychedelic Kit"
+        },
+        {
+          "slot": 21,
+          "name": "Chill Out Kit"
+        },
+        {
+          "slot": 22,
+          "name": "Brush Kit"
+        },
+        {
+          "slot": 23,
+          "name": "Jazz Kit"
+        },
+        {
+          "slot": 24,
+          "name": "Pop Latin Kit"
+        },
+        {
+          "slot": 25,
+          "name": "Analog T9 Kit"
+        },
+        {
+          "slot": 26,
+          "name": "Analog T8 Kit"
+        },
+        {
+          "slot": 27,
+          "name": "Tekno Kit"
+        },
+        {
+          "slot": 28,
+          "name": "House Kit 1"
+        },
+        {
+          "slot": 29,
+          "name": "House Kit 2"
+        },
+        {
+          "slot": 30,
+          "name": "House Compressed Kit"
+        },
+        {
+          "slot": 31,
+          "name": "Big Kit"
+        },
+        {
+          "slot": 32,
+          "name": "Break Kit"
+        },
+        {
+          "slot": 33,
+          "name": "Drum'n'Bass Kit"
+        },
+        {
+          "slot": 34,
+          "name": "Acid Kit"
+        },
+        {
+          "slot": 35,
+          "name": "Jungle Kit"
+        },
+        {
+          "slot": 36,
+          "name": "Electric Kit"
+        },
+        {
+          "slot": 37,
+          "name": "Human Kit"
+        },
+        {
+          "slot": 38,
+          "name": "Hard Kit"
+        },
+        {
+          "slot": 39,
+          "name": "Distorted Kit"
+        },
+        {
+          "slot": 40,
+          "name": "Ambient Kit"
+        },
+        {
+          "slot": 41,
+          "name": "Garage Kit"
+        },
+        {
+          "slot": 42,
+          "name": "Synth Pop Kit"
+        },
+        {
+          "slot": 43,
+          "name": "Orchestra Kit"
+        },
+        {
+          "slot": 44,
+          "name": "Drum Machines Kit"
+        },
+        {
+          "slot": 45,
+          "name": "Rock Multiple Kits"
+        },
+        {
+          "slot": 46,
+          "name": "HipHop Multiple Kits"
+        },
+        {
+          "slot": 47,
+          "name": "Percussion Kit"
+        },
+        {
+          "slot": 48,
+          "name": "Latin Percussion Kit"
+        },
+        {
+          "slot": 49,
+          "name": "Guitar/Bass FX Kit"
+        },
+        {
+          "slot": 50,
+          "name": "Wacko Kit"
+        },
+        {
+          "slot": 51,
+          "name": "Wood Bits Kit"
+        },
+        {
+          "slot": 52,
+          "name": "Metal Bits Kit"
+        },
+        {
+          "slot": 53,
+          "name": "Hands Kit"
+        },
+        {
+          "slot": 54,
+          "name": "Scratches"
+        },
+        {
+          "slot": 55,
+          "name": "Accoustic Snares"
+        },
+        {
+          "slot": 56,
+          "name": "GroupedStereo Snares"
+        },
+        {
+          "slot": 57,
+          "name": "All Kicks"
+        },
+        {
+          "slot": 58,
+          "name": "Dance Kicks"
+        },
+        {
+          "slot": 59,
+          "name": "Arabic Mixed Kit"
+        },
+        {
+          "slot": 60,
+          "name": "Belly Dance Kit"
+        },
+        {
+          "slot": 61,
+          "name": "Dance Snares"
+        },
+        {
+          "slot": 62,
+          "name": "Special SFXs"
+        },
+        {
+          "slot": 63,
+          "name": "Synthetic Kit"
+        },
+        {
+          "slot": 64,
+          "name": "SFX Kit"
+        }
+      ]
+    },
+    {
+      "label": "GMDR",
+      "slotCount": 1,
+      "voices": [
+        {
+          "slot": 1,
+          "name": "Stereo GM Kit"
+        }
+      ]
+    }
+  ]
+}

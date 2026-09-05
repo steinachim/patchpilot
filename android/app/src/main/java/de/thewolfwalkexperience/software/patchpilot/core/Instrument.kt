@@ -89,6 +89,21 @@ data class InstrumentIdentity(
 // ---- Facets ----
 
 /**
+ * Which part of an instrument's stored content a listing covers.
+ *
+ * [USER] is what every instrument has and what the browser opens on. The other two are separate
+ * *listings*, not filters over the first: a factory listing may be free where a user one costs
+ * minutes, and a favorites listing is a sparse set spanning both, in an order the instrument
+ * chooses rather than device order.
+ *
+ * **A closed enum, so a family cannot add a fourth scope without editing this file.** That is the
+ * same ceiling `InstrumentRegistry` already documents as a decision rather than an oversight: the
+ * three screens that render these have to name them anyway, so an open set would only move the
+ * exhaustiveness check from the compiler to a runtime `when` branch nobody would remember to add.
+ */
+enum class PresetScope { USER, FACTORY, FAVORITES }
+
+/**
  * Lists what is stored on the instrument.
  *
  * **A [Flow] of incremental updates rather than a suspending call returning a list.** On a
@@ -98,7 +113,30 @@ data class InstrumentIdentity(
  * with nothing to show for it.
  */
 interface PresetBrowser {
-    fun index(): Flow<IndexUpdate>
+    /**
+     * The listings this instrument can produce, in the order a selector should offer them.
+     *
+     * A [List] rather than a [Set] because the UI renders it positionally - a segmented control
+     * needs to know which item is first and which is last to shape it - and because "USER first"
+     * is a contract this type can state and a set cannot.
+     *
+     * Defaulted, so a family with only its user presets says nothing and gets no selector.
+     */
+    val scopes: List<PresetScope> get() = listOf(PresetScope.USER)
+
+    /**
+     * Lists [scope], which is always one of [scopes].
+     *
+     * **One abstract method taking a scope, not a second overload with a default body.** An
+     * `index(scope)` whose default body forwarded to a no-arg `index()` would let a decorator
+     * override only the latter and then silently serve the user listing for every other scope.
+     * Abstract means the compiler makes all five implementors look at it.
+     *
+     * The *parameter* still defaults, which is a different thing: it saves the many callers that
+     * only ever mean the user listing from saying so, without giving any implementor somewhere to
+     * hide. Production callers that track a selected scope pass it explicitly.
+     */
+    fun index(scope: PresetScope = PresetScope.USER): Flow<IndexUpdate>
 
     /** One slot, re-read after an edit, so the UI need not rebuild the whole index. */
     suspend fun refresh(address: SlotAddress): PresetSlot

@@ -9,6 +9,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
@@ -204,8 +205,11 @@ class Pro800Instrument(
      * A single unreadable address yields [IndexUpdate.Failed] and the walk continues - losing 399
      * presets because one slot timed out would be absurd, and the same rule already governs the
      * Nord device report's probes.
+     *
+     * [scope] is ignored: all 400 of this instrument's addresses are writable, so it declares only
+     * [PresetScope.USER] and no other value can arrive here.
      */
-    override fun index(): Flow<IndexUpdate> = flow {
+    override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
         val batch = mutableListOf<PresetSlot>()
         val total = layout.slotCount
         var done = 0

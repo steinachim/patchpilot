@@ -99,6 +99,11 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.annotation.StringRes
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 
 /**
  * The preset browser. Tapping a preset loads it. Long-pressing a preset's drag handle and dropping
@@ -327,6 +332,14 @@ fun ProgramsScreen(
     // separate boolean to let drift out of sync with it.
     val pickingCopy = copySource != null
     val canSelect = remember(session) { viewModel.canSelect }
+    // Which listing is on screen, and which the instrument offers at all. A family with one scope
+    // shows no selector, so nothing about the Nord, Pro-800 or demo screens changes.
+    val browseScope by viewModel.scope.collectAsState()
+    val browsingScopes = remember(session) { viewModel.browsingScopes() }
+    // Banks the instrument refuses writes to. Per-row rather than per-instrument, because the
+    // favorites listing mixes the two: a favorited factory voice and a favorited user voice sit
+    // in the same list, and only one of them can be renamed.
+    val readOnlyBanks = remember(session) { viewModel.readOnlyBanks() }
 
     val hasReport = remember(session) { viewModel.hasReport }
     val isUnknownDevice = remember(session) { viewModel.isUnknownDevice }
@@ -472,11 +485,17 @@ fun ProgramsScreen(
     // Everything the list needs, derived in one pure pass - see [buildProgramListing], which is
     // where the rules about how the two families report occupancy now live, and where they can
     // finally be tested without running Compose.
-    val listing = remember(programs, showEmptySlots, searchText, pickingCopy) {
+    // `scope` is a key even though it is not an argument: `viewModel.allSlots(scope)` is a plain
+    // call, so nothing else here would tell Compose the address space had changed underneath it.
+    val listing = remember(programs, showEmptySlots, searchText, pickingCopy, browseScope) {
         buildProgramListing(
             reported = programs,
-            allSlots = viewModel.allSlots(),
-            showEmptySlots = showEmptySlots,
+            allSlots = viewModel.allSlots(browseScope),
+            // Only the user listing has empty slots to show, and the checkbox is hidden in the
+            // other two - but hiding a control does not reset it. Left ticked from the user
+            // listing, it would make the favorites one render *nothing*: that scope has no
+            // address space, so "show every address, occupied or not" is an empty set.
+            showEmptySlots = showEmptySlots && browseScope == PresetScope.USER,
             pickingCopy = pickingCopy,
             searchText = searchText,
         )
@@ -485,10 +504,23 @@ fun ProgramsScreen(
     val occupied = listing.occupied
     // Drawn in the rail instead of the full label, which does not fit at the rail's width.
     val bankRailLabels = remember(index) { viewModel.bankRailLabels() }
+    // **The user listing's free slots, whatever is on screen.** A copy can only ever be written to
+    // a writable slot, so the destination pool is a property of the user scope - not of the
+    // listing being displayed. Taking it from `listing` instead is wrong in the factory scope,
+    // where every one of the 1,217 rows holds a voice: `freeSlots` would be empty and the Copy
+    // item would be hidden on exactly the rows the feature exists for.
+    val userIndex by viewModel.userIndex.collectAsState()
+    val copyDestinations = remember(userIndex, session) {
+        freeSlots(userIndex.slots, viewModel.allSlots(PresetScope.USER))
+    }
     // Hidden rather than shown-disabled where there is nowhere to copy to: the row menu has no
     // other disabled-but-visible items, and entering picking mode only to find no valid target
     // is not worth offering.
-    val canCopy = canCopyOp && listing.freeSlots.isNotEmpty()
+    //
+    // Gated on the *user* listing being complete rather than on `editsEnabled`, which describes
+    // whichever listing is displayed - and the factory one completes the moment it is opened,
+    // which would offer a copy before the destinations were known.
+    val canCopy = canCopyOp && userIndex.complete && copyDestinations.isNotEmpty()
 
     // While a row is dragged near an edge of the viewport, keep scrolling so targets outside the
     // visible range can be reached. Keyed on draggedIndex, so onDragEnd/onDragCancel setting it
@@ -612,6 +644,34 @@ fun ProgramsScreen(
         }
     }
 
+    /*
+     * Picking a copy destination has one way in and one way out, deliberately.
+     *
+     * A copy's destination is always a *user* slot, so starting one from the factory listing has
+     * to move the browser there - picking in a list of read-only rows would offer targets the
+     * instrument refuses. Where it came from is remembered so cancelling, or finishing, puts the
+     * user back in the listing they were browsing rather than stranding them in the user banks.
+     *
+     * The two exits used to differ - one cleared `copySource` inside `runEdit`, the other from the
+     * banner's Cancel - which was survivable while clearing one field was all either had to do and
+     * is exactly the kind of thing that drifts once there are two.
+     */
+    var scopeBeforePicking by remember { mutableStateOf<PresetScope?>(null) }
+
+    fun beginPicking(source: PresetSlot) {
+        if (browseScope != PresetScope.USER) {
+            scopeBeforePicking = browseScope
+            viewModel.setScope(PresetScope.USER)
+        }
+        copySource = source
+    }
+
+    fun endPicking() {
+        copySource = null
+        scopeBeforePicking?.let { viewModel.setScope(it) }
+        scopeBeforePicking = null
+    }
+
     fun onCopyConfirmed(source: PresetSlot, destination: PresetSlot) {
         runEdit(
             context.getString(
@@ -621,7 +681,7 @@ fun ProgramsScreen(
             // The picker closes only once the copy has actually landed. On failure it stays open,
             // same reasoning as delete: show what went wrong against the copy that was about to be
             // made rather than dismissing first.
-            viewModel.copyProgram(source, destination).also { copySource = null }
+            viewModel.copyProgram(source, destination).also { endPicking() }
         }
     }
 
@@ -704,6 +764,20 @@ fun ProgramsScreen(
             .padding(innerPadding)
             .padding(horizontal = 16.dp),
     ) {
+        // Only where there is a choice to make. An instrument with one listing renders exactly
+        // what it rendered before this existed.
+        //
+        // Disabled rather than hidden while an edit runs or a copy destination is being picked:
+        // both are states the user is *in the middle of*, and a control that vanishes and comes
+        // back shifts everything below it - in a list they may be reading at the time.
+        if (browsingScopes.size > 1) {
+            ScopeSelector(
+                scopes = browsingScopes,
+                selected = browseScope,
+                enabled = busy == null && !pickingCopy,
+                onSelect = viewModel::setScope,
+            )
+        }
         // Stays for the whole session rather than being dismissible. The connect screen already
         // asked once and the user said continue; the point of this is that the reason is still on
         // screen when a rename goes wrong an hour later, which a dismissed banner would not be.
@@ -743,7 +817,7 @@ fun ProgramsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { copySource = null }) {
+                    TextButton(onClick = { endPicking() }) {
                         Text(stringResource(R.string.action_cancel))
                     }
                 }
@@ -763,7 +837,12 @@ fun ProgramsScreen(
             )
             // One control, not two nodes: the label is part of the target and TalkBack reads it
             // as a single checkbox rather than a box and an unrelated string.
-            Row(
+            //
+            // **Only in the user listing, where an empty slot is a thing that exists.** Every
+            // factory slot holds a voice, so the box would be a no-op there; and the favorites
+            // listing has no address space of its own to have gaps in, so ticking it would replace
+            // eleven favorites with nothing at all.
+            if (browseScope == PresetScope.USER) Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .toggleable(
@@ -826,13 +905,18 @@ fun ProgramsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .pointerInput(visibleRows, canRelocate, index.complete, pickingCopy) {
+                    .pointerInput(visibleRows, canRelocate, index.complete, pickingCopy, browseScope) {
                         // Dragging is off while the index is still arriving: a drop into a region
                         // that has not loaded yet has no defined target, and off entirely on an
                         // instrument that cannot relocate presets at all. Also off while picking a
                         // copy destination - the two gestures would otherwise fight over the same
                         // rows, and a copy pick is resolved by a tap, not a drag.
                         if (!canRelocate || !index.complete || pickingCopy) return@pointerInput
+                        // Reordering is a user-listing gesture. A read-only bank refuses the write,
+                        // and the favorites listing is not an address space - its rows are the
+                        // marked voices across every bank, so "the row below" is not a
+                        // destination and dropping onto it would mean nothing.
+                        if (browseScope != PresetScope.USER) return@pointerInput
                         detectDragGesturesAfterLongPress(
                             onDragStart = { offset ->
                                 drag.begin(offset) { i ->
@@ -865,7 +949,14 @@ fun ProgramsScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 if (searchText.isBlank()) {
-                                    stringResource(R.string.programs_no_presets)
+                                    // "This instrument reports no presets" would be a wrong and
+                                    // slightly alarming thing to say about an instrument full of
+                                    // them that simply has none marked.
+                                    if (browseScope == PresetScope.FAVORITES) {
+                                        stringResource(R.string.programs_no_favorites)
+                                    } else {
+                                        stringResource(R.string.programs_no_presets)
+                                    }
                                 } else {
                                     stringResource(R.string.programs_no_matches, searchText)
                                 },
@@ -874,6 +965,16 @@ fun ProgramsScreen(
                             if (searchText.isNotBlank()) {
                                 Spacer(Modifier.height(8.dp))
                                 TextButton(onClick = { searchText = "" }) { Text(stringResource(R.string.action_clear_filter)) }
+                            } else if (browseScope == PresetScope.FAVORITES) {
+                                // The app cannot set these, so an empty list is a dead end unless
+                                // it says where they are actually set.
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    stringResource(R.string.programs_no_favorites_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
@@ -922,15 +1023,33 @@ fun ProgramsScreen(
                                         Text((listOf(program.displayId) + program.badges).joinToString("  "))
                                     },
                                     colors = ListItemDefaults.colors(containerColor = rowColor),
-                                    // Hidden outright while picking, not merely disabled: none of
-                                    // rename/copy/delete applies to *any* row until the pick is
-                                    // resolved or cancelled, including the row being copied from.
-                                    trailingContent = if (pickingCopy || isEmpty ||
-                                        (!canRename && !canDelete && !canCopy)
-                                    ) {
-                                        null
-                                    } else {
-                                        {
+                                    // What this row in particular offers.
+                                    //
+                                    // A read-only bank refuses every write, so the row keeps only
+                                    // the one action that does not need one - and Copy is a read
+                                    // of *this* row into somewhere else, which is precisely the
+                                    // point of browsing the factory voices at all.
+                                    //
+                                    // Relocating within the favorites listing is meaningless in a
+                                    // different way: its rows are the marked voices in bank order,
+                                    // not an address space, so there is nothing for a copy to
+                                    // rearrange and no free slot in it to copy into.
+                                    trailingContent = run {
+                                        val rowWritable = program.address.bank !in readOnlyBanks
+                                        val rowRename = canRename && rowWritable
+                                        val rowDelete = canDelete && rowWritable &&
+                                            browseScope == PresetScope.USER
+                                        val rowCopy = canCopy && browseScope != PresetScope.FAVORITES
+                                        // Hidden outright while picking, not merely disabled: none
+                                        // of rename/copy/delete applies to *any* row until the
+                                        // pick is resolved or cancelled, including the row being
+                                        // copied from.
+                                        if (pickingCopy || isEmpty ||
+                                            (!rowRename && !rowDelete && !rowCopy)
+                                        ) {
+                                            null
+                                        } else {
+                                            {
                                             // An overflow menu rather than two always-visible
                                             // buttons. In a 128-row bank those were 256 controls
                                             // competing with the preset names, and a destructive
@@ -938,17 +1057,18 @@ fun ProgramsScreen(
                                             // in a scrolling list.
                                             RowActionsMenu(
                                                 program = program,
-                                                canRename = canRename,
-                                                canCopy = canCopy,
-                                                canDelete = canDelete,
+                                                canRename = rowRename,
+                                                canCopy = rowCopy,
+                                                canDelete = rowDelete,
                                                 enabled = editsEnabled,
                                                 onRename = {
                                                     renameTarget = program
                                                     renameText = program.name.orEmpty()
                                                 },
-                                                onCopy = { copySource = program },
+                                                onCopy = { beginPicking(program) },
                                                 onDelete = { deleteTarget = program },
                                             )
+                                            }
                                         }
                                     },
                                     // Always reserves the handle's 32.dp column, even for an empty row with
@@ -961,7 +1081,7 @@ fun ProgramsScreen(
                                                 .size(ProgramListMetrics.handleSize)
                                                 .let { theme.slotBezel(it, occupied = !isEmpty) },
                                         ) {
-                                            if (!isEmpty && canRelocate && !pickingCopy) {
+                                            if (!isEmpty && canRelocate && !pickingCopy && browseScope == PresetScope.USER) {
                                                 // The glyph is decorative; the *row* is what a
                                                 // screen reader should describe, so the handle
                                                 // carries the instruction and nothing else does.
@@ -1208,6 +1328,68 @@ private fun HideKeyboardOnDismiss(keyboardController: SoftwareKeyboardController
     DisposableEffect(Unit) {
         onDispose { keyboardController?.hide() }
     }
+}
+
+/**
+ * Which of the instrument's listings to show, plus a line saying what the current one is.
+ *
+ * **Segmented buttons rather than tabs.** Tabs say "the same kind of thing, paged"; these three
+ * differ in what can be *done* to a row, not merely in which rows are shown, and a segmented
+ * control reads as choosing a mode rather than turning a page. It also carries `Role.RadioButton`
+ * and a selected state on each segment for free, so a screen reader announces "Factory, selected,
+ * 2 of 3" without any semantics written here.
+ *
+ * The caption is not decoration. Two of these listings would otherwise misrepresent themselves:
+ * the factory names are transcribed from Yamaha's Data List rather than read off the instrument,
+ * and the favorite marks can be read but not written, so somebody will look for a way to star a
+ * voice and needs to be told where that lives instead of hunting for it.
+ */
+@Composable
+private fun ScopeSelector(
+    scopes: List<PresetScope>,
+    selected: PresetScope,
+    enabled: Boolean,
+    onSelect: (PresetScope) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            scopes.forEachIndexed { index, scope ->
+                SegmentedButton(
+                    selected = scope == selected,
+                    onClick = { onSelect(scope) },
+                    enabled = enabled,
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = scopes.size),
+                ) {
+                    Text(stringResource(scope.labelRes()))
+                }
+            }
+        }
+        selected.noteRes()?.let { note ->
+            Text(
+                stringResource(note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+/** The segment's label. Kept out of [PresetScope] itself: strings live in `strings.xml`, and the
+ * enum is in `core`, which knows nothing about resources. */
+@StringRes
+private fun PresetScope.labelRes(): Int = when (this) {
+    PresetScope.USER -> R.string.programs_scope_user
+    PresetScope.FACTORY -> R.string.programs_scope_factory
+    PresetScope.FAVORITES -> R.string.programs_scope_favorites
+}
+
+/** What this listing has to admit about itself, or null where there is nothing to say. */
+@StringRes
+private fun PresetScope.noteRes(): Int? = when (this) {
+    PresetScope.USER -> null
+    PresetScope.FACTORY -> R.string.programs_scope_note_factory
+    PresetScope.FAVORITES -> R.string.programs_scope_note_favorites
 }
 
 /**

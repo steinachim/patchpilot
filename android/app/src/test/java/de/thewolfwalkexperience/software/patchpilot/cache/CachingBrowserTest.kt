@@ -2,6 +2,7 @@ package de.thewolfwalkexperience.software.patchpilot.cache
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import kotlinx.coroutines.flow.Flow
@@ -38,7 +39,9 @@ class CachingBrowserTest {
             PresetSlot(addr, "${addr.bank}:${addr.slot}", "Bank ${addr.bank}", "refreshed")
         }
 
-        override fun index(): Flow<IndexUpdate> = flow {
+        override val scopes = listOf(PresetScope.USER, PresetScope.FAVORITES)
+
+        override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
             indexRuns++
             emit(IndexUpdate.Slots(slots))
             failures.forEach { emit(IndexUpdate.Failed(it, "unreadable")) }

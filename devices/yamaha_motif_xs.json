@@ -4,6 +4,106 @@
   "familyConfig": {
     "banks": [
       {
+        "label": "PRE1",
+        "displayLabel": "PRE1",
+        "shortLabel": "P1",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 0,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 0
+      },
+      {
+        "label": "PRE2",
+        "displayLabel": "PRE2",
+        "shortLabel": "P2",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 1,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 1
+      },
+      {
+        "label": "PRE3",
+        "displayLabel": "PRE3",
+        "shortLabel": "P3",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 2,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 2
+      },
+      {
+        "label": "PRE4",
+        "displayLabel": "PRE4",
+        "shortLabel": "P4",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 3,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 3
+      },
+      {
+        "label": "PRE5",
+        "displayLabel": "PRE5",
+        "shortLabel": "P5",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 4,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 4
+      },
+      {
+        "label": "PRE6",
+        "displayLabel": "PRE6",
+        "shortLabel": "P6",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 5,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 5
+      },
+      {
+        "label": "PRE7",
+        "displayLabel": "PRE7",
+        "shortLabel": "P7",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 6,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 6
+      },
+      {
+        "label": "PRE8",
+        "displayLabel": "PRE8",
+        "shortLabel": "P8",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 7,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 7
+      },
+      {
+        "label": "GM",
+        "displayLabel": "GM",
+        "shortLabel": "GM",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 9,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 0,
+        "selectMsb": 0
+      },
+      {
         "label": "USR1",
         "displayLabel": "USER 1",
         "shortLabel": "U1",
@@ -35,6 +135,29 @@
         "readOnly": false,
         "indexByDefault": true,
         "selectLsb": 10
+      },
+      {
+        "label": "PREDR",
+        "displayLabel": "PRE DR",
+        "shortLabel": "P DR",
+        "slotCount": 64,
+        "addressHi": 12,
+        "addressMid": 32,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 32
+      },
+      {
+        "label": "GMDR",
+        "displayLabel": "GM DR",
+        "shortLabel": "G DR",
+        "slotCount": 1,
+        "addressHi": 12,
+        "addressMid": 33,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 0,
+        "selectMsb": 127
       },
       {
         "label": "DRUM",

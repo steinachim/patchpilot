@@ -45,6 +45,21 @@ internal data class ProgramListing(
  *   Pro-800 answers for every address, empty ones included.
  * @param allSlots every address the instrument's layout allows, in device order.
  */
+/**
+ * Where a copy could be written: every address the layout allows that does not already hold one.
+ *
+ * **Its own function, because it is not a property of what is on screen.** Copying a factory voice
+ * needs the free *user* slots while the factory listing is displayed - a listing in which nothing
+ * is free, since all 1,217 rows hold a voice. Computed inside `buildProgramListing` alone, it
+ * answered "empty" there and hid the Copy item on exactly the rows the feature exists for.
+ *
+ * [allSlots] is therefore the caller's choice of address space, not the whole instrument.
+ */
+internal fun freeSlots(reported: List<PresetSlot>, allSlots: List<PresetSlot>): List<PresetSlot> {
+    val occupied = reported.filterNot { it.isEmpty }.map { it.address }.toSet()
+    return allSlots.filterNot { it.address in occupied }
+}
+
 internal fun buildProgramListing(
     reported: List<PresetSlot>,
     allSlots: List<PresetSlot>,
@@ -58,21 +73,28 @@ internal fun buildProgramListing(
     // button it had no business offering.
     val occupied = reported.filterNot { it.isEmpty }.map { it.address }.toSet()
 
-    // Copy's destinations: every address the layout allows, minus the ones actually occupied -
-    // the same set "Show empty slots" already renders, just not filtered to the current bank or
+    // The same set "Show empty slots" already renders, just not filtered to the current bank or
     // name. Computed from the full address space rather than the toggle, since picking a
     // destination needs all of it whether or not that checkbox happens to be on.
-    val freeSlots = allSlots.filterNot { it.address in occupied }
+    val freeSlots = freeSlots(reported, allSlots)
 
     // Bank labels come off the rows themselves rather than being parsed back out of a display id:
     // "A:1:1" yields its bank to substringBefore(':') and "A00" does not, and no screen should
     // know which shape it is looking at.
     //
+    // **In device order, which is the order they arrive in - not sorted.** `distinct` already
+    // preserves it, and sorting destroyed it. That was invisible for as long as every instrument's
+    // labels happened to sort into device order ("USER 1".."USER DR"), and stops being invisible
+    // the moment a bank is called "PRE1" and another "PRE DR": a space sorts before a digit, so
+    // the rail would offer GM, GM DR, PRE DR, PRE1..PRE8 against a list running PRE1..PRE8, GM,
+    // PRE DR, GM DR. Taps would still land, since the jump is a lookup by label, but dragging the
+    // rail scrubs through the labels in order and would jump backwards and forwards.
+    //
     // Picking a copy destination needs every bank on the rail, whether or not "show empty slots"
     // happens to be checked - an empty bank may be exactly where the target is.
     val bankLabels =
         (if (showEmptySlots || pickingCopy) allSlots else reported)
-            .map { it.bankLabel }.distinct().sorted()
+            .map { it.bankLabel }.distinct()
 
     // "Show empty slots" has to work in both directions, because the two families report
     // occupancy differently: a Nord lists only what it holds, so showing empties means *adding*

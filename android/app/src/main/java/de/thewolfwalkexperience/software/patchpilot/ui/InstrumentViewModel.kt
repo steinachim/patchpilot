@@ -14,6 +14,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.OccupiedSlotReason
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.stemFor
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionReport
@@ -29,6 +30,7 @@ import de.thewolfwalkexperience.software.patchpilot.discovery.DeviceDiscovery
 import de.thewolfwalkexperience.software.patchpilot.discovery.MidiDiscovery
 import de.thewolfwalkexperience.software.patchpilot.discovery.UsbHostDiscovery
 import de.thewolfwalkexperience.software.patchpilot.discovery.mergeCandidates
+import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsInstrument
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.DeviceProfile
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
@@ -41,6 +43,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -664,8 +670,8 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
 
     /** Drops the listing and whatever is producing it, so nothing survives into the next session. */
     private fun cancelIndex() {
-        indexJob?.cancel()
-        indexJob = null
+        indexJobs.values.forEach { it.cancel() }
+        indexJobs.clear()
         indexedInstrument = null
         // **Deliberately does not publish a fresh PresetIndexState.** Emitting one recomposes
         // ProgramsScreen at the exact moment there is no instrument - and that screen derives the
@@ -691,7 +697,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      * is 400 sequential dumps and the screen has to render what has landed so far. On a Nord
      * it is one batch, and the same collector handles it without noticing.
      */
-    fun programIndex(): Flow<IndexUpdate> = browser().index()
+    fun programIndex(scope: PresetScope): Flow<IndexUpdate> = browser().index(scope)
 
     /**
      * The connected instrument's browser, wrapped so a listing can come from memory.
@@ -722,13 +728,90 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
     //
     // A ViewModel survives configuration changes, so the scan does now too.
 
-    private val _index = MutableStateFlow(PresetIndexState())
-    val index: StateFlow<PresetIndexState> = _index.asStateFlow()
-    private var indexJob: Job? = null
+    // Each scope keeps its own state, rather than one state re-collected on every switch. Two
+    // things need that, and neither is optional:
+    //
+    // - "Copy to..." has to know which user slots are free *while the factory listing is on
+    //   screen*, because a factory voice can only be copied into a user slot.
+    // - An edit made from the favorites listing changes a row the user listing also holds, and
+    //   the user listing has to be corrected without being re-read.
+    private val _indexes = MutableStateFlow<Map<PresetScope, PresetIndexState>>(emptyMap())
+
+    private val _scope = MutableStateFlow(PresetScope.USER)
+    val scope: StateFlow<PresetScope> = _scope.asStateFlow()
+
+    /**
+     * The listing for whichever scope is selected - what ProgramsScreen collects, unchanged.
+     *
+     * `Eagerly` rather than `WhileSubscribed`: the screen's collector is what it is, but the scan
+     * driving this is launched from here and outlives the composition on purpose (see below), so a
+     * state that reset itself when the screen went away would undo exactly that.
+     */
+    val index: StateFlow<PresetIndexState> = combine(_scope, _indexes) { scope, byScope ->
+        byScope[scope] ?: PresetIndexState()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, PresetIndexState())
+
+    /**
+     * The user listing specifically, whatever scope is selected.
+     *
+     * A flow rather than a getter, because the questions that cross scopes are asked *while
+     * another scope is displayed* - "can this factory voice be copied, and to where?" - and a
+     * plain read would be answered once and never revisited. Browsing the factory list while the
+     * user scan is still running would then leave Copy hidden until something unrelated
+     * recomposed the screen.
+     */
+    val userIndex: StateFlow<PresetIndexState> = _indexes
+        .map { it[PresetScope.USER] ?: PresetIndexState() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, PresetIndexState())
+
+    // **One job per scope, so that switching never throws a listing away.** A user scan is 93
+    // seconds; cancelling it because somebody looked at the factory list for a moment and then
+    // came back would restart it from nothing. Two listings running at once is safe and does not
+    // starve either: `SysExExchange` serialises one request/reply at a time rather than holding
+    // the bus for a whole flow, so a favorites read started mid-scan interleaves with it instead
+    // of queueing behind it, and each reply is matched on its own echoed address.
+    private val indexJobs = mutableMapOf<PresetScope, Job>()
     private var indexGeneration = 0
 
-    /** Which instrument [_index] describes, so a *different* one still triggers a fresh scan. */
+    /** Which instrument [_indexes] describes, so a *different* one still triggers a fresh scan. */
     private var indexedInstrument: String? = null
+
+    /**
+     * The last instrument actually browsed, **surviving a teardown** - which [indexedInstrument]
+     * deliberately does not.
+     *
+     * These two look redundant and are not. `cancelIndex()` clears [indexedInstrument] on every
+     * disconnect, and `MainActivity.onResume` force-reconnects on every return to the foreground,
+     * so "is this the instrument we were just browsing?" cannot be asked of it: after switching
+     * apps and coming back, the answer is always no. Keyed on that, the browser would drop out of
+     * the factory or favorites listing every time the user glanced at something else - the same
+     * churn `PresetIndexCache` exists to avoid, reintroduced one layer up.
+     */
+    private var lastBrowsedInstrument: String? = null
+
+    private fun updateIndex(scope: PresetScope, transform: (PresetIndexState) -> PresetIndexState) {
+        _indexes.update { byScope ->
+            byScope + (scope to transform(byScope[scope] ?: PresetIndexState()))
+        }
+    }
+
+    /** True where [scope]'s listing has finished or failed, so re-running it would buy nothing. */
+    private fun isSettled(scope: PresetScope): Boolean =
+        _indexes.value[scope]?.let { it.complete || it.error != null } == true
+
+    /**
+     * Switches which listing the browser shows, starting it if it has not been read yet.
+     *
+     * A scope that already finished is shown as it stands and costs nothing, which is the point of
+     * keeping all three; one still in flight keeps filling.
+     */
+    fun setScope(scope: PresetScope) {
+        if (_scope.value == scope) return
+        _scope.value = scope
+        val key = instrument?.identity?.stableKey ?: return
+        if (isSettled(scope) || indexJobs[scope]?.isActive == true) return
+        launchIndex(key, scope)
+    }
 
 
     /**
@@ -742,20 +825,31 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      */
     fun startIndex() {
         val key = instrument?.identity?.stableKey ?: return
-        val settled = _index.value.complete || _index.value.error != null
-        if (key == indexedInstrument && (indexJob?.isActive == true || settled)) return
-        launchIndex(key)
+        // A different instrument invalidates all three listings, not just the one on screen, and
+        // returns the browser to the user presets - which is where "the default is the user
+        // presets" actually gets enforced. Deliberately keyed on the *instrument* rather than on
+        // each session: `MainActivity.onResume` rebuilds the session on every return to the
+        // foreground, so resetting per session would drop the user out of the factory or favorites
+        // listing every time they switched apps.
+        if (key != lastBrowsedInstrument) {
+            _indexes.value = emptyMap()
+            _scope.value = PresetScope.USER
+        }
+        lastBrowsedInstrument = key
+        val scope = _scope.value
+        if (key == indexedInstrument && (indexJobs[scope]?.isActive == true || isSettled(scope))) return
+        launchIndex(key, scope)
     }
 
     /**
-     * Re-collects the listing, **keeping** the cache.
+     * Re-collects the current listing, **keeping** the cache.
      *
      * What an edit needs: `refreshEdited` has already written the changed addresses through to
      * the cached index, so this re-reads from memory rather than from the instrument.
      */
     fun reloadIndex(): Int? {
         val key = instrument?.identity?.stableKey ?: return null
-        return launchIndex(key)
+        return launchIndex(key, _scope.value)
     }
 
     /**
@@ -771,19 +865,22 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         return reloadIndex()
     }
 
-    private fun launchIndex(key: String): Int {
-        indexJob?.cancel()
+    private fun launchIndex(key: String, scope: PresetScope): Int {
+        indexJobs.remove(scope)?.cancel()
         indexedInstrument = key
+        // One counter across all scopes. The screen compares the generation it started against the
+        // one that finished, and a per-scope counter would let two scopes issue the same number -
+        // at which point a refresh of one would look, to the screen, like its own refresh landing.
         val generation = ++indexGeneration
-        _index.value = PresetIndexState(generation = generation)
-        indexJob = viewModelScope.launch {
+        updateIndex(scope) { PresetIndexState(generation = generation) }
+        indexJobs[scope] = viewModelScope.launch {
             try {
-                programIndex().collect { update -> _index.update { it.plus(update) } }
+                programIndex(scope).collect { update -> updateIndex(scope) { it.plus(update) } }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "Listing failed", e)
-                _index.update {
+                Log.w(TAG, "Listing $scope failed", e)
+                updateIndex(scope) {
                     it.copy(error = e.message ?: str(R.string.listing_unknown_error), progress = null)
                 }
             }
@@ -795,8 +892,26 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      * Throws away the cached listing so the next collection re-reads the instrument.
      *
      * What the pull-to-refresh gesture and the "Re-read from instrument" menu item both call.
+     *
+     * **Only the user listing is cached** (see [CachingBrowser]), so this is a no-op for the other
+     * two - and has to be. Pulling to refresh the favorites listing, which is exactly when someone
+     * has just marked something on the panel, would otherwise drop the cached user listing as a
+     * side effect and cost 93 seconds the next time they switched back to it.
      */
     fun invalidateIndex() {
+        if (_scope.value != PresetScope.USER) return
+        invalidateUserCache()
+    }
+
+    /**
+     * Drops the cached user listing regardless of which scope is on screen.
+     *
+     * Separate from [invalidateIndex] because the two callers differ in what they know: the
+     * gesture means "re-read what I am looking at", while a failed re-read after an edit means
+     * "the cached user listing is now untrustworthy" - which is true whichever listing the edit
+     * was made from.
+     */
+    private fun invalidateUserCache() {
         val instrument = instrument ?: return
         indexCache.invalidate(CacheKey.of(instrument))
     }
@@ -812,17 +927,24 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      * If a re-read fails, the whole cached index is dropped rather than left holding a value
      * nothing has confirmed. That costs a full listing on the next collection and is the right
      * trade: the alternative is showing a stale row with no way for anyone to know it is stale.
+     *
+     * **The re-read slot is also written into every listing already holding that address**, not
+     * only into the cache. A favorited user voice sits in the user listing and the favorites one
+     * at once; renaming it from either has to correct both, and the cache write-through only
+     * reaches whichever is collected next. A listing that has already finished is not re-collected
+     * - that is the point of keeping it - so without this it would keep showing the old name.
      */
     private suspend fun refreshEdited(vararg addresses: SlotAddress) {
         val browser = browser()
         for (address in addresses) {
             try {
-                browser.refresh(address)
+                val slot = browser.refresh(address)
+                _indexes.update { byScope -> byScope.mapValues { (_, state) -> state.replacing(slot) } }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Couldn't re-read $address after an edit; dropping the cached index", e)
-                invalidateIndex()
+                invalidateUserCache()
                 return
             }
         }
@@ -833,14 +955,20 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      * actually stored there - used by ProgramsScreen to show the gaps a device that only reports
      * occupied slots leaves behind.
      */
-    fun allSlots(): List<PresetSlot> {
+    fun allSlots(scope: PresetScope = PresetScope.USER): List<PresetSlot> {
         val inst = instrument ?: return emptyList()
         val layout = inst.layout
+        // A favorites listing has no address space of its own: it is a sparse set drawn from every
+        // bank, so there is no address at which one is "missing". Returning the whole instrument
+        // here would make "show empty slots" offer 1,633 placeholder rows for a list of eleven.
+        if (scope == PresetScope.FAVORITES) return emptyList()
+        val wantReadOnly = scope == PresetScope.FACTORY
         // Belt-and-suspenders on top of the protocol layer's own bound on a derived device's slot
         // count: a bank's capacity ultimately traces back to a value a connected instrument
         // reported, and this is the loop bound that value feeds into. Clamp rather than trust it
         // so one bad field can't turn into an attempt to materialize millions of strings.
         return layout.banks.flatMapIndexed { bank, spec ->
+            if (spec.readOnly != wantReadOnly) return@flatMapIndexed emptyList()
             (0 until spec.slotCount.coerceIn(0, MAX_ITEMS_PER_BANK)).map { slot ->
                 val address = SlotAddress(bank, slot)
                 PresetSlot(
@@ -852,6 +980,20 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
     }
+
+    /**
+     * Bank indices the instrument refuses writes to, for the per-row gating of edits.
+     *
+     * Read off the layout rather than tracked beside it, so a bank cannot be read-only for the
+     * purposes of [allSlots] and writable for the purposes of the Rename item.
+     */
+    fun readOnlyBanks(): Set<Int> =
+        instrument?.layout?.banks?.withIndex()
+            ?.filter { it.value.readOnly }?.map { it.index }?.toSet()
+            ?: emptySet()
+
+    /** The listings the connected instrument offers; a single entry means no selector is shown. */
+    fun browsingScopes(): List<PresetScope> = connected()?.browser?.scopes ?: listOf(PresetScope.USER)
 
     /**
      * Bank label -> what the index rail should draw for it.
@@ -984,12 +1126,78 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         val occupied = occupiedSlots()
         RegressionTester(
             instrument = current(),
-            allSlots = { allSlots().map { it.address } },
+            // The **writable** addresses, explicitly. The tester picks its sandbox slot as the
+            // first free address it is handed and then writes to it; given the whole layout it
+            // would pick PRE1's first slot, which the instrument refuses, and the run would fail
+            // on its own setup.
+            allSlots = { allSlots(PresetScope.USER).map { it.address } },
             occupiedSlots = { occupied },
             onConfirmSelect = onConfirmSelect,
             onConfirmRealSlotMutation = onConfirmRealSlotMutation,
             refreshEdited = { addresses -> refreshEdited(*addresses.toTypedArray()) },
         ).run(progress)
+    }
+
+    /**
+     * Whether this instrument can have its shipped factory names checked against itself.
+     *
+     * Motif XS only, and only where there are read-only banks to check - which is why it asks the
+     * instrument rather than the family name.
+     */
+    val canVerifyFactoryNames: Boolean
+        get() = connected() is MotifXsInstrument &&
+            connected()?.layout?.banks?.any { it.readOnly } == true
+
+    /** The read-only banks, as (bank index, display label), for the debug screen's picker. */
+    fun factoryBanks(): List<Pair<Int, String>> =
+        connected()?.layout?.banks?.withIndex()
+            ?.filter { it.value.readOnly }
+            ?.map { it.index to it.value.label }
+            ?: emptyList()
+
+    /**
+     * Reads one factory bank off the instrument and compares it to the names the app ships.
+     *
+     * **The only way to check the shipped table against real hardware.** Those 1,217 names are
+     * transcribed from the manufacturer's data list rather than read from any instrument, so a
+     * wrong one is invisible: it renders exactly like a right one. Reading a bank costs about two
+     * minutes and is not something to do on every connect, which is the whole reason the table
+     * exists - but doing it once, deliberately, is what turns "probably correct" into "checked".
+     *
+     * Read-only throughout: it issues dump requests and writes nothing.
+     */
+    suspend fun verifyFactoryNames(
+        bank: Int,
+        progress: (String) -> Unit,
+    ): List<String> = instrumentMutex.withLock {
+        val instrument = current() as? MotifXsInstrument
+            ?: throw InstrumentException.NotSupported("verify factory voice names")
+        val spec = instrument.layout.banks.getOrNull(bank)
+            ?: error("No bank $bank")
+        require(spec.readOnly) { "${spec.label} is not a factory bank." }
+
+        val shipped = _indexes.value[PresetScope.FACTORY]?.slots
+            ?: instrument.browser.index(PresetScope.FACTORY).toList()
+                .filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }
+        val expected = shipped.filter { it.address.bank == bank }.associateBy { it.address.slot }
+
+        val mismatches = mutableListOf<String>()
+        instrument.indexBank(bank).collect { update ->
+            when (update) {
+                is IndexUpdate.Progress -> progress(update.label)
+                is IndexUpdate.Failed ->
+                    mismatches += "${update.address.slot + 1}: unreadable (${update.reason})"
+                is IndexUpdate.Slots -> update.slots.forEach { read ->
+                    val shippedName = expected[read.address.slot]?.name
+                    if (read.name != shippedName) {
+                        mismatches += "${read.displayId}: instrument says " +
+                            "\"${read.name ?: "(empty)"}\", app ships \"${shippedName ?: "(none)"}\""
+                    }
+                }
+                IndexUpdate.Complete -> Unit
+            }
+        }
+        mismatches
     }
 
     /**

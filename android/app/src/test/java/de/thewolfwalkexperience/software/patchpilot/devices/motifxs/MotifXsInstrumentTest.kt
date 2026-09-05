@@ -63,8 +63,16 @@ class MotifXsInstrumentTest {
         return out
     }
 
-    /** Slot 0 named, slot 1 empty, slot 2 long-named, in every bank. */
+    /**
+     * Slot 0 named, slot 1 empty, slot 2 long-named, in every **voice** bank.
+     *
+     * **Refuses anything but `0x0C`, and that guard is load-bearing.** Without it this answered a
+     * favorites request at `71 mm 00` with a well-formed 1,919-byte voice dump echoing the right
+     * address - which passes every check a favorites read makes, and would have been decoded as
+     * about nineteen hundred marks. The fake would have been the thing under test.
+     */
     private fun defaultVoiceAt(hi: Int, mid: Int, lo: Int): ByteArray? {
+        if (hi != 0x0C) return null
         val source = when (lo) {
             0 -> MotifXsFixtures.namedVoice
             1 -> MotifXsFixtures.emptyVoice
@@ -72,6 +80,22 @@ class MotifXsInstrumentTest {
             else -> return null
         }
         return dumpAt(source, hi, mid, lo)
+    }
+
+    /**
+     * One bank's favorite marks, framed as the device sends them.
+     *
+     * Synthesized rather than recorded, unlike everything in [MotifXsFixtures]. That is honest
+     * here: these payloads carry no instrument-specific encoding to get wrong - they are one plain
+     * byte per slot - so there is nothing a recording would pin down that a constructed array does
+     * not. The *framing* still goes through [MotifXsSysEx.bulkDump] and is re-stamped as
+     * device-originated, because that part is real.
+     */
+    private fun favoritesDump(mid: Int, marks: ByteArray): ByteArray {
+        val dump = MotifXsSysEx.bulkDump(0, MotifXsSysEx.FAVORITES_ADDRESS_HI, mid, 0, marks)
+        dump[4] = MotifXsSysEx.MODEL_DEVICE.toByte()
+        dump[dump.size - 2] = MotifXsSysEx.checksumOf(dump).toByte()
+        return dump
     }
 
     /**
@@ -268,6 +292,19 @@ class MotifXsInstrumentTest {
         /** Whether the Universal Device Inquiry is answered. False models an instrument
          * routing MIDI somewhere other than USB - it enumerates and opens, then says nothing. */
         answersIdentity: Boolean = true,
+        /**
+         * Favorite marks per bank **address-mid byte**, one raw byte per slot.
+         *
+         * A bank absent from this map answers nothing at all, which is what a real instrument does
+         * for an address it does not recognise - so a test that expects a bank to be skipped and a
+         * test that expects it to be read cannot be confused with one another.
+         */
+        favorites: Map<Int, ByteArray> = emptyMap(),
+        /** Marks whose reply is corrupted on every attempt, to exercise the retry and the
+         * per-bank failure isolation. */
+        damagedFavorites: Set<Int> = emptySet(),
+        /** The names the factory listing draws on; empty means no factory scope is offered. */
+        factoryVoices: MotifXsFactoryVoices = MotifXsFactoryVoices(),
     ): Pair<MotifXsInstrument, FakeMidiTransport> {
         val slots = FakeSlots(readOnlyBanks)
         var currentMode = mode
@@ -362,12 +399,31 @@ class MotifXsInstrumentTest {
                     if (name == null) emptyList() else listOf(editBufferNameByte(name, address.third))
                 }
 
+                // The favorite marks. Ahead of the catch-all below, which would otherwise hand
+                // back a voice dump - see defaultVoiceAt.
+                MotifXsSysEx.typeOf(request) == MotifXsSysEx.TYPE_DUMP_REQUEST &&
+                    address?.first == MotifXsSysEx.FAVORITES_ADDRESS_HI -> {
+                    val mid = address.second
+                    when {
+                        mid in damagedFavorites -> listOf(
+                            // Truncated after the address: the count says more is coming and the
+                            // message ends anyway, which is what a dropped packet looks like.
+                            favoritesDump(mid, favorites[mid] ?: ByteArray(0)).copyOfRange(0, 11)
+                                .plus(MotifXsSysEx.SYSEX_END),
+                        )
+                        favorites.containsKey(mid) -> listOf(favoritesDump(mid, favorites.getValue(mid)))
+                        else -> emptyList()
+                    }
+                }
+
                 else -> listOfNotNull(
                     address?.let { slots.read(it, defaultVoiceAt(it.first, it.second, it.third)) }
                 )
             }
         }
-        return MotifXsInstrument(SysExExchange(transport, scope), withConfig, testBlanks) to transport
+        return MotifXsInstrument(
+            SysExExchange(transport, scope), withConfig, testBlanks, factoryVoices = factoryVoices,
+        ) to transport
     }
 
     /** One byte of the edit buffer's name, NUL padded, as a `1n` parameter change. */

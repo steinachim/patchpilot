@@ -21,6 +21,15 @@ import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 
 private const val CATALOG_ASSET = "yamaha_motif_xs.json"
 
+/**
+ * The factory voice-name table - see [MotifXsFactoryVoices] for why it ships rather than being read.
+ *
+ * A separate asset from the catalog, because it is a different kind of thing: the catalog is
+ * configuration a person edits, this is 94 kB of transcribed reference data. Bundling them would
+ * mean every device entry carried the whole table through `InstrumentDescriptor.familyConfig`.
+ */
+private const val FACTORY_VOICES_ASSET = "motifxs_factory_voices.json"
+
 /** One addressable bank of voices: what to call it, how many slots, and where it lives. */
 @Serializable
 data class MotifXsBank(
@@ -170,6 +179,8 @@ object MotifXsFamily : InstrumentFamily {
 
     private val catalog = CatalogLoader(CATALOG_ASSET, FamilyCatalog.serializer())
 
+    private val factoryVoices = CatalogLoader(FACTORY_VOICES_ASSET, MotifXsFactoryVoices.serializer())
+
     /**
      * This instrument's messages do not fit the default framer.
      *
@@ -227,8 +238,22 @@ object MotifXsFamily : InstrumentFamily {
             ),
             descriptorId = descriptor.id,
             catalogName = descriptor.name,
+            factoryVoices = loadFactoryVoices(context),
         )
     }
+
+    /**
+     * The factory name table, or an empty one if it cannot be read.
+     *
+     * **Never throws, unlike the blanks above it.** `InstrumentRegistry.create` is not wrapped in
+     * `runCatching` the way `descriptors` is, so anything thrown here does not degrade a feature -
+     * it fails the whole connect, and a Motif XS becomes unusable. The blanks are allowed that
+     * because delete and move genuinely cannot work without them; a missing name table only means
+     * [MotifXsInstrument] does not offer the factory listing, which it decides by asking whether
+     * this is empty.
+     */
+    private fun loadFactoryVoices(context: Context): MotifXsFactoryVoices =
+        runCatching { factoryVoices.load(context) }.getOrElse { MotifXsFactoryVoices() }
 
     /**
      * The instrument speaks MIDI SysEx; the bus it speaks it over is not `android.media.midi`.

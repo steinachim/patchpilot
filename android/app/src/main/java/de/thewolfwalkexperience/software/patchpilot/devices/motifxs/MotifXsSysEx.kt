@@ -93,6 +93,35 @@ object MotifXsSysEx {
             SYSEX_END,
         )
 
+    /**
+     * The favorited-voice marks: a second address family parallel to the `0C` voice extension,
+     * reusing its bank byte at a different high byte.
+     *
+     * One small dump per bank at `71 mm 00`, where `mm` is the bank's own [MotifXsBank.addressMid]
+     * - the same selector as a voice dump. The payload is **one raw byte per slot**, indexed by
+     * zero-based slot: `0` for unmarked, and `1`, `2` or `3` for marked. Which of those three means
+     * what is not known; nothing here or above treats them as anything but non-zero.
+     *
+     * **Not MSB-packed.** Every other payload this app reads from a `0C` address is packed 7 bits
+     * per byte and has to be unpacked; this one is not, and running the unpacker over it produces
+     * plausible-looking nonsense rather than an error.
+     *
+     * **Never sweep the middle byte.** An unmapped address is not merely refused - it puts an
+     * *Illegal Bulk Data* message on the instrument's own screen, in front of the user, once per
+     * attempt. `mm = 0x08` is a permanent hole between PRE8 and GM. Only ever pass a value that
+     * came out of the catalog's bank table.
+     *
+     * **Read-only, deliberately.** Whether the instrument would accept a bulk dump *to* `0x71` is
+     * untested, and an ill-formed write to this instrument has been observed to hang its MIDI
+     * handling until a power cycle. There is no writer here and none should be added without a
+     * bench session behind it.
+     */
+    const val FAVORITES_ADDRESS_HI = 0x71
+
+    /** `F0 43 2n 7F 03 71 mm 00 F7` - see [FAVORITES_ADDRESS_HI], especially the sweep hazard. */
+    fun requestFavorites(device: Int, bankByte: Int): ByteArray =
+        requestDump(device, FAVORITES_ADDRESS_HI, bankByte, 0)
+
     /** Address a voice selection writes to, one byte per message. */
     const val SELECT_ADDRESS_HI = 0x65
     const val SELECT_ADDRESS_MID = 0x00

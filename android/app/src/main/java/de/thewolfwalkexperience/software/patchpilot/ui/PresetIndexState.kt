@@ -47,4 +47,25 @@ data class PresetIndexState(
         is IndexUpdate.Failed -> copy(failures = failures + update)
         IndexUpdate.Complete -> copy(complete = true, progress = null)
     }
+
+    /**
+     * This listing with [slot]'s address showing [slot], or unchanged if it does not hold it.
+     *
+     * **In place, keeping its position.** A row re-read after a rename has to stay where it was;
+     * removing and appending it would move a renamed voice to the bottom of its bank.
+     *
+     * What this is for: the same address can appear in more than one listing - a favorited user
+     * voice is in both the user listing and the favorites one - and an edit made from either has
+     * to correct both. Writing the re-read slot through to the cache only fixes whichever listing
+     * is collected next, which leaves a listing that has already finished showing the old name
+     * until something re-reads it.
+     *
+     * A no-op for an absent address rather than an insertion: a listing is the set of slots that
+     * scan found, and adding a row to it would be inventing one.
+     */
+    fun replacing(slot: PresetSlot): PresetIndexState {
+        val index = slots.indexOfFirst { it.address == slot.address }
+        if (index < 0) return this
+        return copy(slots = slots.toMutableList().also { it[index] = slot })
+    }
 }

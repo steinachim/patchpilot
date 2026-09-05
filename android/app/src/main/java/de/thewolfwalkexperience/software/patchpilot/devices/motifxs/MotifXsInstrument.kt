@@ -11,6 +11,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
@@ -58,18 +59,26 @@ class MotifXsInstrument(
      */
     private val descriptorId: String = "yamaha_motif_xs",
     private val catalogName: String = "Yamaha Motif XS",
+    /**
+     * The read-only banks' voice names, shipped rather than read - see [MotifXsFactoryVoices].
+     *
+     * Defaults to empty so the JVM tests, which build this class with no catalog and no assets,
+     * do not have to supply one. An empty table simply means no factory listing is offered.
+     */
+    private val factoryVoices: MotifXsFactoryVoices = MotifXsFactoryVoices(),
 ) : Instrument, PresetBrowser {
 
     /**
-     * Every voice bank the catalog declares: 416 slots across the four user banks (128, 128,
-     * 128 and 32 for USER DR).
+     * Every voice bank the catalog declares: all fifteen, 1,633 slots.
      *
-     * Bank sizes differ, which is why this is built from [BankSpec]s rather than
-     * [SlotLayout.uniform] - a shape that also has room for the instrument's eleven factory
-     * banks (PRE DR, GM DR and the rest) if they are ever added to the catalog; see
-     * [defaultAddresses] and [indexBank] for why they are not there today.
+     * Bank sizes differ - 128 for a normal bank, 64 for PRE DR, 32 for USER DR and exactly 1 for
+     * GM DR - which is why this is built from [BankSpec]s rather than [SlotLayout.uniform].
      *
-     * Every catalogued bank is walked by a full [index]; see [MotifXsBank.indexByDefault].
+     * **The layout is the whole instrument; a listing is not.** Only the four writable banks are
+     * walked by a full [indexUser] (see [MotifXsBank.indexByDefault]); the eleven read-only ones
+     * are named from a shipped table by [indexFactory] and never read on connect. Anything that
+     * needs "the addresses a user could write to" has to filter on [BankSpec.readOnly] rather than
+     * take this whole list - which is what carrying that flag on the layout is for.
      */
     override val layout = SlotLayout(
         // The *display* label, not the internal one: this is what the browser's headers and
@@ -81,6 +90,7 @@ class MotifXsInstrument(
                 label = shown,
                 slotCount = spec.slotCount,
                 shortLabel = spec.shortLabel.ifEmpty { shown },
+                readOnly = spec.readOnly,
             )
         },
         format = MotifXsAddressFormat(
@@ -846,12 +856,28 @@ class MotifXsInstrument(
     // ---- PresetBrowser ----
 
     /**
-     * The addresses a full [index] walks: every bank the catalog declares.
+     * All three listings, where the instrument can fill them.
      *
-     * The instrument's eleven factory banks (1,217 read-only voices) are not in the catalog at
-     * all yet, so there is nothing here to exclude - see [CatalogParsesTest] for why. Were they
-     * added, they would need [MotifXsBank.indexByDefault] set to false: re-reading read-only
-     * voices on every connect would cost about six minutes for nothing.
+     * [PresetScope.FACTORY] is offered only when there is both something to list and something to
+     * call it: a catalog with no read-only banks, or a missing name table, would otherwise put a
+     * tab on the screen that opens onto 1,217 unnamed rows. [PresetScope.FAVORITES] needs neither,
+     * because it is read from the instrument - an instrument with nothing marked shows an empty
+     * list, which is a true answer rather than a broken one.
+     */
+    override val scopes: List<PresetScope> = buildList {
+        add(PresetScope.USER)
+        if (config.banks.any { it.readOnly } && !factoryVoices.isEmpty) add(PresetScope.FACTORY)
+        add(PresetScope.FAVORITES)
+    }
+
+    /**
+     * The addresses [indexUser] walks: the banks marked [MotifXsBank.indexByDefault], which is the
+     * four writable ones.
+     *
+     * The eleven factory banks are excluded here rather than absent from the catalog. Walking them
+     * would cost about seven and a half minutes - 1,217 voices at ~160 ms, and a full second for
+     * each of the 65 drum kits - to re-read data that is identical on every Motif XS and cannot
+     * have changed since the last time. [indexFactory] names them from a shipped table instead.
      */
     private fun defaultAddresses(): Sequence<SlotAddress> = sequence {
         config.banks.forEachIndexed { bank, spec ->
@@ -910,7 +936,13 @@ class MotifXsInstrument(
      * to appear as they arrive, and an unreadable voice has to cost only itself rather than the
      * minute already spent.
      */
-    override fun index(): Flow<IndexUpdate> = flow {
+    override fun index(scope: PresetScope): Flow<IndexUpdate> = when (scope) {
+        PresetScope.USER -> indexUser()
+        PresetScope.FACTORY -> indexFactory()
+        PresetScope.FAVORITES -> indexFavorites()
+    }
+
+    private fun indexUser(): Flow<IndexUpdate> = flow {
         val batch = mutableListOf<PresetSlot>()
         val total = defaultAddresses().count()
         var done = 0
@@ -936,6 +968,142 @@ class MotifXsInstrument(
             }
         }
         emit(IndexUpdate.Complete)
+    }
+
+    /**
+     * The eleven read-only banks, named from the shipped table. **No round trips at all.**
+     *
+     * One batch rather than the streaming shape the other two need: there is nothing to wait for,
+     * so chunking 1,217 rows would only make the list appear in stutters instead of at once.
+     *
+     * A slot the table has no entry for becomes an unnamed row rather than being skipped. That
+     * keeps the listing's shape equal to the instrument's - a gap in the table shows up as one
+     * visibly missing name, which is findable, instead of silently shifting every row after it.
+     */
+    private fun indexFactory(): Flow<IndexUpdate> = flow {
+        val slots = config.banks.withIndex()
+            .filter { (_, spec) -> spec.readOnly }
+            .flatMap { (bank, spec) ->
+                (0 until spec.slotCount).map { slot ->
+                    val address = SlotAddress(bank, slot)
+                    PresetSlot(
+                        address = address,
+                        displayId = layout.format.format(address),
+                        bankLabel = spec.displayLabel.ifEmpty { spec.label },
+                        name = factoryVoices.name(spec.label, slot),
+                    )
+                }
+            }
+        emit(IndexUpdate.Slots(slots))
+        emit(IndexUpdate.Complete)
+    }
+
+    /**
+     * The voices marked as favorites on the instrument itself, across every bank.
+     *
+     * One small dump per bank at `71 mm 00` (see [MotifXsSysEx.FAVORITES_ADDRESS_HI]) tells us
+     * which slots are marked; the names then come from wherever they are cheapest. A read-only
+     * bank's come from the shipped table for nothing, so a listing of only factory favorites -
+     * which is the common case - costs fifteen tiny round trips and no voice dumps at all. A user
+     * bank's have to be read, one ~160 ms dump per marked slot, because no table can know them.
+     *
+     * **Only catalogued banks are asked.** The middle byte is taken from the bank table rather
+     * than iterated over a range: an unmapped address puts an *Illegal Bulk Data* message on the
+     * instrument's screen, and `mm = 0x08` is a hole between PRE8 and GM.
+     *
+     * A bank that will not answer costs only itself, the same rule [indexUser] applies per slot.
+     */
+    private fun indexFavorites(): Flow<IndexUpdate> = flow {
+        val total = config.banks.size
+        config.banks.forEachIndexed { bank, spec ->
+            val label = spec.displayLabel.ifEmpty { spec.label }
+            val marks = try {
+                readFavoriteMarks(spec, label)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't read $label's favorite marks", e)
+                // Addressed at the bank's first slot: IndexUpdate.Failed carries an address, and
+                // the failure is the bank's rather than any one slot's. The count the user sees is
+                // "1 unreadable", which is honest - what was lost is one bank's marks.
+                emit(IndexUpdate.Failed(SlotAddress(bank, 0), e.message ?: "unreadable"))
+                emit(IndexUpdate.Progress(bank + 1, total, "Reading $label"))
+                return@forEachIndexed
+            }
+
+            val batch = mutableListOf<PresetSlot>()
+            // The payload should be one byte per slot, but the bound is the smaller of the two
+            // rather than either alone: a short reply must not index past its end, and a long one
+            // must not invent slots the bank does not have.
+            for (slot in 0 until minOf(marks.size, spec.slotCount)) {
+                // Any non-zero mark counts. The values 1, 2 and 3 all occur and what distinguishes
+                // them is not known, so nothing here branches on them or shows them.
+                if (marks[slot].toInt() == 0) continue
+                val address = SlotAddress(bank, slot)
+                val displayId = layout.format.format(address)
+                if (spec.readOnly) {
+                    batch += PresetSlot(
+                        address = address,
+                        displayId = displayId,
+                        bankLabel = label,
+                        name = factoryVoices.name(spec.label, slot),
+                    )
+                } else {
+                    try {
+                        batch += readSlot(address, displayId)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Couldn't read favorited voice $displayId", e)
+                        emit(IndexUpdate.Failed(address, e.message ?: "unreadable"))
+                    }
+                }
+            }
+            if (batch.isNotEmpty()) emit(IndexUpdate.Slots(batch))
+            emit(IndexUpdate.Progress(bank + 1, total, "Reading $label"))
+        }
+        emit(IndexUpdate.Complete)
+    }
+
+    /** One bank's marks, one raw byte per slot. See [MotifXsSysEx.FAVORITES_ADDRESS_HI]. */
+    private suspend fun readFavoriteMarks(spec: MotifXsBank, label: String): ByteArray {
+        var damaged = false
+        val reply = try {
+            exchange.exchange(
+                MotifXsSysEx.requestFavorites(config.deviceNumber, spec.addressMid),
+                what = "reading $label's favorite marks",
+                // The exchange's own default, not [VOICE_TIMEOUT]. That one is sized for the
+                // slowest thing on this wire - a ~12.6 kB drum kit, a full second - and this is
+                // the smallest: at most 128 bytes, about ten milliseconds at the rate the
+                // instrument paces its output.
+            ) { message ->
+                // Matched on the echoed address as well as the type, and well-formedness is part
+                // of the match rather than a check afterwards - both for the same reasons as
+                // readSlot, which see: a late reply to a previous request would otherwise put one
+                // bank's marks against another's, and a truncated one would be accepted as real
+                // and never retried.
+                MotifXsSysEx.typeOf(message) == MotifXsSysEx.TYPE_BULK_DUMP &&
+                    MotifXsSysEx.addressOf(message) ==
+                    Triple(MotifXsSysEx.FAVORITES_ADDRESS_HI, spec.addressMid, 0) &&
+                    MotifXsSysEx.isWellFormedBulkDump(message).also { intact ->
+                        if (!intact) damaged = true
+                    }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (damaged) {
+                throw IllegalStateException(
+                    "$label's favorite marks arrived damaged (bad length or checksum) on every " +
+                        "attempt", e
+                )
+            }
+            throw e
+        }
+        // Deliberately not unpacked. Unlike every voice dump this app reads, this payload is not
+        // MSB-packed - it is one plain byte per slot - and running the unpacker over it would
+        // produce a shorter array of plausible-looking rubbish rather than an error.
+        return MotifXsSysEx.dumpPayload(reply)
     }
 
     override suspend fun refresh(address: SlotAddress): PresetSlot =

@@ -10,6 +10,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.slugifyDeviceId
@@ -119,8 +120,13 @@ class NordInstrument(
      * One batch and done. The Nord lists its programs device-side in a single walk, so there is
      * no meaningful progress to report and nothing to gain by chunking - the streaming shape
      * exists for the Pro-800, which needs 400 round trips to answer the same question.
+     *
+     * [scope] is ignored: this family declares only [PresetScope.USER], so it is the only value
+     * that can arrive here. The instrument does have factory content, but reading it is not
+     * implemented, and declaring a scope the browser cannot fill would put a tab on the screen
+     * that leads nowhere.
      */
-    override fun index(): Flow<IndexUpdate> = flow {
+    override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
         val items = mapNordFailure("listing presets") {
             device.collectItemNames(device.fetchCategoryItems(device.getProgramCategoryIndex()))
         }
