@@ -280,6 +280,12 @@ class Pro800Instrument(
      * sequence as a whole is not, so a select issued during a 400-preset scan interleaves with
      * dumps. That is harmless: the write is atomic under the lock, and an intervening dump costs at
      * most one extra poll iteration.
+     *
+     * **Confirmed on hardware, by ear** - including with `MIDI RX Channel` set to OFF, where the
+     * old path could do nothing at all. Worth knowing before simplifying any of this: step 4 is not
+     * decoration. Drop it and the display, the settings block and the preset list all still report
+     * the new preset while the instrument keeps playing the old one - so the regression passes every
+     * check the app is capable of making, and only listening catches it.
      */
     override suspend fun select(address: SlotAddress) {
         val programNumber = programNumberOf(address)
