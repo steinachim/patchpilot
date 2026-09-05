@@ -14,6 +14,9 @@ import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
  * [ignoreWrites] models an instrument that accepts a write and does not store it, and
  * [failWritesTo] models one address refusing while others succeed - which is what turns a swap
  * into a potential data loss.
+ *
+ * The settings block is stored the same way, because selection writes it: see [staleSettingsReads],
+ * which models the delayed commit that is the reason `Pro800Instrument.select` polls at all.
  */
 class FakePro800(
     initial: Map<Int, ByteArray> = emptyMap(),
@@ -21,11 +24,26 @@ class FakePro800(
     var ignoreWrites: Boolean = false,
     /** Program numbers whose writes silently do nothing. */
     var failWritesTo: Set<Int> = emptySet(),
+    /**
+     * How many settings reads after a settings write still report the *old* block.
+     *
+     * Real hardware does this: most settings writes are visible on the next read, but some take
+     * over a second to commit. Zero is the common case; anything above it exercises the poll loop.
+     */
+    var staleSettingsReads: Int = 0,
 ) {
     /** Program number -> the encoded payload stored there. Absent means an empty address. */
     private val stored = initial.toMutableMap()
 
+    /** The committed settings block, and a write waiting out [staleSettingsReads] before it lands. */
+    private var settings: ByteArray = initialSettings()
+    private var uncommittedSettings: ByteArray? = null
+    private var staleReadsLeft = 0
+
     val writeLog = mutableListOf<Pair<Int, Int>>() // (programNumber, payload size)
+
+    /** Every request the instrument was sent, in order - what ordering assertions are made on. */
+    val requestLog = mutableListOf<ByteArray>()
 
     fun contentsOf(programNumber: Int): ByteArray? = stored[programNumber]
 
@@ -34,7 +52,14 @@ class FakePro800(
 
     fun isEmptyAt(programNumber: Int): Boolean = stored[programNumber] == null
 
+    /** The committed settings block as the instrument would report it, decoded. */
+    fun currentSettings(): Pro800Settings = Pro800Settings.fromEncoded(settings)
+
+    /** The committed settings block's raw encoded payload. */
+    fun settingsPayload(): ByteArray = settings
+
     val transport = FakeMidiTransport { request ->
+        requestLog += request
         when (Pro800SysEx.typeOf(request)) {
             Pro800SysEx.TYPE_DEVICE_NAME -> listOf(
                 Pro800SysEx.HEADER + byteArrayOf(Pro800SysEx.TYPE_DEVICE_NAME_REPLY.toByte()) +
@@ -51,6 +76,12 @@ class FakePro800(
                 applyWrite(request)
                 emptyList()
             }
+            // The preset reload. Answers a plain OK status, like every other command.
+            Pro800SysEx.TYPE_RESET_MODE -> listOf(
+                Pro800SysEx.HEADER +
+                    byteArrayOf(Pro800SysEx.TYPE_STATUS.toByte(), 0x00, Pro800SysEx.STATUS_OK.toByte()) +
+                    Pro800SysEx.SYSEX_END,
+            )
             else -> emptyList()
         }
     }
@@ -60,6 +91,11 @@ class FakePro800(
         val payload = Pro800SysEx.dumpPayload(request)
         writeLog += programNumber to payload.size
         if (ignoreWrites || programNumber in failWritesTo) return
+        if (programNumber == Pro800SysEx.SETTINGS_ADDRESS) {
+            uncommittedSettings = payload
+            staleReadsLeft = staleSettingsReads
+            return
+        }
         if (payload.isEmpty()) stored.remove(programNumber) else stored[programNumber] = payload
     }
 
@@ -76,21 +112,40 @@ class FakePro800(
             Pro800SysEx.SYSEX_END
     }
 
-    /** MIDI RX ALL, so nothing in these tests depends on a channel. */
+    /** Serves the block, committing a pending write once its stale reads are used up. */
     private fun settingsDump(): ByteArray {
-        val dense = ByteArray(Pro800Settings.RX_CHANNEL_DENSE + 1)
-        Pro800ProgramCodec.writeValue(dense, Pro800Settings.RX_CHANNEL_DENSE, 1, Pro800Settings.RX_ALL)
+        if (staleReadsLeft > 0) {
+            staleReadsLeft--
+        } else {
+            uncommittedSettings?.let { settings = it }
+            uncommittedSettings = null
+        }
         return Pro800SysEx.HEADER +
             byteArrayOf(
                 Pro800SysEx.TYPE_DUMP.toByte(),
                 (Pro800SysEx.SETTINGS_ADDRESS and 0x7F).toByte(),
                 ((Pro800SysEx.SETTINGS_ADDRESS shr 7) and 0x7F).toByte(),
             ) +
-            Pro800ProgramCodec.encode(dense) +
+            settings +
             Pro800SysEx.SYSEX_END
     }
 
+    /**
+     * A full-length settings block: MIDI RX ALL and the pointer at A00.
+     *
+     * Full length on purpose - 40 dense bytes encode to exactly the 46 raw bytes a real block is,
+     * ending mid-group, which is the shape `Pro800ProgramCodec.patchValue` exists to handle.
+     */
+    private fun initialSettings(): ByteArray {
+        val dense = ByteArray(SETTINGS_DENSE_SIZE)
+        Pro800ProgramCodec.writeValue(dense, Pro800Settings.RX_CHANNEL_DENSE, 1, Pro800Settings.RX_ALL)
+        return Pro800ProgramCodec.encode(dense)
+    }
+
     companion object {
+        /** What a real 46-byte settings block decodes to. */
+        const val SETTINGS_DENSE_SIZE = 40
+
         /** A stored preset with [name], built the way the instrument's own records are. */
         fun preset(name: String?, version: Int = 111): ByteArray {
             val dense = ByteArray(Pro800ProgramFields.NAME_DENSE_END)

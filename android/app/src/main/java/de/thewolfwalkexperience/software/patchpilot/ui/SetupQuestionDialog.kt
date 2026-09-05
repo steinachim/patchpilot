@@ -35,13 +35,17 @@ import androidx.compose.runtime.setValue
 /**
  * Asks the user for something the instrument will not tell us.
  *
- * **Deliberately not dismissable.** There is no cancel: the question exists because an operation
- * cannot work until it is answered, and the one case that exists - which MIDI channel a Pro-800's
- * DIP switches are set to - fails *silently* when guessed wrong. A dialog the user can wave away
- * would leave them with a Load button that does nothing and no explanation, which is exactly the
- * situation this replaced.
+ * **Deliberately not dismissable.** There is no cancel: a question is only ever raised because an
+ * operation cannot work until it is answered, and the kind of setting that lands here is one the
+ * instrument will not report and the app must not guess - so a wrong or absent answer fails
+ * *silently*, leaving the user with a button that does nothing and no explanation.
  *
  * The default is pre-selected but still has to be confirmed, for the same reason.
+ *
+ * **No instrument raises a question today.** The one that did - which MIDI channel a Pro-800's rear
+ * DIP switches are set to, needed because selection was a program change - went away when selection
+ * became pure SysEx and stopped needing a channel at all. This is kept as the extension point for
+ * the next instrument with a setting only its owner can answer.
  */
 @Composable
 fun SetupQuestionDialog(question: SetupQuestion, onAnswer: (Int) -> Unit) {
@@ -57,12 +61,13 @@ fun SetupQuestionDialog(question: SetupQuestion, onAnswer: (Int) -> Unit) {
                 Spacer(Modifier.height(12.dp))
 
                 // **A dropdown once the list gets long, radio buttons while it is short.**
-                // The one question that exists today offers sixteen MIDI channels, and sixteen
-                // radio buttons is a scrolling list where the choice the user already knows is
-                // off-screen - they were asked "which channel", not "read this list". A dropdown
-                // shows the current answer as a single line and opens only when they want to
-                // change it. Below the threshold radio buttons are still better: every option
-                // visible at once, one tap to answer, nothing to open.
+                // A question of this kind can easily run to a dozen or more options - the one this
+                // was built for offered sixteen MIDI channels - and that many radio buttons is a
+                // scrolling list where the choice the user already knows is off-screen. They were
+                // asked to pick a value, not to read a list. A dropdown shows the current answer as
+                // a single line and opens only when they want to change it. Below the threshold
+                // radio buttons are still better: every option visible at once, one tap to answer,
+                // nothing to open.
                 if (question.options.size > INLINE_OPTION_LIMIT) {
                     Box {
                         OutlinedButton(
@@ -111,7 +116,7 @@ fun SetupQuestionDialog(question: SetupQuestion, onAnswer: (Int) -> Unit) {
         },
         confirmButton = {
             TextButton(onClick = { onAnswer(selected) }) {
-                Text(stringResource(R.string.action_use_this_channel))
+                Text(stringResource(R.string.action_use_this_setting))
             }
         },
     )

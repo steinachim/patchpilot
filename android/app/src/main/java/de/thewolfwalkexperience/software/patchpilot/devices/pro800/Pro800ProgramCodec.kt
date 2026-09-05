@@ -80,6 +80,43 @@ object Pro800ProgramCodec {
     /** How many dense bytes an encoded buffer of [encodedSize] holds. */
     fun denseSizeOf(encodedSize: Int): Int = encodedSize - (encodedSize + GROUP - 1) / GROUP
 
+    /**
+     * A copy of [encoded] with [byteCount] little-endian bytes at [denseOffset] set to [value],
+     * touching only those value bytes and the overflow bits that carry their high bits.
+     *
+     * **Deliberately not a [decode]/[encode] round trip.** That would be the obvious way to change
+     * one field, and it is wrong for a record whose length ends mid-group. The settings block is 46
+     * raw bytes: its last overflow byte governs only five value bytes, not seven, so two of its bits
+     * have no owner. [decode] never reads them and [encode] would re-derive the byte from dense
+     * alone and zero them. Whether real hardware ever puts anything there is unconfirmed, and this
+     * is the block holding every global setting - so patch in place and leave every byte, and every
+     * bit of a shared overflow byte, exactly as it was read.
+     *
+     * The mapping is the exact inverse of [decode]'s: dense index `d` sits in group `d / 7`, whose
+     * overflow byte is at raw `group * 8` and whose value byte is at raw `group * 8 + d % 7 + 1`,
+     * carrying its high bit in bit `d % 7` of that overflow byte.
+     */
+    fun patchValue(encoded: ByteArray, denseOffset: Int, byteCount: Int, value: Int): ByteArray {
+        require(byteCount in 1..4) { "only 1..4 byte values are defined, asked for $byteCount" }
+        require(denseOffset >= 0) { "dense offset $denseOffset is negative" }
+        val patched = encoded.copyOf()
+        for (i in 0 until byteCount) {
+            val dense = denseOffset + i
+            val group = dense / (GROUP - 1)
+            val overflowPosition = group * GROUP
+            val bit = dense % (GROUP - 1)
+            val valuePosition = overflowPosition + bit + 1
+            require(valuePosition < patched.size) {
+                "dense byte $dense is past the end of this ${encoded.size}-byte record"
+            }
+            val byte = (value shr (i * 8)) and 0xFF
+            patched[valuePosition] = (byte and 0x7F).toByte()
+            val overflow = patched[overflowPosition].toInt() and 0x7F
+            patched[overflowPosition] = ((overflow and (1 shl bit).inv()) or ((byte shr 7) shl bit)).toByte()
+        }
+        return patched
+    }
+
     /** [byteCount] little-endian bytes at [denseOffset], optionally sign-extended. */
     fun readValue(dense: ByteArray, denseOffset: Int, byteCount: Int, signed: Boolean = false): Int {
         require(byteCount in 1..4) { "only 1..4 byte values are defined, asked for $byteCount" }

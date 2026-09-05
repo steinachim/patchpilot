@@ -34,7 +34,7 @@
     <string name="action_continue_anyway">Continue anyway</string>
     <string name="action_retry_search">Retry search</string>
     <string name="action_try_demo">Try demo mode</string>
-    <string name="action_use_this_channel">Use this channel</string>
+    <string name="action_use_this_setting">Use this</string>
 
     <!-- Content descriptions: spoken by a screen reader, never shown. -->
     <string name="cd_back">Back</string>

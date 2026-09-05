@@ -227,15 +227,17 @@ interface PresetTransfer {
 /**
  * A setting the instrument will not report and the app cannot infer, which the user has to supply.
  *
- * There is exactly one of these today, and it is a good example of why the facet needs to exist at
- * all rather than being a Pro-800 detail: that instrument can be configured to take its MIDI
- * receive channel from the DIP switches on its back panel, and in that mode it reports "the DIP
- * switches decide" without saying what they are set to. Nothing on the wire can answer it, and
- * guessing is worse than asking - a program change on the wrong channel is ignored *silently*,
- * because nothing acknowledges one.
+ * **No instrument implements this today, and the one that did is worth recording.** A Pro-800 can be
+ * configured to take its MIDI receive channel from the DIP switches on its back panel, and in that
+ * mode it reports "the DIP switches decide" without saying what they are set to. That mattered
+ * while loading a preset meant sending a program change, because a program change on the wrong
+ * channel is ignored *silently* - the app had fallen back to a configured default, which is how a
+ * real instrument on channel 3 sat there doing nothing while the app reported success. Asking was
+ * the fix; not needing the channel at all was the better one, and selection is pure SysEx now.
  *
- * The app previously fell back to a configured default here, which is how a real instrument on
- * channel 3 sat there doing nothing while the app reported success.
+ * The facet stays because the shape recurs: a setting that lives in hardware the protocol cannot
+ * read, where guessing fails invisibly. Where the answer *is* on the wire, read it instead - this
+ * is the last resort, not the convenient one.
  */
 interface InstrumentSetup {
     /** Non-null while an answer is still needed; null once the instrument is fully usable. */

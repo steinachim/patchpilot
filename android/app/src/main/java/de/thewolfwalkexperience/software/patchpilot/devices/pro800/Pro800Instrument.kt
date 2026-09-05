@@ -7,7 +7,6 @@ import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
-import de.thewolfwalkexperience.software.patchpilot.core.SetupQuestion
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentSetup
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
@@ -18,6 +17,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
@@ -66,22 +66,6 @@ class Pro800Instrument(
     private var firmware: String = UNKNOWN_FIRMWARE
     private var deviceName: String = catalogName
 
-    /**
-     * The channel selection is sent on, resolved at connect time from the instrument's own
-     * settings.
-     *
-     * Null means no program change can land: either the instrument's MIDI receive is OFF, or it is
-     * in DIP-switch mode and the user has not yet said which channel that is ([setup]). [select]
-     * refuses in both cases rather than sending into the void, because nothing acknowledges a
-     * program change and a wrong-channel send is indistinguishable from a working one.
-     */
-    private var sendChannel: Int? = config.midiChannel
-    private var midiRxDescription: String = "not read"
-
-    /** Set when the instrument said its channel comes from the DIP switches, which it will not
-     * read out. Only the user can resolve it - see [setup]. */
-    private var awaitingChannelChoice = false
-
     override val identity: InstrumentIdentity
         get() = InstrumentIdentity(
             descriptorId = descriptorId,
@@ -109,34 +93,12 @@ class Pro800Instrument(
     override val editor: PresetEditor = Pro800Editor(this, layout)
 
     /**
-     * Non-null because this instrument *can* need something the app cannot work out: its MIDI
-     * channel, when it is taking that from its DIP switches. [InstrumentSetup.question] is null
-     * whenever nothing is actually pending.
+     * Nothing to ask. This used to carry the one question the app could not answer for itself -
+     * which MIDI channel the rear DIP switches select - because selection was a program change and
+     * a wrong channel failed silently. [select] is pure SysEx now and needs no channel at all, so
+     * there is nothing left for the user to resolve.
      */
-    override val setup: InstrumentSetup = object : InstrumentSetup {
-        override val question: SetupQuestion?
-            get() = if (!awaitingChannelChoice) {
-                null
-            } else {
-                SetupQuestion(
-                    title = "Which MIDI channel?",
-                    explanation = "$deviceName takes its MIDI receive channel from the DIP " +
-                        "switches on its back panel, and does not report which one they are set " +
-                        "to. Loading a preset sends on the channel you pick here. If it is wrong, " +
-                        "the instrument ignores it silently - nothing comes back either way.",
-                    options = (1..16).map { "Channel $it" },
-                    defaultOption = config.midiChannel.coerceIn(0, 15),
-                )
-            }
-
-        override suspend fun answer(optionIndex: Int) {
-            require(optionIndex in 0..15) { "MIDI channel index must be 0..15, was $optionIndex" }
-            sendChannel = optionIndex
-            awaitingChannelChoice = false
-            midiRxDescription = "channel ${optionIndex + 1} (set by you)"
-            Log.i(TAG, "$deviceName: sending selection on MIDI channel ${optionIndex + 1} by user choice")
-        }
-    }
+    override val setup: InstrumentSetup? = null
 
     /** Read-only, and the source of the sample fixtures used in tests - see [Pro800Reporter]. */
     override val report: DeviceReporter = Pro800Reporter(exchange, layout) {
@@ -152,7 +114,6 @@ class Pro800Instrument(
         deviceName = queryDeviceName() ?: catalogName
         firmware = queryFirmware() ?: UNKNOWN_FIRMWARE
         validateFirmware()
-        resolveSendChannel()
     }
 
     /**
@@ -189,49 +150,25 @@ class Pro800Instrument(
     }
 
     /**
-     * Reads the instrument's `MIDI RX Channel` setting and sends on it.
+     * One read of the settings block, as its still-encoded payload.
      *
-     * **This is what makes selection work at all.** A program change sent on the wrong channel is
-     * ignored, and nothing acknowledges it, so the failure is completely silent: an instrument set
-     * to channel 3 with an app configured for channel 1 looks like a button that does nothing.
+     * Deliberately **not** routed through [read]: that path bounds its address to the 400 preset
+     * slots, which is what keeps the settings block out of a browsable index, and it carries a
+     * re-read rule for suspiciously short *preset* records that means nothing here.
      *
-     * Three answers are possible, and only one of them is a channel:
-     *
-     *  - **A fixed channel, or ALL** - use it, and nothing further is needed.
-     *  - **OFF** - no channel will work at all; [select] says so rather than pretending.
-     *  - **The DIP switches** - the instrument knows and will not say. That is what [setup] is
-     *    for: ask the user. Falling back to a configured default here is precisely the silent
-     *    failure this whole path exists to avoid.
-     *
-     * A settings read that fails outright keeps the configured fallback: not knowing the mode is
-     * different from knowing it is unknowable, and a wrong-channel select is no worse there than
-     * refusing to send at all.
+     * Unlike the identity probes above, a failure is not swallowed. [select] is built on this, and
+     * a select that cannot read the block must fail loudly rather than proceed on a payload it
+     * does not have.
      */
-    private suspend fun resolveSendChannel() {
-        val settings = runProbe {
-            val reply = exchange.exchange(
-                Pro800SysEx.requestSettings(),
-                what = "reading the instrument's settings",
-            ) { message ->
-                Pro800SysEx.typeOf(message) == Pro800SysEx.TYPE_DUMP &&
-                    Pro800SysEx.addressOf(message) == Pro800SysEx.SETTINGS_ADDRESS
-            }
-            Pro800Settings.fromEncoded(Pro800SysEx.dumpPayload(reply))
-        } ?: return
-
-        midiRxDescription = settings.midiRxDescription
-        val reported = settings.sendChannel
-        awaitingChannelChoice = !settings.midiReceiveDisabled && reported == null
-        sendChannel = when {
-            settings.midiReceiveDisabled -> null
-            reported != null -> reported
-            else -> null // DIP switches: unanswerable from here, so [setup] asks
+    private suspend fun readSettings(): ByteArray {
+        val reply = exchange.exchange(
+            Pro800SysEx.requestSettings(),
+            what = "reading the instrument's settings",
+        ) { message ->
+            Pro800SysEx.typeOf(message) == Pro800SysEx.TYPE_DUMP &&
+                Pro800SysEx.addressOf(message) == Pro800SysEx.SETTINGS_ADDRESS
         }
-        Log.i(
-            TAG,
-            "$deviceName receives on $midiRxDescription; sending selection on " +
-                (sendChannel?.let { "MIDI channel ${it + 1}" } ?: "no channel - selection disabled"),
-        )
+        return Pro800SysEx.dumpPayload(reply)
     }
 
     /** Releases the MIDI port. Not optional: an unclosed port stays claimed, and the next
@@ -325,35 +262,77 @@ class Pro800Instrument(
     // ---- PresetSelector ----
 
     /**
-     * Bank select (CC 0) then program change - two plain channel-voice messages, exactly the
-     * (bank, slot) pair the address already carries.
+     * Moves the instrument's own selection pointer, then makes it act on it. **Pure SysEx: no MIDI
+     * channel is involved anywhere.**
      *
-     * Goes out through `tell` because **nothing answers either message**: no status, no echo,
-     * nothing to correlate. Taking the same lock is what keeps a select issued during a
-     * 400-preset scan from landing in the middle of a dump.
+     * This replaced a bank select plus a program change, and the reason is that the channel-voice
+     * path could not be made to work. Nothing acknowledges either message, so a channel mismatch is
+     * a button that silently does nothing; and the channel is not always knowable - the instrument
+     * takes it from its rear DIP switches in one mode and refuses MIDI entirely in another, and a
+     * separate `MIDI PC Mode` setting can disable program-change reception on top of that. Writing
+     * the pointer works in every one of those cases, and is confirmed rather than hoped for.
+     *
+     * Four steps, and the order of the last two is the whole design:
+     *
+     *  1. Read the settings block.
+     *  2. Patch the pointer and write it back - both fields in one write, see
+     *     [Pro800Settings.withSelection].
+     *  3. **Poll the read-back until it matches.** A settings write is not guaranteed to be visible
+     *     on the very next read: of 55 measured writes, most were immediate but several took over a
+     *     second. Checking once and moving on would mean acting on a pointer that has not landed.
+     *  4. **Only then** reload. The write moves the pointer; it does not recall the preset - the
+     *     display and every "current preset" field follow it while the voice engine keeps playing
+     *     what was loaded before. [Pro800SysEx.reloadPreset] is what makes the instrument act, and
+     *     sending it before the pointer commits would recall the preset on its way out.
+     *
+     * Each message is serialized against the rest of the bus by the exchange's lock, but the
+     * sequence as a whole is not, so a select issued during a 400-preset scan interleaves with
+     * dumps. That is harmless: the write is atomic under the lock, and an intervening dump costs at
+     * most one extra poll iteration.
      */
     override suspend fun select(address: SlotAddress) {
-        val channel = sendChannel ?: throw InstrumentException.NotSupported(
-            if (awaitingChannelChoice) {
-                "load presets until you say which MIDI channel its DIP switches are set to"
-            } else {
-                "load presets while its MIDI receive channel is $midiRxDescription"
-            },
+        val programNumber = programNumberOf(address)
+        val displayId = layout.format.format(address)
+
+        val settings = Pro800Settings.withSelection(readSettings(), programNumber, address.bank)
+        // Fire-and-forget with a settle pause, the same posture as every other write here: the
+        // instrument does answer with a status, but the read-back below is the stronger proof and
+        // is the one being waited on anyway.
+        exchange.tell(Pro800SysEx.writeSettings(settings))
+        delay(WRITE_SETTLE_MS)
+
+        var waited = 0L
+        while (true) {
+            val readBack = Pro800Settings.fromEncoded(readSettings())
+            if (readBack.currentPresetNumber == programNumber && readBack.currentBank == address.bank) {
+                exchange.exchange(Pro800SysEx.reloadPreset(), what = "loading $displayId") {
+                    Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_STATUS
+                }
+                Log.i(TAG, "$deviceName: selected $displayId (program $programNumber)")
+                return
+            }
+            if (waited >= SELECT_CONFIRM_BUDGET_MS) break
+            delay(SELECT_POLL_INTERVAL_MS)
+            waited += SELECT_POLL_INTERVAL_MS
+        }
+        // No reload. The pointer is where the instrument left it, and recalling now would load
+        // whatever that is rather than what the user asked for.
+        throw InstrumentException.ProtocolDesync(
+            "Asked the instrument to load $displayId, but it never reported it as selected. The " +
+                "preset was not loaded.",
         )
-        exchange.tell(Pro800SysEx.bankSelect(channel, address.bank))
-        exchange.tell(Pro800SysEx.programChange(channel, address.slot))
     }
 
     /**
-     * "Sent", not "Selected".
+     * "Selected", and it is a fact rather than a hope.
      *
-     * The instrument does not acknowledge a program change, so the app genuinely does not know
-     * whether it landed - and if the instrument's MIDI RX channel does not match
-     * [Pro800Config.midiChannel], it did not. Claiming otherwise would be the app inventing a
-     * confirmation nothing gave it. Contrast `NordInstrument`, where the reply echoes the address
-     * back and the call verifies it.
+     * The pointer was written and then read back until it matched, which the old program-change
+     * path could never claim - nothing acknowledged it, so a wrong channel and a working one looked
+     * identical. What still cannot be confirmed is the *audible* recall: the instrument transmits
+     * nothing when it loads a preset and no readable surface reports it, so every check available
+     * to a client reports the pointer. This claims the pointer, which is verified.
      */
-    override fun confirmationFor(displayId: String) = "Sent $displayId."
+    override fun confirmationFor(displayId: String) = "Selected $displayId."
 
     // ---- PresetTransfer ----
 
@@ -449,8 +428,9 @@ class Pro800Instrument(
      * unconsumed status message is therefore real traffic rather than a hypothetical, and it
      * cannot be mistaken for anything, since every matcher here checks a type and an address.
      *
-     * This is the one method in this class that changes the instrument. It is not reachable from
-     * the UI except through [editor], which warns first.
+     * This is the only method in this class that changes a *preset*. It is not reachable from the
+     * UI except through [editor], which warns first. [select] also writes, but to the settings
+     * block rather than through here - see [programNumberOf] for why the two paths are separate.
      */
     override suspend fun write(address: SlotAddress, blob: ByteArray) {
         val programNumber = programNumberOf(address)
@@ -484,7 +464,9 @@ class Pro800Instrument(
      *
      * Bounded against [Pro800SysEx.SETTINGS_ADDRESS] as well as the program count: the settings
      * block lives in the same address space at 510, and a browsable row that overwrites global
-     * settings is not a preset (design section 7.4).
+     * settings is not a preset (design section 7.4). [select] does write that block, but reaches it
+     * through [Pro800SysEx.writeSettings] rather than through an address that came from a row -
+     * which is exactly the separation this bound exists to enforce.
      */
     private fun programNumberOf(address: SlotAddress): Int {
         val number = address.bank * config.slotsPerBank + address.slot
@@ -506,5 +488,20 @@ class Pro800Instrument(
         /** Emitting every 25 dumps keeps the list visibly filling without one recomposition per
          * round trip. */
         private const val BATCH_SIZE = 25
+
+        /** The pause the reference implementation leaves after a write before reading back. Same
+         * figure `Pro800Editor` uses, and for the same reason. */
+        private const val WRITE_SETTLE_MS = 20L
+
+        private const val SELECT_POLL_INTERVAL_MS = 200L
+
+        /**
+         * How long a settings write has to become visible before [select] gives up.
+         *
+         * Measured rather than guessed: across 55 settings writes on real hardware, most were
+         * readable immediately, a handful only after about 1.6 seconds, and a few not within three.
+         * Anything under about two and a half seconds is not a window at all.
+         */
+        private const val SELECT_CONFIRM_BUDGET_MS = 2500L
     }
 }

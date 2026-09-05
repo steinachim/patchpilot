@@ -5,7 +5,6 @@
     "bankCount": 4,
     "slotsPerBank": 100,
     "slotDigits": 2,
-    "midiChannel": 0,
     "supportedFirmwareVersions": [
       "1.4.6"
     ]

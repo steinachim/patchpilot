@@ -59,18 +59,28 @@ object Pro800SysEx {
     /**
      * **Destructive, and named here on purpose.**
      *
-     * `0x7D` is a factory reset with no confirmation and no undo; `0x32` with a non-zero parameter
-     * puts the synth into a state where it displays 8888 and stops responding properly to its own
-     * controls. Neither has a UI path, and any raw-message tool must demand a typed confirmation
-     * before sending either.
+     * `0x7D` is a factory reset with no confirmation and no undo. It has no UI path and is never
+     * sent; any raw-message tool must demand a typed confirmation before sending it.
      *
-     * Naming them here rather than leaving them as unlabelled numbers is deliberate: an
-     * undocumented destructive command is easy to send by accident precisely because nothing marks
-     * it as dangerous. Naming both, documenting what they do, and gating both behind a typed
-     * confirmation is what keeps that from happening.
+     * Naming it here rather than leaving it an unlabelled number is deliberate: an undocumented
+     * destructive command is easy to send by accident precisely because nothing marks it as
+     * dangerous.
      */
     const val TYPE_FACTORY_RESET = 0x7D
-    const val TYPE_DEBUG_MODE = 0x32
+
+    /**
+     * Reset mode. **Parameter `0x00` is the preset reload, and it is the only safe parameter.**
+     *
+     * `0x00` makes the instrument recall the preset its settings block points at, which is what
+     * turns a pointer write into an actual preset change - see [reloadPreset] and
+     * [Pro800Instrument.select]. It also discards unsaved front-panel edits, which loading a preset
+     * does anyway.
+     *
+     * **Every non-zero parameter is a hazard and is never sent**: it puts the synth into a state
+     * where it displays 8888 and stops responding properly to its own controls. The safety belongs
+     * to the parameter, not to the type, so nothing here may send this with anything but `0x00`.
+     */
+    const val TYPE_RESET_MODE = 0x32
 
     /**
      * Programs occupy 0..399; the settings block lives at 510 (`7E 03` as LSB/MSB) and must never
@@ -115,6 +125,26 @@ object Pro800SysEx {
 
     /** The settings block's own dump request - the same 0x77 mechanism, at [SETTINGS_ADDRESS]. */
     fun requestSettings(): ByteArray = requestDump(SETTINGS_ADDRESS)
+
+    /**
+     * A write of the settings block - the same `0x78` mechanism, at [SETTINGS_ADDRESS].
+     *
+     * Named separately from [writeDump] so the one legitimate write to 510 is greppable. Every
+     * other write in this app goes to a preset address, and [Pro800Instrument]'s preset write path
+     * bounds itself to 0..399 precisely so this address can never be reached by accident from a
+     * browsable row.
+     */
+    fun writeSettings(encodedPayload: ByteArray): ByteArray = writeDump(SETTINGS_ADDRESS, encodedPayload)
+
+    /**
+     * Recall the preset the settings block points at.
+     *
+     * [TYPE_RESET_MODE] with the one parameter that is not a hazard. A settings-block write moves
+     * the pointer - the display and every "current preset" field follow it - while the voice engine
+     * keeps playing whatever was loaded before; this is the message that makes the instrument
+     * actually act on the pointer. Answered by a status.
+     */
+    fun reloadPreset(): ByteArray = request(TYPE_RESET_MODE, 0x00)
 
     /** A dump request for one program number, split into the LSB/MSB pair the protocol takes. */
     fun requestDump(programNumber: Int): ByteArray =
@@ -208,24 +238,4 @@ object Pro800SysEx {
 
     /** The request, with the parameter byte the instrument expects. */
     fun requestFirmware(): ByteArray = request(TYPE_FIRMWARE, 0x00)
-
-    // ---- Channel-voice messages (not SysEx) ----
-
-    /**
-     * Bank select (CC 0) then program change - how a preset is loaded (section 7.6).
-     *
-     * Two plain channel-voice messages rather than SysEx, and exactly the (bank, slot)
-     * decomposition an address already carries, so there is no arithmetic here at all. **Nothing
-     * answers either message**, which is why they go out through `tell()` rather than `exchange()`.
-     *
-     * The bank select is always sent, even when the bank has not changed: it costs one three-byte
-     * message, and the alternative - tracking the instrument's current bank host-side - is wrong
-     * the moment the user touches the front panel, which they will, since the point of selecting a
-     * preset is to then play it.
-     */
-    fun bankSelect(channel: Int, bank: Int): ByteArray =
-        byteArrayOf((0xB0 or (channel and 0x0F)).toByte(), 0x00, (bank and 0x7F).toByte())
-
-    fun programChange(channel: Int, slot: Int): ByteArray =
-        byteArrayOf((0xC0 or (channel and 0x0F)).toByte(), (slot and 0x7F).toByte())
 }

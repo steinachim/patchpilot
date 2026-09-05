@@ -113,19 +113,21 @@ class SysExExchangeTest {
     }
 
     /**
-     * Selection is fire-and-forget - nothing answers a bank select or a program change - so it
-     * needs a path that does not wait for a reply, but *does* take the same lock.
+     * A write is fire-and-forget - the proof it landed is reading the address back, not a status
+     * byte - so it needs a path that does not wait for a reply, but *does* take the same lock.
      */
     @Test
     fun `tell sends without waiting for anything`() = runTest {
         val transport = FakeMidiTransport { emptyList() }
         val exchange = SysExExchange(transport, backgroundScope)
 
-        exchange.tell(Pro800SysEx.bankSelect(0, 2))
-        exchange.tell(Pro800SysEx.programChange(0, 37))
+        val first = Pro800SysEx.writeDump(2, byteArrayOf(0x00, 0x01))
+        val second = Pro800SysEx.writeDump(37, byteArrayOf(0x00, 0x02))
+        exchange.tell(first)
+        exchange.tell(second)
 
         assertEquals(2, transport.sent.size)
-        assertArrayEquals(byteArrayOf(0xB0.toByte(), 0x00, 0x02), transport.sent[0])
-        assertArrayEquals(byteArrayOf(0xC0.toByte(), 0x25), transport.sent[1])
+        assertArrayEquals(first, transport.sent[0])
+        assertArrayEquals(second, transport.sent[1])
     }
 }

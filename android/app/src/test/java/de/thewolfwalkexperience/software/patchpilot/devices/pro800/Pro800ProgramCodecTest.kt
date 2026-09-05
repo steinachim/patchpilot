@@ -178,4 +178,61 @@ class Pro800ProgramCodecTest {
         assertEquals(150, Pro800ProgramFields.NAME_DENSE_OFFSET) // raw 172 - 172/8 - 1
         assertEquals(16, Pro800ProgramFields.NAME_LENGTH) // raw 172..189, less overflow at 176, 184
     }
+
+    // ---- patchValue ----
+
+    /** Whatever was patched in is what decode reads back out, at every offset and width. */
+    @Test
+    fun `a patched value decodes to what was written`() {
+        val encoded = Pro800ProgramCodec.encode(Random(7).nextBytes(40))
+        for (denseOffset in 0 until 38) {
+            val patched = Pro800ProgramCodec.patchValue(encoded, denseOffset, 2, 0xBEEF)
+            assertEquals(
+                "two bytes at dense $denseOffset",
+                0xBEEF,
+                Pro800ProgramCodec.readValue(Pro800ProgramCodec.decode(patched), denseOffset, 2),
+            )
+        }
+    }
+
+    /**
+     * **Nothing outside the patched field moves - not one bit.**
+     *
+     * The reason this is a patcher rather than a decode/modify/encode round trip. A 46-byte
+     * settings block ends mid-group: its last overflow byte governs only five value bytes, so two
+     * of its bits belong to no value at all. `decode` never reads them and `encode` would rebuild
+     * that byte from dense alone and zero them. This is a write to the block holding every global
+     * setting, so bits nobody has accounted for are left exactly as they were read.
+     */
+    @Test
+    fun `patching leaves every other byte and every unrelated overflow bit alone`() {
+        // Every bit set, including the two the last overflow byte has no value for.
+        val encoded = ByteArray(46) { 0x7F }
+        val patched = Pro800ProgramCodec.patchValue(encoded, denseOffset = 5, byteCount = 2, value = 0)
+
+        // Dense 5 and 6 are raw 6 and 7, sharing the overflow byte at raw 0 in bits 5 and 6.
+        assertEquals(listOf(0, 6, 7), encoded.indices.filter { encoded[it] != patched[it] })
+        assertEquals(0x7F and (1 shl 5).inv() and (1 shl 6).inv(), patched[0].toInt())
+        // The trailing overflow byte governs five values, not seven; its top two bits survive.
+        assertEquals(0x7F, patched[40].toInt())
+    }
+
+    /** A high bit belongs in the overflow byte, not truncated off the value. */
+    @Test
+    fun `a value above 0x7F stores its high bit in the overflow byte`() {
+        val encoded = ByteArray(46)
+        val patched = Pro800ProgramCodec.patchValue(encoded, denseOffset = 0, byteCount = 1, value = 0x80)
+
+        assertEquals("the value byte keeps only its low seven bits", 0x00, patched[1].toInt())
+        assertEquals("and the high bit lands in bit 0 of the overflow byte", 0x01, patched[0].toInt())
+        assertEquals(0x80, Pro800ProgramCodec.decode(patched)[0].toInt() and 0xFF)
+    }
+
+    /** A field the record is too short to hold is a caller error, not a silently grown buffer. */
+    @Test
+    fun `patching past the end of a record is refused`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            Pro800ProgramCodec.patchValue(ByteArray(46), denseOffset = 39, byteCount = 2, value = 1)
+        }
+    }
 }

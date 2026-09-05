@@ -40,17 +40,6 @@ data class Pro800Config(
     val slotsPerBank: Int = 100,
     val slotDigits: Int = 2,
     /**
-     * Which MIDI channel to send bank select and program change on (0-based).
-     *
-     * A real configuration input with no Nord counterpart: the instrument's own `MIDI RX Channel`
-     * setting can be ALL, dip-switch-driven, a fixed channel, or OFF, and sending on the wrong one
-     * fails **silently** - there is no acknowledgement to notice its absence in. Once the settings
-     * block at address 510 is readable, this can be derived from its byte 10 instead of
-     * configured, including detecting OFF and saying so rather than presenting a dead button
-     * (design section 7.6).
-     */
-    val midiChannel: Int = 0,
-    /**
      * Firmware versions this app has been tested against. Empty means "skip the check".
      *
      * Mirrors `VersionMessage::SUPPORTED_FIRMWARE_VERSIONS` in the reference implementation, and

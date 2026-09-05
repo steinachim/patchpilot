@@ -55,8 +55,10 @@ class Pro800DecodingTest {
     // ---- Settings ----
 
     /**
-     * The setting behind the silently-broken selection: a value of 4 here is front-panel channel
-     * 3, which is wire channel 2.
+     * A value of 4 here is front-panel channel 3, which is wire channel 2.
+     *
+     * Nothing depends on this any more - selection needs no channel - but it is still read and
+     * still reported in the device report, so it still has to decode correctly.
      */
     @Test
     fun `the settings block yields the instrument's MIDI receive channel`() {
@@ -64,9 +66,41 @@ class Pro800DecodingTest {
             Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.SETTINGS_DUMP)),
         )
         assertEquals(4, settings.midiRxChannelSetting)
-        assertEquals(2, settings.sendChannel)
         assertEquals("channel 3", settings.midiRxDescription)
-        assertFalse(settings.midiReceiveDisabled)
+    }
+
+    /** The same block's selection pointer: the two fields `select` writes. */
+    @Test
+    fun `the settings block yields the selection pointer`() {
+        val settings = Pro800Settings.fromEncoded(
+            Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.SETTINGS_DUMP)),
+        )
+        // A06 - the preset this instrument was sitting on when the capture was taken.
+        assertEquals(6, settings.currentPresetNumber)
+        assertEquals(0, settings.currentBank)
+    }
+
+    /**
+     * Moving the pointer changes exactly two bytes of the block and nothing else.
+     *
+     * This is the real 46-byte block, which is the shape that matters: it ends mid-group, so its
+     * last overflow byte governs five value bytes rather than seven and two of its bits belong to
+     * nothing. A decode/re-encode round trip would zero those; patching in place cannot.
+     */
+    @Test
+    fun `moving the pointer leaves the rest of the settings block untouched`() {
+        val before = Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.SETTINGS_DUMP))
+        val after = Pro800Settings.withSelection(before, programNumber = 305, bank = 3)
+
+        assertEquals(before.size, after.size)
+        assertEquals(listOf(6, 7, 23), before.indices.filter { before[it] != after[it] })
+
+        val settings = Pro800Settings.fromEncoded(after)
+        assertEquals(305, settings.currentPresetNumber)
+        assertEquals(3, settings.currentBank)
+        // Everything else still reads as it did - the MIDI channel is the one to check, since it
+        // sits between the two patched fields.
+        assertEquals(4, settings.midiRxChannelSetting)
     }
 
     // ---- Program records ----
@@ -154,6 +188,11 @@ class Pro800DecodingTest {
             2 to Pro800Fixtures.DUMP_A48,
             3 to Pro800Fixtures.DUMP_B01,
         )
+        // The settings block is kept, not re-served from the fixture, because selection writes it
+        // and then reads it back: a transport that always answers with the capture would report the
+        // pointer never moving. This starts as the real captured block, which is the point - the
+        // patch below is applied to genuine hardware bytes, not a synthetic 46 bytes.
+        var settings = bytes(Pro800Fixtures.SETTINGS_DUMP)
         val transport = FakeMidiTransport { request ->
             when (Pro800SysEx.typeOf(request)) {
                 Pro800SysEx.TYPE_DEVICE_NAME -> listOf(bytes(Pro800Fixtures.DEVICE_NAME_REPLY))
@@ -161,7 +200,7 @@ class Pro800DecodingTest {
                 Pro800SysEx.TYPE_REQUEST_DUMP -> {
                     val number = Pro800SysEx.addressOf(request)!!
                     if (number == Pro800SysEx.SETTINGS_ADDRESS) {
-                        listOf(bytes(Pro800Fixtures.SETTINGS_DUMP))
+                        listOf(settings)
                     } else {
                         // The sample dumps echo their own original addresses, so re-address
                         // them to whatever this small fixture instrument is being asked for.
@@ -169,6 +208,17 @@ class Pro800DecodingTest {
                             ?: listOf(bytes(Pro800Fixtures.DUMP_B00_EMPTY))
                     }
                 }
+                Pro800SysEx.TYPE_DUMP -> {
+                    if (Pro800SysEx.addressOf(request) == Pro800SysEx.SETTINGS_ADDRESS) {
+                        settings = request
+                    }
+                    emptyList()
+                }
+                Pro800SysEx.TYPE_RESET_MODE -> listOf(
+                    Pro800SysEx.HEADER +
+                        byteArrayOf(Pro800SysEx.TYPE_STATUS.toByte(), 0x00, Pro800SysEx.STATUS_OK.toByte()) +
+                        Pro800SysEx.SYSEX_END,
+                )
                 else -> emptyList()
             }
         }
@@ -188,11 +238,20 @@ class Pro800DecodingTest {
         assertEquals(Pro800Instrument.UNNAMED, slots[3].name)
         assertNull(slots[4].name)
 
-        // And selection goes out on the channel the settings fixture declares (wire 2).
+        // And selection moves the pointer in the real captured settings block. The capture was
+        // taken with the instrument on A06; A01 is where this asks it to go.
+        assertEquals(6, Pro800Settings.fromEncoded(Pro800SysEx.dumpPayload(settings)).currentPresetNumber)
         pro800.selector!!.select(SlotAddress(0, 1))
-        val voice = transport.sent.filter { it.isNotEmpty() && it[0] != 0xF0.toByte() }
-        assertArrayEquals(byteArrayOf(0xB2.toByte(), 0x00, 0x00), voice[0])
-        assertArrayEquals(byteArrayOf(0xC2.toByte(), 0x01), voice[1])
+
+        val after = Pro800Settings.fromEncoded(Pro800SysEx.dumpPayload(settings))
+        assertEquals(1, after.currentPresetNumber)
+        assertEquals(0, after.currentBank)
+        // The MIDI channel the capture declares is untouched - and never consulted.
+        assertEquals(4, after.midiRxChannelSetting)
+        assertTrue(
+            "selection must send no channel-voice message",
+            transport.sent.none { it.isNotEmpty() && it[0] != 0xF0.toByte() },
+        )
     }
 
     private fun readdress(message: ByteArray, programNumber: Int): ByteArray {
