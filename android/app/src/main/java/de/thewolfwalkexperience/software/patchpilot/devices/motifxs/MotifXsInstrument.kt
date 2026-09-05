@@ -9,7 +9,6 @@ import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
-import de.thewolfwalkexperience.software.patchpilot.core.InstrumentSetup
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
@@ -90,7 +89,7 @@ class MotifXsInstrument(
         ),
     )
 
-    private var firmware: String = "unknown"
+    private var firmware: String = UNKNOWN_FIRMWARE
 
     override val identity: InstrumentIdentity
         get() = InstrumentIdentity(
@@ -116,29 +115,75 @@ class MotifXsInstrument(
     // Not implemented for this instrument; see the class doc.
     override val transfer: PresetTransfer? = null
     override val report: DeviceReporter? = null
-    override val setup: InstrumentSetup? = null
 
     /**
-     * Reads the identity reply, purely so the connect screen has something true to show.
+     * Reads the identity reply, and refuses the session if the instrument answers nothing at all.
      *
-     * Best-effort: an instrument that will not answer still browses fine, and refusing a session
-     * over a cosmetic field would be the wrong trade.
+     * **The identity reply itself stays best-effort** - it is a cosmetic field, and an instrument
+     * that will not supply it still browses fine. What is not survivable is an instrument that
+     * answers *nothing*, and this is the only place that can tell the difference cheaply.
+     *
+     * See [requireItIsListening] for what total silence means here and why it is worth a second
+     * probe before blaming it on anything.
      */
     override suspend fun connect() {
-        firmware = try {
-            val reply = exchange.exchange(
-                MotifXsSysEx.identityRequest(),
-                what = "asking the instrument to identify itself",
-            ) { it.size > 4 && it[1].toInt() == 0x7E && it[4].toInt() == 0x02 }
-            // Version occupies the four bytes before F7 in the inquiry reply.
-            reply.copyOfRange(reply.size - 5, reply.size - 1)
-                .joinToString(".") { (it.toInt() and 0x7F).toString() }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "Couldn't read the identity reply; continuing", e)
-            "unknown"
-        }
+        val version = readIdentityVersion()
+        if (version == null) requireItIsListening()
+        firmware = version ?: UNKNOWN_FIRMWARE
+    }
+
+    /** The identity reply's version, or null if the instrument did not answer. */
+    private suspend fun readIdentityVersion(): String? = try {
+        val reply = exchange.exchange(
+            MotifXsSysEx.identityRequest(),
+            what = "asking the instrument to identify itself",
+        ) { it.size > 4 && it[1].toInt() == 0x7E && it[4].toInt() == 0x02 }
+        // Version occupies the four bytes before F7 in the inquiry reply.
+        reply.copyOfRange(reply.size - 5, reply.size - 1)
+            .joinToString(".") { (it.toInt() and 0x7F).toString() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "Couldn't read the identity reply", e)
+        null
+    }
+
+    /**
+     * Turns "answers nothing" into the one explanation that actually fixes it.
+     *
+     * **A Motif XS routes MIDI to exactly one destination** - its DIN sockets, USB, or mLAN - and
+     * set to any but USB it still enumerates, still gets permission, still opens its bulk
+     * endpoints, and then ignores every byte the app sends. Nothing about the connection looks
+     * wrong; the instrument is simply listening somewhere else. Before this check the session was
+     * built anyway and the user got a working-looking app where each operation timed out
+     * separately, none of them able to say why.
+     *
+     * **Two different probes have to be silent, not one.** The identity inquiry is a Universal
+     * SysEx message and the mode request is Yamaha's own; one going unanswered is thin evidence,
+     * and the identity reply in particular is allowed to be missing on an instrument that
+     * otherwise works. Both going unanswered means nothing is getting through in either direction,
+     * which is the only claim this makes.
+     *
+     * It is still an *inference from an absence* - a cable, or another application holding the
+     * device, produces the same silence - so the message says what to check rather than asserting
+     * what is wrong.
+     */
+    private suspend fun requireItIsListening() {
+        if (readMode() != null) return
+        throw InstrumentException.NeedsManualSetting(
+            message = "$catalogName is connected but not answering. The most likely reason is " +
+                "that its MIDI In/Out setting is routing MIDI to the MIDI or mLAN ports rather " +
+                "than to USB - it still appears as a USB device either way, but ignores " +
+                "everything sent to it.",
+            steps = listOf(
+                "On the instrument, press UTILITY.",
+                "Select [F5] Control, then [SF2] MIDI.",
+                "Set MIDI In/Out to USB.",
+                "Tap Retry below.",
+            ),
+            alsoCheck = "If it is already set to USB, check that the cable runs to the " +
+                "instrument's TO HOST port and that no other application is using the instrument.",
+        )
     }
 
     override fun close() = exchange.close()
@@ -954,6 +999,10 @@ class MotifXsInstrument(
 
     companion object {
         const val FAMILY = "motifxs"
+
+        /** What [identity] reports when the identity inquiry went unanswered but the instrument
+         * proved it is listening some other way. */
+        const val UNKNOWN_FIRMWARE = "unknown"
 
         /** Emitting every 8 voices keeps the list visibly filling without a recomposition per
          * round trip - at ~160 ms each that is a batch roughly every 1.3 seconds. */

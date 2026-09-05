@@ -52,7 +52,6 @@ class NoCopyFixtureInstrument : Instrument, PresetBrowser, PresetSelector, Prese
 
     /** No device report, same as the two real families this shape used to stand in for. */
     override val report: DeviceReporter? = null
-    override val setup: InstrumentSetup? = null
     override val transfer: PresetTransfer? = null
 
     override suspend fun connect() = Unit

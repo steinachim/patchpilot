@@ -8,7 +8,6 @@ import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressForma
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
-import de.thewolfwalkexperience.software.patchpilot.core.InstrumentSetup
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
@@ -87,7 +86,6 @@ class NordInstrument(
 
     /** Nothing about a Nord needs the user to fill it in: everything is read from the instrument
      * or fixed by the protocol. */
-    override val setup: InstrumentSetup? = null
 
     /**
      * Null until the item data path is ported (see `NordDevice.READ_BUFSIZE`'s

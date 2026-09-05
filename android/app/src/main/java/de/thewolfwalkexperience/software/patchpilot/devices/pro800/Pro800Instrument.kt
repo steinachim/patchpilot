@@ -7,7 +7,6 @@ import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
-import de.thewolfwalkexperience.software.patchpilot.core.InstrumentSetup
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
@@ -91,14 +90,6 @@ class Pro800Instrument(
         private set
 
     override val editor: PresetEditor = Pro800Editor(this, layout)
-
-    /**
-     * Nothing to ask. This used to carry the one question the app could not answer for itself -
-     * which MIDI channel the rear DIP switches select - because selection was a program change and
-     * a wrong channel failed silently. [select] is pure SysEx now and needs no channel at all, so
-     * there is nothing left for the user to resolve.
-     */
-    override val setup: InstrumentSetup? = null
 
     /** Read-only, and the source of the sample fixtures used in tests - see [Pro800Reporter]. */
     override val report: DeviceReporter = Pro800Reporter(exchange, layout) {

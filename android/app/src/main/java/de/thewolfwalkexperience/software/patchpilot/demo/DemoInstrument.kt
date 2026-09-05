@@ -16,7 +16,6 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
-import de.thewolfwalkexperience.software.patchpilot.core.InstrumentSetup
 
 /**
  * A fictitious instrument, implemented directly against [Instrument] with an in-memory library -
@@ -60,7 +59,6 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
     override val report: DeviceReporter? = this
 
     /** Demo mode has no unknowable settings - there is no instrument to be configured. */
-    override val setup: InstrumentSetup? = null
 
     /** Demo mode doesn't pretend to hand out preset blobs; there is nothing meaningful to hand. */
     override val transfer: PresetTransfer? = null

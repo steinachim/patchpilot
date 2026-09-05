@@ -227,6 +227,7 @@ private fun ConnectionState.rendersOnProgramsScreen(): Boolean = when (this) {
     is ConnectionState.Opening,
     -> true
     is ConnectionState.Error,
+    is ConnectionState.NeedsManualSetting,
     is ConnectionState.NothingFound,
     is ConnectionState.DeviceSelection,
     is ConnectionState.UnknownDeviceWarning,
@@ -337,12 +338,6 @@ fun ProgramsScreen(
     // an instrument that silently keeps the first N characters should not be the thing that tells
     // the user their name was too long.
     val maxNameLength = remember(session) { viewModel.maxPresetNameLength }
-
-    // A setting the instrument cannot report and the app must not guess. No instrument raises one
-    // today - the Pro-800's MIDI channel question went away when selection stopped needing a
-    // channel - but the hook stays. Shown here rather than on the connect screen because that one
-    // navigates away the instant a connection lands.
-    val setupQuestion by viewModel.setupQuestion.collectAsState()
 
     // Brief confirmations (selected/swapped/renamed/deleted) surface as a Snackbar.
     //
@@ -1138,10 +1133,6 @@ fun ProgramsScreen(
             }
         }
     }
-    }
-
-    setupQuestion?.let { question ->
-        SetupQuestionDialog(question = question, onAnswer = { viewModel.answerSetup(it) })
     }
 
     pendingShare?.let { pending ->

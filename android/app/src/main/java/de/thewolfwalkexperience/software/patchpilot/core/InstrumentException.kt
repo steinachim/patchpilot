@@ -53,4 +53,30 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
         val remedyDetail: String? = null,
         val remedy: (suspend () -> Unit)? = null,
     ) : InstrumentException(message)
+
+    /**
+     * The instrument is attached but not listening, and **only the user can fix it** - at the
+     * instrument's own front panel.
+     *
+     * The sibling of [BlockedByDeviceState], for the case where there is no remedy to offer: the
+     * app cannot send the fix, because the reason it is stuck is that the instrument is not
+     * receiving what the app sends. [steps] is the button sequence, in order, so the screen can
+     * show it as a list rather than as one long sentence.
+     *
+     * The case it was written for: a Motif XS routes MIDI to exactly one of its ports - the DIN
+     * sockets, USB, or mLAN - and set to any of the others it still enumerates as a USB device and
+     * still opens, while answering nothing at all. Every operation then times out, one at a time,
+     * and none of them can say why. Retrying is worth offering because the user is expected to go
+     * and change something between the failure and the retry, which is exactly when a plain "did
+     * not answer" is least useful.
+     *
+     * [alsoCheck] carries the other explanations for the same silence - a cable, another
+     * application holding the device - because the app is inferring the cause from an absence and
+     * must not claim more certainty than that.
+     */
+    class NeedsManualSetting(
+        message: String,
+        val steps: List<String>,
+        val alsoCheck: String? = null,
+    ) : InstrumentException(message)
 }

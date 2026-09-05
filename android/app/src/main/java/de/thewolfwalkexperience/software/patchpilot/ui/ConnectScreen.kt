@@ -120,6 +120,31 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
+            // Deliberately not styled as an error. Nothing is broken and nothing failed that the
+            // user can read as their fault - the instrument is listening on a different port, and
+            // what they need is the sequence that changes it, legible enough to follow while
+            // standing at the instrument.
+            is ConnectionState.NeedsManualSetting -> {
+                Text(s.message, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(16.dp))
+                s.steps.forEachIndexed { index, step ->
+                    Row(Modifier.padding(bottom = 6.dp)) {
+                        Text("${index + 1}.", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.width(8.dp))
+                        Text(step, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                s.alsoCheck?.let {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
+            }
             is ConnectionState.Connected -> {
                 Text(stringResource(R.string.connect_connected, s.instrument.identity.name))
                 Text(stringResource(R.string.connect_firmware, s.instrument.identity.firmwareVersion))

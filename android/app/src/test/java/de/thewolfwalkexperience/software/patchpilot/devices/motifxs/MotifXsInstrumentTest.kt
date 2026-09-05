@@ -265,6 +265,9 @@ class MotifXsInstrumentTest {
         loadedVoiceName: String? = null,
         /** Answer the documented read with a Drum Voice's shape rather than a Normal Voice's. */
         drumShape: Boolean = false,
+        /** Whether the Universal Device Inquiry is answered. False models an instrument
+         * routing MIDI somewhere other than USB - it enumerates and opens, then says nothing. */
+        answersIdentity: Boolean = true,
     ): Pair<MotifXsInstrument, FakeMidiTransport> {
         val slots = FakeSlots(readOnlyBanks)
         var currentMode = mode
@@ -278,7 +281,7 @@ class MotifXsInstrumentTest {
             val address = MotifXsSysEx.addressOf(request)
             when {
                 request.size > 4 && request[1].toInt() == 0x7E ->
-                    listOf(MotifXsFixtures.identityReply)
+                    if (answersIdentity) listOf(MotifXsFixtures.identityReply) else emptyList()
 
                 // A host bulk dump on the documented path: header, block or footer.
                 MotifXsSysEx.typeOf(request) == MotifXsSysEx.TYPE_BULK_DUMP &&
@@ -536,18 +539,26 @@ class MotifXsInstrumentTest {
         assertEquals("6.0.0.127", motif.identity.firmwareVersion)
     }
 
-    /** A silent instrument still browses: the voices are what the user came for, and an
-     * unanswered inquiry is a cosmetic loss. */
+    /**
+     * A transport that answers nothing at all is refused, not accepted with a blank firmware.
+     *
+     * **This used to assert the opposite**, on the reasoning that an unanswered inquiry is a
+     * cosmetic loss and the voices are what the user came for. That holds for the inquiry alone -
+     * see `an unanswered identity inquiry alone still connects` - but not for an instrument
+     * answering nothing, which has no voices to offer either: every operation would time out on
+     * its own, and none of them could explain why.
+     */
     @Test
-    fun `connect survives an instrument that will not identify itself`() = runTest {
+    fun `connect refuses an instrument that answers nothing at all`() = runTest {
         val transport = FakeMidiTransport { emptyList() }
         val motif = MotifXsInstrument(
             SysExExchange(transport, backgroundScope, defaultTimeout = 20.milliseconds, retries = 0),
             config,
             testBlanks,
         )
-        motif.connect()
-        assertEquals("unknown", motif.identity.firmwareVersion)
+        assertThrows(InstrumentException.NeedsManualSetting::class.java) {
+            runBlocking { motif.connect() }
+        }
     }
 
     /** Read-only for now, and the nulls say so - see MotifXsInstrument's class doc. */
@@ -567,7 +578,47 @@ class MotifXsInstrumentTest {
         // Still nothing anywhere about these.
         assertNull(motif.transfer)
         assertNull(motif.report)
-        assertNull(motif.setup)
+    }
+
+    // ---- Connecting to an instrument that is not listening on USB ----
+
+    /**
+     * **Total silence is refused, with the fix spelled out.**
+     *
+     * A Motif XS routes MIDI to one destination - DIN, USB or mLAN - and set to any but USB it
+     * still enumerates, still opens, and then ignores everything. The session used to be built
+     * anyway, so the user got a working-looking app in which each operation timed out separately
+     * and none could say why.
+     */
+    @Test
+    fun `an instrument answering nothing is refused, with the setting to change`() = runTest {
+        val (motif, _) = instrument(backgroundScope, mode = null, answersIdentity = false)
+        try {
+            motif.connect()
+            throw AssertionError("a silent instrument was accepted as a working session")
+        } catch (expected: InstrumentException.NeedsManualSetting) {
+            assertTrue(expected.message!!.contains("MIDI In/Out"))
+            // The button sequence has to be usable while standing at the instrument.
+            assertTrue(expected.steps.any { it.contains("UTILITY") })
+            assertTrue(expected.steps.any { it.contains("[F5]") && it.contains("[SF2]") })
+            assertTrue(expected.steps.any { it.contains("USB") })
+            // Silence has other causes, and the app is inferring from an absence.
+            assertTrue(expected.alsoCheck!!.contains("TO HOST"))
+        }
+    }
+
+    /**
+     * **One silent probe is not enough to refuse a session.**
+     *
+     * The identity reply is cosmetic and allowed to be missing on an instrument that otherwise
+     * works, so the refusal above requires the Yamaha-specific mode request to be unanswered too.
+     * Gating on the identity inquiry alone would lock out a working instrument.
+     */
+    @Test
+    fun `an unanswered identity inquiry alone still connects`() = runTest {
+        val (motif, _) = instrument(backgroundScope, mode = MotifXsMode.VOICE, answersIdentity = false)
+        motif.connect()
+        assertEquals(MotifXsInstrument.UNKNOWN_FIRMWARE, motif.identity.firmwareVersion)
     }
 
     // ---- Mode gating ----

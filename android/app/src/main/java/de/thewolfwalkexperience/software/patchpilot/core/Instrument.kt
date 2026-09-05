@@ -30,12 +30,6 @@ interface Instrument {
     val report: DeviceReporter?
 
     /**
-     * Non-null on an instrument that can have a setting the app cannot work out for itself.
-     * Null where everything needed is either read from the device or fixed by the protocol.
-     */
-    val setup: InstrumentSetup?
-
-    /**
      * Something the user must be told before using this instrument, or null where all is well.
      *
      * **Usable but not vouched for.** Set during [connect] by a family that got far enough to talk
@@ -223,43 +217,6 @@ interface PresetTransfer {
     suspend fun write(address: SlotAddress, blob: ByteArray)
     val fileExtension: String
 }
-
-/**
- * A setting the instrument will not report and the app cannot infer, which the user has to supply.
- *
- * **No instrument implements this today, and the one that did is worth recording.** A Pro-800 can be
- * configured to take its MIDI receive channel from the DIP switches on its back panel, and in that
- * mode it reports "the DIP switches decide" without saying what they are set to. That mattered
- * while loading a preset meant sending a program change, because a program change on the wrong
- * channel is ignored *silently* - the app had fallen back to a configured default, which is how a
- * real instrument on channel 3 sat there doing nothing while the app reported success. Asking was
- * the fix; not needing the channel at all was the better one, and selection is pure SysEx now.
- *
- * The facet stays because the shape recurs: a setting that lives in hardware the protocol cannot
- * read, where guessing fails invisibly. Where the answer *is* on the wire, read it instead - this
- * is the last resort, not the convenient one.
- */
-interface InstrumentSetup {
-    /** Non-null while an answer is still needed; null once the instrument is fully usable. */
-    val question: SetupQuestion?
-
-    /** Records the user's choice, by index into [SetupQuestion.options]. */
-    suspend fun answer(optionIndex: Int)
-}
-
-/**
- * One question to put to the user.
- *
- * [defaultOption] is a hint, not an answer - it is pre-selected in the dialog where the app has a
- * reasonable guess, and the user still has to confirm it, because a wrong guess here fails
- * invisibly.
- */
-data class SetupQuestion(
-    val title: String,
-    val explanation: String,
-    val options: List<String>,
-    val defaultOption: Int = 0,
-)
 
 /** Everything the app can read off this instrument without changing anything on it, as JSON. */
 interface DeviceReporter {

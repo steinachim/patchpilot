@@ -12,12 +12,12 @@ import de.thewolfwalkexperience.software.patchpilot.cache.CachingBrowser
 import de.thewolfwalkexperience.software.patchpilot.cache.PresetIndexCache
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.OccupiedSlotReason
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.stemFor
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionReport
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionTester
-import de.thewolfwalkexperience.software.patchpilot.core.SetupQuestion
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentRegistry
@@ -95,6 +95,20 @@ sealed class ConnectionState {
      * which is exactly the case when connecting to a Pro-800. */
     data class Opening(val displayName: String, val bus: Bus) : ConnectionState()
     data class Error(val message: String) : ConnectionState()
+
+    /**
+     * The instrument is attached but not listening, and the fix is at its own front panel.
+     *
+     * Distinct from [Error] because the user is expected to *go and change something* before
+     * retrying, which needs the button sequence spelled out rather than a single red line. The
+     * screen shows [steps] as a list and offers a retry, which rescans and reconnects from
+     * scratch - the instrument may well have re-enumerated when the setting changed.
+     */
+    data class NeedsManualSetting(
+        val message: String,
+        val steps: List<String>,
+        val alsoCheck: String?,
+    ) : ConnectionState()
     data class Connected(val instrument: Instrument) : ConnectionState()
 
     /** Nothing is attached at all - not an error, just the expected state before a supported
@@ -174,16 +188,6 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
 
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
-
-    /**
-     * A question the connected instrument needs answered before it is fully usable, or null.
-     *
-     * Held as state rather than read from the facet on demand because the screens have to
-     * recompose when it appears and when it is answered, and `InstrumentSetup.question` is a plain
-     * property on a long-lived object.
-     */
-    private val _setupQuestion = MutableStateFlow<SetupQuestion?>(null)
-    val setupQuestion: StateFlow<SetupQuestion?> = _setupQuestion.asStateFlow()
 
     private var instrument: Instrument? = null
 
@@ -312,6 +316,14 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
                 block()
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: InstrumentException.NeedsManualSetting) {
+                // Not an error line: the user has something to go and do, and the screen has to
+                // show them what. See ConnectionState.NeedsManualSetting.
+                _state.value = ConnectionState.NeedsManualSetting(
+                    message = e.message ?: str(R.string.connect_failed),
+                    steps = e.steps,
+                    alsoCheck = e.alsoCheck,
+                )
             } catch (e: Exception) {
                 _state.value =
                     ConnectionState.Error(e.message ?: failureMessage ?: str(R.string.connect_failed))
@@ -369,7 +381,6 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         instrumentMutex.withLock {
             instrument = built
             connectedPhysicalKey = candidate.physicalKey
-            _setupQuestion.value = built.setup?.question
         }
         _state.value = connectedOrAdvisory(built)
         startIndex()
@@ -648,7 +659,6 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
             closeQuietly(instrument)
             instrument = null
             connectedPhysicalKey = null
-            _setupQuestion.value = null
         }
     }
 
@@ -662,28 +672,6 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         // bank rail and its placeholder rows from `index`, both of which need one. [launchIndex]
         // resets the state when the next scan starts, by which point there is something to
         // describe.
-    }
-
-    /**
-     * Records the user's answer to [setupQuestion] and re-reads whether anything is still pending.
-     *
-     * Re-reading rather than assuming the question is done: an instrument is free to have more
-     * than one, and the facet is the authority on what is left.
-     */
-    fun answerSetup(optionIndex: Int) {
-        viewModelScope.launch {
-            instrumentMutex.withLock {
-                try {
-                    val setup = current().setup ?: return@withLock
-                    setup.answer(optionIndex)
-                    _setupQuestion.value = setup.question
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "Couldn't record the setup answer", e)
-                }
-            }
-        }
     }
 
     private fun closeQuietly(target: Instrument?) {
