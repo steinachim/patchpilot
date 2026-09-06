@@ -35,7 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.usb.displayLabel
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -107,13 +106,14 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
             is ConnectionState.Opening -> {
                 theme.ProgressIndicator()
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    if (s.bus == Bus.USB) {
-                        "Waiting for USB permission..."
-                    } else {
-                        "Opening ${s.displayName} over ${s.bus.label}..."
-                    },
-                )
+                // One message for both buses. The USB branch used to claim "Waiting for USB
+                // permission...", which is true only the first time an instrument is plugged in:
+                // `UsbConnectionManager.requestPermission` returns immediately once permission
+                // has been granted, and this state also covers opening the endpoints and the
+                // family's handshake - so for every connection after the first it named a step
+                // that never happened. Nothing is lost by dropping it: when a prompt really is
+                // raised, the system puts its own dialog on top of this.
+                Text(stringResource(R.string.connect_opening, s.displayName, s.bus.label))
             }
             is ConnectionState.Error -> {
                 Text(stringResource(R.string.programs_error, s.message), color = MaterialTheme.colorScheme.error)

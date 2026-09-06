@@ -65,6 +65,11 @@
     <!-- Connect screen. -->
     <string name="connect_idle">Not connected.</string>
     <string name="connect_searching">Looking for an instrument…</string>
+    <!-- Covers the whole open: the permission prompt where one is needed, opening the
+         endpoints, and the family's own handshake. Deliberately does not name the
+         permission step - it is skipped entirely once permission has been granted once,
+         and the system's own dialog is on top and self-explanatory when it is not. -->
+    <string name="connect_opening">Opening %1$s over %2$s…</string>
     <string name="connect_connected">Connected to %1$s</string>
     <string name="connect_firmware">Firmware: %1$s</string>
     <string name="connect_multiple_found">More than one instrument is connected.</string>

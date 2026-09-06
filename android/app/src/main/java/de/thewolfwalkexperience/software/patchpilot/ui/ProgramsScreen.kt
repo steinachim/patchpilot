@@ -264,7 +264,7 @@ fun ProgramsScreen(
     // and takes several seconds, during which the app looked exactly as it did before the tap.
     // The user could not tell that the destination had registered, let alone that anything was
     // happening - so the natural response is to tap again.
-    var busy by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf<BusyOperation?>(null) }
     var showEmptySlots by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
     // An operation the instrument's *current state* blocked, together with the fix the family
@@ -557,6 +557,16 @@ fun ProgramsScreen(
         busyLabel: String,
         reloadAfter: Boolean = true,
         retry: (() -> Unit)? = null,
+        /**
+         * Whether to put a progress line above the list while this runs.
+         *
+         * False for selection, which is the one operation fast enough that the line was pure
+         * cost: it appears and disappears within a couple of hundred milliseconds, and because it
+         * sits above the list it pushes every row down and lets them spring back on every single
+         * tap. The operation is still tracked - a second tap is still refused - it just does not
+         * move the thing the user is aiming at.
+         */
+        showProgress: Boolean = true,
         block: suspend () -> String,
     ) {
         val what = busyLabel.trimEnd('…', ' ')
@@ -565,7 +575,7 @@ fun ProgramsScreen(
             operationError = null
             statusMessage = null
             try {
-                busy = busyLabel
+                busy = BusyOperation(busyLabel, showProgress)
                 statusMessage = block()
                 if (reloadAfter) viewModel.reloadIndex()
             } catch (e: CancellationException) {
@@ -605,6 +615,7 @@ fun ProgramsScreen(
             busyLabel = context.getString(R.string.programs_busy_selecting, slot.displayId),
             reloadAfter = false,
             retry = { onProgramTapped(slot) },
+            showProgress = false,
         ) { viewModel.selectProgram(slot) }
     }
 
@@ -666,9 +677,17 @@ fun ProgramsScreen(
         copySource = source
     }
 
-    fun endPicking() {
+    /**
+     * Leaves destination-picking, going back to where it started - or staying put after a copy.
+     *
+     * **A finished copy deliberately does not return to the factory listing.** The new voice is in
+     * the user banks and that is what the user just made; bouncing back to the read-only list they
+     * launched from hides the result of the action and leaves them to find their way to it. A
+     * cancelled pick has made nothing, so it does go back.
+     */
+    fun endPicking(returnToPreviousScope: Boolean = true) {
         copySource = null
-        scopeBeforePicking?.let { viewModel.setScope(it) }
+        if (returnToPreviousScope) scopeBeforePicking?.let { viewModel.setScope(it) }
         scopeBeforePicking = null
     }
 
@@ -681,7 +700,8 @@ fun ProgramsScreen(
             // The picker closes only once the copy has actually landed. On failure it stays open,
             // same reasoning as delete: show what went wrong against the copy that was about to be
             // made rather than dismissing first.
-            viewModel.copyProgram(source, destination).also { endPicking() }
+            viewModel.copyProgram(source, destination)
+                .also { endPicking(returnToPreviousScope = false) }
         }
     }
 
@@ -774,6 +794,18 @@ fun ProgramsScreen(
             ScopeSelector(
                 scopes = browsingScopes,
                 selected = browseScope,
+                // **Off during an edit, not during a listing.** The three scopes would otherwise
+                // be gated on something none of them shares: a factory listing costs no round
+                // trips at all, and a favorites read interleaves with a running scan rather than
+                // fighting it - `SysExExchange` locks one request/reply pair at a time, so the
+                // two alternate, no reply can reach the wrong collector, and the scan pays about
+                // fifteen extra round trips out of its four hundred. Switching away does not
+                // abandon a scan either; each scope keeps its own job. Gating on `editsEnabled`
+                // bought nothing and left every tab dead for the 93 seconds after a connect.
+                //
+                // An edit is different, and not because of the bus: `runEdit` reloads whichever
+                // scope is current when it finishes, so switching underneath it reloads the wrong
+                // one. Picking a copy destination owns the list until it resolves.
                 enabled = busy == null && !pickingCopy,
                 onSelect = viewModel::setScope,
             )
@@ -872,7 +904,7 @@ fun ProgramsScreen(
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        busy?.let { what ->
+        busy?.takeIf { it.showProgress }?.let { (what, _) ->
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Text(what, style = MaterialTheme.typography.labelMedium)
                 // Indeterminate: the instrument reports no progress through an edit, and a bar
@@ -1039,7 +1071,11 @@ fun ProgramsScreen(
                                         val rowRename = canRename && rowWritable
                                         val rowDelete = canDelete && rowWritable &&
                                             browseScope == PresetScope.USER
-                                        val rowCopy = canCopy && browseScope != PresetScope.FAVORITES
+                                        // Offered in every listing, favorites included: a
+                                        // favorited voice is as good a thing to duplicate as any
+                                        // other, and picking a destination already moves to the
+                                        // user banks, so a read-only source needs no special case.
+                                        val rowCopy = canCopy
                                         // Hidden outright while picking, not merely disabled: none
                                         // of rename/copy/delete applies to *any* row until the
                                         // pick is resolved or cancelled, including the row being
@@ -1331,6 +1367,16 @@ private fun HideKeyboardOnDismiss(keyboardController: SoftwareKeyboardController
 }
 
 /**
+ * An operation in flight, and whether the user should see a progress line for it.
+ *
+ * The flag is not cosmetic. Every operation here blocks a second one from starting, but only the
+ * slow ones are worth announcing: the progress line sits above the list, so showing it for a
+ * ~160 ms selection pushed every row down and let them spring back on each tap - jitter directly
+ * under the finger, on the one action people repeat.
+ */
+private data class BusyOperation(val label: String, val showProgress: Boolean)
+
+/**
  * Which of the instrument's listings to show, plus a line saying what the current one is.
  *
  * **Segmented buttons rather than tabs.** Tabs say "the same kind of thing, paged"; these three
@@ -1500,6 +1546,13 @@ private fun BankIndex(
             .clip(pillShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .let { theme.railDecoration(it) }
+            // **After the decoration, before the measurement.** The rivets are painted over the
+            // whole plate, so they keep their positions; everything below divides only what is
+            // left between them. Putting it here rather than on the Column's outer padding is
+            // what keeps dragging and tapping in agreement: `onSizeChanged` and `pointerInput`
+            // both sit after it, so the height `jumpToY` divides is the same box the weighted
+            // cells fill, and a y position means the same thing to both.
+            .padding(vertical = theme.railEndInset)
             .onSizeChanged { columnHeightPx = it.height.toFloat() }
             .pointerInput(banks) {
                 detectDragGestures(

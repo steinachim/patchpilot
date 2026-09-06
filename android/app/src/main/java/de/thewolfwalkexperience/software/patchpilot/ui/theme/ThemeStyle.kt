@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -63,6 +64,18 @@ interface ThemeStyle {
     /** A bank caption row in the preset list (e.g. "Bank A"). */
     @Composable
     fun BankHeader(text: String, modifier: Modifier = Modifier)
+
+    /**
+     * Space to keep clear at each end of the bank rail, for decoration drawn over it.
+     *
+     * Zero unless a theme paints something into the rail's own ends. A theme that does has no
+     * other way to say so: [railDecoration] draws *over* the rail after its content is laid out,
+     * so the labels know nothing about it and will happily sit underneath. That went unnoticed
+     * while the longest rail had four banks and cells tall enough to keep every label clear of the
+     * ends by luck; the Motif XS's factory listing has eleven, and the first and last labels
+     * landed on top of the decoration.
+     */
+    val railEndInset: Dp get() = 0.dp
 }
 
 /**

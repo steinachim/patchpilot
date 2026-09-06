@@ -31,6 +31,15 @@ object SteampunkThemeStyle : ThemeStyle {
     override fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean): Modifier =
         base.steampunkRowPanel(dragged, dropTarget)
 
+    /**
+     * Clear of the cap rivets [steampunkVerticalRivets] draws.
+     *
+     * The rivet sits at the centre of each semicircular end cap - `railWidth / 2`, so 24.dp in -
+     * with a 3.dp radius, hence 27.dp plus a little air. Stated rather than derived because the
+     * rail's width is the screen's to choose, and a theme that guessed it would be wrong quietly.
+     */
+    override val railEndInset = 30.dp
+
     override fun railDecoration(base: Modifier): Modifier {
         // A riveted brass rail rather than a plain M3 pill - border plus a rivet at each end, the
         // same two-rivet language as a bank header rotated vertical. Recomputing the pill shape
