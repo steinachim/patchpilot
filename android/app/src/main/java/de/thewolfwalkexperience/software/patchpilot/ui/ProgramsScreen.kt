@@ -86,10 +86,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
-import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -98,13 +96,11 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
-import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 
 /**
  * The preset browser. Tapping a preset loads it. Long-pressing a preset's drag handle and dropping
  * it elsewhere relocates it: onto an occupied row that's a two-way swap, onto an empty slot a
- * one-way move. onSwapDropped picks between them from the loaded index, since an instrument with
+ * one-way move. [ProgramsController.onSwapDropped] picks between them from the loaded index, since an instrument with
  * native operations rejects either call at the wrong kind of destination. The drag gesture is
  * detected on a Box wrapping the whole LazyColumn - not on the individual row - and hit-tests
  * the touch position against the row it landed in (via listState.layoutInfo) plus a left-edge
@@ -131,7 +127,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
  * dividing a pixel offset by a single sampled row height - headers and preset rows aren't the same
  * height - so onDragStart/onDrag/the auto-scroll effect all resolve a position to a row via
  * hitRowInfo (a direct lookup against listState.layoutInfo.visibleItemsInfo) instead.
- * onSwapDropped takes the two rows' slots rather than indices, since that's what the
+ * [ProgramsController.onSwapDropped] takes the two rows' slots rather than indices, since that's what the
  * instrument-facing call actually needs and stays valid independent of row vs. preset index space.
  *
  * **Three things here are driven by what the connected instrument declares**, not by
@@ -200,7 +196,7 @@ internal data class BlockedOperation(
  * written to be read by whoever is holding the phone, and rephrasing them here would put the
  * wording two files away from the condition that produces it.
  */
-private fun reportFailure(what: String, error: Throwable, fallback: String): String {
+internal fun reportFailure(what: String, error: Throwable, fallback: String): String {
     Log.w(TAG, "$what failed", error)
     return error.message ?: fallback
 }
@@ -250,34 +246,14 @@ fun ProgramsScreen(
     onOpenSettings: () -> Unit,
 ) {
     val theme = LocalThemeStyle.current
-    var statusMessage by remember { mutableStateOf<String?>(null) }
-    var operationError by remember { mutableStateOf<String?>(null) }
 
-    // What an edit currently in flight is doing, or null when nothing is.
-    //
-    // **These are seconds, not milliseconds, and the instrument gives nothing away.** A copy is a
-    // whole-voice read, a write, a commit and a read-back; on a drum kit that is ~12.6 kB each way
-    // and takes several seconds, during which the app looked exactly as it did before the tap.
-    // The user could not tell that the destination had registered, let alone that anything was
-    // happening - so the natural response is to tap again.
-    var busy by remember { mutableStateOf<BusyOperation?>(null) }
+    // Every instrument operation this screen can start, and the state each one owns - see
+    // [ProgramsController]. What stays below is the state that only describes the view.
+    val ops = rememberProgramsController(viewModel)
+
     var showEmptySlots by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
-    // An operation the instrument's *current state* blocked, together with the fix the family
-    // offered and the action to retry once it is applied. Kept separate from `operationError`
-    // because this one is answerable: the user gets a choice, not a report.
-    var blocked by remember { mutableStateOf<BlockedOperation?>(null) }
-    var renameTarget by remember { mutableStateOf<PresetSlot?>(null) }
-    var deleteTarget by remember { mutableStateOf<PresetSlot?>(null) }
-    // The two tag dialogs. Both carry the tags as read, not just the row: what the dialog offers
-    // depends on what the preset is already filed under, so it cannot open until that is known.
-    var favoriteTarget by remember { mutableStateOf<TagTarget?>(null) }
-    var categoriesTarget by remember { mutableStateOf<TagTarget?>(null) }
-    // The row a "Copy to…" tap started from - non-null while the destination picker is open.
-    var copySource by remember { mutableStateOf<PresetSlot?>(null) }
-    var renameText by remember { mutableStateOf("") }
-    // Share-report dialog: null while closed, otherwise what is about to be shared.
-    var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
+
     // Reads the report and opens the share sheet; `progress` is non-null while it runs, because
     // the probe walks every item on the instrument and is slow enough to need saying so.
     val sharer = rememberReportSharer(viewModel)
@@ -328,9 +304,6 @@ fun ProgramsScreen(
     val canDelete = EditOp.DELETE in supportedEdits
     val canRelocate = EditOp.MOVE in supportedEdits || EditOp.SWAP in supportedEdits
     val canCopyOp = EditOp.COPY in supportedEdits
-    // Non-null copySource doubles as "picking a copy destination is in progress" - there is no
-    // separate boolean to let drift out of sync with it.
-    val pickingCopy = copySource != null
     val canSelect = remember(session) { viewModel.canSelect }
     // Which listing is on screen, and which the instrument offers at all. A family with one scope
     // shows no selector, so nothing about the Nord, Pro-800 or demo screens changes.
@@ -361,14 +334,14 @@ fun ProgramsScreen(
     // belongs to this Scaffold, which is both the convention and the prerequisite for ever
     // offering "Undo" on a delete.
     val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(statusMessage) {
-        val message = statusMessage ?: return@LaunchedEffect
+    LaunchedEffect(ops.statusMessage) {
+        val message = ops.statusMessage ?: return@LaunchedEffect
         // Clear *after* showing, never before. `showSnackbar` suspends until the snackbar is
         // dismissed, and clearing first changes this effect's key - which cancels the very call
         // that was about to render it. The Toast this replaced hid the mistake, because
         // `Toast.show()` does not suspend and had already completed by then.
         snackbarHostState.showSnackbar(message, withDismissAction = true)
-        statusMessage = null
+        ops.statusMessage = null
     }
 
     // Failures use the same Snackbar, and **do not time out**.
@@ -383,14 +356,14 @@ fun ProgramsScreen(
     // the commit, so the writes may or may not have been stored" - and a message telling somebody
     // their data might be in an unknown state must not disappear on a timer while they are looking
     // at the keyboard. One tap on the dismiss action clears it.
-    LaunchedEffect(operationError, sharer.error) {
-        val message = operationError ?: sharer.error ?: return@LaunchedEffect
+    LaunchedEffect(ops.operationError, sharer.error) {
+        val message = ops.operationError ?: sharer.error ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(
             message = message,
             withDismissAction = true,
             duration = SnackbarDuration.Indefinite,
         )
-        operationError = null
+        ops.operationError = null
     }
 
     // Rows render as they arrive, unlike the loading/error/data trio this used to use - the
@@ -442,7 +415,7 @@ fun ProgramsScreen(
     //
     // Selection is deliberately *not* gated on this. It stores nothing, it is the fastest thing
     // here, and auditioning one preset while another edit finishes is reasonable.
-    val editsEnabled = index.complete && busy == null
+    val editsEnabled = index.complete && ops.busy == null
 
     // The gesture drops the cached listing and re-runs the scan; the scan reaching Complete is
     // what stops the spinner. Driving the spinner off `index.complete` rather than off a timer
@@ -489,7 +462,7 @@ fun ProgramsScreen(
     // finally be tested without running Compose.
     // `scope` is a key even though it is not an argument: `viewModel.allSlots(scope)` is a plain
     // call, so nothing else here would tell Compose the address space had changed underneath it.
-    val listing = remember(programs, showEmptySlots, searchText, pickingCopy, browseScope) {
+    val listing = remember(programs, showEmptySlots, searchText, ops.pickingCopy, browseScope) {
         buildProgramListing(
             reported = programs,
             allSlots = viewModel.allSlots(browseScope),
@@ -498,7 +471,7 @@ fun ProgramsScreen(
             // listing, it would make the favorites one render *nothing*: that scope has no
             // address space, so "show every address, occupied or not" is an empty set.
             showEmptySlots = showEmptySlots && browseScope == PresetScope.USER,
-            pickingCopy = pickingCopy,
+            pickingCopy = ops.pickingCopy,
             searchText = searchText,
         )
     }
@@ -535,253 +508,13 @@ fun ProgramsScreen(
     // Lets an instrument's owner send back everything the app can read off it, for turning into
     // a catalog entry. Read-only, but slow: the probe walks every item, so this reports progress
     // and blocks the button while it runs.
-    /**
-     * Runs one instrument operation with this screen's bookkeeping around it.
-     *
-     * **Five copies of this shape used to sit here**, one per operation, differing only in the verb
-     * and the call - and they had already drifted: selection skipped the reload (correctly, since
-     * it stores nothing) while copy cleared its picker inside the `try`, so a failed copy left the
-     * picker open and a successful one closed it.
-     *
-     * [busyLabel] is both what the progress line shows and, with its ellipsis trimmed, the phrase
-     * the failure message and the log line are built from - so the two can no longer disagree about
-     * capitalisation the way "Selecting A:1:1…" and "selecting A:1:1" did.
-     *
-     * @param reloadAfter false for an operation that changes nothing stored. Selection is the only
-     *   one, and re-listing after it would be a round trip per tap for no new information.
-     * @param retry re-runs this operation after the user accepts a family's remedy. Non-null makes
-     *   the operation *answerable* when the instrument's state blocks it: a Motif XS in Performance
-     *   mode ignores a voice selection silently, and one documented message fixes it. Only selection
-     *   passed one before, because the catch clause lived in its copy of this block; every operation
-     *   can offer it now.
-     */
-    fun runEdit(
-        busyLabel: String,
-        reloadAfter: Boolean = true,
-        retry: (() -> Unit)? = null,
-        /**
-         * Whether to put a progress line above the list while this runs.
-         *
-         * False for selection, which is the one operation fast enough that the line was pure
-         * cost: it appears and disappears within a couple of hundred milliseconds, and because it
-         * sits above the list it pushes every row down and lets them spring back on every single
-         * tap. The operation is still tracked - a second tap is still refused - it just does not
-         * move the thing the user is aiming at.
-         */
-        showProgress: Boolean = true,
-        /**
-         * Returns the line the snackbar shows, or null where there is nothing to report - an
-         * operation whose whole result is a dialog that just opened, say.
-         */
-        block: suspend () -> String?,
-    ) {
-        val what = busyLabel.trimEnd('…', ' ')
-        val failed = context.getString(R.string.programs_operation_failed, what)
-        // **Not `scope.launch`.** An edit outlives this screen deliberately - see
-        // [InstrumentViewModel.launchEdit] for why cancelling one mid-write is the one thing that
-        // can leave an instrument stuck. Writing the result back into these `remember`ed states
-        // after the screen is gone is harmless; they are snapshot state, and nothing retains them.
-        viewModel.launchEdit {
-            operationError = null
-            statusMessage = null
-            try {
-                busy = BusyOperation(busyLabel, showProgress)
-                statusMessage = block()
-                if (reloadAfter) viewModel.reloadIndex()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: InstrumentException.BlockedByDeviceState) {
-                // Answerable rather than merely reportable: the family knows a fix and the user
-                // decides whether to take it. That fix changes what the instrument is playing,
-                // so it is never applied without asking.
-                val fix = e.remedy
-                if (fix == null || retry == null) {
-                    operationError = reportFailure(what, e, failed)
-                } else {
-                    blocked = BlockedOperation(
-                        message = e.message.orEmpty(),
-                        detail = e.remedyDetail,
-                        actionLabel = e.remedyLabel
-                            ?: context.getString(R.string.programs_blocked_action_default),
-                        apply = fix,
-                        retry = retry,
-                    )
-                }
-            } catch (e: Exception) {
-                operationError = reportFailure(what, e, failed)
-            } finally {
-                // In a finally, always: a failure that left the bar running would claim the app
-                // was still working on something it had given up on.
-                busy = null
-            }
-        }
-    }
-
-    fun onProgramTapped(slot: PresetSlot) {
-        // The confirmation comes from the instrument, not from here: one that echoes the address
-        // back can honestly say "Selected", one that is sent a fire-and-forget message cannot
-        // (see PresetSelector.confirmationFor). Nothing is stored, so nothing is re-listed.
-        runEdit(
-            busyLabel = context.getString(R.string.programs_busy_selecting, slot.displayId),
-            reloadAfter = false,
-            retry = { onProgramTapped(slot) },
-            showProgress = false,
-        ) { viewModel.selectProgram(slot) }
-    }
-
-    fun onBlockedRemedyConfirmed(pending: BlockedOperation) {
-        // Same reasoning as runEdit: `pending.retry()` is the edit that was blocked, and it must
-        // not become abandonable just because it arrived via the remedy dialog.
-        viewModel.launchEdit {
-            blocked = null
-            operationError = null
-            try {
-                pending.apply()
-                // Retry only after the fix reports success. The remedy verifies itself - a mode
-                // change draws no reply of its own - so a silent no-op here would otherwise show
-                // the user the same dialog twice with no explanation.
-                pending.retry()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val what = context.getString(R.string.programs_busy_applying_fix).trimEnd('…', ' ')
-                operationError =
-                    reportFailure(what, e, context.getString(R.string.programs_operation_failed, what))
-            }
-        }
-    }
-
-    fun onDeleteConfirmed(slot: PresetSlot) {
-        // Dismissed *before* the work starts, not after it finishes. An edit is seconds on this
-        // instrument, and a dialog left standing over them hides the progress line.
-        deleteTarget = null
-        runEdit(context.getString(R.string.programs_busy_deleting, slot.displayId)) {
-            viewModel.deleteProgram(slot)
-        }
-    }
-
-    fun onRenameConfirmed(slot: PresetSlot, newName: String) {
-        renameTarget = null
-        runEdit(context.getString(R.string.programs_busy_renaming, slot.displayId)) {
-            viewModel.renameProgram(slot, newName)
-        }
-    }
-
-    /**
-     * Reads a preset's tags, then opens the dialog that needs them.
-     *
-     * **Read before the dialog opens, not inside it.** A dialog that appears empty and fills in
-     * gives the user a moment where every box is unchecked, which is indistinguishable from "not
-     * a favorite" - and a tap in that moment writes that. Reading first costs at most one small
-     * dump, and `runEdit` already owns the busy line and the error path.
-     */
-    fun openTagDialog(slot: PresetSlot, forFavorite: Boolean) {
-        runEdit(
-            context.getString(R.string.programs_busy_reading_tags, slot.displayId),
-            reloadAfter = false,
-            showProgress = false,
-        ) {
-            val tags = viewModel.presetTags(slot)
-            val target = TagTarget(slot, tags)
-            if (forFavorite) favoriteTarget = target else categoriesTarget = target
-            // Nothing to report: the dialog that just opened is the result.
-            null
-        }
-    }
-
-    fun onFavoriteConfirmed(slot: PresetSlot, under: Set<Int>) {
-        favoriteTarget = null
-        runEdit(context.getString(R.string.programs_busy_favoriting, slot.displayId)) {
-            viewModel.setFavorite(slot, under)
-        }
-    }
-
-    fun onCategoriesConfirmed(slot: PresetSlot, categories: List<CategoryRef?>) {
-        categoriesTarget = null
-        runEdit(context.getString(R.string.programs_busy_categorising, slot.displayId)) {
-            viewModel.setCategories(slot, categories)
-        }
-    }
-
-    /*
-     * Picking a copy destination has one way in and one way out, deliberately.
-     *
-     * A copy's destination is always a *user* slot, so starting one from the factory listing has
-     * to move the browser there - picking in a list of read-only rows would offer targets the
-     * instrument refuses. Where it came from is remembered so cancelling, or finishing, puts the
-     * user back in the listing they were browsing rather than stranding them in the user banks.
-     *
-     * The two exits used to differ - one cleared `copySource` inside `runEdit`, the other from the
-     * banner's Cancel - which was survivable while clearing one field was all either had to do and
-     * is exactly the kind of thing that drifts once there are two.
-     */
-    var scopeBeforePicking by remember { mutableStateOf<PresetScope?>(null) }
-
-    fun beginPicking(source: PresetSlot) {
-        if (browseScope != PresetScope.USER) {
-            scopeBeforePicking = browseScope
-            viewModel.setScope(PresetScope.USER)
-        }
-        copySource = source
-    }
-
-    /**
-     * Leaves destination-picking, going back to where it started - or staying put after a copy.
-     *
-     * **A finished copy deliberately does not return to the factory listing.** The new voice is in
-     * the user banks and that is what the user just made; bouncing back to the read-only list they
-     * launched from hides the result of the action and leaves them to find their way to it. A
-     * cancelled pick has made nothing, so it does go back.
-     */
-    fun endPicking(returnToPreviousScope: Boolean = true) {
-        copySource = null
-        if (returnToPreviousScope) scopeBeforePicking?.let { viewModel.setScope(it) }
-        scopeBeforePicking = null
-    }
-
-    fun onCopyConfirmed(source: PresetSlot, destination: PresetSlot) {
-        runEdit(
-            context.getString(
-                R.string.programs_busy_copying, source.displayId, destination.displayId,
-            ),
-        ) {
-            // The picker closes only once the copy has actually landed. On failure it stays open,
-            // same reasoning as delete: show what went wrong against the copy that was about to be
-            // made rather than dismissing first.
-            viewModel.copyProgram(source, destination)
-                .also { endPicking(returnToPreviousScope = false) }
-        }
-    }
-
-    fun runRelocation(source: PresetSlot, target: PresetSlot, targetWasEmpty: Boolean) {
-        val label = if (targetWasEmpty) R.string.programs_busy_moving else R.string.programs_busy_swapping
-        runEdit(context.getString(label, source.displayId, target.displayId)) {
-            viewModel.moveProgram(source, target, targetWasEmpty)
-        }
-    }
-
-    fun onSwapDropped(source: PresetSlot, target: PresetSlot) {
-        if (source.address == target.address) return
-        val targetWasEmpty = target.address !in occupied
-        // A source has nothing to move - onDragStart already blocks starting a drag from an
-        // empty row, this is just a defensive re-check. An empty *target*, on the other hand, is
-        // a valid drop target; targetWasEmpty picks the operation, since an instrument with a
-        // separate one-way move rejects the two-way swap there.
-        if (source.address !in occupied) return
-        // No confirmation step, even where the operation is emulated rather than a single device
-        // command: composed move and swap were verified on real hardware, and a dialog in front of
-        // every drag is friction the reliability does not justify. The safety that mattered lives
-        // in the operation itself - read-back verification, destructive step last, rollback on a
-        // half-completed swap - not in asking first.
-        runRelocation(source, target, targetWasEmpty)
-    }
 
     // The system-back half of `backEnabled` below. Disabling the arrow does nothing for the
     // gesture or the hardware key, and with `enableOnBackInvokedCallback` set in the manifest a
     // predictive-back swipe would otherwise animate this screen away mid-write. Enabled only
     // while an edit is running, so it is inert - and predictive back is not intercepted at all -
     // the rest of the time.
-    BackHandler(enabled = busy != null) {
+    BackHandler(enabled = ops.busy != null) {
         // Deliberately empty: refusing the gesture *is* the behaviour. The progress line already
         // says what is running, so there is nothing further to tell the user here.
     }
@@ -813,7 +546,7 @@ fun ProgramsScreen(
         // across navigation, and exchangeAfterAll already refuses to stop mid-sequence. What this
         // adds is telling the user *why* nothing happened when they tapped, instead of appearing
         // to leave while a write is still running against the instrument.
-        backEnabled = busy == null,
+        backEnabled = ops.busy == null,
         snackbarHostState = snackbarHostState,
         // The discoverable half of "re-read from the instrument". The pull gesture is the fast
         // half, and invisible to anyone not already expecting it - which on a screen whose rows
@@ -874,7 +607,7 @@ fun ProgramsScreen(
                 // An edit is different, and not because of the bus: `runEdit` reloads whichever
                 // scope is current when it finishes, so switching underneath it reloads the wrong
                 // one. Picking a copy destination owns the list until it resolves.
-                enabled = busy == null && !pickingCopy,
+                enabled = ops.busy == null && !ops.pickingCopy,
                 onSelect = viewModel::setScope,
             )
         }
@@ -898,10 +631,10 @@ fun ProgramsScreen(
         // Picking a copy destination happens in the list itself rather than behind a separate
         // dialog: occupied rows below grey out and stop responding to taps, empty rows show
         // regardless of the filter or "show empty slots" (see visiblePrograms/bankLabels above),
-        // and tapping one starts the copy immediately - see onCopyConfirmed. This banner is the
+        // and tapping one starts the copy immediately - see [ProgramsController.onCopyConfirmed]. This banner is the
         // one persistent sign that mode is active, and its Cancel is the only way out besides
         // picking a target; there is deliberately no dialog stacked on top of another.
-        copySource?.let { source ->
+        ops.copySource?.let { source ->
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -917,7 +650,7 @@ fun ProgramsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { endPicking() }) {
+                    TextButton(onClick = { ops.endPicking() }) {
                         Text(stringResource(R.string.action_cancel))
                     }
                 }
@@ -927,7 +660,7 @@ fun ProgramsScreen(
         // the list in that mode (see visiblePrograms/bankLabels), and the banner above already
         // says what mode this is - a filter and a checkbox that visibly do nothing would only
         // repeat that with dead controls.
-        if (!pickingCopy) {
+        if (!ops.pickingCopy) {
             OutlinedTextField(
                 value = searchText,
                 onValueChange = { searchText = it },
@@ -972,7 +705,7 @@ fun ProgramsScreen(
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        busy?.takeIf { it.showProgress }?.let { (what, _) ->
+        ops.busy?.takeIf { it.showProgress }?.let { (what, _) ->
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Text(what, style = MaterialTheme.typography.labelMedium)
                 // Indeterminate: the instrument reports no progress through an edit, and a bar
@@ -1005,13 +738,13 @@ fun ProgramsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .pointerInput(visibleRows, canRelocate, index.complete, pickingCopy, browseScope) {
+                    .pointerInput(visibleRows, canRelocate, index.complete, ops.pickingCopy, browseScope) {
                         // Dragging is off while the index is still arriving: a drop into a region
                         // that has not loaded yet has no defined target, and off entirely on an
                         // instrument that cannot relocate presets at all. Also off while picking a
                         // copy destination - the two gestures would otherwise fight over the same
                         // rows, and a copy pick is resolved by a tap, not a drag.
-                        if (!canRelocate || !index.complete || pickingCopy) return@pointerInput
+                        if (!canRelocate || !index.complete || ops.pickingCopy) return@pointerInput
                         // Reordering is a user-listing gesture. A read-only bank refuses the write,
                         // and the favorites listing is not an address space - its rows are the
                         // marked voices across every bank, so "the row below" is not a
@@ -1035,7 +768,7 @@ fun ProgramsScreen(
                                 val source = visibleRows.getOrNull(from) as? ProgramRow.ProgramEntry
                                 val target = visibleRows.getOrNull(to) as? ProgramRow.ProgramEntry
                                 if (source != null && target != null) {
-                                    onSwapDropped(source.item, target.item)
+                                    ops.onSwapDropped(source.item, target.item, occupied)
                                 }
                             },
                             onDragCancel = { drag.cancel() },
@@ -1105,7 +838,7 @@ fun ProgramsScreen(
                                 // While picking, an empty slot is the only thing a tap can do
                                 // anything with - including one that was already empty before
                                 // picking started, not just ones "Show empty slots" would add.
-                                val isCopyTarget = pickingCopy && isEmpty
+                                val isCopyTarget = ops.pickingCopy && isEmpty
                                 val rowColor = when {
                                     isDragged -> MaterialTheme.colorScheme.primaryContainer
                                     isDropTarget -> MaterialTheme.colorScheme.secondaryContainer
@@ -1175,7 +908,7 @@ fun ProgramsScreen(
                                         // Hidden outright while picking, not merely disabled: none
                                         // of these applies to *any* row until the pick is resolved
                                         // or cancelled, including the row being copied from.
-                                        if (pickingCopy || isEmpty ||
+                                        if (ops.pickingCopy || isEmpty ||
                                             (!rowRename && !rowDelete && !rowCopy &&
                                                 !rowFavorite && !rowCategories)
                                         ) {
@@ -1197,16 +930,16 @@ fun ProgramsScreen(
                                                 categoryCount = tagger?.assignmentCount ?: 1,
                                                 enabled = editsEnabled,
                                                 onRename = {
-                                                    renameTarget = program
-                                                    renameText = program.name.orEmpty()
+                                                    ops.renameTarget = program
+                                                    ops.renameText = program.name.orEmpty()
                                                 },
-                                                onCopy = { beginPicking(program) },
-                                                onDelete = { deleteTarget = program },
+                                                onCopy = { ops.beginPicking(program) },
+                                                onDelete = { ops.deleteTarget = program },
                                                 onSetFavorite = {
-                                                    openTagDialog(program, forFavorite = true)
+                                                    ops.openTagDialog(program, forFavorite = true)
                                                 },
                                                 onSetCategories = {
-                                                    openTagDialog(program, forFavorite = false)
+                                                    ops.openTagDialog(program, forFavorite = false)
                                                 },
                                             )
                                             }
@@ -1222,7 +955,7 @@ fun ProgramsScreen(
                                                 .size(ProgramListMetrics.handleSize)
                                                 .let { theme.slotBezel(it, occupied = !isEmpty) },
                                         ) {
-                                            if (!isEmpty && canRelocate && !pickingCopy && browseScope == PresetScope.USER) {
+                                            if (!isEmpty && canRelocate && !ops.pickingCopy && browseScope == PresetScope.USER) {
                                                 // The glyph is decorative; the *row* is what a
                                                 // screen reader should describe, so the handle
                                                 // carries the instruction and nothing else does.
@@ -1273,9 +1006,9 @@ fun ProgramsScreen(
                                         .alpha(
                                             when {
                                                 isDragged -> ProgramListMetrics.DRAGGED_ALPHA
-                                                pickingCopy && !isCopyTarget ->
+                                                ops.pickingCopy && !isCopyTarget ->
                                                     ProgramListMetrics.DISABLED_ALPHA
-                                                isEmpty && !pickingCopy ->
+                                                isEmpty && !ops.pickingCopy ->
                                                     ProgramListMetrics.EMPTY_SLOT_ALPHA
                                                 else -> 1f
                                             },
@@ -1290,15 +1023,15 @@ fun ProgramsScreen(
                                                     // open across the copy it started, so without
                                                     // this a second destination could be tapped
                                                     // and queued behind the first.
-                                                    m.clickable(enabled = busy == null) {
-                                                        copySource?.let { onCopyConfirmed(it, program) }
+                                                    m.clickable(enabled = ops.busy == null) {
+                                                        ops.copySource?.let { ops.onCopyConfirmed(it, program) }
                                                     }.semantics { contentDescription = description }
                                                 }
                                                 // Occupied and not the source: inert while picking,
                                                 // same reasoning as the hidden overflow menu above.
-                                                pickingCopy -> m
+                                                ops.pickingCopy -> m
                                                 isEmpty || !canSelect -> m
-                                                else -> m.clickable { onProgramTapped(program) }
+                                                else -> m.clickable { ops.onProgramTapped(program) }
                                             }
                                         },
                                 )
@@ -1369,7 +1102,7 @@ fun ProgramsScreen(
             val jsonSuffix = stringResource(R.string.programs_json_suffix)
             TextButton(
                 onClick = {
-                    pendingShare = PendingShare(
+                    ops.pendingShare = PendingShare(
                         title = shareReportTitle,
                         // Supplied by the instrument's own reporter: the two families read
                         // entirely different things, and this text used to describe Nord
@@ -1379,7 +1112,7 @@ fun ProgramsScreen(
                         initialStem = viewModel.suggestedReportFilename(),
                         onConfirm = { stem ->
                             sharer.share(stem) { shared ->
-                                statusMessage = context.getString(R.string.programs_shared_as, shared)
+                                ops.statusMessage = context.getString(R.string.programs_shared_as, shared)
                             }
                         },
                     )
@@ -1396,56 +1129,56 @@ fun ProgramsScreen(
     }
     }
 
-    pendingShare?.let { pending ->
-        ShareFilenameDialog(pending, onDismiss = { pendingShare = null })
+    ops.pendingShare?.let { pending ->
+        ShareFilenameDialog(pending, onDismiss = { ops.pendingShare = null })
     }
 
-    deleteTarget?.let { target ->
+    ops.deleteTarget?.let { target ->
         DeleteConfirmationDialog(
             target = target,
             emulated = viewModel.isEmulatedEdit(EditOp.DELETE),
-            onConfirm = { onDeleteConfirmed(target) },
-            onDismiss = { deleteTarget = null },
+            onConfirm = { ops.onDeleteConfirmed(target) },
+            onDismiss = { ops.deleteTarget = null },
         )
     }
 
-    blocked?.let { pending ->
+    ops.blocked?.let { pending ->
         BlockedOperationDialog(
             pending = pending,
-            onApply = { onBlockedRemedyConfirmed(pending) },
-            onDismiss = { blocked = null },
+            onApply = { ops.onBlockedRemedyConfirmed(pending) },
+            onDismiss = { ops.blocked = null },
         )
     }
 
-    renameTarget?.let { target ->
+    ops.renameTarget?.let { target ->
         HideKeyboardOnDismiss(keyboardController)
         RenameDialog(
             target = target,
-            text = renameText,
-            onTextChange = { renameText = it },
+            text = ops.renameText,
+            onTextChange = { ops.renameText = it },
             maxNameLength = maxNameLength,
-            onConfirm = { onRenameConfirmed(target, renameText) },
-            onDismiss = { renameTarget = null },
+            onConfirm = { ops.onRenameConfirmed(target, ops.renameText) },
+            onDismiss = { ops.renameTarget = null },
         )
     }
 
     // Both are guarded on `tagger` as well as on their target, because a disconnect between the
     // read and the dialog opening would otherwise leave a dialog with no facet to save through.
     tagger?.let { facet ->
-        favoriteTarget?.let { target ->
+        ops.favoriteTarget?.let { target ->
             SetFavoriteDialog(
                 target = target.slot,
                 tags = target.tags,
                 taxonomy = facet.taxonomy,
                 assignmentCount = facet.assignmentCount,
-                onConfirm = { under -> onFavoriteConfirmed(target.slot, under) },
-                onDismiss = { favoriteTarget = null },
+                onConfirm = { under -> ops.onFavoriteConfirmed(target.slot, under) },
+                onDismiss = { ops.favoriteTarget = null },
                 // The way out of "this preset has no categories, so it cannot be a favorite" -
                 // offered only where they can actually be set, which is not a factory bank.
                 onSetCategories = if (facet.canSetCategories(target.slot.address)) {
                     {
-                        favoriteTarget = null
-                        categoriesTarget = target
+                        ops.favoriteTarget = null
+                        ops.categoriesTarget = target
                     }
                 } else {
                     null
@@ -1453,27 +1186,19 @@ fun ProgramsScreen(
             )
         }
 
-        categoriesTarget?.let { target ->
+        ops.categoriesTarget?.let { target ->
             SetCategoriesDialog(
                 target = target.slot,
                 tags = target.tags,
                 taxonomy = facet.taxonomy,
                 assignmentCount = facet.assignmentCount,
                 allowsUnassigned = facet.allowsUnassigned,
-                onConfirm = { picked -> onCategoriesConfirmed(target.slot, picked) },
-                onDismiss = { categoriesTarget = null },
+                onConfirm = { picked -> ops.onCategoriesConfirmed(target.slot, picked) },
+                onDismiss = { ops.categoriesTarget = null },
             )
         }
     }
 }
-
-/**
- * A row plus the tags read for it, which is what a tag dialog opens on.
- *
- * The tags travel with the row rather than being re-read by the dialog: see `openTagDialog` on why
- * an empty dialog that fills in is the one shape this must not have.
- */
-private data class TagTarget(val slot: PresetSlot, val tags: PresetTags)
 
 /**
  * Counts taps on the instrument name, and says when five of them have landed close enough
@@ -1515,16 +1240,6 @@ private fun HideKeyboardOnDismiss(keyboardController: SoftwareKeyboardController
         onDispose { keyboardController?.hide() }
     }
 }
-
-/**
- * An operation in flight, and whether the user should see a progress line for it.
- *
- * The flag is not cosmetic. Every operation here blocks a second one from starting, but only the
- * slow ones are worth announcing: the progress line sits above the list, so showing it for a
- * ~160 ms selection pushed every row down and let them spring back on each tap - jitter directly
- * under the finger, on the one action people repeat.
- */
-private data class BusyOperation(val label: String, val showProgress: Boolean)
 
 /**
  * Which of the instrument's listings to show, plus a line saying what the current one is.
@@ -1595,7 +1310,7 @@ private fun PresetScope.noteRes(): Int? = when (this) {
  * destructive action permanently within a few dp of a benign one in a scrolling list, which left
  * the confirmation dialog doing work the layout should have been doing. Copy sits between the
  * two: unlike Delete it gets no confirmation of its own, since it is exactly as safe as Rename -
- * choosing a destination in the list itself (`copySource`/`pickingCopy` in `ProgramsScreen`) is
+ * choosing a destination in the list itself (`copySource`/`pickingCopy` in [ProgramsController]) is
  * the only decision it needs from the user.
  */
 @Composable

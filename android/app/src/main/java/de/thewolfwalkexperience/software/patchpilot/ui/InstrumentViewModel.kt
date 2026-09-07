@@ -180,7 +180,8 @@ sealed class ConnectionState {
  * cleans up after itself, which is what keeps the instrument's own display/play state usable
  * between actions without this class wrapping every call in an open/close pair.
  */
-class InstrumentViewModel(application: Application) : AndroidViewModel(application) {
+class InstrumentViewModel(application: Application) :
+    AndroidViewModel(application), ProgramsOperations {
     private val connectionManager = UsbConnectionManager(application)
 
     /**
@@ -278,7 +279,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      * the other half of that guarantee, and the half that also keeps a slow single-message write
      * from being dropped halfway.
      */
-    fun launchEdit(block: suspend () -> Unit): Job = viewModelScope.launch { block() }
+    override fun launchEdit(block: suspend () -> Unit): Job = viewModelScope.launch { block() }
 
     /**
      * Reacts to a physical USB detach, in whichever of three shapes the session is currently in:
@@ -758,7 +759,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
     private val _indexes = MutableStateFlow<Map<PresetScope, PresetIndexState>>(emptyMap())
 
     private val _scope = MutableStateFlow(PresetScope.USER)
-    val scope: StateFlow<PresetScope> = _scope.asStateFlow()
+    override val scope: StateFlow<PresetScope> = _scope.asStateFlow()
 
     /**
      * The listing for whichever scope is selected - what ProgramsScreen collects, unchanged.
@@ -825,7 +826,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      * A scope that already finished is shown as it stands and costs nothing, which is the point of
      * keeping all three; one still in flight keeps filling.
      */
-    fun setScope(scope: PresetScope) {
+    override fun setScope(scope: PresetScope) {
         if (_scope.value == scope) return
         _scope.value = scope
         val key = instrument?.identity?.stableKey ?: return
@@ -867,7 +868,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      * What an edit needs: `refreshEdited` has already written the changed addresses through to
      * the cached index, so this re-reads from memory rather than from the instrument.
      */
-    fun reloadIndex(): Int? {
+    override fun reloadIndex(): Int? {
         val key = instrument?.identity?.stableKey ?: return null
         return launchIndex(key, _scope.value)
     }
@@ -1045,7 +1046,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
     fun bankRailLabels(): Map<String, String> =
         instrument?.layout?.banks?.associate { it.label to it.shortLabel } ?: emptyMap()
 
-    suspend fun selectProgram(slot: PresetSlot): String = instrumentMutex.withLock {
+    override suspend fun selectProgram(slot: PresetSlot): String = instrumentMutex.withLock {
         val selector = requireFacet(current().selector, "load a preset")
         selector.select(slot.address)
         selector.confirmationFor(slot.displayId)
@@ -1057,7 +1058,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      * either call used at the wrong kind of destination, so [targetIsEmpty] has to come from the
      * caller's own view of what is stored where - ProgramsScreen knows it from the index it has.
      */
-    suspend fun moveProgram(
+    override suspend fun moveProgram(
         source: PresetSlot,
         target: PresetSlot,
         targetIsEmpty: Boolean,
@@ -1074,14 +1075,14 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         str(R.string.result_swapped, source.displayId, target.displayId)
     }
 
-    suspend fun renameProgram(slot: PresetSlot, newName: String): String = instrumentMutex.withLock {
+    override suspend fun renameProgram(slot: PresetSlot, newName: String): String = instrumentMutex.withLock {
         requireFacet(current().editor, "rename presets").rename(slot.address, newName)
         refreshEdited(slot.address)
         str(R.string.result_renamed, slot.displayId, newName)
     }
 
     /** What [slot] is filed under and whether it is a favorite, for the two tag dialogs. */
-    suspend fun presetTags(slot: PresetSlot): PresetTags = instrumentMutex.withLock {
+    override suspend fun presetTags(slot: PresetSlot): PresetTags = instrumentMutex.withLock {
         requireFacet(current().tagger, "categorise presets").read(slot.address)
     }
 
@@ -1093,7 +1094,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      * for a rename and wrong here: favoriting a voice adds it to a listing it was absent from, and
      * `PresetIndexState.replacing` is a no-op for an absent address rather than an insertion.
      */
-    suspend fun setFavorite(slot: PresetSlot, under: Set<Int>): String = instrumentMutex.withLock {
+    override suspend fun setFavorite(slot: PresetSlot, under: Set<Int>): String = instrumentMutex.withLock {
         requireFacet(current().tagger, "favorite presets").setFavorite(slot.address, under)
         refreshEdited(slot.address)
         _indexes.update { it - PresetScope.FAVORITES }
@@ -1102,7 +1103,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     /** Replaces [slot]'s category assignments, nulls included. */
-    suspend fun setCategories(slot: PresetSlot, categories: List<CategoryRef?>): String =
+    override suspend fun setCategories(slot: PresetSlot, categories: List<CategoryRef?>): String =
         instrumentMutex.withLock {
             val tagger = requireFacet(current().tagger, "categorise presets")
             tagger.setCategories(slot.address, categories)
@@ -1123,7 +1124,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      * [source]'s - a Nord appends a disambiguating suffix, so the only way to know what actually
      * got stored is what the editor's own `copyProgram` read back.
      */
-    suspend fun copyProgram(source: PresetSlot, destination: PresetSlot): String = instrumentMutex.withLock {
+    override suspend fun copyProgram(source: PresetSlot, destination: PresetSlot): String = instrumentMutex.withLock {
         val copiedName = requireFacet(current().editor, "copy presets")
             .copyProgram(source.address, destination.address)
         refreshEdited(destination.address)
@@ -1141,7 +1142,7 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
      * with one command and can still reclaim it until its own cleanup runs, while a Pro-800 and
      * a Motif XS overwrite the slot with an initialised preset, which nothing can undo.
      */
-    suspend fun deleteProgram(slot: PresetSlot): String = instrumentMutex.withLock {
+    override suspend fun deleteProgram(slot: PresetSlot): String = instrumentMutex.withLock {
         requireFacet(current().editor, "delete presets").delete(slot.address)
         refreshEdited(slot.address)
         str(R.string.result_deleted, slot.displayId)
