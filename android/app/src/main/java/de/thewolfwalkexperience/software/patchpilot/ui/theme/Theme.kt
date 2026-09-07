@@ -1,5 +1,6 @@
 package de.thewolfwalkexperience.software.patchpilot.ui.theme
 
+import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -9,7 +10,10 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 /**
  * Wraps [content] in the chosen [AppTheme].
@@ -60,6 +64,32 @@ fun PatchPilotTheme(
     val shapes = when (appTheme) {
         AppTheme.Default -> MaterialTheme.shapes
         AppTheme.Steampunk -> SteampunkShapes
+    }
+    // **The status bar has to follow the *app's* theme, not the system's.**
+    // `enableEdgeToEdge()` in MainActivity opts into drawing behind the bars and, left to itself,
+    // picks the bar icon colours from the system light/dark setting. That is right for
+    // [AppTheme.Default], which follows the same setting - but [AppTheme.Steampunk] is
+    // deliberately always dark, so with the system in light mode the platform drew dark icons over
+    // this theme's near-black surface and the clock, battery and back gesture hint disappeared.
+    //
+    // Derived from the theme rather than from `darkTheme` alone, so a future theme gets this right
+    // by declaring what it is instead of by remembering to touch MainActivity.
+    val darkBars = when (appTheme) {
+        AppTheme.Default -> darkTheme
+        AppTheme.Steampunk -> true
+    }
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        // A SideEffect, not a LaunchedEffect: this is a one-line write to window state that has to
+        // land after every successful composition, including the one a theme change causes.
+        SideEffect {
+            (view.context as? Activity)?.window?.let { window ->
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = !darkBars
+                    isAppearanceLightNavigationBars = !darkBars
+                }
+            }
+        }
     }
     CompositionLocalProvider(LocalThemeStyle provides appTheme.style) {
         MaterialTheme(colorScheme = colorScheme, typography = typography, shapes = shapes, content = content)

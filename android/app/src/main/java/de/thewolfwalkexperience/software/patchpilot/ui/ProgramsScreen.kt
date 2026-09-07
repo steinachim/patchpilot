@@ -55,7 +55,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -735,7 +734,11 @@ fun ProgramsScreen(
         when {
             scanError != null ->
                 Text(stringResource(R.string.programs_error, scanError), color = MaterialTheme.colorScheme.error)
-            index.slots.isEmpty() && index.loading -> CircularProgressIndicator()
+            // The theme's own indicator, the same one ConnectScreen shows while it opens a
+            // device. A bare CircularProgressIndicator here meant the two waits either side of a
+            // connect looked like they belonged to different apps under the Steampunk theme, where
+            // one is a pressure gauge and the other a Material spinner.
+            index.slots.isEmpty() && index.loading -> theme.ProgressIndicator()
             else -> PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 // The gesture starts the work directly now, rather than flipping a flag an effect
