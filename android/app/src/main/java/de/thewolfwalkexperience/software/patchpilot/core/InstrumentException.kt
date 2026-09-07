@@ -18,9 +18,19 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
     class Timeout(what: String, cause: Throwable? = null) :
         InstrumentException("The instrument did not answer while $what.", cause)
 
-    /** The instrument answered, and said no. [status] is its own code, verbatim. */
-    class DeviceRejected(what: String, val status: Int) :
-        InstrumentException("The instrument refused to $what (status $status).")
+    /**
+     * The instrument answered, and said no. [status] is its own code, verbatim.
+     *
+     * @param explanation what that code actually means, where the family knows. A bare "(status 4)"
+     *   is the instrument's vocabulary, not the user's - it says something went wrong without
+     *   saying what, or what to do about it - so a family that can name the condition passes the
+     *   sentence here and it is shown instead. [status] is still carried for the log and for
+     *   anything that needs to branch on it.
+     */
+    class DeviceRejected(what: String, val status: Int, val explanation: String? = null) :
+        InstrumentException(
+            explanation ?: "The instrument refused to $what (status $status).",
+        )
 
     /** A reply arrived that this app cannot make sense of - a bug, or an unprofiled device. */
     class ProtocolDesync(detail: String, cause: Throwable? = null) :

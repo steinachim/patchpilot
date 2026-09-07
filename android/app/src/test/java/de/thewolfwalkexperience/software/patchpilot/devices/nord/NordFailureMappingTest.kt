@@ -4,6 +4,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -96,6 +97,33 @@ class NordFailureMappingTest {
             }
         }
         assertEquals(NordDevice.STATUS_FILE_EXISTS, failure.status)
+        // The status survives for the log; what the *user* is shown has to be the condition, not
+        // the code. "(status 4)" says something went wrong without saying what or what to do.
+        assertEquals(
+            "Couldn't copy a preset: that slot already holds a preset, and this needs an empty one.",
+            failure.message,
+        )
+    }
+
+    /**
+     * The counterpart: a code with no documented meaning must not be given an invented one. The
+     * generic wording is honest - the app has the instrument's answer and cannot interpret it.
+     */
+    @Test
+    fun `a status the protocol does not name keeps the generic wording`() = runTest {
+        val instrument = instrument(
+            listOf(
+                1 to rootList(),
+                5 to ByteArray(0),
+                21 to (uint32BE(9) + uint32BE(8) + uint32BE(12)),
+                7 to ByteArray(0),
+            ),
+        )
+        val failure = assertThrows(InstrumentException.DeviceRejected::class.java) {
+            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
+        }
+        assertNull(failure.explanation)
+        assertTrue(failure.message!!.contains("status 9"))
     }
 
     /**

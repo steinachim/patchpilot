@@ -72,7 +72,14 @@ fun LicenseTextScreen(assetFile: String, onBack: () -> Unit) {
     LaunchedEffect(assetFile) {
         text = readLicenseAsset(context, assetFile)
     }
-    PatchPilotScaffold(title = assetFile.substringBeforeLast('.'), onBack = onBack) { innerPadding ->
+    // The license's own name, not its filename. Deriving the title from the asset put "OFL-Cinzel"
+    // and "LICENSE-GPL-3.0" in the app bar - build artefacts, and not what the row the user tapped
+    // called it. The license name is also what the screen is actually showing the text of, where
+    // the group name ("AndroidX, Jetpack Compose, Kotlin, kotlinx") would only ellipsize.
+    val title = LICENSE_ENTRIES.firstOrNull { it.assetFile == assetFile }
+        ?.let { stringResource(it.licenseNameRes) }
+        ?: assetFile.substringBeforeLast('.')
+    PatchPilotScaffold(title = title, onBack = onBack) { innerPadding ->
         SelectionContainer {
             Text(
                 text.orEmpty(),

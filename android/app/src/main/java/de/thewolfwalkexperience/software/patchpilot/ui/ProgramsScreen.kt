@@ -21,8 +21,8 @@ import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -528,11 +528,15 @@ fun ProgramsScreen(
         // behind it is for whoever is developing against an instrument, not for whoever is
         // playing one. Local state: it means nothing outside this composition and there is
         // nothing to restore if the process dies mid-gesture.
-        titleModifier = Modifier.clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null,
-            onClick = { if (debugTaps.tap()) onOpenDebugMenu() },
-        ),
+        //
+        // **`pointerInput`, not `clickable`.** `clickable` adds a click semantics node, so
+        // TalkBack announced the app bar title as a button and offered to activate it - a control
+        // where the whole point is that there is no control, and one that appears to do nothing,
+        // since a single activation is one tap of five. Handling the taps as a raw gesture leaves
+        // the title as the plain heading it reads as everywhere else.
+        titleModifier = Modifier.pointerInput(Unit) {
+            detectTapGestures { if (debugTaps.tap()) onOpenDebugMenu() }
+        },
         // Back returns to the connect screen, which re-scans on arrival - the way to pick up an
         // instrument that was plugged in after the app started, or to swap between two.
         onBack = onBack,

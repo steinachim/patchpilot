@@ -447,12 +447,25 @@ class NordInstrument(
  * [InstrumentException.DeviceRejected]'s sentences read correctly: "rename presets", not
  * "SET_NAME".
  */
+/**
+ * Plain-language meaning for the status codes this protocol's replies are known to use.
+ *
+ * Null for anything else, which leaves the generic "refused (status N)" - honest about the fact
+ * that the app has the instrument's answer and cannot interpret it, rather than inventing a
+ * reason. Only one code has a documented meaning; see [NordDevice.STATUS_FILE_EXISTS].
+ */
+private fun nordStatusExplanation(what: String, status: Int): String? = when (status) {
+    NordDevice.STATUS_FILE_EXISTS ->
+        "Couldn't $what: that slot already holds a preset, and this needs an empty one."
+    else -> null
+}
+
 private suspend fun <T> mapNordFailure(what: String, block: suspend () -> T): T = try {
     block()
 } catch (e: CancellationException) {
     throw e
 } catch (e: NordStatusException) {
-    throw InstrumentException.DeviceRejected(what, e.status)
+    throw InstrumentException.DeviceRejected(what, e.status, nordStatusExplanation(what, e.status))
 } catch (e: UnsupportedProtocolVersionException) {
     throw InstrumentException.ProtocolDesync(e.message ?: "Unsupported protocol version", e)
 } catch (e: IllegalArgumentException) {
