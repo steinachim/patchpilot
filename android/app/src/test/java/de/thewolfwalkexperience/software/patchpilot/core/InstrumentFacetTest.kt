@@ -72,7 +72,59 @@ class InstrumentFacetTest {
         // master name list - and this fixture profile carries neither, so there is nothing to
         // resolve. The Nord path with both halves present is covered by NordTaggerTest.
         assertNull("no category ids and no master list in this fixture", nord().tagger)
-        assertNull(DemoInstrument().tagger)
+    }
+
+    /**
+     * Demo mode offers categories but not favorites, and says so through the facet rather than by
+     * throwing when asked.
+     *
+     * It exists so every screen has something to render with no hardware attached, so the shape it
+     * declares has to be one a real instrument actually has - a Nord's: one assignment, flat, and
+     * `None` a category rather than the absence of one.
+     */
+    @Test
+    fun `demo mode declares a Nord-shaped tagger`() {
+        val tagger = requireNotNull(DemoInstrument().tagger) { "demo mode should offer categories" }
+        assertEquals(1, tagger.assignmentCount)
+        assertNull("a favorite mark is hardware state demo mode does not model", tagger.favorites)
+        assertTrue("no sub-categories, like the Nord it mirrors", tagger.taxonomy.isFlat)
+        assertFalse(tagger.allowsUnassigned)
+        assertTrue("every demo slot is writable", tagger.canSetCategories(SlotAddress(0, 0)))
+        assertFalse(tagger.canSetFavorite(SlotAddress(0, 0)))
+    }
+
+    /** Every seeded demo preset files under a category the demo's own taxonomy lists. */
+    @Test
+    fun `every demo preset starts in a category the taxonomy names`() = runTest {
+        val demo = DemoInstrument()
+        val tagger = requireNotNull(demo.tagger)
+        val rows = demo.browser.index().toList()
+            .filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }
+        assertTrue("the demo should seed some presets", rows.isNotEmpty())
+        for (row in rows) {
+            val ref = requireNotNull(tagger.read(row.address).categories.single()) {
+                "${row.displayId} ${row.name} should carry a category"
+            }
+            assertNotNull(
+                "${row.displayId} names a category outside the taxonomy",
+                tagger.taxonomy.label(ref),
+            )
+        }
+    }
+
+    /** A category set in demo mode sticks, and shows on the row it was set on. */
+    @Test
+    fun `setting a demo category is stored and badged`() = runTest {
+        val demo = DemoInstrument()
+        val tagger = requireNotNull(demo.tagger)
+        val row = demo.browser.index().toList()
+            .filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }.first()
+
+        val lead = tagger.taxonomy.mains.indexOfFirst { it.name == "Lead" }
+        tagger.setCategories(row.address, listOf(CategoryRef(lead, null)))
+
+        assertEquals(CategoryRef(lead, null), tagger.read(row.address).categories.single())
+        assertEquals(listOf("Lead"), demo.browser.refresh(row.address).badges)
     }
 
     // ---- Every declared edit actually completes ----

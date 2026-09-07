@@ -15,9 +15,27 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
  * `core.NoCopyFixtureInstrument`, a test-only fixture shaped like a family with no copy of its
  * own, which is why this class knows nothing about who is asking.
  */
-class DemoLibrary(private val nameList: List<String>, private val slotsPerBank: Int) {
+class DemoLibrary(
+    private val nameList: List<String>,
+    private val slotsPerBank: Int,
+    /**
+     * What each seeded preset's category tag starts as, by preset name. Empty for a caller with no
+     * categories at all, which is what leaves every row unbadged.
+     */
+    private val categoryByName: Map<String, String> = emptyMap(),
+) {
 
-    private val programs: MutableMap<SlotAddress, String> = seedPrograms().toMutableMap()
+    /**
+     * One preset: its name and its category tag.
+     *
+     * **The tag travels with the name rather than in a parallel map keyed by address**, which is
+     * how a real instrument stores it too - inside the preset. It is also the only version of this
+     * that cannot desynchronise: move, swap, copy and delete all relocate the whole record, so a
+     * preset cannot arrive somewhere wearing the category of whatever used to be there.
+     */
+    data class Program(val name: String, val category: String? = null)
+
+    private val programs: MutableMap<SlotAddress, Program> = seedPrograms().toMutableMap()
 
     /** Unused by anything today - kept because nothing established it should go with this change. */
     private val categories: Map<String, List<String>> = linkedMapOf(
@@ -41,7 +59,8 @@ class DemoLibrary(private val nameList: List<String>, private val slotsPerBank: 
         address = address,
         displayId = layout.format.format(address),
         bankLabel = layout.format.bankLabel(address.bank),
-        name = programs[address],
+        name = programs[address]?.name,
+        badges = listOfNotNull(programs[address]?.category),
     )
 
     fun requireOccupied(address: SlotAddress) {
@@ -50,7 +69,16 @@ class DemoLibrary(private val nameList: List<String>, private val slotsPerBank: 
 
     fun rename(address: SlotAddress, newName: String) {
         requireOccupied(address)
-        programs[address] = newName
+        // Copied, not replaced: a rename must not silently clear the category tag.
+        programs[address] = programs.getValue(address).copy(name = newName)
+    }
+
+    /** The category tag at [address], or null where the preset carries none. */
+    fun categoryAt(address: SlotAddress): String? = programs[address]?.category
+
+    fun setCategoryAt(address: SlotAddress, category: String) {
+        requireOccupied(address)
+        programs[address] = programs.getValue(address).copy(category = category)
     }
 
     fun move(from: SlotAddress, to: SlotAddress) {
@@ -68,11 +96,12 @@ class DemoLibrary(private val nameList: List<String>, private val slotsPerBank: 
     fun copy(from: SlotAddress, to: SlotAddress): String {
         requireOccupied(from)
         check(to !in programs) { "That slot already holds a preset; a copy needs an empty one." }
-        val sourceName = programs.getValue(from)
+        val source = programs.getValue(from)
         val copyName = generateSequence(2) { it + 1 }
-            .map { "$sourceName $it" }
-            .first { candidate -> programs.values.none { it == candidate } }
-        programs[to] = copyName
+            .map { "${source.name} $it" }
+            .first { candidate -> programs.values.none { it.name == candidate } }
+        // The copy keeps the source's category, the way a real instrument's copy does.
+        programs[to] = source.copy(name = copyName)
         return copyName
     }
 
@@ -113,11 +142,14 @@ class DemoLibrary(private val nameList: List<String>, private val slotsPerBank: 
      * Leaves deliberate gaps, so "show empty slots" and the move-versus-swap distinction both have
      * something to act on.
      */
-    private fun seedPrograms(): Map<SlotAddress, String> = buildMap {
+    private fun seedPrograms(): Map<SlotAddress, Program> = buildMap {
         nameList.forEachIndexed { index, name ->
             // Spread across banks with gaps rather than filling bank A first.
             val flat = index * 3
-            put(SlotAddress(flat / slotsPerBank, flat % slotsPerBank), name)
+            put(
+                SlotAddress(flat / slotsPerBank, flat % slotsPerBank),
+                Program(name, categoryByName[name]),
+            )
         }
     }
 }

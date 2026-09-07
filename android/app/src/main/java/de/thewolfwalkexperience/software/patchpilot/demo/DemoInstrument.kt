@@ -12,6 +12,8 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
+import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
@@ -38,7 +40,11 @@ import de.thewolfwalkexperience.software.patchpilot.core.Bus
  */
 class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, DeviceReporter {
 
-    private val library = DemoLibrary(NAMES, slotsPerBank = SLOTS_PER_BANK)
+    private val library = DemoLibrary(
+        NAMES,
+        slotsPerBank = SLOTS_PER_BANK,
+        categoryByName = DemoCategories.BY_PRESET,
+    )
 
     override val layout: SlotLayout = SlotLayout.uniform(
         bankCount = BANK_COUNT,
@@ -58,8 +64,14 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
     override val browser: PresetBrowser get() = this
     override val selector: PresetSelector get() = this
     override val editor: PresetEditor get() = this
-    /** The demo instrument has no categories to invent and no instrument to favorite on. */
-    override val tagger: PresetTagger? = null
+    /**
+     * Categories, shaped like a Nord's - see [DemoCategories].
+     *
+     * Favorites are the one tagging capability demo mode does *not* offer: a favorite mark is a
+     * per-bank table a Motif XS keeps beside its voices, and inventing one here would put a
+     * control on screen that no part of this class is modelling.
+     */
+    override val tagger: PresetTagger = DemoTagger()
 
     override val report: DeviceReporter? = this
 
@@ -117,6 +129,47 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
     override suspend fun swap(a: SlotAddress, b: SlotAddress) = library.swap(a, b)
     override suspend fun delete(address: SlotAddress) = library.delete(address)
     override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String = library.copy(src, dst)
+
+    // ---- PresetTagger ----
+
+    /**
+     * The demo's category editor, backed by the same in-memory library the browser reads.
+     *
+     * An inner class rather than another facet on [DemoInstrument] itself, because it is the only
+     * one whose operations do not already have a name on one of the interfaces this implements -
+     * `read` and `setCategories` would sit oddly beside `rename` and `select`.
+     */
+    private inner class DemoTagger : PresetTagger {
+        override val taxonomy = DemoCategories.taxonomy
+
+        /** One, like the Nord this mirrors. */
+        override val assignmentCount = 1
+
+        override val favorites = null
+
+        /** `None` is a category here, not the absence of one - same as a Nord. */
+        override val allowsUnassigned = false
+
+        override fun canSetCategories(address: SlotAddress) = true
+
+        override fun canSetFavorite(address: SlotAddress) = false
+
+        override suspend fun read(address: SlotAddress) =
+            PresetTags(categories = listOf(DemoCategories.refOf(library.categoryAt(address))))
+
+        override suspend fun setCategories(address: SlotAddress, categories: List<CategoryRef?>) {
+            val wanted = categories.firstOrNull()
+                ?: throw IllegalArgumentException(
+                    "This instrument always files a preset under a category; there is none to clear."
+                )
+            val name = DemoCategories.nameOf(wanted)
+                ?: throw IllegalArgumentException("No category ${wanted.main} on this instrument.")
+            library.setCategoryAt(address, name)
+        }
+
+        override suspend fun setFavorite(address: SlotAddress, under: Set<Int>): Unit =
+            throw UnsupportedOperationException("Demo mode has no favorites.")
+    }
 
     // ---- DeviceReporter ----
 
