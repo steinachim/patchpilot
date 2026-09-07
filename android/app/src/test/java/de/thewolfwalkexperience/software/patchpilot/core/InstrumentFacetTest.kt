@@ -55,6 +55,23 @@ class InstrumentFacetTest {
         override fun close() = Unit
     }
 
+    // ---- Facet declarations ----
+
+    /**
+     * **A facet a family cannot implement must be null, not an implementation that refuses.**
+     *
+     * `Instrument` states the rule and nothing else enforces it. The Motif XS case is the one that
+     * varies with data rather than with code: its tagger exists only where the shipped catalog
+     * carries a category encoding, and the fixture above deliberately has none - so a build that
+     * started returning a tagger regardless would be offering a dialog with no categories in it.
+     */
+    @Test
+    fun `a family without a capability declares null for it`() {
+        assertNull("no encoding in this fixture, so nothing to tag with", motifXs().tagger)
+        assertNull("a Nord has no category opcode this app knows", nord().tagger)
+        assertNull(DemoInstrument().tagger)
+    }
+
     // ---- Every declared edit actually completes ----
 
     @Test

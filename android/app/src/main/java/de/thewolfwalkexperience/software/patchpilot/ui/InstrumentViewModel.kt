@@ -15,6 +15,9 @@ import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.OccupiedSlotReason
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
+import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
+import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.stemFor
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionReport
@@ -995,6 +998,21 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
     /** The listings the connected instrument offers; a single entry means no selector is shown. */
     fun browsingScopes(): List<PresetScope> = connected()?.browser?.scopes ?: listOf(PresetScope.USER)
 
+    /** The connected instrument's tagging facet, or null where it has none. */
+    val tagger: PresetTagger? get() = connected()?.tagger
+
+    /**
+     * Whether these two row actions should be offered for [address].
+     *
+     * Asked of the facet rather than derived from [readOnlyBanks], because on a Motif XS the two
+     * disagree: a factory voice can be favorited but not re-categorised.
+     */
+    fun canSetCategories(address: SlotAddress): Boolean =
+        tagger?.canSetCategories(address) == true
+
+    fun canSetFavorite(address: SlotAddress): Boolean =
+        tagger?.favorites != null && tagger?.canSetFavorite(address) == true
+
     /**
      * Bank label -> what the index rail should draw for it.
      *
@@ -1044,6 +1062,41 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
         refreshEdited(slot.address)
         str(R.string.result_renamed, slot.displayId, newName)
     }
+
+    /** What [slot] is filed under and whether it is a favorite, for the two tag dialogs. */
+    suspend fun presetTags(slot: PresetSlot): PresetTags = instrumentMutex.withLock {
+        requireFacet(current().tagger, "categorise presets").read(slot.address)
+    }
+
+    /**
+     * Files [slot] under the categories named by [under], or removes the favorite mark.
+     *
+     * **Drops the favorites listing rather than patching the row into it.** `refreshEdited` writes
+     * a re-read slot into every listing that *already holds* that address, which is exactly right
+     * for a rename and wrong here: favoriting a voice adds it to a listing it was absent from, and
+     * `PresetIndexState.replacing` is a no-op for an absent address rather than an insertion.
+     */
+    suspend fun setFavorite(slot: PresetSlot, under: Set<Int>): String = instrumentMutex.withLock {
+        requireFacet(current().tagger, "favorite presets").setFavorite(slot.address, under)
+        refreshEdited(slot.address)
+        _indexes.update { it - PresetScope.FAVORITES }
+        if (under.isEmpty()) str(R.string.result_favorite_cleared, slot.displayId)
+        else str(R.string.result_favorite_set, slot.displayId)
+    }
+
+    /** Replaces [slot]'s category assignments, nulls included. */
+    suspend fun setCategories(slot: PresetSlot, categories: List<CategoryRef?>): String =
+        instrumentMutex.withLock {
+            val tagger = requireFacet(current().tagger, "categorise presets")
+            tagger.setCategories(slot.address, categories)
+            refreshEdited(slot.address)
+            // A favorite is filed under the voice's own categories, so changing one moves where
+            // the instrument lists it - the same reason setFavorite drops that listing.
+            _indexes.update { it - PresetScope.FAVORITES }
+            val shown = categories.mapNotNull { ref -> ref?.let { tagger.taxonomy.label(it) } }
+            if (shown.isEmpty()) str(R.string.result_categories_cleared, slot.displayId)
+            else str(R.string.result_categories_set, slot.displayId, shown.joinToString(", "))
+        }
 
     /**
      * Duplicates [source] into the empty slot [destination], leaving [source] untouched.

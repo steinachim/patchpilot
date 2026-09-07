@@ -3,7 +3,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 import kotlinx.serialization.Serializable
 
 /**
- * The names of the instrument's 1,217 read-only voices, by bank and slot.
+ * The names and category assignments of the instrument's 1,217 read-only voices, by bank and slot.
  *
  * **Transcribed from Yamaha's own Data List, not read off the wire.** That is the whole point of
  * shipping it: the eleven factory banks never change, and reading them over MIDI costs about seven
@@ -17,6 +17,20 @@ import kotlinx.serialization.Serializable
  * fabricate. These are display strings the app never transmits. The failure mode of a wrong entry
  * here is a row with the wrong label on it, not a malformed write; and the browser says where the
  * names came from, so nobody is invited to believe the instrument was asked.
+ *
+ * **The categories are here for the same reason, and one more.** Reading them is cheap now (see
+ * [MotifXsVoice.categoriesOf]), but "cheap" still means a dump per voice, and the factory listing
+ * is built without asking the instrument anything at all - see `MotifXsInstrument.indexFactory`.
+ * Serving factory categories from this table is what keeps that true.
+ *
+ * They are stored **by name**, and turning a name into an index needs
+ * [MotifXsCategoryEncoding], which lives in the device catalog rather than here - it describes the
+ * instrument, not this list.
+ *
+ * **PREDR and GMDR carry none.** Yamaha's `drum_voice_list.xls` has no category columns at all, so
+ * the 65 drum kits are the one gap: the instrument holds their assignments and no published table
+ * does. They are left null rather than guessed. Filling them needs a bench session reading
+ * `--categories PREDR`/`GMDR`, which is recorded as a TODO in the reverse-engineering repo.
  *
  * Bank labels match `MotifXsBank.label` in the catalog, and `MotifXsFactoryVoicesTest` pins the two
  * together so a bank renamed in one and not the other fails the build rather than quietly listing
@@ -35,15 +49,15 @@ data class MotifXsFactoryVoices(
      * table that disagrees with the catalog about a slot count yields an unnamed row rather than an
      * exception.
      */
-    private val byLabel: Map<String, Array<String?>> by lazy {
+    private val byLabel: Map<String, Array<MotifXsFactoryVoice?>> by lazy {
         banks.associate { bank ->
-            val slots = arrayOfNulls<String>(bank.slotCount)
+            val slots = arrayOfNulls<MotifXsFactoryVoice>(bank.slotCount)
             for (voice in bank.voices) {
                 // 1-based in the Data List and in this file, 0-based everywhere in the app. The
                 // out-of-range guard is not decoration: it is the only thing standing between a
                 // mistyped slot number and an ArrayIndexOutOfBoundsException at connect time.
                 val index = voice.slot - 1
-                if (index in slots.indices) slots[index] = voice.name
+                if (index in slots.indices) slots[index] = voice
             }
             bank.label to slots
         }
@@ -53,10 +67,23 @@ data class MotifXsFactoryVoices(
     val isEmpty: Boolean get() = banks.isEmpty()
 
     /** The name at [slot0] of [bankLabel] (0-based), or null if this table does not carry one. */
-    fun name(bankLabel: String, slot0: Int): String? = byLabel[bankLabel]?.getOrNull(slot0)
+    fun name(bankLabel: String, slot0: Int): String? = voice(bankLabel, slot0)?.name
+
+    /**
+     * The assignments at [slot0] of [bankLabel] (0-based), **by name**.
+     *
+     * Empty for a voice this table has no categories for, which is every drum kit - see the class
+     * note. Resolving a name to an index is [MotifXsCategoryEncoding]'s job, since that is the
+     * instrument's format rather than this list's.
+     */
+    fun categories(bankLabel: String, slot0: Int): List<MotifXsFactoryCategory> =
+        voice(bankLabel, slot0)?.categories.orEmpty()
+
+    private fun voice(bankLabel: String, slot0: Int): MotifXsFactoryVoice? =
+        byLabel[bankLabel]?.getOrNull(slot0)
 }
 
-/** One factory bank's names. [slotCount] is carried so the table can be checked against the catalog. */
+/** One factory bank's voices. [slotCount] is carried so the table can be checked against the catalog. */
 @Serializable
 data class MotifXsFactoryBank(
     val label: String,
@@ -64,6 +91,20 @@ data class MotifXsFactoryBank(
     val voices: List<MotifXsFactoryVoice> = emptyList(),
 )
 
-/** One voice: its **1-based** slot within the bank, and its name. */
+/**
+ * One voice: its **1-based** slot within the bank, its name, and its category assignments.
+ *
+ * [categories] is null where the source table publishes none - every drum kit - and distinct from
+ * an empty list, which would claim the voice genuinely has no assignment. Nothing downstream needs
+ * to tell those apart today, but the file does, and flattening it here would throw that away.
+ */
 @Serializable
-data class MotifXsFactoryVoice(val slot: Int, val name: String)
+data class MotifXsFactoryVoice(
+    val slot: Int,
+    val name: String,
+    val categories: List<MotifXsFactoryCategory>? = null,
+)
+
+/** One assignment, by name. [sub] is null for "this main, no sub-category". */
+@Serializable
+data class MotifXsFactoryCategory(val main: String, val sub: String? = null)

@@ -104,6 +104,8 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
+import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 
 /**
  * The preset browser. Tapping a preset loads it. Long-pressing a preset's drag handle and dropping
@@ -273,6 +275,10 @@ fun ProgramsScreen(
     var blocked by remember { mutableStateOf<BlockedOperation?>(null) }
     var renameTarget by remember { mutableStateOf<PresetSlot?>(null) }
     var deleteTarget by remember { mutableStateOf<PresetSlot?>(null) }
+    // The two tag dialogs. Both carry the tags as read, not just the row: what the dialog offers
+    // depends on what the preset is already filed under, so it cannot open until that is known.
+    var favoriteTarget by remember { mutableStateOf<TagTarget?>(null) }
+    var categoriesTarget by remember { mutableStateOf<TagTarget?>(null) }
     // The row a "Copy to…" tap started from - non-null while the destination picker is open.
     var copySource by remember { mutableStateOf<PresetSlot?>(null) }
     var renameText by remember { mutableStateOf("") }
@@ -340,6 +346,8 @@ fun ProgramsScreen(
     // favorites listing mixes the two: a favorited factory voice and a favorited user voice sit
     // in the same list, and only one of them can be renamed.
     val readOnlyBanks = remember(session) { viewModel.readOnlyBanks() }
+    // Null where the instrument has no categories at all, which is what hides both row actions.
+    val tagger = remember(session) { viewModel.tagger }
 
     val hasReport = remember(session) { viewModel.hasReport }
     val isUnknownDevice = remember(session) { viewModel.isUnknownDevice }
@@ -567,7 +575,11 @@ fun ProgramsScreen(
          * move the thing the user is aiming at.
          */
         showProgress: Boolean = true,
-        block: suspend () -> String,
+        /**
+         * Returns the line the snackbar shows, or null where there is nothing to report - an
+         * operation whose whole result is a dialog that just opened, say.
+         */
+        block: suspend () -> String?,
     ) {
         val what = busyLabel.trimEnd('…', ' ')
         val failed = context.getString(R.string.programs_operation_failed, what)
@@ -652,6 +664,42 @@ fun ProgramsScreen(
         renameTarget = null
         runEdit(context.getString(R.string.programs_busy_renaming, slot.displayId)) {
             viewModel.renameProgram(slot, newName)
+        }
+    }
+
+    /**
+     * Reads a preset's tags, then opens the dialog that needs them.
+     *
+     * **Read before the dialog opens, not inside it.** A dialog that appears empty and fills in
+     * gives the user a moment where every box is unchecked, which is indistinguishable from "not
+     * a favorite" - and a tap in that moment writes that. Reading first costs at most one small
+     * dump, and `runEdit` already owns the busy line and the error path.
+     */
+    fun openTagDialog(slot: PresetSlot, forFavorite: Boolean) {
+        runEdit(
+            context.getString(R.string.programs_busy_reading_tags, slot.displayId),
+            reloadAfter = false,
+            showProgress = false,
+        ) {
+            val tags = viewModel.presetTags(slot)
+            val target = TagTarget(slot, tags)
+            if (forFavorite) favoriteTarget = target else categoriesTarget = target
+            // Nothing to report: the dialog that just opened is the result.
+            null
+        }
+    }
+
+    fun onFavoriteConfirmed(slot: PresetSlot, under: Set<Int>) {
+        favoriteTarget = null
+        runEdit(context.getString(R.string.programs_busy_favoriting, slot.displayId)) {
+            viewModel.setFavorite(slot, under)
+        }
+    }
+
+    fun onCategoriesConfirmed(slot: PresetSlot, categories: List<CategoryRef?>) {
+        categoriesTarget = null
+        runEdit(context.getString(R.string.programs_busy_categorising, slot.displayId)) {
+            viewModel.setCategories(slot, categories)
         }
     }
 
@@ -1076,12 +1124,18 @@ fun ProgramsScreen(
                                         // other, and picking a destination already moves to the
                                         // user banks, so a read-only source needs no special case.
                                         val rowCopy = canCopy
+                                        // Asked of the facet, not derived from `rowWritable`,
+                                        // because the two disagree: a Motif XS can favorite a
+                                        // factory voice but not re-categorise one.
+                                        val rowFavorite = viewModel.canSetFavorite(program.address)
+                                        val rowCategories =
+                                            viewModel.canSetCategories(program.address)
                                         // Hidden outright while picking, not merely disabled: none
-                                        // of rename/copy/delete applies to *any* row until the
-                                        // pick is resolved or cancelled, including the row being
-                                        // copied from.
+                                        // of these applies to *any* row until the pick is resolved
+                                        // or cancelled, including the row being copied from.
                                         if (pickingCopy || isEmpty ||
-                                            (!rowRename && !rowDelete && !rowCopy)
+                                            (!rowRename && !rowDelete && !rowCopy &&
+                                                !rowFavorite && !rowCategories)
                                         ) {
                                             null
                                         } else {
@@ -1096,6 +1150,8 @@ fun ProgramsScreen(
                                                 canRename = rowRename,
                                                 canCopy = rowCopy,
                                                 canDelete = rowDelete,
+                                                canSetFavorite = rowFavorite,
+                                                canSetCategories = rowCategories,
                                                 enabled = editsEnabled,
                                                 onRename = {
                                                     renameTarget = program
@@ -1103,6 +1159,12 @@ fun ProgramsScreen(
                                                 },
                                                 onCopy = { beginPicking(program) },
                                                 onDelete = { deleteTarget = program },
+                                                onSetFavorite = {
+                                                    openTagDialog(program, forFavorite = true)
+                                                },
+                                                onSetCategories = {
+                                                    openTagDialog(program, forFavorite = false)
+                                                },
                                             )
                                             }
                                         }
@@ -1323,7 +1385,50 @@ fun ProgramsScreen(
             onDismiss = { renameTarget = null },
         )
     }
+
+    // Both are guarded on `tagger` as well as on their target, because a disconnect between the
+    // read and the dialog opening would otherwise leave a dialog with no facet to save through.
+    tagger?.let { facet ->
+        favoriteTarget?.let { target ->
+            SetFavoriteDialog(
+                target = target.slot,
+                tags = target.tags,
+                taxonomy = facet.taxonomy,
+                onConfirm = { under -> onFavoriteConfirmed(target.slot, under) },
+                onDismiss = { favoriteTarget = null },
+                // The way out of "this preset has no categories, so it cannot be a favorite" -
+                // offered only where they can actually be set, which is not a factory bank.
+                onSetCategories = if (facet.canSetCategories(target.slot.address)) {
+                    {
+                        favoriteTarget = null
+                        categoriesTarget = target
+                    }
+                } else {
+                    null
+                },
+            )
+        }
+
+        categoriesTarget?.let { target ->
+            SetCategoriesDialog(
+                target = target.slot,
+                tags = target.tags,
+                taxonomy = facet.taxonomy,
+                assignmentCount = facet.assignmentCount,
+                onConfirm = { picked -> onCategoriesConfirmed(target.slot, picked) },
+                onDismiss = { categoriesTarget = null },
+            )
+        }
+    }
 }
+
+/**
+ * A row plus the tags read for it, which is what a tag dialog opens on.
+ *
+ * The tags travel with the row rather than being re-read by the dialog: see `openTagDialog` on why
+ * an empty dialog that fills in is the one shape this must not have.
+ */
+private data class TagTarget(val slot: PresetSlot, val tags: PresetTags)
 
 /**
  * Counts taps on the instrument name, and says when five of them have landed close enough
@@ -1454,9 +1559,13 @@ private fun RowActionsMenu(
     canRename: Boolean,
     canCopy: Boolean,
     canDelete: Boolean,
+    canSetFavorite: Boolean,
+    canSetCategories: Boolean,
     onRename: () -> Unit,
     onCopy: () -> Unit,
     onDelete: () -> Unit,
+    onSetFavorite: () -> Unit,
+    onSetCategories: () -> Unit,
     /** False while the listing is still arriving - see `editsEnabled` in ProgramsScreen. */
     enabled: Boolean = true,
 ) {
@@ -1486,6 +1595,19 @@ private fun RowActionsMenu(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_copy)) },
                     onClick = { expanded = false; onCopy() },
+                )
+            }
+            // Before Delete: these are ordinary edits, and the destructive item stays last.
+            if (canSetFavorite) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_set_favorite)) },
+                    onClick = { expanded = false; onSetFavorite() },
+                )
+            }
+            if (canSetCategories) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_set_categories)) },
+                    onClick = { expanded = false; onSetCategories() },
                 )
             }
             if (canDelete) {

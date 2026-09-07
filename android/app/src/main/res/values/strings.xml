@@ -28,6 +28,9 @@
     <string name="action_retry">Retry</string>
     <string name="action_delete">Delete</string>
     <string name="action_rename">Rename</string>
+    <string name="action_save">Save</string>
+    <string name="action_set_favorite">Set favorite</string>
+    <string name="action_set_categories">Set categories</string>
     <string name="action_copy">Copy to…</string>
     <string name="action_share">Share</string>
     <string name="action_clear_filter">Clear filter</string>
@@ -38,6 +41,7 @@
     <!-- Content descriptions: spoken by a screen reader, never shown. -->
     <string name="cd_back">Back</string>
     <string name="cd_refresh">Re-read from instrument</string>
+    <string name="cd_category_badge">Category %1$s</string>
     <string name="cd_row_options">Options for %1$s</string>
     <string name="cd_reorder">Reorder %1$s</string>
     <string name="cd_reorder_unavailable">Reordering is unavailable until the listing finishes</string>
@@ -100,9 +104,9 @@
     <string name="programs_scope_factory">Factory</string>
     <string name="programs_scope_favorites">Favorites</string>
     <string name="programs_scope_note_factory">Names come from the manufacturer\'s data list, not read from this instrument.</string>
-    <string name="programs_scope_note_favorites">Marked on the instrument. Patch Pilot only reads these.</string>
+    <string name="programs_scope_note_favorites">Marked on the instrument. Use Set favorite in a row menu to change one.</string>
     <string name="programs_no_favorites">Nothing is marked as a favorite on this instrument.</string>
-    <string name="programs_no_favorites_hint">Favorites are set on the instrument itself — on a Motif XS, hold [CATEGORY SEARCH] and use the [FAVORITE] bank. Pull down to re-read them.</string>
+    <string name="programs_no_favorites_hint">Mark one with Set favorite in a row menu, or on the instrument itself — on a Motif XS, hold [CATEGORY SEARCH] and use the [FAVORITE] bank. Pull down to re-read them.</string>
     <string name="programs_share_report">Share device details</string>
     <string name="share_reading_device">Reading device\u2026</string>
     <string name="programs_shared_as">Shared as %1$s.</string>
@@ -112,6 +116,24 @@
     <string name="programs_new_name">New name</string>
     <string name="programs_name_counter">%1$d / %2$d</string>
     <string name="programs_rename_title">Rename %1$s</string>
+
+    <!--
+      The two tag dialogs. A Motif XS voice carries two category assignments, and its favorite
+      flag names which of those the instrument's own browser files it under - so the favorite
+      dialog offers the voice's own categories and nothing else, and has something to say when
+      there are none to offer.
+    -->
+    <string name="programs_favorite_title">Set favorite — %1$s</string>
+    <string name="programs_favorite_body">Show this preset under:</string>
+    <string name="programs_favorite_slot">Category %1$d</string>
+    <string name="programs_favorite_clear_hint">Clearing every box removes the favorite.</string>
+    <string name="programs_favorite_none">This preset has no categories, and a favorite is filed under one of them. Set a category first.</string>
+    <string name="programs_favorite_unknown">Categories for this bank are not in the shipped list, so there is nothing to file a favorite under.</string>
+    <string name="programs_categories_title">Set categories — %1$s</string>
+    <string name="programs_categories_main">Category %1$d</string>
+    <string name="programs_categories_sub">Sub-category</string>
+    <string name="programs_categories_none">None</string>
+    <string name="programs_categories_no_sub">—</string>
     <string name="programs_delete_title">Delete %1$s?</string>
     <!--
       Two forms because a named preset and an empty slot warrant different
@@ -131,6 +153,9 @@
     <string name="programs_busy_selecting">Selecting %1$s\u2026</string>
     <string name="programs_busy_deleting">Deleting %1$s\u2026</string>
     <string name="programs_busy_renaming">Renaming %1$s\u2026</string>
+    <string name="programs_busy_favoriting">Setting the favorite for %1$s\u2026</string>
+    <string name="programs_busy_categorising">Setting the categories of %1$s\u2026</string>
+    <string name="programs_busy_reading_tags">Reading %1$s\u2026</string>
     <string name="programs_busy_copying">Copying %1$s to %2$s\u2026</string>
     <string name="programs_busy_moving">Moving %1$s to %2$s\u2026</string>
     <string name="programs_busy_swapping">Swapping %1$s and %2$s\u2026</string>
@@ -145,6 +170,10 @@
     <string name="result_moved">Moved %1$s to %2$s.</string>
     <string name="result_swapped">Swapped %1$s and %2$s.</string>
     <string name="result_renamed">Preset %1$s has been renamed to %2$s.</string>
+    <string name="result_favorite_set">%1$s is now a favorite.</string>
+    <string name="result_favorite_cleared">%1$s is no longer a favorite.</string>
+    <string name="result_categories_set">%1$s is now filed under %2$s.</string>
+    <string name="result_categories_cleared">%1$s no longer has a category.</string>
     <string name="result_copied">Copied %1$s to %2$s as \"%3$s\".</string>
     <string name="result_deleted">Preset %1$s has been deleted.</string>
 

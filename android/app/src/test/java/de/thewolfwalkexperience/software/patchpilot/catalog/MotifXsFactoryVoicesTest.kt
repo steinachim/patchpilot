@@ -1,6 +1,8 @@
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
+import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsCategories
+import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsCategoryEncoding
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsFactoryVoices
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsVoice
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.resolvedConfig
@@ -40,6 +42,9 @@ class MotifXsFactoryVoicesTest {
         )
     }
 
+    /** The family's category encoding, resolved the way the app resolves it. */
+    private fun encoding(): MotifXsCategoryEncoding? = motifXs6Config().categoryEncoding
+
     private fun motifXs6Config(): MotifXsConfig {
         val catalog = json.decodeFromString(
             FamilyCatalog.serializer(),
@@ -53,6 +58,94 @@ class MotifXsFactoryVoicesTest {
     fun `the table carries every factory voice`() {
         assertEquals(11, table.banks.size)
         assertEquals(1217, table.banks.sumOf { it.voices.size })
+    }
+
+    /**
+     * The category encoding is in the **device catalog**, not beside the voice names.
+     *
+     * It describes the instrument's format rather than the shipped list - a user voice is filed
+     * under the same categories a factory one is - so it belongs to `yamaha_motif_xs.json`.
+     *
+     * `NoAsg` has to be main **16**, because an unassigned slot serialises as the figure 256 in a
+     * voice dump and 256 is `16 * 16`. A table that listed fewer mains would decode every voice on
+     * the instrument one category to the left.
+     */
+    @Test
+    fun `the device catalog carries the category encoding`() {
+        val encoding = requireNotNull(encoding())
+        assertEquals(17, encoding.mainByValue.size)
+        assertEquals(
+            MotifXsCategoryEncoding.NO_ASSIGNMENT,
+            encoding.mainByValue[MotifXsCategories.NO_ASSIGNMENT_MAIN],
+        )
+        assertEquals(17, encoding.taxonomy.mains.size)
+    }
+
+    /** Every model of this family inherits it; none of the three carries its own copy. */
+    @Test
+    fun `every Motif XS model resolves the same encoding`() {
+        val catalog = json.decodeFromString(
+            FamilyCatalog.serializer(),
+            catalogDir.resolve("yamaha_motif_xs.json").readText(),
+        )
+        for (descriptor in catalog.devices) {
+            val config = resolvedConfig(catalog.familyConfig, descriptor.familyConfig, json)
+            assertEquals(
+                "${descriptor.id} should resolve the family's category encoding",
+                encoding(), config.categoryEncoding,
+            )
+        }
+    }
+
+    /**
+     * **Two mains have four sub-categories, not five**, which is what makes "no sub-category" a
+     * rule rather than a constant: it is one past the main's last sub, so 4 for these and 5 for
+     * the other fourteen. No factory voice has a `Bass` or `Dr/Pc` assignment without a sub, so
+     * nothing else in this build would notice the difference.
+     */
+    @Test
+    fun `Bass and Dr Pc have four sub-categories where the rest have five`() {
+        val taxonomy = requireNotNull(encoding()).taxonomy
+        val short = taxonomy.mains.filter { it.subs.size == 4 }.map { it.name }
+        assertEquals(listOf("Bass", "Dr/Pc"), short)
+        val full = taxonomy.mains.filter { it.subs.isNotEmpty() && it.subs.size != 4 }
+        assertTrue("every other main with subs has five", full.all { it.subs.size == 5 })
+    }
+
+    /**
+     * The sub-category order is a hardware measurement, and Yamaha's own voice list disagrees
+     * with it: `Brass` prints as `Orche, Solo, BrsEn` and indexes as `Solo, BrsEn, Orche`.
+     * Pinned because "correcting" it to match the printed list looks right and is wrong.
+     */
+    @Test
+    fun `the measured sub-category order is kept, not the printed one`() {
+        val brass = requireNotNull(encoding()).taxonomy.mains.first { it.name == "Brass" }
+        assertEquals(listOf("Solo", "BrsEn", "Orche", "Synth", "Arp"), brass.subs)
+    }
+
+    /**
+     * Every factory category names something the encoding lists, and the normal banks all have
+     * one - the two drum banks are the documented gap, since Yamaha publishes no drum categories.
+     */
+    @Test
+    fun `every factory category resolves, and only the drum banks have none`() {
+        val taxonomy = requireNotNull(encoding()).taxonomy
+        val withoutCategories = table.banks.filter { bank ->
+            bank.voices.any { table.categories(bank.label, it.slot - 1).isEmpty() }
+        }.map { it.label }
+        assertEquals(listOf("PREDR", "GMDR"), withoutCategories)
+
+        for (bank in table.banks) {
+            for (voice in bank.voices) {
+                val listed = voice.categories.orEmpty()
+                val resolved = MotifXsCategories.refsOf(listed, encoding())
+                assertEquals(
+                    "${bank.label}:${voice.slot} ${voice.name} has an unresolvable category",
+                    listed.size, resolved.size,
+                )
+                assertTrue(resolved.all { taxonomy.label(it) != null })
+            }
+        }
     }
 
     /**

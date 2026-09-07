@@ -30,6 +30,15 @@ interface Instrument {
     val report: DeviceReporter?
 
     /**
+     * Categories and favorites - see [PresetTagger]. Null where the family does neither.
+     *
+     * Abstract like the four above it rather than defaulted to null, for the reason this file
+     * gives everywhere else: a facet nobody is made to look at is a facet a new family forgets it
+     * could have offered.
+     */
+    val tagger: PresetTagger?
+
+    /**
      * Something the user must be told before using this instrument, or null where all is well.
      *
      * **Usable but not vouched for.** Set during [connect] by a family that got far enough to talk

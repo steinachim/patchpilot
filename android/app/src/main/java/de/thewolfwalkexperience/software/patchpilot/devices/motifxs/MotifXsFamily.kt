@@ -14,6 +14,9 @@ import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbMidiBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.transportScope
 import kotlinx.coroutines.CoroutineScope
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
+import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -128,7 +131,54 @@ data class MotifXsConfig(
      * instrument answers others is untested. */
     val deviceNumber: Int = 0,
     val banks: List<MotifXsBank> = emptyList(),
+    /**
+     * How this instrument encodes a voice's category assignments.
+     *
+     * **A property of the instrument, so it lives here** rather than beside the factory voice
+     * names: a user voice is filed under the same categories a factory one is, and the encoding
+     * describes the format rather than the shipped list. Null in a catalog that does not carry it,
+     * which is what leaves the app without a tagging facet at all.
+     */
+    val categoryEncoding: MotifXsCategoryEncoding? = null,
 )
+
+/**
+ * How the four category bytes at `0x18`-`0x1B` of a voice's Common block encode two assignments.
+ *
+ * Ships as catalog data rather than as Kotlin constants because it is per-family *data*, and
+ * because the sub-category order is a hardware measurement that Yamaha's own published voice list
+ * contradicts - `Brass` prints as `Orche, Solo, BrsEn` and indexes as `Solo, BrsEn, Orche`.
+ *
+ * The JSON also carries `mainSource`, `subSource` and `subNoAssignmentRule`: prose explaining
+ * where each half came from. They are not decoded here, and they are why the file is worth reading
+ * before anyone changes this table.
+ */
+@Serializable
+data class MotifXsCategoryEncoding(
+    /** Main category by byte value, index 0 up. The last entry is `NoAsg`, meaning unassigned. */
+    val mainByValue: List<String> = emptyList(),
+    /** Sub-categories by byte value, keyed by main-category name. */
+    val subByValuePerMain: Map<String, List<String>> = emptyMap(),
+) {
+    /** The taxonomy as everything above wants it: by index, in the main table's own order. */
+    val taxonomy: CategoryTaxonomy by lazy {
+        CategoryTaxonomy(
+            mainByValue.map { name -> MainCategory(name, subByValuePerMain[name].orEmpty()) },
+        )
+    }
+
+    /** The index of one assignment's main and sub by name, or null where the table lacks it. */
+    fun refOf(main: String, sub: String?): CategoryRef? {
+        val mainIndex = mainByValue.indexOf(main).takeIf { it >= 0 } ?: return null
+        val subs = subByValuePerMain[main].orEmpty()
+        return CategoryRef(mainIndex, sub?.let { subs.indexOf(it).takeIf { i -> i >= 0 } })
+    }
+
+    companion object {
+        /** The main-category name this table uses for "no assignment". */
+        const val NO_ASSIGNMENT = "NoAsg"
+    }
+}
 
 /**
  * A device's [MotifXsConfig], with [MotifXsConfig.banks] filled in from the catalog's shared
@@ -148,9 +198,13 @@ internal fun resolvedConfig(
     format: Json,
 ): MotifXsConfig {
     val own = format.decodeFromJsonElement(MotifXsConfig.serializer(), deviceFamilyConfig)
-    if (own.banks.isNotEmpty()) return own
     val shared = format.decodeFromJsonElement(MotifXsConfig.serializer(), catalogFamilyConfig)
-    return own.copy(banks = shared.banks)
+    // Per field, not all-or-nothing: a device that overrides its bank table still inherits the
+    // family's category encoding, which is the same silicon whatever the memory map looks like.
+    return own.copy(
+        banks = own.banks.ifEmpty { shared.banks },
+        categoryEncoding = own.categoryEncoding ?: shared.categoryEncoding,
+    )
 }
 
 /**

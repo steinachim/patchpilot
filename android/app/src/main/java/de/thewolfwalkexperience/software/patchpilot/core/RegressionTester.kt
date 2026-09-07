@@ -84,6 +84,7 @@ class RegressionTester(
         "Edits presets" to instrument.editor,
         "Reads and writes preset data" to instrument.transfer,
         "Describes itself" to instrument.report,
+        "Categorises and favorites presets" to instrument.tagger,
     ).map { (what, facet) ->
         if (facet != null) {
             RegressionResult("Offers: $what", Status.PASS, "declared by this instrument")

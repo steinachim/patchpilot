@@ -15,6 +15,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.slugifyDeviceId
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
+import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
@@ -83,6 +84,13 @@ class NordInstrument(
     override val browser: PresetBrowser get() = this
     override val selector: PresetSelector get() = this
     override val editor: PresetEditor get() = this
+    /**
+     * A Nord program does carry a category tag, but no opcode this app knows reads or writes
+     * one - `DeviceProfile.programCategoryIds` is still unused. When that lands this becomes a
+     * real [PresetTagger] with a flat taxonomy and no favorites.
+     */
+    override val tagger: PresetTagger? = null
+
     override val report: DeviceReporter get() = this
 
     /** Nothing about a Nord needs the user to fill it in: everything is read from the instrument

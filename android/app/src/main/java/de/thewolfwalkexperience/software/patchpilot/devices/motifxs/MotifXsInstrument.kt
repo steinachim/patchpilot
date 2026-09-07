@@ -3,6 +3,8 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.AddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.BankSpec
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
@@ -14,6 +16,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
+import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
@@ -125,6 +128,16 @@ class MotifXsInstrument(
     // Not implemented for this instrument; see the class doc.
     override val transfer: PresetTransfer? = null
     override val report: DeviceReporter? = null
+
+    /**
+     * Categories and favorites.
+     *
+     * **Null where the shipped catalog carries no category encoding**, rather than a facet that
+     * offers an empty list of categories and refuses every write. That encoding is what names the
+     * byte values in both directions, so without it there is nothing this could honestly do.
+     */
+    override val tagger: PresetTagger? =
+        config.categoryEncoding?.let { MotifXsTagger(this, config, it, factoryVoices) }
 
     /**
      * Reads the identity reply, and refuses the session if the instrument answers nothing at all.
@@ -273,7 +286,6 @@ class MotifXsInstrument(
                 "A Motif XS voice name can only hold plain ASCII characters."
             }
 
-            val bank = config.banks[address.bank]
             val where = layout.format.format(address)
 
             // Refused, for the same reason `copyProgram` refuses an empty source. An empty slot
@@ -281,55 +293,24 @@ class MotifXsInstrument(
             // *succeed* - and leave a named voice with nothing in it, which is not what anyone
             // means by "rename". The browser hides empty slots by default, so it would also be
             // an edit whose result the user could not see.
-            val previousName = MotifXsVoice.nameOf(readPayload(address))
+            val previousName = MotifXsVoice.nameOf(readVoicePayload(address))
                 ?: throw InstrumentException.NotSupported("rename an empty slot")
 
-            val blocks = readStoredVoice(address)
-
-            // Rebuilt, never echoed: the instrument sends model 0x0B and the host must send 0x03,
-            // and the checksum covers that byte. The header and footer are ours, addressed at the
-            // destination; only the blocks between them come off the instrument.
-            val body = blocks
-                .filter { !isHeaderOrFooter(it) }
-                .map { block ->
-                    if (MotifXsSysEx.isCommonBlock(block)) renamedCommonBlock(block, trimmed)
-                    else MotifXsSysEx.rebuildForHost(config.deviceNumber, block)
+            editCommonBlock(address, "renaming $where", "rename of $where") { payload ->
+                check(payload.size >= MotifXsVoice.NAME_LENGTH) {
+                    "the Common block is ${payload.size} bytes, too short to hold a name"
                 }
-            // **No expected block count.** A Normal Voice is 24 blocks and a Drum Voice is 81,
-            // and hard-coding either is what used to refuse the other. The shape comes from the
-            // instrument and every byte but the name goes straight back, so the checks that
-            // matter are about integrity rather than about recognising a layout: a header and a
-            // footer arrived, every block is well-formed, and exactly one Common block is
-            // present to patch. Those hold whatever the instrument sent.
-            check(body.isNotEmpty()) { "the documented read of $where carried no blocks" }
-
-            val sequence = buildList {
-                add(MotifXsSysEx.bulkHeader(config.deviceNumber, bank.addressMid, address.slot))
-                addAll(body)
-                add(MotifXsSysEx.bulkFooter(config.deviceNumber, bank.addressMid, address.slot))
-            }
-            try {
-                exchange.exchangeAfterAll(
-                    messages = sequence,
-                    what = "renaming $where",
-                    timeout = SEQUENCE_TIMEOUT,
-                    gap = BLOCK_GAP,
-                ) { MotifXsSysEx.isAck(it) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                throw IllegalStateException(
-                    "The instrument did not acknowledge the rename of $where. The sequence was " +
-                        "sent whole, so it has either been stored or refused outright - the " +
-                        "instrument's own screen says which. Re-read the bank before trusting " +
-                        "what the app shows.",
-                    e,
-                )
+                // Padded with NUL rather than space, which is what the instrument itself does and
+                // what revision C0 of the Data List permits - revision B0 says otherwise and is
+                // wrong.
+                for (i in 0 until MotifXsVoice.NAME_LENGTH) {
+                    payload[i] = if (i < trimmed.length) trimmed[i].code.toByte() else 0
+                }
             }
 
             // Read back through `0C`, the path the browser itself lists with, so what is verified
             // is what the user will see rather than what was just written.
-            val stored = MotifXsVoice.nameOf(readPayload(address))
+            val stored = MotifXsVoice.nameOf(readVoicePayload(address))
             check(stored == trimmed) {
                 "renamed $where but it reads back as ${stored ?: "empty"}"
             }
@@ -365,64 +346,8 @@ class MotifXsInstrument(
             }
         }
 
-        /** Header and footer bracket the sequence and carry the slot; the blocks do not. */
-        private fun isHeaderOrFooter(message: ByteArray): Boolean =
-            MotifXsSysEx.addressOf(message)?.first
-                .let { it == MotifXsSysEx.BULK_HEADER_HI || it == MotifXsSysEx.BULK_FOOTER_HI }
 
-        /**
-         * The Common block with its first 20 bytes replaced by [name], NUL padded.
-         *
-         * Padding is NUL rather than space, which is what the instrument itself does and what
-         * revision C0 of the Data List permits - revision B0 says otherwise and is wrong.
-         */
-        private fun renamedCommonBlock(block: ByteArray, name: String): ByteArray {
-            // Re-addressed to whichever Common block this is - 40 00 00 for a Normal Voice,
-            // 46 00 00 for a Drum. Rebuilding it at a fixed address would send a drum kit's
-            // Common to a normal voice's address.
-            val (hi, mid, lo) = MotifXsSysEx.addressOf(block)
-                ?: error("the Common block carries no address")
-            val payload = MotifXsSysEx.dumpPayload(block).copyOf()
-            check(payload.size >= MotifXsVoice.NAME_LENGTH) {
-                "the Common block is ${payload.size} bytes, too short to hold a name"
-            }
-            for (i in 0 until MotifXsVoice.NAME_LENGTH) {
-                payload[i] = if (i < name.length) name[i].code.toByte() else 0
-            }
-            return MotifXsSysEx.bulkDump(config.deviceNumber, hi, mid, lo, payload)
-        }
 
-        /**
-         * The documented read: one request, 26 messages back, ending at the footer.
-         *
-         * Every block is checked for structural soundness before any of it is sent back, because
-         * this is the only place a rename can still be aborted safely - once the header goes out
-         * the instrument is committed to receiving a sequence (see [SysExExchange.exchangeAfterAll]).
-         */
-        private suspend fun readStoredVoice(address: SlotAddress): List<ByteArray> {
-            val bank = config.banks[address.bank]
-            val where = layout.format.format(address)
-            val blocks = exchange.exchangeSequence(
-                request = MotifXsSysEx.requestStoredVoice(
-                    config.deviceNumber, bank.addressMid, address.slot,
-                ),
-                what = "reading $where by its documented address",
-                timeout = SEQUENCE_TIMEOUT,
-                accept = { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP },
-            ) { MotifXsSysEx.isBulkFooter(it) }
-
-            check(blocks.isNotEmpty() && blocks.all { MotifXsSysEx.isWellFormedBulkDump(it) }) {
-                "the documented read of $where came back damaged; refusing to write it back"
-            }
-            // Exactly one, because that is what the name patch assumes. "At least one" would
-            // let an unrecognised sequence through and rename only the first block of it.
-            check(blocks.count { MotifXsSysEx.isCommonBlock(it) } == 1) {
-                "the documented read of $where carried " +
-                    "${blocks.count { MotifXsSysEx.isCommonBlock(it) }} Common blocks; expected " +
-                    "exactly one, so there is no single name to patch"
-            }
-            return blocks
-        }
 
         /**
          * Erases a slot by writing an initialised voice over it.
@@ -453,8 +378,8 @@ class MotifXsInstrument(
             requireWritable(b)
             requireSameKind(a, b)
             if (a == b) return
-            val payloadA = readPayload(a)
-            val payloadB = readPayload(b)
+            val payloadA = readVoicePayload(a)
+            val payloadB = readVoicePayload(b)
             write(a, payloadB)
             write(b, payloadA)
             commit()
@@ -485,14 +410,14 @@ class MotifXsInstrument(
             requireSameKind(src, dst)
             if (src == dst) throw InstrumentException.NotSupported("copy a voice onto itself")
 
-            val payload = readPayload(src)
+            val payload = readVoicePayload(src)
             val name = MotifXsVoice.nameOf(payload)
                 ?: throw InstrumentException.NotSupported("copy an empty slot")
 
             // Refused, not overwritten. The contract says "into the empty slot dst"; composed
             // host-side, nothing enforces that unless this does, and the instrument certainly
             // will not - a well-formed dump to an occupied writable slot is simply accepted.
-            if (MotifXsVoice.nameOf(readPayload(dst)) != null) {
+            if (MotifXsVoice.nameOf(readVoicePayload(dst)) != null) {
                 throw InstrumentException.NotSupported("copy onto an occupied slot")
             }
 
@@ -520,7 +445,7 @@ class MotifXsInstrument(
             requireWritable(to)
             requireSameKind(from, to)
             if (from == to) return
-            val payload = readPayload(from)
+            val payload = readVoicePayload(from)
             // Sourced before the first write, so a bank with no blank to copy fails before
             // anything has been changed rather than after the destination is already written.
             val blank = blankPayloadFor(from.bank)
@@ -558,31 +483,7 @@ class MotifXsInstrument(
             )
         }
 
-        private fun requireWritable(address: SlotAddress) {
-            val bank = config.banks.getOrNull(address.bank) ?: error("No bank ${address.bank}")
-            require(!bank.readOnly) {
-                "${bank.displayLabel.ifEmpty { bank.label }} is a factory bank and cannot be written."
-            }
-        }
 
-        private suspend fun readPayload(address: SlotAddress): ByteArray {
-            val bank = config.banks[address.bank]
-            val reply = exchange.exchange(
-                request = MotifXsSysEx.requestDump(
-                    config.deviceNumber, bank.addressHi, bank.addressMid, address.slot,
-                ),
-                what = "reading ${layout.format.format(address)}",
-                timeout = VOICE_TIMEOUT,
-                // Well-formedness is part of the match here too, so a truncated dump is retried
-                // rather than accepted and then rejected - see readSlot. It matters more on this
-                // path than on the browser's: these bytes get written straight back to the
-                // instrument, so "damaged" would mean writing damage.
-            ) { m ->
-                MotifXsSysEx.typeOf(m) == MotifXsSysEx.TYPE_BULK_DUMP &&
-                    MotifXsSysEx.isWellFormedBulkDump(m)
-            }
-            return MotifXsSysEx.dumpPayload(reply)
-        }
 
         /**
          * An initialised-voice payload to write over a cleared slot, per kind of voice.
@@ -668,11 +569,230 @@ class MotifXsInstrument(
 
         /** Reads a slot back and insists it holds what was written. */
         private suspend fun verify(address: SlotAddress, payload: ByteArray) {
-            val readBack = readPayload(address)
+            val readBack = readVoicePayload(address)
             check(readBack.contentEquals(payload)) {
                 "wrote ${layout.format.format(address)} but read back something different " +
                     "(${payload.size} bytes out, ${readBack.size} back)"
             }
+        }
+    }
+
+    // ---- The documented write path ----
+
+    /*
+     * These sit on the instrument rather than inside the editor because a rename and a
+     * category change are the same write with a different patch: the hazards belong to
+     * the path, not to either caller.
+     */
+
+    /**
+     * Yamaha's documented write path, with [patch] applied to the voice's Common block.
+     *
+     * **The one place this app writes a stored voice by the documented route**, shared by
+     * [MotifXsEditor.rename] and by [MotifXsTagger.setCategories], which differ only in which
+     * bytes of the Common block they change - the name at `0x00`-`0x13`, or the categories at
+     * `0x18`-`0x1B`. Both carry exactly the same hazards, so both get exactly the same checks;
+     * two copies of this would have been two places to get the footer wrong.
+     *
+     * The sequence is: read the stored voice at Bulk Header `0E mm nn`, patch the Common block,
+     * and send every block back between a header and a **footer**, which is what saves to Flash
+     * ROM. No store marker - that belongs to the `0C` path.
+     *
+     * [busyWhat] is the present participle the exchange logs ("renaming USER 1 - A:16"), and
+     * [failedWhat] the noun phrase the failure message is built from ("rename of USER 1 - A:16").
+     *
+     * @param patch mutates the Common block's payload in place, on a copy. It cannot change the
+     *   block's length, which is what keeps every block going back at the size it arrived.
+     */
+    private suspend fun editCommonBlock(
+        address: SlotAddress,
+        busyWhat: String,
+        failedWhat: String,
+        patch: (ByteArray) -> Unit,
+    ) {
+        val bank = config.banks[address.bank]
+        val where = layout.format.format(address)
+        val blocks = readStoredVoice(address)
+
+        // Rebuilt, never echoed: the instrument sends model 0x0B and the host must send 0x03,
+        // and the checksum covers that byte. The header and footer are ours, addressed at the
+        // destination; only the blocks between them come off the instrument.
+        val body = blocks
+            .filter { !isHeaderOrFooter(it) }
+            .map { block ->
+                if (MotifXsSysEx.isCommonBlock(block)) patchedCommonBlock(block, patch)
+                else MotifXsSysEx.rebuildForHost(config.deviceNumber, block)
+            }
+        // **No expected block count.** A Normal Voice is 24 blocks and a Drum Voice is 81, and
+        // hard-coding either is what used to refuse the other. The shape comes from the
+        // instrument and every byte but the patched ones goes straight back, so the checks that
+        // matter are about integrity rather than about recognising a layout: a header and a
+        // footer arrived, every block is well-formed, and exactly one Common block is present to
+        // patch. Those hold whatever the instrument sent.
+        check(body.isNotEmpty()) { "the documented read of $where carried no blocks" }
+
+        val sequence = buildList {
+            add(MotifXsSysEx.bulkHeader(config.deviceNumber, bank.addressMid, address.slot))
+            addAll(body)
+            add(MotifXsSysEx.bulkFooter(config.deviceNumber, bank.addressMid, address.slot))
+        }
+        try {
+            exchange.exchangeAfterAll(
+                messages = sequence,
+                what = busyWhat,
+                timeout = SEQUENCE_TIMEOUT,
+                gap = BLOCK_GAP,
+            ) { MotifXsSysEx.isAck(it) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw IllegalStateException(
+                "The instrument did not acknowledge the $failedWhat. The sequence was sent " +
+                    "whole, so it has either been stored or refused outright - the instrument's " +
+                    "own screen says which. Re-read the bank before trusting what the app shows.",
+                e,
+            )
+        }
+    }
+
+    /** The Common block with [patch] applied to a copy of its payload. */
+    private fun patchedCommonBlock(block: ByteArray, patch: (ByteArray) -> Unit): ByteArray {
+        // Re-addressed to whichever Common block this is - 40 00 00 for a Normal Voice,
+        // 46 00 00 for a Drum. Rebuilding it at a fixed address would send a drum kit's Common
+        // to a normal voice's address.
+        val (hi, mid, lo) = MotifXsSysEx.addressOf(block)
+            ?: error("the Common block carries no address")
+        // In place, on a copy: a ByteArray cannot be resized, so a patch has no way to change
+        // the block's length even by mistake.
+        val payload = MotifXsSysEx.dumpPayload(block).copyOf()
+        patch(payload)
+        return MotifXsSysEx.bulkDump(config.deviceNumber, hi, mid, lo, payload)
+    }
+
+    internal suspend fun readVoicePayload(address: SlotAddress): ByteArray {
+        val bank = config.banks[address.bank]
+        val reply = exchange.exchange(
+            request = MotifXsSysEx.requestDump(
+                config.deviceNumber, bank.addressHi, bank.addressMid, address.slot,
+            ),
+            what = "reading ${layout.format.format(address)}",
+            timeout = VOICE_TIMEOUT,
+            // Well-formedness is part of the match here too, so a truncated dump is retried
+            // rather than accepted and then rejected - see readSlot. It matters more on this
+            // path than on the browser's: these bytes get written straight back to the
+            // instrument, so "damaged" would mean writing damage.
+        ) { m ->
+            MotifXsSysEx.typeOf(m) == MotifXsSysEx.TYPE_BULK_DUMP &&
+                MotifXsSysEx.isWellFormedBulkDump(m)
+        }
+        return MotifXsSysEx.dumpPayload(reply)
+    }
+
+    /** Header and footer bracket the sequence and carry the slot; the blocks do not. */
+    private fun isHeaderOrFooter(message: ByteArray): Boolean =
+        MotifXsSysEx.addressOf(message)?.first
+            .let { it == MotifXsSysEx.BULK_HEADER_HI || it == MotifXsSysEx.BULK_FOOTER_HI }
+
+    /**
+     * The documented read: one request, 26 messages back, ending at the footer.
+     *
+     * Every block is checked for structural soundness before any of it is sent back, because
+     * this is the only place a rename can still be aborted safely - once the header goes out
+     * the instrument is committed to receiving a sequence (see [SysExExchange.exchangeAfterAll]).
+     */
+    private suspend fun readStoredVoice(address: SlotAddress): List<ByteArray> {
+        val bank = config.banks[address.bank]
+        val where = layout.format.format(address)
+        val blocks = exchange.exchangeSequence(
+            request = MotifXsSysEx.requestStoredVoice(
+                config.deviceNumber, bank.addressMid, address.slot,
+            ),
+            what = "reading $where by its documented address",
+            timeout = SEQUENCE_TIMEOUT,
+            accept = { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP },
+        ) { MotifXsSysEx.isBulkFooter(it) }
+
+        check(blocks.isNotEmpty() && blocks.all { MotifXsSysEx.isWellFormedBulkDump(it) }) {
+            "the documented read of $where came back damaged; refusing to write it back"
+        }
+        // Exactly one, because that is what the name patch assumes. "At least one" would
+        // let an unrecognised sequence through and rename only the first block of it.
+        check(blocks.count { MotifXsSysEx.isCommonBlock(it) } == 1) {
+            "the documented read of $where carried " +
+                "${blocks.count { MotifXsSysEx.isCommonBlock(it) }} Common blocks; expected " +
+                "exactly one, so there is no single name to patch"
+        }
+        return blocks
+    }
+
+    private fun requireWritable(address: SlotAddress) {
+        val bank = config.banks.getOrNull(address.bank) ?: error("No bank ${address.bank}")
+        require(!bank.readOnly) {
+            "${bank.displayLabel.ifEmpty { bank.label }} is a factory bank and cannot be written."
+        }
+    }
+
+    // ---- Tagging support ----
+
+    /** The address as the browser writes it, e.g. `USER 1 - A:16`. */
+    internal fun describe(address: SlotAddress): String = layout.format.format(address)
+
+    /**
+     * Writes the four category bytes of a stored voice, by the documented path.
+     *
+     * [bytes] is `main1, sub1, main2, sub2`, the layout at `0x18`-`0x1B` of the voice's Common
+     * block. Refuses a factory bank for the same reason a rename does: these bytes are inside the
+     * voice, so setting one in a PRE bank means rewriting a factory voice.
+     */
+    internal suspend fun editStoredCategories(address: SlotAddress, bytes: List<Int>) {
+        requireWritable(address)
+        val where = describe(address)
+        require(bytes.size == MotifXsSysEx.CATEGORY_LENGTH) {
+            "a Motif XS voice has ${MotifXsSysEx.CATEGORY_LENGTH} category bytes, not ${bytes.size}"
+        }
+        require(bytes.all { it in 0..0x7F }) { "a category byte has to fit in seven bits" }
+        editCommonBlock(
+            address,
+            "setting the categories of $where",
+            "category change of $where",
+        ) { payload ->
+            check(payload.size >= MotifXsSysEx.CATEGORY_OFFSET + MotifXsSysEx.CATEGORY_LENGTH) {
+                "the Common block is ${payload.size} bytes, too short to hold its categories"
+            }
+            bytes.forEachIndexed { i, value ->
+                payload[MotifXsSysEx.CATEGORY_OFFSET + i] = value.toByte()
+            }
+        }
+    }
+
+    /** One bank's favorite marks - see [readFavoriteMarks]. */
+    internal suspend fun readFavoriteTable(spec: MotifXsBank): ByteArray =
+        readFavoriteMarks(spec, spec.displayLabel.ifEmpty { spec.label })
+
+    /**
+     * Writes one bank's whole favorite table and waits for the instrument to apply it.
+     *
+     * **Polled, not slept through.** The write is acknowledged at once and applied a moment
+     * later, so the obvious read-back straight after the ack returns the *old* table and reports
+     * a working write as a no-op. This re-reads until the table matches or [FAVORITE_SETTLE] is
+     * up. No store marker: see [MotifXsSysEx.writeFavorites].
+     */
+    internal suspend fun writeFavoriteTable(spec: MotifXsBank, table: ByteArray) {
+        val label = spec.displayLabel.ifEmpty { spec.label }
+        exchange.exchange(
+            request = MotifXsSysEx.writeFavorites(config.deviceNumber, spec.addressMid, table),
+            what = "setting $label's favorite marks",
+            timeout = WRITE_TIMEOUT,
+        ) { MotifXsSysEx.isAck(it) }
+
+        val settled = withTimeoutOrNull(FAVORITE_SETTLE) {
+            while (!readFavoriteMarks(spec, label).contentEquals(table)) delay(FAVORITE_POLL)
+            true
+        }
+        // The write *was* acknowledged, so this is not "it failed" - it is "it has not shown up
+        // yet", which is a different thing to tell the user and the only honest one available.
+        check(settled == true) {
+            "$label's favorite marks were acknowledged but had not applied after $FAVORITE_SETTLE"
         }
     }
 
@@ -936,10 +1056,17 @@ class MotifXsInstrument(
      * to appear as they arrive, and an unreadable voice has to cost only itself rather than the
      * minute already spent.
      */
-    override fun index(scope: PresetScope): Flow<IndexUpdate> = when (scope) {
-        PresetScope.USER -> indexUser()
-        PresetScope.FACTORY -> indexFactory()
-        PresetScope.FAVORITES -> indexFavorites()
+    override fun index(scope: PresetScope): Flow<IndexUpdate> {
+        // A listing is the app's "re-read the instrument" gesture, and the favorite marks are the
+        // one thing here a *player* can change behind its back - from the front panel, mid-session.
+        // Dropping the cache here is what makes pull-to-refresh mean what it says for the tag
+        // dialogs too, rather than only for the rows.
+        (tagger as? MotifXsTagger)?.invalidate()
+        return when (scope) {
+            PresetScope.USER -> indexUser()
+            PresetScope.FACTORY -> indexFactory()
+            PresetScope.FAVORITES -> indexFavorites()
+        }
     }
 
     private fun indexUser(): Flow<IndexUpdate> = flow {
@@ -984,15 +1111,7 @@ class MotifXsInstrument(
         val slots = config.banks.withIndex()
             .filter { (_, spec) -> spec.readOnly }
             .flatMap { (bank, spec) ->
-                (0 until spec.slotCount).map { slot ->
-                    val address = SlotAddress(bank, slot)
-                    PresetSlot(
-                        address = address,
-                        displayId = layout.format.format(address),
-                        bankLabel = spec.displayLabel.ifEmpty { spec.label },
-                        name = factoryVoices.name(spec.label, slot),
-                    )
-                }
+                (0 until spec.slotCount).map { slot -> factorySlot(spec, SlotAddress(bank, slot)) }
             }
         emit(IndexUpdate.Slots(slots))
         emit(IndexUpdate.Complete)
@@ -1042,12 +1161,7 @@ class MotifXsInstrument(
                 val address = SlotAddress(bank, slot)
                 val displayId = layout.format.format(address)
                 if (spec.readOnly) {
-                    batch += PresetSlot(
-                        address = address,
-                        displayId = displayId,
-                        bankLabel = label,
-                        name = factoryVoices.name(spec.label, slot),
-                    )
+                    batch += factorySlot(spec, address)
                 } else {
                     try {
                         batch += readSlot(address, displayId)
@@ -1106,8 +1220,19 @@ class MotifXsInstrument(
         return MotifXsSysEx.dumpPayload(reply)
     }
 
-    override suspend fun refresh(address: SlotAddress): PresetSlot =
-        readSlot(address, layout.format.format(address))
+    /**
+     * Re-reads one row after an edit.
+     *
+     * **A factory row is rebuilt from the table, not dumped.** Nothing used to arrive here with a
+     * read-only address, because no edit could target one; favoriting a factory voice can. Its
+     * name and categories cannot have changed anyway - only the mark did, and the mark is not
+     * carried on the row.
+     */
+    override suspend fun refresh(address: SlotAddress): PresetSlot {
+        val spec = config.banks[address.bank]
+        if (spec.readOnly) return factorySlot(spec, address)
+        return readSlot(address, layout.format.format(address))
+    }
 
     private suspend fun readSlot(address: SlotAddress, displayId: String): PresetSlot {
         val bank = config.banks[address.bank]
@@ -1154,6 +1279,7 @@ class MotifXsInstrument(
             throw e
         }
 
+        val payload = MotifXsSysEx.dumpPayload(reply)
         return PresetSlot(
             address = address,
             displayId = displayId,
@@ -1161,8 +1287,46 @@ class MotifXsInstrument(
             // browser's only sources of rows and it groups by this string, so if they disagree
             // every bank gets two headers - one for the indexed rows, one for the placeholders.
             bankLabel = bank.displayLabel.ifEmpty { bank.label },
-            name = MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(reply)),
+            name = MotifXsVoice.nameOf(payload),
+            // Free: the categories sit in front of the name in the bytes this dump already
+            // carried - see [MotifXsVoice.categoriesOf]. No extra round trip on a listing.
+            badges = categoryBadges(MotifXsVoice.categoriesOf(payload)),
         )
+    }
+
+    /**
+     * A row for a factory slot, built entirely from the shipped table. **No round trips.**
+     *
+     * The one place a factory row is made, so the rule that a factory voice is never dumped holds
+     * by construction rather than by three call sites remembering it - [indexFactory],
+     * [indexFavorites] and [refresh] all come here.
+     */
+    private fun factorySlot(spec: MotifXsBank, address: SlotAddress): PresetSlot = PresetSlot(
+        address = address,
+        displayId = layout.format.format(address),
+        bankLabel = spec.displayLabel.ifEmpty { spec.label },
+        name = factoryVoices.name(spec.label, address.slot),
+        // Empty for the two factory drum banks: Yamaha's drum voice list publishes no categories
+        // at all, so the instrument has them and no shipped table does.
+        badges = factoryCategories(spec, address.slot).mapNotNull { taxonomy?.label(it) },
+    )
+
+    /** The category names this instrument knows, or null where the catalog carries none. */
+    internal val taxonomy: CategoryTaxonomy? get() = config.categoryEncoding?.taxonomy
+
+    /** A factory voice's assignments, from the shipped table. **Never a device read.** */
+    internal fun factoryCategories(spec: MotifXsBank, slot0: Int): List<CategoryRef> =
+        MotifXsCategories.refsOf(
+            factoryVoices.categories(spec.label, slot0),
+            config.categoryEncoding,
+        )
+
+    /** Labels for decoded `0C` figures, dropping anything the shipped taxonomy cannot name. */
+    private fun categoryBadges(figures: List<Int?>?): List<String> {
+        val names = taxonomy ?: return emptyList()
+        return figures.orEmpty().mapNotNull { figure ->
+            figure?.let { MotifXsCategories.refOf(it, names) }?.let { names.label(it) }
+        }
     }
 
     companion object {
@@ -1199,6 +1363,19 @@ class MotifXsInstrument(
 
         /** One parameter request; the mode reply comes back in ~10 ms. */
         private val MODE_TIMEOUT = 2.seconds
+
+        /**
+         * How long a favorites write gets to actually apply after being acknowledged.
+         *
+         * **No measured settle time exists.** The delay was found by an immediate read-back
+         * returning the old table while a read from a fresh process returned the new one, which
+         * is why this is polled rather than slept through. Generous, because the alternative to
+         * waiting is reporting a write that worked as one that did not.
+         */
+        private val FAVORITE_SETTLE = 3.seconds
+
+        /** Between polls of the favorites table; each is a single dump of at most 128 bytes. */
+        private val FAVORITE_POLL = 150.milliseconds
 
         /**
          * How long to wait for a mode change to take effect, as interval x count.

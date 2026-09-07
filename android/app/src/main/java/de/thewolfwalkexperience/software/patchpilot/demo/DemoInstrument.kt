@@ -11,6 +11,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
+import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
@@ -57,6 +58,9 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
     override val browser: PresetBrowser get() = this
     override val selector: PresetSelector get() = this
     override val editor: PresetEditor get() = this
+    /** The demo instrument has no categories to invent and no instrument to favorite on. */
+    override val tagger: PresetTagger? = null
+
     override val report: DeviceReporter? = this
 
     /** Demo mode has no unknowable settings - there is no instrument to be configured. */

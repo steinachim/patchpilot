@@ -111,16 +111,46 @@ object MotifXsSysEx {
      * attempt. `mm = 0x08` is a permanent hole between PRE8 and GM. Only ever pass a value that
      * came out of the catalog's bank table.
      *
-     * **Read-only, deliberately.** Whether the instrument would accept a bulk dump *to* `0x71` is
-     * untested, and an ill-formed write to this instrument has been observed to hang its MIDI
-     * handling until a power cycle. There is no writer here and none should be added without a
-     * bench session behind it.
+     * **The mark values are decoded**, and they are not a boolean or a bitmask. The byte names
+     * which of the voice's *own two category assignments* the instrument's browser files the
+     * favorite under: `0` not favorited, `1` both, `2` Category 1 only, `3` Category 2 only.
+     * Anything else is stored verbatim and lists the voice under neither - which is what rules
+     * the bitmask reading out, since a third bit produced no third listing.
+     *
+     * **Writable, and confirmed on hardware** - see [writeFavorites] for the four rules that
+     * differ from the `0C` path.
      */
     const val FAVORITES_ADDRESS_HI = 0x71
 
     /** `F0 43 2n 7F 03 71 mm 00 F7` - see [FAVORITES_ADDRESS_HI], especially the sweep hazard. */
     fun requestFavorites(device: Int, bankByte: Int): ByteArray =
         requestDump(device, FAVORITES_ADDRESS_HI, bankByte, 0)
+
+    /**
+     * A whole bank's favorite marks, written back to `71 mm 00`.
+     *
+     * **[table] is the entire bank's table, not one slot.** Read it, change one byte, send it
+     * back, so the length declared is always the instrument's own. A wrong-length write at a
+     * neighbouring address family once left this instrument ignoring MIDI until it was power
+     * cycled, and nothing about a favorite is worth risking that to save a round trip.
+     *
+     * Four things here are the opposite of the stored-voice path, all measured on hardware:
+     *
+     * - **No store marker.** This reaches non-volatile storage by itself; an uncommitted write
+     *   survived a cold power cycle. Sending [storeMarker] anyway is not merely redundant, it
+     *   commits every unrelated pending write too.
+     * - **It applies on a delay.** An immediate read-back returns the *old* table, so a caller
+     *   that verifies straight away reports a working write as a no-op. Poll instead.
+     * - **The read-only-bank rule does not apply.** PRE1 is read-only and its favorites table
+     *   accepts a write and acknowledges it. That rule belongs to `0C`.
+     * - **Out-of-range values are kept, not clamped.** Writing `4` is accepted, survives a power
+     *   cycle, and lists the voice nowhere - so a caller must refuse anything outside `0..3`
+     *   rather than letting the instrument sort it out.
+     *
+     * Acknowledged with [isAck] like any other bulk dump.
+     */
+    fun writeFavorites(device: Int, bankByte: Int, table: ByteArray): ByteArray =
+        bulkDump(device, FAVORITES_ADDRESS_HI, bankByte, 0, table)
 
     /** Address a voice selection writes to, one byte per message. */
     const val SELECT_ADDRESS_HI = 0x65
@@ -363,6 +393,18 @@ object MotifXsSysEx {
      * depends on that.
      */
     const val DRUM_COMMON_HI = 0x46
+
+    /**
+     * Where a voice's category assignments sit in its Common block: `main1, sub1, main2, sub2`.
+     *
+     * From Yamaha's own Data List (`MIDI_Data_Table_en.xls`, VOICE NORMAL rows 26-29), which names
+     * them `Voice Category 1 (Main)` through `Voice Category 2 (Sub)`. The *values* those bytes
+     * take are another matter: Yamaha documents the main half and says only "Refer to Category
+     * List" for the sub half, and that list is in no released file - see the shipped
+     * `categoryEncoding`, which was measured on hardware.
+     */
+    const val CATEGORY_OFFSET = 0x18
+    const val CATEGORY_LENGTH = 4
 
     fun isCommonBlock(message: ByteArray): Boolean = addressOf(message).let {
         it == Triple(COMMON_HI, COMMON_MID, COMMON_LO) ||

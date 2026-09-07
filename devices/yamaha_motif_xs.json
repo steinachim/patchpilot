@@ -2,6 +2,143 @@
   "family": "motifxs",
   "schemaVersion": 1,
   "familyConfig": {
+    "categoryEncoding": {
+      "description": "How the four category bytes at 0x18-0x1B of a voice's documented Voice Common block encode the two assignments (MIDI_Data_Table_en.xls, VOICE NORMAL r26-r29; the Common block is 0x40 00 00 for a Normal Voice and 0x46 00 00 for a Drum Voice). Each assignment is a main byte then a sub byte.",
+      "mainByValue": [
+        "Piano",
+        "Keys",
+        "Organ",
+        "Guitar",
+        "Bass",
+        "String",
+        "Brass",
+        "SaxWW",
+        "SynLd",
+        "Pads",
+        "SyCmp",
+        "CPerc",
+        "Dr/Pc",
+        "S.EFX",
+        "M.EFX",
+        "Ethnic",
+        "NoAsg"
+      ],
+      "mainSource": "Yamaha's own notes column in the VOICE NORMAL sheet ('Pn, Kb, Or, Gt, Bs, St, Br, SW, Ld, Pd, Sc, Cp, Dr, Se, Me, Et, --'). Value 16 (NoAsg) means no assignment, and is what a voice's Category 2 holds when it has only one.",
+      "subByValuePerMain": {
+        "Piano": [
+          "APno",
+          "Layer",
+          "Modrn",
+          "Vintg",
+          "Arp"
+        ],
+        "Keys": [
+          "EP",
+          "FM",
+          "Clavi",
+          "Synth",
+          "Arp"
+        ],
+        "Organ": [
+          "TnWhl",
+          "Combo",
+          "Pipe",
+          "Synth",
+          "Arp"
+        ],
+        "Guitar": [
+          "A.Gtr",
+          "E.Cln",
+          "E.Dst",
+          "Synth",
+          "Arp"
+        ],
+        "Bass": [
+          "ABass",
+          "EBass",
+          "SynBs",
+          "Arp"
+        ],
+        "String": [
+          "Solo",
+          "Ensem",
+          "Pizz",
+          "Synth",
+          "Arp"
+        ],
+        "Brass": [
+          "Solo",
+          "BrsEn",
+          "Orche",
+          "Synth",
+          "Arp"
+        ],
+        "SaxWW": [
+          "Sax",
+          "Flute",
+          "WWind",
+          "RPipe",
+          "Arp"
+        ],
+        "SynLd": [
+          "Analg",
+          "Digtl",
+          "H Hop",
+          "Dance",
+          "Arp"
+        ],
+        "Pads": [
+          "Analg",
+          "Warm",
+          "Brite",
+          "Choir",
+          "Arp"
+        ],
+        "SyCmp": [
+          "Analg",
+          "Digtl",
+          "Fade",
+          "Hook",
+          "Arp"
+        ],
+        "CPerc": [
+          "Malet",
+          "Bell",
+          "SynBl",
+          "PDrum",
+          "Arp"
+        ],
+        "Dr/Pc": [
+          "Drums",
+          "Perc",
+          "Synth",
+          "Arp"
+        ],
+        "S.EFX": [
+          "Move",
+          "Ambie",
+          "Natur",
+          "SciFi",
+          "Arp"
+        ],
+        "M.EFX": [
+          "Move",
+          "Ambie",
+          "Sweep",
+          "Hit",
+          "Arp"
+        ],
+        "Ethnic": [
+          "Bowed",
+          "Pluk",
+          "Struk",
+          "Blown",
+          "Arp"
+        ]
+      },
+      "subSource": "Measured on hardware, session 7: Yamaha documents the sub byte only as 'Refer to Category List', a list not in any released table here, and the VOICE NORMAL sheet's stated range (00-03) is too small. Indices 0-3 of every main, and index 4 of the ten mains that use it, were recovered by reading one factory voice per (main, sub) pair the documented way and matching it against this file's own category names. The order is NOT the one the voice-list spreadsheet prints (Brass is Orche, Solo, BrsEn there but Solo, BrsEn, Orche here). The remaining six index-4 values were set from the front panel on a scratch USER voice and read back: Piano, Keys, Brass and SaxWW have Arp there, and Bass and Dr/Pc have no fifth sub at all. The same round corrected the no-sub sentinel - every factory voice that showed one was in a five-sub main, where a fixed 5 and 'one past the last' are the same byte; Bass and Dr/Pc read 4, so the rule is the latter.",
+      "subNoAssignmentRule": "The 'no sub-category' value is one past the main's last sub - i.e. exactly len(subByValuePerMain[main]). That is 5 for fourteen mains and 4 for Bass and Dr/Pc, which have only four subs each."
+    },
     "banks": [
       {
         "label": "PRE1",

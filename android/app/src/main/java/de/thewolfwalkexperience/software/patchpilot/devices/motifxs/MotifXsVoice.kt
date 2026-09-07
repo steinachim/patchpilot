@@ -1,10 +1,10 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 /**
- * The one thing this app currently decodes out of a Motif XS voice: its name.
+ * What this app decodes out of a Motif XS voice dump: its name and its category assignments.
  *
- * A voice dump is roughly 1.9 kB and almost none of it is understood. That is deliberate for a
- * first iteration - a browser needs a name and nothing else.
+ * A voice dump is roughly 1.9 kB and almost none of the rest is understood, which is fine - a
+ * browser needs a name, and the two category figures happen to sit in front of it.
  */
 object MotifXsVoice {
 
@@ -42,12 +42,15 @@ object MotifXsVoice {
 
     /**
      * The ASCII figure pair the dense stream opens with: two decimal numbers, colon-separated and
-     * colon-terminated - `256:256:`, `192:256:`, `83:146:`, `0:0:`. What they mean is not decoded.
+     * colon-terminated - `256:256:`, `192:256:`, `227:146:`, `0:0:`.
+     *
+     * **They are the voice's two category assignments** - see [categoriesOf] for the encoding.
      *
      * **They are variable width, so the name after them does not start at a fixed offset.**
      * Reading it at a constant position (assuming both figures are three digits) mis-decodes
      * names whose preceding figures are a different width, dropping the leading character - e.g.
-     * `Dyno Straight MW+AS2` decodes as `yno Straight MW+AS2`.
+     * `Dyno Straight MW+AS2` decodes as `yno Straight MW+AS2`. It is also why a category must
+     * never be written by patching this pair: changing `9` to `146` moves every byte after it.
      */
     val NAME_PREFIX = Regex("""\d{1,4}:\d{1,4}:""")
 
@@ -153,5 +156,51 @@ object MotifXsVoice {
         val head = String(dense, 0, minOf(dense.size, 12), Charsets.ISO_8859_1)
         val match = NAME_PREFIX.find(head) ?: return null
         return if (match.range.first == 0) match.range.last + 1 else null
+    }
+
+    /** How many sub-category values one main category's byte packs. */
+    const val SUBS_PER_MAIN = 16
+
+    /** The main-category value that means "no assignment", and the figure it produces. */
+    const val NO_ASSIGNMENT_MAIN = 16
+
+    /**
+     * The voice's two category assignments, as `main * 16 + sub` figures, null where unassigned.
+     *
+     * Always two entries - a Motif XS voice has exactly two assignment slots, and an unused one
+     * reads as `NoAsg`. Null where the payload carries no figure pair at all, which is the same
+     * signal [nameOf] treats as an unreadable slot.
+     *
+     * **The categories really are in the cheap `0C` dump, re-encoded.** Yamaha documents them as
+     * four bytes at `0x18`-`0x1B` of the voice's Common block, reachable only by the documented
+     * 26-message read; this serialisation packs each `(main, sub)` pair into one number and prints
+     * it as decimal ASCII in front of the name. So `227:146:` is `227 = 14*16 + 3` (M.EFX / Hit)
+     * and `146 = 9*16 + 2` (Pads / Brite), and `256 = 16*16 + 0` is `NoAsg`.
+     *
+     * A search for the four *raw* bytes in this payload finds no consistent offset, which is what
+     * had this recorded as "not present in `0C`" - correct about the bytes, and wrong about the
+     * information. Validated against the shipped factory catalog on every user voice in the
+     * project's full-sync capture whose name matches a factory voice: 205 of 205, no mismatches.
+     *
+     * **Read-only, and it has to stay that way.** The figures are variable width, so writing a
+     * category by patching them here would shift every byte of the dense stream after them. The
+     * write path is the documented one - see `MotifXsInstrument.editCommonBlock`.
+     */
+    fun categoriesOf(dumpPayload: ByteArray): List<Int?>? {
+        if (dumpPayload.size <= PACKED_OFFSET) return null
+        return figuresOf(unpack(dumpPayload.copyOfRange(PACKED_OFFSET, dumpPayload.size)))
+    }
+
+    /** [categoriesOf] on an already-unpacked stream, so a caller that has one need not unpack twice. */
+    fun figuresOf(dense: ByteArray): List<Int?>? {
+        val head = String(dense, 0, minOf(dense.size, 12), Charsets.ISO_8859_1)
+        val match = NAME_PREFIX.find(head) ?: return null
+        if (match.range.first != 0) return null
+        // The regex guarantees two runs of one to four digits, so neither parse can fail; the
+        // range check is about the *values*, since an unrecognised figure must read as unassigned
+        // rather than as an index into something.
+        return match.value.trimEnd(':').split(':').map { figure ->
+            figure.toIntOrNull()?.takeIf { it in 0 until NO_ASSIGNMENT_MAIN * SUBS_PER_MAIN }
+        }
     }
 }

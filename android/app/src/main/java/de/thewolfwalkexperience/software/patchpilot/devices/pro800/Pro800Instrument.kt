@@ -12,6 +12,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
+import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
@@ -93,6 +94,9 @@ class Pro800Instrument(
     override val editor: PresetEditor = Pro800Editor(this, layout)
 
     /** Read-only, and the source of the sample fixtures used in tests - see [Pro800Reporter]. */
+    /** A Pro-800 preset has no category and no favorite mark. */
+    override val tagger: PresetTagger? = null
+
     override val report: DeviceReporter = Pro800Reporter(exchange, layout) {
         Pro800ReportIdentity(deviceName, firmware, descriptorId)
     }
