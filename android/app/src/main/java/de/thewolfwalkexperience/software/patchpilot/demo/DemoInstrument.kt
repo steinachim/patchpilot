@@ -107,8 +107,6 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
         library.requireOccupied(address)
     }
 
-    override fun confirmationFor(displayId: String) = "Selected $displayId."
-
     // ---- PresetEditor ----
 
     override val supported =

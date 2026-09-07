@@ -7,6 +7,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.indexWalk
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
@@ -970,7 +971,6 @@ class MotifXsInstrument(
          * but less than a Nord's verified read-back, because the echo is of the request rather
          * than of the resulting state.
          */
-        override fun confirmationFor(displayId: String) = "Selected $displayId"
     }
 
     // ---- PresetBrowser ----
@@ -1069,33 +1069,17 @@ class MotifXsInstrument(
         }
     }
 
-    private fun indexUser(): Flow<IndexUpdate> = flow {
-        val batch = mutableListOf<PresetSlot>()
-        val total = defaultAddresses().count()
-        var done = 0
-
-        for (address in defaultAddresses()) {
-            val displayId = layout.format.format(address)
-            try {
-                batch += readSlot(address, displayId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Logged, not just counted. A Failed slot reaches the user as a number - "2 slots
-                // could not be read" - which says nothing about *why*, and the difference between
-                // a timeout and a malformed reply is the difference between a slow bus and a bug.
-                Log.w(TAG, "Couldn't read $displayId", e)
-                emit(IndexUpdate.Failed(address, e.message ?: "unreadable"))
-            }
-            done++
-            if (batch.size >= BATCH_SIZE || done == total) {
-                emit(IndexUpdate.Progress(done, total, "Reading $displayId"))
-                emit(IndexUpdate.Slots(batch.toList()))
-                batch.clear()
-            }
-        }
-        emit(IndexUpdate.Complete)
-    }
+    private fun indexUser(): Flow<IndexUpdate> = indexWalk(
+        addresses = defaultAddresses().asIterable(),
+        total = defaultAddresses().count(),
+        batchSize = BATCH_SIZE,
+        layout = layout,
+        // Logged, not just counted. A Failed slot reaches the user as a number - "2 slots could
+        // not be read" - which says nothing about *why*, and the difference between a timeout and
+        // a malformed reply is the difference between a slow bus and a bug.
+        onFailure = { displayId, cause -> Log.w(TAG, "Couldn't read $displayId", cause) },
+        readSlot = ::readSlot,
+    )
 
     /**
      * The eleven read-only banks, named from the shipped table. **No round trips at all.**
@@ -1155,8 +1139,10 @@ class MotifXsInstrument(
             // rather than either alone: a short reply must not index past its end, and a long one
             // must not invent slots the bank does not have.
             for (slot in 0 until minOf(marks.size, spec.slotCount)) {
-                // Any non-zero mark counts. The values 1, 2 and 3 all occur and what distinguishes
-                // them is not known, so nothing here branches on them or shows them.
+                // Any non-zero mark counts. 1, 2 and 3 say which of the voice's own two category
+                // assignments the instrument's browser files the favorite under (see
+                // [MotifXsSysEx.FAVORITES_ADDRESS_HI]); this listing is "every favorite", so the
+                // distinction is one the tag dialog makes and this loop deliberately does not.
                 if (marks[slot].toInt() == 0) continue
                 val address = SlotAddress(bank, slot)
                 val displayId = layout.format.format(address)

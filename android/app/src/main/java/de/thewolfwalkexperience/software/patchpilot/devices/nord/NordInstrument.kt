@@ -206,8 +206,6 @@ class NordInstrument(
         mapNordFailure("load a preset") { device.selectPreset(address.bank, address.slot) }
 
     /** A fact, not a hope: sub-opcode 47/48 echoes the address back and `selectPreset` checks it. */
-    override fun confirmationFor(displayId: String) = "Selected $displayId."
-
     // ---- PresetEditor ----
 
     override val supported = setOf(EditOp.RENAME, EditOp.MOVE, EditOp.SWAP, EditOp.DELETE, EditOp.COPY)

@@ -44,6 +44,10 @@ import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
  * @param onBack null on a root screen, which is what decides whether a back arrow is drawn - the
  *   arrow's presence should follow from the navigation graph rather than from a flag somebody has
  *   to keep in step with it.
+ * @param backEnabled false while leaving would interrupt something that cannot be interrupted -
+ *   see ProgramsScreen's use of it. Deliberately greys the arrow out rather than hiding it: an
+ *   arrow that vanishes for a few seconds reads as a layout bug, while a disabled one reads as
+ *   "not now", which is what is actually meant. A screen with no such state leaves this true.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,6 +57,7 @@ fun PatchPilotScaffold(
     /** Applied to the title `Text` itself - what the hidden debug gesture hangs off. */
     titleModifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
+    backEnabled: Boolean = true,
     snackbarHostState: SnackbarHostState? = null,
     actions: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
@@ -76,7 +81,7 @@ fun PatchPilotScaffold(
                 },
                 navigationIcon = {
                     if (onBack != null) {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = onBack, enabled = backEnabled) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = stringResource(R.string.cd_back),

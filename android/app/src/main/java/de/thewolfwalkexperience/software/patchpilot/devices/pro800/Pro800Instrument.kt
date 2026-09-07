@@ -4,6 +4,7 @@ import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.FlatBankAddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.indexWalk
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
@@ -20,7 +21,6 @@ import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 
 private const val TAG = "Pro800Instrument"
@@ -213,29 +213,13 @@ class Pro800Instrument(
      * [scope] is ignored: all 400 of this instrument's addresses are writable, so it declares only
      * [PresetScope.USER] and no other value can arrive here.
      */
-    override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
-        val batch = mutableListOf<PresetSlot>()
-        val total = layout.slotCount
-        var done = 0
-
-        for (address in layout.allAddresses()) {
-            val displayId = layout.format.format(address)
-            try {
-                batch += readSlot(address, displayId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                emit(IndexUpdate.Failed(address, e.message ?: "unreadable"))
-            }
-            done++
-            if (batch.size >= BATCH_SIZE || done == total) {
-                emit(IndexUpdate.Progress(done, total, "Reading $displayId"))
-                emit(IndexUpdate.Slots(batch.toList()))
-                batch.clear()
-            }
-        }
-        emit(IndexUpdate.Complete)
-    }
+    override fun index(scope: PresetScope): Flow<IndexUpdate> = indexWalk(
+        addresses = layout.allAddresses().asIterable(),
+        total = layout.slotCount,
+        batchSize = BATCH_SIZE,
+        layout = layout,
+        readSlot = ::readSlot,
+    )
 
     override suspend fun refresh(address: SlotAddress): PresetSlot =
         readSlot(address, layout.format.format(address))
@@ -294,6 +278,11 @@ class Pro800Instrument(
      * decoration. Drop it and the display, the settings block and the preset list all still report
      * the new preset while the instrument keeps playing the old one - so the regression passes every
      * check the app is capable of making, and only listening catches it.
+     *
+     * That is also the exact limit of what [confirmationFor] claims afterwards. The pointer is
+     * written and read back until it matches, so "Selected" is verified rather than hoped; the
+     * *audible* recall is not, because the instrument transmits nothing when it loads a preset and
+     * no readable surface reports it. Every check available to a client reports the pointer.
      */
     override suspend fun select(address: SlotAddress) {
         val programNumber = programNumberOf(address)
@@ -327,17 +316,6 @@ class Pro800Instrument(
                 "preset was not loaded.",
         )
     }
-
-    /**
-     * "Selected", and it is a fact rather than a hope.
-     *
-     * The pointer was written and then read back until it matched, which the old program-change
-     * path could never claim - nothing acknowledged it, so a wrong channel and a working one looked
-     * identical. What still cannot be confirmed is the *audible* recall: the instrument transmits
-     * nothing when it loads a preset and no readable surface reports it, so every check available
-     * to a client reports the pointer. This claims the pointer, which is verified.
-     */
-    override fun confirmationFor(displayId: String) = "Selected $displayId."
 
     // ---- PresetTransfer ----
 

@@ -1,6 +1,8 @@
 # Changelog
 
 ## Next release
+- Fix: renaming a Yamaha Motif XS voice or setting its categories can no longer be interrupted part way through. Leaving the screen while one was being written abandoned the transfer and left the instrument waiting on "receiving midi bulk data" until it was power-cycled. The write now always runs to completion, and the back arrow is unavailable while one is in progress.
+- Fix: backing out of a Nord connection while it is still being established no longer reports it as a failure to read the instrument.
 - Add: a Nord program's category now shows on every row in the browser, and a row's menu offers Set category.
 - Add: Yamaha Motif XS voices now show their categories in the browser, and a row's menu offers Set favorite (any voice) and Set categories (user voices).
 - Fix: selecting a preset no longer briefly inserts a progress line above the list, which pushed every row down and let them spring back on each tap.

@@ -99,8 +99,8 @@ object MotifXsSysEx {
      *
      * One small dump per bank at `71 mm 00`, where `mm` is the bank's own [MotifXsBank.addressMid]
      * - the same selector as a voice dump. The payload is **one raw byte per slot**, indexed by
-     * zero-based slot: `0` for unmarked, and `1`, `2` or `3` for marked. Which of those three means
-     * what is not known; nothing here or above treats them as anything but non-zero.
+     * zero-based slot: `0` for unmarked, and `1`, `2` or `3` for marked - see the note below on
+     * what each of those three means.
      *
      * **Not MSB-packed.** Every other payload this app reads from a `0C` address is packed 7 bits
      * per byte and has to be unpacked; this one is not, and running the unpacker over it produces

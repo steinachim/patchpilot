@@ -34,10 +34,14 @@ kotlin {
 
 android {
     namespace = "de.thewolfwalkexperience.software.patchpilot"
-    // 37 because Compose 1.12 (BOM 2026.08.00) declares minCompileSdk=37. Compile-time only:
-    // `minSdk` still decides which devices can install this, and `targetSdk` still decides which
-    // runtime behaviours are opted into - neither moves. Compose 1.12 itself declares
-    // minSdkVersion 23, below this app's 26, so nothing is cut off at the low end either.
+    // Compile-time only: `minSdk` still decides which devices can install this, and `targetSdk`
+    // still decides which runtime behaviours are opted into - neither moves with this.
+    //
+    // **Not a floor imposed by Compose.** The BOM pinned in libs.versions.toml (2026.01.01)
+    // resolves to Compose 1.10.2, which builds against 35 just as well - verified, not assumed.
+    // This is simply the newest platform the project compiles against; it is the line to raise
+    // when some dependency really does demand a higher one, and the line to check first if that
+    // is ever asserted again.
     compileSdk = 37
 
     defaultConfig {

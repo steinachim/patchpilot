@@ -19,7 +19,7 @@ This document describes the wire protocols PatchPilot uses to talk to each suppo
 | 16..N−2 | Payload | Sub-opcode-specific data. |
 | N−2..N | CRC-16 | See below. |
 
-A reply is correlated to its request by protocol ID and sub-opcode, not by a sequence number. A large reply is not guaranteed to arrive in a single USB read and is reassembled from multiple reads using the total-length field.
+A reply is correlated to its request only by arriving next: the protocol carries no sequence number, and exactly one request is outstanding at a time, so the next message read is by definition the answer to the last message sent. Nothing in the header is checked to establish that — anything still buffered when a request goes out is therefore stale by construction, and is discarded rather than handed back as an answer. A large reply is not guaranteed to arrive in a single USB read and is reassembled from multiple reads using the total-length field.
 
 **CRC**: CRC-16/CCITT-FALSE — polynomial `0x1021`, initial value `0xFFFF`, no input/output reflection, no final XOR — computed over every byte of the message *before* the CRC field (header + payload) and appended big-endian.
 
@@ -43,6 +43,8 @@ The app also reads `CAPABILITY_QUERY` (protocol 6, sub-opcode 4/5), also an empt
 | 28/29 | Set name | `bank`, `item`, name length, ASCII name | `status`, echoed `bank`, echoed `item`. An oversized name is accepted and silently truncated to the instrument's stored maximum rather than rejected. |
 | 30/31 | Fetch item | `bank`, `item` | The item's metadata record (see layout below) — not its program data. |
 | 32/33 | Cursor next item | `bank`, previous item index (`-1` to start), direction (`0`) | A "bank exhausted" flag at offset 0 and the next item index at offset 8; used to walk a category one item at a time without a directory query. |
+| 47/48 | Select preset | `bank`, `item` | `status` + echoed `bank`/`item`. Loads the preset, and is also what refreshes the instrument's display after a write: on a Nord Stage 2EX none of rename, move, swap or set-category updates the screen on their own, and reselecting the same slot — *inside* the category lock — is what does. Sent unbracketed it does nothing there, unlike on a Grand, where it changes the active preset by itself. |
+| 51/52 | Set category | `bank`, `item`, `categoryId` | `status` + echoed `bank`/`item`, followed by a 47/48 display refresh. Writes the category tag alone, leaving the name untouched — the vendor editor's rename dialog commits name and category together on OK, but the two requests are independent. Every id 0–31 is accepted and stored; one the instrument cannot name displays as `No Cat`. |
 
 **Item record layout** (sub-opcode 30/31 reply):
 
@@ -53,7 +55,8 @@ The app also reads `CAPABILITY_QUERY` (protocol 6, sub-opcode 4/5), also an empt
 | 8–11 | Item |
 | 12–15 | Data size — the exact byte length of the item's underlying blob |
 | 16–19 | Content-type tag (ASCII, e.g. `ngp `, `npno`, `nsmp`) |
-| 20–31 | Unparsed |
+| 20–27 | Unparsed |
+| 28–31 | Tag-specific. On an `ngp ` program record this is the category id written by sub-opcode 51/52, and is what the browser shows per row. It means something else per content type — on an `nsmp` sample record it is two 2-byte halves, a (category, sub-category) pair — so it is decoded only when the tag at 16–19 is `ngp `, and left alone otherwise. |
 | 32–35 | Name length |
 | 36..+len | Name (ASCII) |
 | +8 bytes | Unparsed trailer |

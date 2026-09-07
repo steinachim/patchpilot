@@ -1,6 +1,8 @@
 package de.thewolfwalkexperience.software.patchpilot.core
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 /**
  * What the UI talks to, whatever is plugged in.
@@ -169,6 +171,58 @@ sealed interface IndexUpdate {
 }
 
 /**
+ * The sequential read-every-slot walk, for the families that have no directory to read instead.
+ *
+ * A Motif XS and a Pro-800 arrive at the same shape from opposite directions - one has 1,217
+ * factory voices at 12,468 B/s, the other has 400 addresses and no way to learn a name except by
+ * reading the whole preset - and both need the same three things: rows in front of the user as
+ * they arrive, one unreadable slot costing only itself, and progress that means something. That
+ * is this loop, and having it once is what stops the two copies drifting on the details that
+ * matter (whether a failure aborts the walk; whether the final partial batch is emitted at all).
+ *
+ * What genuinely differs stays a parameter: [batchSize] is tuned per family (a Pro-800's 25 slots
+ * against a Motif XS's 8, whose reads are an order of magnitude larger), and [onFailure] lets a
+ * family log the cause where the emitted [IndexUpdate.Failed] only carries a count to the user.
+ *
+ * @param addresses walked in order; [total] is stated separately so a [Sequence] need not be
+ *   counted twice.
+ * @param readSlot may throw - anything but [kotlinx.coroutines.CancellationException] becomes an
+ *   [IndexUpdate.Failed] and the walk goes on. Cancellation is always propagated.
+ */
+fun indexWalk(
+    addresses: Iterable<SlotAddress>,
+    total: Int,
+    batchSize: Int,
+    layout: SlotLayout,
+    onFailure: (displayId: String, cause: Throwable) -> Unit = { _, _ -> },
+    readSlot: suspend (SlotAddress, String) -> PresetSlot,
+): Flow<IndexUpdate> = flow {
+    val batch = mutableListOf<PresetSlot>()
+    var done = 0
+
+    for (address in addresses) {
+        val displayId = layout.format.format(address)
+        try {
+            batch += readSlot(address, displayId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            onFailure(displayId, e)
+            emit(IndexUpdate.Failed(address, e.message ?: "unreadable"))
+        }
+        done++
+        // `done == total` is what flushes the tail: without it a walk whose last batch is short
+        // ends having emitted rows the UI never received.
+        if (batch.size >= batchSize || done == total) {
+            emit(IndexUpdate.Progress(done, total, "Reading $displayId"))
+            emit(IndexUpdate.Slots(batch.toList()))
+            batch.clear()
+        }
+    }
+    emit(IndexUpdate.Complete)
+}
+
+/**
  * One row in the browser.
  *
  * [displayId] and [bankLabel] are both carried rather than derived, because deriving them means
@@ -193,12 +247,14 @@ interface PresetSelector {
     /**
      * What to tell the user after [select] returns.
      *
-     * Not a constant string in the screen, because the two families can honestly claim different
-     * things: a Nord echoes the address back and `NordDevice.selectPreset()` verifies it, so
-     * "Selected A:1:1" is a fact. A Pro-800 is sent a bank select and a program change and answers
-     * nothing at all, so the most the app can honestly say is that it sent them.
+     * Every family currently verifies its own selection before returning - a Nord echoes the
+     * address back, a Pro-800 reads its pointer back until it matches - so every family can state
+     * it as a fact, and the default says so. It stays overridable rather than becoming a constant
+     * in the screen because what a family can *honestly* claim is the family's to know: one that
+     * could only fire a message off and hope would have to word this differently, and that is a
+     * property of the wire protocol, not of the UI.
      */
-    fun confirmationFor(displayId: String): String
+    fun confirmationFor(displayId: String): String = "Selected $displayId."
 }
 
 enum class EditOp { RENAME, MOVE, SWAP, DELETE, COPY }

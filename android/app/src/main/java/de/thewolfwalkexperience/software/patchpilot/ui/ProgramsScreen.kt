@@ -1,6 +1,7 @@
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import de.thewolfwalkexperience.software.patchpilot.R
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -14,10 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.ui.zIndex
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -25,7 +24,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -40,7 +38,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.toggleable
@@ -57,8 +54,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -84,7 +79,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.text.style.TextAlign
@@ -96,9 +90,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.annotation.StringRes
@@ -585,7 +577,11 @@ fun ProgramsScreen(
     ) {
         val what = busyLabel.trimEnd('…', ' ')
         val failed = context.getString(R.string.programs_operation_failed, what)
-        scope.launch {
+        // **Not `scope.launch`.** An edit outlives this screen deliberately - see
+        // [InstrumentViewModel.launchEdit] for why cancelling one mid-write is the one thing that
+        // can leave an instrument stuck. Writing the result back into these `remember`ed states
+        // after the screen is gone is harmless; they are snapshot state, and nothing retains them.
+        viewModel.launchEdit {
             operationError = null
             statusMessage = null
             try {
@@ -634,7 +630,9 @@ fun ProgramsScreen(
     }
 
     fun onBlockedRemedyConfirmed(pending: BlockedOperation) {
-        scope.launch {
+        // Same reasoning as runEdit: `pending.retry()` is the edit that was blocked, and it must
+        // not become abandonable just because it arrived via the remedy dialog.
+        viewModel.launchEdit {
             blocked = null
             operationError = null
             try {
@@ -778,6 +776,16 @@ fun ProgramsScreen(
         runRelocation(source, target, targetWasEmpty)
     }
 
+    // The system-back half of `backEnabled` below. Disabling the arrow does nothing for the
+    // gesture or the hardware key, and with `enableOnBackInvokedCallback` set in the manifest a
+    // predictive-back swipe would otherwise animate this screen away mid-write. Enabled only
+    // while an edit is running, so it is inert - and predictive back is not intercepted at all -
+    // the rest of the time.
+    BackHandler(enabled = busy != null) {
+        // Deliberately empty: refusing the gesture *is* the behaviour. The progress line already
+        // says what is running, so there is nothing further to tell the user here.
+    }
+
     PatchPilotScaffold(
         // The instrument's own name, not the word "Presets". This is the only screen that shows
         // which instrument the app is talking to, which matters when more than one is plugged in
@@ -796,6 +804,16 @@ fun ProgramsScreen(
         // Back returns to the connect screen, which re-scans on arrival - the way to pick up an
         // instrument that was plugged in after the app started, or to swap between two.
         onBack = onBack,
+        // Off while an edit is in flight. `busy` is only ever a discrete edit - seconds - and
+        // never the index scan, which reports through `index.progress` and leaves back available
+        // for the whole 93 seconds it can take. So this greys the arrow out for a moment during a
+        // rename or a copy, not for the long wait somebody might genuinely want out of.
+        //
+        // Belt and braces rather than the safety itself: launchEdit already keeps the write alive
+        // across navigation, and exchangeAfterAll already refuses to stop mid-sequence. What this
+        // adds is telling the user *why* nothing happened when they tapped, instead of appearing
+        // to leave while a write is still running against the instrument.
+        backEnabled = busy == null,
         snackbarHostState = snackbarHostState,
         // The discoverable half of "re-read from the instrument". The pull gesture is the fast
         // half, and invisible to anyone not already expecting it - which on a screen whose rows

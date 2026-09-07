@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.BufferOverflow
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -234,6 +236,13 @@ class SysExExchange(
      * **There is no safe place to stop part way.** A Motif XS left mid-sequence sits on
      * *receiving midi bulk data* until it is completed or power-cycled, so this sends the whole
      * list and every check a caller wants belongs before the call.
+     *
+     * That rule is enforced here rather than merely stated: the send loop runs under
+     * [NonCancellable], so cancelling the calling coroutine - backing out of the screen, the app
+     * going away, or [timeout] elapsing mid-send - cannot leave the instrument waiting for blocks
+     * that will never arrive. Cancellation is observed at the *next* suspension point instead,
+     * which is the wait for the acknowledgement below; by then the instrument has the whole
+     * sequence and is in a state it can get itself out of.
      */
     suspend fun exchangeAfterAll(
         messages: List<ByteArray>,
@@ -254,9 +263,15 @@ class SysExExchange(
                         }
                     }
                 }
-                messages.forEachIndexed { index, message ->
-                    transport.send(message)
-                    if (gap > Duration.ZERO && index < messages.size - 1) delay(gap)
+                // See the "no safe place to stop part way" note above: once the first block is on
+                // the wire the instrument is in a transaction, and the only way out of it is the
+                // footer. `delay(gap)` is a cancellation point on every iteration, so without
+                // this the sequence is abandonable at ~15ms granularity.
+                withContext(NonCancellable) {
+                    messages.forEachIndexed { index, message ->
+                        transport.send(message)
+                        if (gap > Duration.ZERO && index < messages.size - 1) delay(gap)
+                    }
                 }
                 awaited.await()
             }

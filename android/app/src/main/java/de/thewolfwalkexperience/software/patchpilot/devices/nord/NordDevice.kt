@@ -15,6 +15,68 @@ import java.util.Locale
 private const val TAG = "NordDevice"
 
 /**
+ * Byte offsets into a content-database reply payload, one object per reply *shape*.
+ *
+ * Grouped this way rather than as one flat list because the same offset means different things in
+ * different replies: word 1 is the echoed bank in a write's acknowledgement, the item count in a
+ * `GET_ITEM_COUNT` reply, and the total category count in a root-category listing. A single
+ * `OFFSET_BANK = 4` would be right in one place and quietly wrong in the other two.
+ *
+ * Every field is a 4-byte big-endian word, and these tables are the ones in docs/PROTOCOLS.md -
+ * keep the two in step.
+ */
+private object StatusEcho {
+    /** Non-zero is a refusal; the instrument's own code, verbatim. */
+    const val STATUS = 0
+    const val BANK = 4
+    const val ITEM = 8
+}
+
+/** The sub-opcode 30/31 reply: an item's metadata record, not its data. */
+private object ItemRecord {
+    const val BANK = 4
+    const val ITEM = 8
+
+    /** The exact byte length of the item's underlying blob. */
+    const val DATA_SIZE = 12
+
+    /** ASCII, e.g. `ngp `, `npno`, `nsmp` - what makes [CATEGORY_ID] meaningful or not. */
+    const val CONTENT_TAG = 16
+
+    /**
+     * Tag-specific. A category id on an `ngp ` program record; two 2-byte halves on an `nsmp`
+     * sample record, which is why it is only read once the tag has been checked.
+     */
+    const val CATEGORY_ID = 28
+    const val NAME_LEN = 32
+
+    /** Where the ASCII name itself starts - immediately after the [NAME_LEN] word. */
+    const val NAME_START = 36
+}
+
+/** The sub-opcode 8/9 reply: six words, of which only the storage figures are trusted. */
+private object ItemCountReply {
+    const val STATUS = 0
+
+    /**
+     * Not the authority on how many items a category holds - the cursor is, and this can read 0
+     * for a category that is not empty (observed on a Stage 2 EX). Used as an *upper* bound that
+     * ends a walk early and as one term of its runaway guard, never as the count itself.
+     */
+    const val ITEM_COUNT = 4
+    const val FREE = 8
+    const val USED = 12
+    const val RECLAIMABLE = 16
+    const val UNIT_CODE = 20
+}
+
+/** The sub-opcode 32/33 reply: one step of a bank walk. */
+private object CursorReply {
+    const val BANK_EXHAUSTED = 0
+    const val NEXT_ITEM = 8
+}
+
+/**
  * The instrument speaks a file-transfer protocol version this app does not.
  *
  * Its own type because it must not be confused with *failing to read* the version:
@@ -204,6 +266,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         try {
             detectProtocolVersionFileTransfer()
         } catch (exc: UnsupportedProtocolVersionException) {
+            throw exc
+        } catch (exc: CancellationException) {
+            // Backing out of a connect attempt is not a failure to report: rewrapping this as an
+            // IllegalStateException put an error screen in front of a user who had just asked to
+            // leave - see InstrumentViewModel's guarded() for the contract this restores.
             throw exc
         } catch (exc: Exception) {
             throw IllegalStateException(
@@ -511,15 +578,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     private suspend fun reloadPresetForDisplay(bank: Int, item: Int) {
         val payload = fileTransfer(FileTransferSubOp.SELECT_PRESET, uint32BE(bank) + uint32BE(item))!!.payload
-        val flag = readUInt32BE(payload, 0)
-        val echoBank = readUInt32BE(payload, 4)
-        val echoItem = readUInt32BE(payload, 8)
-        if (flag != 0 || echoBank != bank || echoItem != item) {
-            throw IllegalStateException(
-                "Unexpected display-refresh response: flag=$flag bank=$echoBank item=$echoItem " +
-                    "(requested bank=$bank item=$item)",
-            )
-        }
+        requireEcho("display-refresh", payload, bank, item)
     }
 
     /**
@@ -633,14 +692,14 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * the record's 4-byte content tag (`ngp`, `npno`, `nsmp`, ...).
      */
     fun parseItemName(payload: ByteArray): String {
-        require(payload.size >= 36) {
-            "item record is only ${payload.size} bytes, too short for a name length field at offset 32"
+        require(payload.size >= ItemRecord.NAME_START) {
+            "item record is only ${payload.size} bytes, too short for a name length field at offset ${ItemRecord.NAME_LEN}"
         }
-        val nameLen = readUInt32BE(payload, 32)
-        require(nameLen in 0..MAX_ITEM_NAME_LEN && 36 + nameLen <= payload.size) {
+        val nameLen = readUInt32BE(payload, ItemRecord.NAME_LEN)
+        require(nameLen in 0..MAX_ITEM_NAME_LEN && ItemRecord.NAME_START + nameLen <= payload.size) {
             "implausible item name length $nameLen in a ${payload.size}-byte record"
         }
-        return sanitizeDeviceText(String(payload, 36, nameLen, Charsets.US_ASCII))
+        return sanitizeDeviceText(String(payload, ItemRecord.NAME_START, nameLen, Charsets.US_ASCII))
     }
 
     /**
@@ -660,9 +719,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     fun parseItemCategory(payload: ByteArray): Int? {
         if (payload.size < 32) return null
-        val tag = String(payload, 16, 4, Charsets.US_ASCII)
+        val tag = String(payload, ItemRecord.CONTENT_TAG, 4, Charsets.US_ASCII)
         if (tag != PROGRAM_CONTENT_TAG) return null
-        return readUInt32BE(payload, 28)
+        return readUInt32BE(payload, ItemRecord.CATEGORY_ID)
     }
 
     /**
@@ -687,23 +746,26 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         raw.filter { it.code in 0x20..0x7E }
 
     fun collectItemNames(itemPayloads: List<ByteArray>): List<NamedItem> = itemPayloads.map { payload ->
-        val bank = readUInt32BE(payload, 4)
-        val item = readUInt32BE(payload, 8)
+        val bank = readUInt32BE(payload, ItemRecord.BANK)
+        val item = readUInt32BE(payload, ItemRecord.ITEM)
         NamedItem(formatPresetId(bank, item), parseItemName(payload), parseItemCategory(payload))
     }
 
     /**
      * Checks the `(status, bank, item)` triple most write sub-opcodes answer with.
      *
-     * Both halves matter and were checked identically in four places: a non-zero status is a
-     * refusal, and an echo that does not match means the instrument acted on a *different* slot
-     * than the one asked for - which on a delete is the difference between losing the right preset
-     * and losing the wrong one.
+     * Both halves matter: a non-zero status is a refusal, and an echo that does not match means
+     * the instrument acted on a *different* slot than the one asked for - which on a delete is the
+     * difference between losing the right preset and losing the wrong one.
+     *
+     * Every sub-opcode answering that triple checks it here rather than inline, the display
+     * refresh in [reloadPresetForDisplay] included: its reply has the same shape, and a refresh
+     * that silently landed on another slot is worth hearing about for the same reason.
      */
     private fun requireEcho(what: String, payload: ByteArray, bank: Int, item: Int) {
-        val status = readUInt32BE(payload, 0)
-        val echoBank = readUInt32BE(payload, 4)
-        val echoItem = readUInt32BE(payload, 8)
+        val status = readUInt32BE(payload, StatusEcho.STATUS)
+        val echoBank = readUInt32BE(payload, StatusEcho.BANK)
+        val echoItem = readUInt32BE(payload, StatusEcho.ITEM)
         if (status != 0 || echoBank != bank || echoItem != item) {
             throw NordStatusException(
                 what, status,
@@ -778,10 +840,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             if (countPayload.size < 8) {
                 throw IllegalStateException(
                     "Item-count reply for category $categoryIndex is ${countPayload.size} bytes, " +
-                        "too short for a count field at offset 4",
+                        "too short for a count field at offset ${ItemCountReply.ITEM_COUNT}",
                 )
             }
-            val totalCount = readUInt32BE(countPayload, 4)
+            val totalCount = readUInt32BE(countPayload, ItemCountReply.ITEM_COUNT)
 
             // If the child list could not be read the bank count is simply unknown -
             // nothing else on the wire gives it. Let the instrument end the walk (the
@@ -812,8 +874,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                                         FileTransferSubOp.CURSOR_NEXT_ITEM,
                                         uint32BE(bank) + uint32BE(prevItem) + uint32BE(0),
                                     )!!.payload
-                val bankExhausted = readUInt32BE(cursorPayload, 0)
-                val nextVal = readUInt32BE(cursorPayload, 8)
+                val bankExhausted = readUInt32BE(cursorPayload, CursorReply.BANK_EXHAUSTED)
+                val nextVal = readUInt32BE(cursorPayload, CursorReply.NEXT_ITEM)
 
                 if (bankExhausted != 0) {
                     // Boolean "current bank has no more items" flag, NOT the next
@@ -976,7 +1038,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                               FileTransferSubOp.SWAP_PROGRAMS,
                               uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
                           )!!.payload
-            val status = readUInt32BE(payload, 0)
+            val status = readUInt32BE(payload, StatusEcho.STATUS)
             if (status != 0) {
                 throw NordStatusException(
                     "swap-programs", status,
@@ -1006,7 +1068,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                               FileTransferSubOp.MOVE_PROGRAM,
                               uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
                           )!!.payload
-            val status = readUInt32BE(payload, 0)
+            val status = readUInt32BE(payload, StatusEcho.STATUS)
             if (status != 0) {
                 throw NordStatusException(
                     "move-program", status,
@@ -1048,7 +1110,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                               FileTransferSubOp.COPY_PROGRAM,
                               uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
                           )!!.payload
-            val status = readUInt32BE(payload, 0)
+            val status = readUInt32BE(payload, StatusEcho.STATUS)
             if (status == STATUS_FILE_EXISTS) {
                 throw NordStatusException(
                     "copy-program", status,
@@ -1163,6 +1225,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         categoryBankCounts[categoryIndex]?.let { return it }
         return try {
             fetchCategoryChildren(categoryIndex).size.also { categoryBankCounts[categoryIndex] = it }
+        } catch (e: CancellationException) {
+            // Not an unreadable child list - the walk itself is being torn down. Falling through
+            // to the `null` below would have let it carry on against a scope that is already gone.
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Category $categoryIndex's child list could not be read, so its bank " +
                 "count is unknown; the walk will rely on the item count and the empty-bank rule", e)
@@ -1288,7 +1354,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                         "too short for the six fields this reply is expected to carry",
                 )
             }
-            val status = readUInt32BE(payload, 0)
+            val status = readUInt32BE(payload, ItemCountReply.STATUS)
             if (status != 0) {
                 throw NordStatusException(
                     "item-count query", status,
@@ -1296,11 +1362,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 )
             }
             CategorySpace(
-                itemCount = readUInt32BE(payload, 4),
-                free = readUInt32BE(payload, 8),
-                used = readUInt32BE(payload, 12),
-                reclaimable = readUInt32BE(payload, 16),
-                unitCode = readUInt32BE(payload, 20),
+                itemCount = readUInt32BE(payload, ItemCountReply.ITEM_COUNT),
+                free = readUInt32BE(payload, ItemCountReply.FREE),
+                used = readUInt32BE(payload, ItemCountReply.USED),
+                reclaimable = readUInt32BE(payload, ItemCountReply.RECLAIMABLE),
+                unitCode = readUInt32BE(payload, ItemCountReply.UNIT_CODE),
             )
         }
     }
@@ -1739,7 +1805,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
          * 12, right before the 4-byte content tag. The exact byte length of
          * the item's blob, which is what makes [calibrateStorageUnits] possible at all.
          */
-        fun parseItemDataSize(payload: ByteArray): Int = readUInt32BE(payload, 12)
+        fun parseItemDataSize(payload: ByteArray): Int = readUInt32BE(payload, ItemRecord.DATA_SIZE)
 
         /**
          * A sub-opcode 31 item record's content id - the CRC-32 of the item's data blob - or
@@ -1752,13 +1818,13 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
          * record's own length settles which, so this is detected rather than configured.
          */
         fun parseItemContentId(payload: ByteArray): Int? {
-            if (payload.size < 36) return null
-            val nameLen = readUInt32BE(payload, 32)
+            if (payload.size < ItemRecord.NAME_START) return null
+            val nameLen = readUInt32BE(payload, ItemRecord.NAME_LEN)
             // Validated (not just clamped) before the arithmetic below: an unchecked nameLen near
             // Int.MAX_VALUE would silently wrap this offset calculation around to a small or
             // negative value, defeating the payload.size bounds check that follows it.
             if (nameLen !in 0..MAX_ITEM_NAME_LEN) return null
-            val offset = 36 + nameLen + 8
+            val offset = ItemRecord.NAME_START + nameLen + 8
             return if (payload.size < offset + 4) null else readUInt32BE(payload, offset)
         }
 

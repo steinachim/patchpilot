@@ -4,9 +4,13 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Message framing for the Nord vendor USB protocol: [4B total length][4B command][4B target]
- * [4B sub-opcode][payload][2B CRC-16/CCITT-FALSE], all big-endian, CRC over everything
- * before it.
+ * Message framing for the Nord vendor USB protocol:
+ * `[4B total length][4B protocol ID][4B protocol version][4B sub-opcode][payload][2B CRC-16/CCITT-FALSE]`,
+ * all big-endian, CRC over everything before it.
+ *
+ * The two middle words carry which protocol the message belongs to (6 = UI, 7 = Ctrl, 12 = file
+ * transfer) and the version that protocol was negotiated at - the same names [NordMessage]'s own
+ * fields and docs/PROTOCOLS.md use for them.
  */
 const val MESSAGE_HEADER_LEN = 16
 const val MESSAGE_CRC_LEN = 2

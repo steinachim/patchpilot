@@ -264,6 +264,23 @@ class InstrumentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     /**
+     * Runs an edit on [viewModelScope] rather than on the caller's composition scope.
+     *
+     * **The scope an edit runs in decides whether navigating away can abandon it mid-write.** A
+     * `rememberCoroutineScope()` in ProgramsScreen is cancelled the moment that screen leaves the
+     * composition, so tapping back during a write cancelled the write itself - and on a Motif XS a
+     * write is a header, up to 81 blocks and a footer, with the instrument sitting on *receiving
+     * midi bulk data* until it is completed or power-cycled. Tying an edit's lifetime to the
+     * instrument's instead of to the screen's is what makes backing out safe rather than merely
+     * discouraged.
+     *
+     * `SysExExchange.exchangeAfterAll` refuses to be interrupted mid-sequence in any case; this is
+     * the other half of that guarantee, and the half that also keeps a slow single-message write
+     * from being dropped halfway.
+     */
+    fun launchEdit(block: suspend () -> Unit): Job = viewModelScope.launch { block() }
+
+    /**
      * Reacts to a physical USB detach, in whichever of three shapes the session is currently in:
      * closes an active session if the device that went away is the one it is actually using
      * ([ConnectionState.DeviceLost]); fails a connect attempt still waiting on that same device

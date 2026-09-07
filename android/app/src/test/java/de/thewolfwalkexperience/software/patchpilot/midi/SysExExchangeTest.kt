@@ -2,6 +2,8 @@ package de.thewolfwalkexperience.software.patchpilot.midi
 
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800SysEx
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -9,6 +11,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class SysExExchangeTest {
 
@@ -129,5 +132,65 @@ class SysExExchangeTest {
         assertEquals(2, transport.sent.size)
         assertArrayEquals(first, transport.sent[0])
         assertArrayEquals(second, transport.sent[1])
+    }
+
+    /** Eight blocks standing in for a Motif XS voice write: a header, some body, a footer. */
+    private fun sequence(count: Int): List<ByteArray> =
+        (0 until count).map { byteArrayOf(0xF0.toByte(), it.toByte(), 0xF7.toByte()) }
+
+    @Test
+    fun `exchangeAfterAll sends every message before waiting for the acknowledgement`() = runTest {
+        val ack = byteArrayOf(0xF0.toByte(), 0x7E, 0xF7.toByte())
+        val messages = sequence(8)
+        // Answers only once the last message has gone out, which is what "acknowledged only at
+        // the end" means on the wire.
+        val transport = FakeMidiTransport { request ->
+            if (request.contentEquals(messages.last())) listOf(ack) else emptyList()
+        }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val reply = exchange.exchangeAfterAll(messages, "writing a voice", gap = 15.milliseconds) {
+            it.contentEquals(ack)
+        }
+
+        assertArrayEquals(ack, reply)
+        assertEquals(messages.size, transport.sent.size)
+    }
+
+    /**
+     * **The one that protects the instrument.** A Motif XS left mid-sequence sits on *receiving
+     * midi bulk data* until it is completed or power-cycled, so a cancelled write must still put
+     * every block on the wire - the footer above all, since that is what ends the transaction.
+     *
+     * Before `exchangeAfterAll` ran its send loop under `NonCancellable`, the `delay(gap)` between
+     * blocks was a cancellation point on every iteration: tapping back during a rename abandoned
+     * the sequence at ~15ms granularity and left the instrument stuck. This drives exactly that -
+     * cancel the caller a couple of blocks in - and asserts the whole sequence went out anyway.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun `a cancelled exchangeAfterAll still sends the whole sequence`() = runTest {
+        val messages = sequence(8)
+        // Never acknowledges: the point here is what reached the instrument, not what came back.
+        val transport = FakeMidiTransport { emptyList() }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val job = launch {
+            exchange.exchangeAfterAll(messages, "writing a voice", timeout = 10.seconds, gap = 15.milliseconds) {
+                false
+            }
+        }
+        // Two blocks in - far enough to be genuinely mid-sequence, nowhere near the footer.
+        advanceTimeBy(30.milliseconds)
+        job.cancel()
+        job.join()
+
+        assertEquals(
+            "a cancelled write must still reach the footer, or the instrument is left mid-transaction",
+            messages.size,
+            transport.sent.size,
+        )
+        assertArrayEquals(messages.last(), transport.sent.last())
+        assertTrue("the caller itself must still end up cancelled", job.isCancelled)
     }
 }
