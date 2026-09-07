@@ -10,8 +10,10 @@ import kotlinx.serialization.Serializable
  * `$defs/device` shape - deliberately so a [DeviceProfile] can be serialized straight back into a
  * paste-able catalog entry (see NordInstrument.buildReport(), which is what a user shares) with
  * no field mapping.
- * [programCategoryIds] is otherwise unused - nothing in this app reads preset category
- * tags yet.
+ *
+ * [programCategoryIds] indexes the catalog's family-level `programCategories` master list, which
+ * is *not* on this class - see [DeviceCatalog] and [NordCategories] for why the two halves are
+ * carried separately.
  */
 @Serializable
 data class DeviceProfile(
@@ -53,7 +55,7 @@ data class DeviceProfile(
     /** Which ids of the master programCategories list in devices/nord_devices.json this
      * instrument offers - an index into it, not a redefinition of it.
      * Null (always true for [unknown]) means "this instrument's subset has not been
-     * established". See the class doc for why this otherwise-unread field is modeled at all. */
+     * established", which is what leaves such a device without a [NordTagger]. */
     val programCategoryIds: List<Int>? = null,
     /** Ids from [programCategoryIds] this instrument displays under a name other than the master
      * list's, id -> name. Both current instruments relabel 23/24 as EPiano1/EPiano2. */
@@ -97,4 +99,15 @@ data class DeviceProfile(
 data class DeviceCatalog(
     val schemaVersion: Int,
     val devices: List<DeviceProfile>,
+    /**
+     * The master category table, `id -> name`, all 54 entries.
+     *
+     * **Family-level, not per-device**, which is why it is here rather than on [DeviceProfile]:
+     * it is one list Clavia shares across the whole Nord line, and each instrument names only a
+     * subset of it via [DeviceProfile.programCategoryIds]. It also **cannot** be stored the other
+     * way round, because it is not injective - ids 2 and 37 are both `Wind`, 14 and 43 both
+     * `User` - so `name -> id` is well defined only within one instrument's subset. [NordCategories]
+     * is what builds that direction, per device.
+     */
+    val programCategories: Map<String, String> = emptyMap(),
 )

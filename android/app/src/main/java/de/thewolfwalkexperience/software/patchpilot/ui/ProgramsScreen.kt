@@ -1415,6 +1415,7 @@ fun ProgramsScreen(
                 tags = target.tags,
                 taxonomy = facet.taxonomy,
                 assignmentCount = facet.assignmentCount,
+                allowsUnassigned = facet.allowsUnassigned,
                 onConfirm = { picked -> onCategoriesConfirmed(target.slot, picked) },
                 onDismiss = { categoriesTarget = null },
             )

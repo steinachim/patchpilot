@@ -68,7 +68,10 @@ class InstrumentFacetTest {
     @Test
     fun `a family without a capability declares null for it`() {
         assertNull("no encoding in this fixture, so nothing to tag with", motifXs().tagger)
-        assertNull("a Nord has no category opcode this app knows", nord().tagger)
+        // A Nord's categories need *two* halves - the model's own id subset and the catalog's
+        // master name list - and this fixture profile carries neither, so there is nothing to
+        // resolve. The Nord path with both halves present is covered by NordTaggerTest.
+        assertNull("no category ids and no master list in this fixture", nord().tagger)
         assertNull(DemoInstrument().tagger)
     }
 

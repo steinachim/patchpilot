@@ -49,7 +49,12 @@ object NordFamily : InstrumentFamily {
     ): Instrument {
         val bulk = transport as? UsbBulkTransport
             ?: error("A Nord speaks its vendor protocol over bulk USB, not ${transport::class.simpleName}.")
-        return NordInstrument(NordDevice(bulk, descriptor.profile()))
+        // The master category list is family-level data, so it comes from the catalog here
+        // rather than riding along in the per-device familyConfig. `load` is memoised.
+        return NordInstrument(
+            NordDevice(bulk, descriptor.profile()),
+            catalog.load(context).programCategories,
+        )
     }
 
     /** The profile [toDescriptor] stashed, read back with no field mapping - the two are the same

@@ -49,8 +49,25 @@ private val REPORT_JSON = Json { prettyPrint = true; encodeDefaults = true }
  */
 class NordInstrument(
     private val device: NordDevice,
+    /**
+     * The catalog's family-level category master list, `id -> name`.
+     *
+     * Passed in rather than read off [DeviceProfile], because it belongs to the whole Nord line
+     * rather than to one instrument - see [DeviceCatalog.programCategories]. Defaulted to empty so
+     * a caller that has no catalog to hand (the unknown-device path, and the tests) still gets a
+     * working instrument, just without categories.
+     */
+    programCategories: Map<String, String> = emptyMap(),
     private val bus: Bus = Bus.USB,
 ) : Instrument, PresetBrowser, PresetSelector, PresetEditor, DeviceReporter {
+
+    /**
+     * This model's categories, resolved once.
+     *
+     * Held rather than re-derived per row: [toPresetSlot] needs it for every one of them, and
+     * resolving involves a sort.
+     */
+    private val categories: NordCategories? = NordCategories.resolve(device.profile, programCategories)
 
     /**
      * Rebuilt from [NordDevice.profile] on every read rather than captured once, because
@@ -85,11 +102,13 @@ class NordInstrument(
     override val selector: PresetSelector get() = this
     override val editor: PresetEditor get() = this
     /**
-     * A Nord program does carry a category tag, but no opcode this app knows reads or writes
-     * one - `DeviceProfile.programCategoryIds` is still unused. When that lands this becomes a
-     * real [PresetTagger] with a flat taxonomy and no favorites.
+     * Categories, where the catalog says which ones this model offers.
+     *
+     * Null when [NordCategories.resolve] declines - an unrecognised device, or a family catalog
+     * with no master name list - rather than a facet offering an empty list of categories and
+     * refusing every write. Same rule the Motif XS applies to a catalog with no encoding.
      */
-    override val tagger: PresetTagger? = null
+    override val tagger: PresetTagger? = categories?.let { NordTagger(device, it) }
 
     override val report: DeviceReporter get() = this
 
@@ -168,6 +187,9 @@ class NordInstrument(
             // of ProgramsScreen and left standing here, ten lines above [emptySlot] doing it right.
             bankLabel = addressFormat().bankLabel(parsed.bank),
             name = name,
+            // Free: the tag is in the item record this row was already built from. Empty for an
+            // id this model does not name, which its own display shows as `No Cat`.
+            badges = listOfNotNull(categoryId?.let { categories?.nameOf(it) }),
         )
     }
 

@@ -141,6 +141,10 @@ internal fun SetFavoriteDialog(
  * and a dialog is the wrong place to scroll through eighty rows. A family with a flat taxonomy -
  * a Nord - renders one group with its sub dropdown suppressed, without this composable branching
  * on which instrument it is.
+ *
+ * @param allowsUnassigned whether to offer a synthetic "None" entry meaning *no* category. False
+ *   on a Nord, which has a real category called `None` of its own: offering both would put two
+ *   entries with the same word in one dropdown, one of which the instrument cannot store.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -149,6 +153,7 @@ internal fun SetCategoriesDialog(
     tags: PresetTags,
     taxonomy: CategoryTaxonomy,
     assignmentCount: Int,
+    allowsUnassigned: Boolean,
     onConfirm: (List<CategoryRef?>) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -157,6 +162,10 @@ internal fun SetCategoriesDialog(
     }
     val noneLabel = stringResource(R.string.programs_categories_none)
     val noSubLabel = stringResource(R.string.programs_categories_no_sub)
+    // How far the dropdown's indices run ahead of the taxonomy's, which is 1 while the synthetic
+    // "None" occupies row 0 and 0 without it - written once so the two dropdown callbacks below
+    // cannot disagree about it.
+    val offset = if (allowsUnassigned) 1 else 0
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -170,11 +179,11 @@ internal fun SetCategoriesDialog(
                     Picker(
                         label = stringResource(R.string.programs_categories_main, slot + 1),
                         selected = main?.name ?: noneLabel,
-                        options = listOf(noneLabel) + taxonomy.mains.map { it.name },
+                        options = (if (allowsUnassigned) listOf(noneLabel) else emptyList()) +
+                            taxonomy.mains.map { it.name },
                         onSelect = { index ->
-                            // Index 0 is the synthetic "None" entry, so everything after it is
-                            // one ahead of the taxonomy's own indices.
-                            picks[slot] = if (index == 0) null else CategoryRef(index - 1, null)
+                            picks[slot] = if (allowsUnassigned && index == 0) null
+                            else CategoryRef(index - offset, null)
                         },
                     )
 

@@ -102,6 +102,20 @@ interface PresetTagger {
     val favorites: FavoriteModel?
 
     /**
+     * Whether an assignment can be left empty.
+     *
+     * True on a Motif XS, which has a real `NoAsg` state its own panel offers. **False on a
+     * Nord**, where every program always carries a category id and `None` is one of the
+     * categories rather than the absence of one - so an editor must not offer a "clear it"
+     * option the instrument has nowhere to store.
+     *
+     * **Constrains writing, not reading.** [PresetTags.categories] can still hold a null here: a
+     * Nord program tagged with an id outside the ids its own model names displays as `No Cat` on
+     * the instrument, and null is the honest way to show something this app cannot name.
+     */
+    val allowsUnassigned: Boolean get() = true
+
+    /**
      * Whether [address]'s categories can be changed.
      *
      * **Per-slot, and separate from [canSetFavorite], because on a Motif XS they disagree.** A

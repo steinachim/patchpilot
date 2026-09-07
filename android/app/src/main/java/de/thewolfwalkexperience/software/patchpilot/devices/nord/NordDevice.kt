@@ -160,12 +160,14 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         GET_DEPENDENCY(40), // an item's dependency list: the piano and sample library it needs (40/41)
         ENABLE_INVALIDATION(45), // `enable invalidation` (45/46); the reply is an unexamined ack
         SELECT_PRESET(47), // select/load a preset by (bank, item) (47/48)
+        SET_CATEGORY(51), // set a preset's category tag by (bank, item) (51/52)
         RESET(57), // `reset` (57/58); reply is always 4 zero bytes, nothing needs it
         QUERY_CONTENT_VERSION(61), // `query content version` (61/62); reply is 4 zero bytes
     }
 
     data class BankItem(val bank: Int, val item: Int)
-    data class NamedItem(val presetId: String, val name: String)
+    /** [categoryId] is null for a record carrying no program category - see [parseItemCategory]. */
+    data class NamedItem(val presetId: String, val name: String, val categoryId: Int? = null)
 
     /**
      * Fetches the firmware version, refuses to continue if it isn't in
@@ -642,6 +644,28 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     }
 
     /**
+     * A program record's category tag id, or null where this record does not carry one.
+     *
+     * Four bytes at offset 28, immediately before the name length [parseItemName] reads at 32 -
+     * so it costs nothing: it is already in the record the listing fetches for every row. It is
+     * the same field sub-opcode 51 writes ([setPresetCategory]), confirmed on one slot from both
+     * directions: the recorded `A:1:1` "White Grand" record reads 21 here, and the capture of a
+     * category change on that same preset carries `categoryId` 21 for "Grand".
+     *
+     * **Gated on the content tag, which is the whole point.** Offset 28 is the record's
+     * *tag-specific* field and means something different per content type: on an `nsmp` sample
+     * record it is two 2-byte halves, a (category, sub-category) pair, which read as a 4-byte
+     * word gives 589826 for the sample fixture here. Decoding it blind would badge samples with
+     * a nonsense id rather than fail, so a record that is not `ngp` answers null.
+     */
+    fun parseItemCategory(payload: ByteArray): Int? {
+        if (payload.size < 32) return null
+        val tag = String(payload, 16, 4, Charsets.US_ASCII)
+        if (tag != PROGRAM_CONTENT_TAG) return null
+        return readUInt32BE(payload, 28)
+    }
+
+    /**
      * Strips control characters from text the *instrument* chose.
      *
      * **The length of a name was checked here; its contents were not.** US-ASCII decoding already
@@ -665,7 +689,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     fun collectItemNames(itemPayloads: List<ByteArray>): List<NamedItem> = itemPayloads.map { payload ->
         val bank = readUInt32BE(payload, 4)
         val item = readUInt32BE(payload, 8)
-        NamedItem(formatPresetId(bank, item), parseItemName(payload))
+        NamedItem(formatPresetId(bank, item), parseItemName(payload), parseItemCategory(payload))
     }
 
     /**
@@ -902,6 +926,32 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             val payload = uint32BE(bank) + uint32BE(item) + uint32BE(nameBytes.size) + nameBytes
             val respPayload = fileTransfer(FileTransferSubOp.SET_NAME, payload)!!.payload
             requireEcho("rename", respPayload, bank, item)
+            reloadPresetForDisplay(bank, item)
+        }
+    }
+
+    /**
+     * Sets the category tag of the preset at (bank, item) - selects the "Program" category, then
+     * sub-opcode 51/52. The response echoes back (flag, bank, item); flag is expected to be 0.
+     *
+     * **Deliberately the same shape as [renamePreset]**, because on the wire it is the same
+     * operation with a different sub-opcode and a three-word payload: same lock/unlock bracket,
+     * same echo check, same trailing re-select so the instrument's own display catches up.
+     *
+     * the vendor editor's rename dialog always commits *both* the name and the category on OK,
+     * whichever the user actually touched, but the two calls are independent - confirmed live on
+     * a Nord Stage 2 EX (2026-08-08). So this writes the category alone and leaves the name
+     * untouched.
+     *
+     * [categoryId] is not validated against the instrument's own set here: every value from 0 to
+     * 31 is accepted and stored, and one the instrument cannot name simply displays as `No Cat`.
+     * Choosing an id a user can actually see is [NordCategories]' job.
+     */
+    suspend fun setPresetCategory(bank: Int, item: Int, categoryId: Int) {
+        withProgramCategory {
+            val payload = uint32BE(bank) + uint32BE(item) + uint32BE(categoryId)
+            val respPayload = fileTransfer(FileTransferSubOp.SET_CATEGORY, payload)!!.payload
+            requireEcho("set-category", respPayload, bank, item)
             reloadPresetForDisplay(bank, item)
         }
     }
@@ -1552,6 +1602,20 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         /** Same idea as [MAX_ROOT_CATEGORY_NAME_LEN], for an item record's own name field -
          * real preset/sample names are well under this. */
         private const val MAX_ITEM_NAME_LEN = 64
+
+        /**
+         * The 4-byte content tag of a *program* record.
+         *
+         * **NUL-padded, not space-padded**: a three-letter tag arrives as `6e 67 70 00`, so this
+         * is `ngp` plus a NUL - written as an escape, because a raw NUL in source is invisible to
+         * every reader and to most diffs. Matching `"ngp "` instead would never match anything,
+         * and since [parseItemCategory] answers null on a mismatch, that would present as an
+         * instrument whose programs simply carry no category rather than as a failure.
+         *
+         * The one tag whose record carries a program category at offset 28. The others (`npno`,
+         * `nsmp`, `npdl`, ...) put something else entirely in that field.
+         */
+        private const val PROGRAM_CONTENT_TAG = "ngp\u0000"
 
         /** Upper bound on a category-child's `capacity` field (the sub-opcode 2/3 reply)
          * **where it is used as an addressing bound** - i.e. in [NordDevice.deriveBankLayout],
