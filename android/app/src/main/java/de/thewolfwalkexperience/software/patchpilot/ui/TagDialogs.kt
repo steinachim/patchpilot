@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -61,6 +62,7 @@ internal fun SetFavoriteDialog(
     target: PresetSlot,
     tags: PresetTags,
     taxonomy: CategoryTaxonomy,
+    assignmentCount: Int,
     onConfirm: (Set<Int>) -> Unit,
     onDismiss: () -> Unit,
     onSetCategories: (() -> Unit)? = null,
@@ -116,7 +118,7 @@ internal fun SetFavoriteDialog(
             if (assigned.isEmpty()) {
                 onSetCategories?.let { open ->
                     TextButton(onClick = open) {
-                        Text(stringResource(R.string.action_set_categories))
+                        Text(pluralStringResource(R.plurals.action_set_categories, assignmentCount))
                     }
                 }
             } else {
@@ -169,7 +171,9 @@ internal fun SetCategoriesDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.programs_categories_title, target.displayId)) },
+        title = {
+            Text(pluralStringResource(R.plurals.programs_categories_title, assignmentCount, target.displayId))
+        },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 repeat(assignmentCount) { slot ->
@@ -177,7 +181,10 @@ internal fun SetCategoriesDialog(
                     val main = ref?.let { taxonomy.main(it.main) }
 
                     Picker(
-                        label = stringResource(R.string.programs_categories_main, slot + 1),
+                        // Numbered only where there is more than one to tell apart.
+                        label = pluralStringResource(
+                            R.plurals.programs_categories_main, assignmentCount, slot + 1,
+                        ),
                         selected = main?.name ?: noneLabel,
                         options = (if (allowsUnassigned) listOf(noneLabel) else emptyList()) +
                             taxonomy.mains.map { it.name },

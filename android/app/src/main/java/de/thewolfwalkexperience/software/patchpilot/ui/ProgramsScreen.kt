@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -88,6 +89,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
@@ -1097,10 +1099,32 @@ fun ProgramsScreen(
                                         if (program.name == null) EmptySlotText() else Text(program.name)
                                     },
                                     supportingContent = {
-                                        // Badges are short family-supplied strings (a preset
-                                        // version, say) rendered uniformly, so a family can add
+                                        // Badges are short family-supplied strings (a category, a
+                                        // preset version) rendered uniformly, so a family can add
                                         // one without this screen learning what it means.
-                                        Text((listOf(program.displayId) + program.badges).joinToString("  "))
+                                        //
+                                        // **Pushed to the trailing edge**, so a column of them
+                                        // lines up down the list instead of starting wherever the
+                                        // id happens to end. The badge text takes the remaining
+                                        // width rather than a spacer taking it, which is what lets
+                                        // a long one shrink and ellipsize instead of shoving the
+                                        // id off the row.
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(program.displayId)
+                                            if (program.badges.isNotEmpty()) {
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    text = program.badges.joinToString("  "),
+                                                    modifier = Modifier.weight(1f),
+                                                    textAlign = TextAlign.End,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        }
                                     },
                                     colors = ListItemDefaults.colors(containerColor = rowColor),
                                     // What this row in particular offers.
@@ -1152,6 +1176,7 @@ fun ProgramsScreen(
                                                 canDelete = rowDelete,
                                                 canSetFavorite = rowFavorite,
                                                 canSetCategories = rowCategories,
+                                                categoryCount = tagger?.assignmentCount ?: 1,
                                                 enabled = editsEnabled,
                                                 onRename = {
                                                     renameTarget = program
@@ -1394,6 +1419,7 @@ fun ProgramsScreen(
                 target = target.slot,
                 tags = target.tags,
                 taxonomy = facet.taxonomy,
+                assignmentCount = facet.assignmentCount,
                 onConfirm = { under -> onFavoriteConfirmed(target.slot, under) },
                 onDismiss = { favoriteTarget = null },
                 // The way out of "this preset has no categories, so it cannot be a favorite" -
@@ -1562,6 +1588,9 @@ private fun RowActionsMenu(
     canDelete: Boolean,
     canSetFavorite: Boolean,
     canSetCategories: Boolean,
+    /** How many categories this instrument's presets hold - one on a Nord, two on a Motif XS.
+     * Decides whether the menu offers "Set category" or "Set categories". */
+    categoryCount: Int,
     onRename: () -> Unit,
     onCopy: () -> Unit,
     onDelete: () -> Unit,
@@ -1607,7 +1636,9 @@ private fun RowActionsMenu(
             }
             if (canSetCategories) {
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_set_categories)) },
+                    text = {
+                        Text(pluralStringResource(R.plurals.action_set_categories, categoryCount))
+                    },
                     onClick = { expanded = false; onSetCategories() },
                 )
             }

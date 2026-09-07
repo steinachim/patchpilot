@@ -30,7 +30,6 @@
     <string name="action_rename">Rename</string>
     <string name="action_save">Save</string>
     <string name="action_set_favorite">Set favorite</string>
-    <string name="action_set_categories">Set categories</string>
     <string name="action_copy">Copy to…</string>
     <string name="action_share">Share</string>
     <string name="action_clear_filter">Clear filter</string>
@@ -129,8 +128,6 @@
     <string name="programs_favorite_clear_hint">Clearing every box removes the favorite.</string>
     <string name="programs_favorite_none">This preset has no categories, and a favorite is filed under one of them. Set a category first.</string>
     <string name="programs_favorite_unknown">Categories for this bank are not in the shipped list, so there is nothing to file a favorite under.</string>
-    <string name="programs_categories_title">Set categories — %1$s</string>
-    <string name="programs_categories_main">Category %1$d</string>
     <string name="programs_categories_sub">Sub-category</string>
     <string name="programs_categories_none">None</string>
     <string name="programs_categories_no_sub">—</string>
@@ -239,5 +236,27 @@
     <plurals name="programs_unreadable_slots">
         <item quantity="one">%1$d slot could not be read.</item>
         <item quantity="other">%1$d slots could not be read.</item>
+    </plurals>
+
+    <!--
+      How many categories a preset holds is a per-family fact, so the three places that name
+      them are plurals rather than fixed text. A Nord program has one, a Motif XS voice two,
+      and "Set categories" on an instrument with a single one reads like a mistake.
+
+      The quantity is the *number of assignments the instrument has*, not an index - which is
+      why programs_categories_main can drop the number entirely in the singular case: with one
+      category there is nothing for "Category 1" to distinguish it from.
+    -->
+    <plurals name="action_set_categories">
+        <item quantity="one">Set category</item>
+        <item quantity="other">Set categories</item>
+    </plurals>
+    <plurals name="programs_categories_title">
+        <item quantity="one">Set category — %1$s</item>
+        <item quantity="other">Set categories — %1$s</item>
+    </plurals>
+    <plurals name="programs_categories_main">
+        <item quantity="one">Category</item>
+        <item quantity="other">Category %1$d</item>
     </plurals>
 </resources>

@@ -1,7 +1,7 @@
 # Changelog
 
 ## Next release
-- Add: a Nord program's category now shows on every row in the browser, and a row's menu offers Set categories.
+- Add: a Nord program's category now shows on every row in the browser, and a row's menu offers Set category.
 - Add: Yamaha Motif XS voices now show their categories in the browser, and a row's menu offers Set favorite (any voice) and Set categories (user voices).
 - Fix: selecting a preset no longer briefly inserts a progress line above the list, which pushed every row down and let them spring back on each tap.
 - Fix: the connect screen no longer claims to be waiting for USB permission when it is not. Permission is asked for only the first time an instrument is plugged in and that step is skipped entirely afterwards, so the screen now says what it is actually doing: opening the instrument.
