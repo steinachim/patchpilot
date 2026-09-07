@@ -54,3 +54,12 @@ internal interface ProgramsOperations {
 internal fun interface StringResolver {
     fun get(resId: Int, vararg args: Any): String
 }
+
+/**
+ * Which operation a destination pick is going to perform.
+ *
+ * The two differ in what counts as a valid destination, which is why the screen needs to know
+ * rather than just remembering that *a* pick is in progress: a copy needs somewhere empty to write
+ * to, while a move can land on anything - an empty slot moves, an occupied one swaps.
+ */
+internal enum class PickIntent { COPY, MOVE }

@@ -462,7 +462,7 @@ fun ProgramsScreen(
     // finally be tested without running Compose.
     // `scope` is a key even though it is not an argument: `viewModel.allSlots(scope)` is a plain
     // call, so nothing else here would tell Compose the address space had changed underneath it.
-    val listing = remember(programs, showEmptySlots, searchText, ops.pickingCopy, browseScope) {
+    val listing = remember(programs, showEmptySlots, searchText, ops.picking, browseScope) {
         buildProgramListing(
             reported = programs,
             allSlots = viewModel.allSlots(browseScope),
@@ -471,7 +471,7 @@ fun ProgramsScreen(
             // listing, it would make the favorites one render *nothing*: that scope has no
             // address space, so "show every address, occupied or not" is an empty set.
             showEmptySlots = showEmptySlots && browseScope == PresetScope.USER,
-            pickingCopy = ops.pickingCopy,
+            picking = ops.picking,
             searchText = searchText,
         )
     }
@@ -607,7 +607,7 @@ fun ProgramsScreen(
                 // An edit is different, and not because of the bus: `runEdit` reloads whichever
                 // scope is current when it finishes, so switching underneath it reloads the wrong
                 // one. Picking a copy destination owns the list until it resolves.
-                enabled = ops.busy == null && !ops.pickingCopy,
+                enabled = ops.busy == null && !ops.picking,
                 onSelect = viewModel::setScope,
             )
         }
@@ -631,10 +631,11 @@ fun ProgramsScreen(
         // Picking a copy destination happens in the list itself rather than behind a separate
         // dialog: occupied rows below grey out and stop responding to taps, empty rows show
         // regardless of the filter or "show empty slots" (see visiblePrograms/bankLabels above),
-        // and tapping one starts the copy immediately - see [ProgramsController.onCopyConfirmed]. This banner is the
+        // and tapping one resolves the pick immediately - see
+        // [ProgramsController.onPickConfirmed]. This banner is the
         // one persistent sign that mode is active, and its Cancel is the only way out besides
         // picking a target; there is deliberately no dialog stacked on top of another.
-        ops.copySource?.let { source ->
+        ops.pickSource?.let { source ->
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -646,7 +647,13 @@ fun ProgramsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        stringResource(R.string.programs_copy_title, source.name ?: source.displayId),
+                        stringResource(
+                            when (ops.pickIntent) {
+                                PickIntent.COPY -> R.string.programs_copy_title
+                                PickIntent.MOVE -> R.string.programs_move_title
+                            },
+                            source.name ?: source.displayId,
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
@@ -660,7 +667,7 @@ fun ProgramsScreen(
         // the list in that mode (see visiblePrograms/bankLabels), and the banner above already
         // says what mode this is - a filter and a checkbox that visibly do nothing would only
         // repeat that with dead controls.
-        if (!ops.pickingCopy) {
+        if (!ops.picking) {
             OutlinedTextField(
                 value = searchText,
                 onValueChange = { searchText = it },
@@ -738,13 +745,13 @@ fun ProgramsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .pointerInput(visibleRows, canRelocate, index.complete, ops.pickingCopy, browseScope) {
+                    .pointerInput(visibleRows, canRelocate, index.complete, ops.picking, browseScope) {
                         // Dragging is off while the index is still arriving: a drop into a region
                         // that has not loaded yet has no defined target, and off entirely on an
                         // instrument that cannot relocate presets at all. Also off while picking a
                         // copy destination - the two gestures would otherwise fight over the same
                         // rows, and a copy pick is resolved by a tap, not a drag.
-                        if (!canRelocate || !index.complete || ops.pickingCopy) return@pointerInput
+                        if (!canRelocate || !index.complete || ops.picking) return@pointerInput
                         // Reordering is a user-listing gesture. A read-only bank refuses the write,
                         // and the favorites listing is not an address space - its rows are the
                         // marked voices across every bank, so "the row below" is not a
@@ -835,10 +842,16 @@ fun ProgramsScreen(
                                 val isDragged = drag.draggedIndex == rowIndex
                                 val isDropTarget = drag.dropTargetIndex == rowIndex &&
                                     drag.draggedIndex != null && drag.draggedIndex != rowIndex
-                                // While picking, an empty slot is the only thing a tap can do
-                                // anything with - including one that was already empty before
-                                // picking started, not just ones "Show empty slots" would add.
-                                val isCopyTarget = ops.pickingCopy && isEmpty
+                                // While picking, which rows a tap can do anything with depends on
+                                // what is being picked *for*. A copy needs somewhere empty to
+                                // write - including a slot that was already empty before picking
+                                // started, not just ones "Show empty slots" would add. A move can
+                                // land anywhere except its own source: an empty destination moves,
+                                // an occupied one swaps.
+                                val isPickTarget = ops.picking && when (ops.pickIntent) {
+                                    PickIntent.COPY -> isEmpty
+                                    PickIntent.MOVE -> program.address != ops.pickSource?.address
+                                }
                                 val rowColor = when {
                                     isDragged -> MaterialTheme.colorScheme.primaryContainer
                                     isDropTarget -> MaterialTheme.colorScheme.secondaryContainer
@@ -899,6 +912,13 @@ fun ProgramsScreen(
                                         // other, and picking a destination already moves to the
                                         // user banks, so a read-only source needs no special case.
                                         val rowCopy = canCopy
+                                        // Same conditions the drag gesture is enabled under: a
+                                        // move is a user-listing operation, needs a writable
+                                        // source, and needs the instrument to support relocation
+                                        // at all. Offering it where a drag would be refused would
+                                        // make the accessible path the *less* capable one.
+                                        val rowMove = canRelocate && rowWritable &&
+                                            browseScope == PresetScope.USER
                                         // Asked of the facet, not derived from `rowWritable`,
                                         // because the two disagree: a Motif XS can favorite a
                                         // factory voice but not re-categorise one.
@@ -908,7 +928,7 @@ fun ProgramsScreen(
                                         // Hidden outright while picking, not merely disabled: none
                                         // of these applies to *any* row until the pick is resolved
                                         // or cancelled, including the row being copied from.
-                                        if (ops.pickingCopy || isEmpty ||
+                                        if (ops.picking || isEmpty ||
                                             (!rowRename && !rowDelete && !rowCopy &&
                                                 !rowFavorite && !rowCategories)
                                         ) {
@@ -924,6 +944,7 @@ fun ProgramsScreen(
                                                 program = program,
                                                 canRename = rowRename,
                                                 canCopy = rowCopy,
+                                                canMove = rowMove,
                                                 canDelete = rowDelete,
                                                 canSetFavorite = rowFavorite,
                                                 canSetCategories = rowCategories,
@@ -933,7 +954,8 @@ fun ProgramsScreen(
                                                     ops.renameTarget = program
                                                     ops.renameText = program.name.orEmpty()
                                                 },
-                                                onCopy = { ops.beginPicking(program) },
+                                                onCopy = { ops.beginPicking(program, PickIntent.COPY) },
+                                                onMove = { ops.beginPicking(program, PickIntent.MOVE) },
                                                 onDelete = { ops.deleteTarget = program },
                                                 onSetFavorite = {
                                                     ops.openTagDialog(program, forFavorite = true)
@@ -955,7 +977,7 @@ fun ProgramsScreen(
                                                 .size(ProgramListMetrics.handleSize)
                                                 .let { theme.slotBezel(it, occupied = !isEmpty) },
                                         ) {
-                                            if (!isEmpty && canRelocate && !ops.pickingCopy && browseScope == PresetScope.USER) {
+                                            if (!isEmpty && canRelocate && !ops.picking && browseScope == PresetScope.USER) {
                                                 // The glyph is decorative; the *row* is what a
                                                 // screen reader should describe, so the handle
                                                 // carries the instruction and nothing else does.
@@ -1006,30 +1028,36 @@ fun ProgramsScreen(
                                         .alpha(
                                             when {
                                                 isDragged -> ProgramListMetrics.DRAGGED_ALPHA
-                                                ops.pickingCopy && !isCopyTarget ->
+                                                ops.picking && !isPickTarget ->
                                                     ProgramListMetrics.DISABLED_ALPHA
-                                                isEmpty && !ops.pickingCopy ->
+                                                isEmpty && !ops.picking ->
                                                     ProgramListMetrics.EMPTY_SLOT_ALPHA
                                                 else -> 1f
                                             },
                                         )
                                         .let { m ->
                                             when {
-                                                isCopyTarget -> {
+                                                isPickTarget -> {
                                                     val description = stringResource(
-                                                        R.string.cd_copy_destination, program.displayId,
+                                                        when (ops.pickIntent) {
+                                                            PickIntent.COPY -> R.string.cd_copy_destination
+                                                            PickIntent.MOVE -> R.string.cd_move_destination
+                                                        },
+                                                        program.displayId,
                                                     )
                                                     // Gated while an edit runs: the picker stays
                                                     // open across the copy it started, so without
                                                     // this a second destination could be tapped
                                                     // and queued behind the first.
                                                     m.clickable(enabled = ops.busy == null) {
-                                                        ops.copySource?.let { ops.onCopyConfirmed(it, program) }
+                                                        ops.pickSource?.let {
+                                                            ops.onPickConfirmed(it, program, isEmpty)
+                                                        }
                                                     }.semantics { contentDescription = description }
                                                 }
                                                 // Occupied and not the source: inert while picking,
                                                 // same reasoning as the hidden overflow menu above.
-                                                ops.pickingCopy -> m
+                                                ops.picking -> m
                                                 isEmpty || !canSelect -> m
                                                 else -> m.clickable { ops.onProgramTapped(program) }
                                             }
@@ -1310,7 +1338,7 @@ private fun PresetScope.noteRes(): Int? = when (this) {
  * destructive action permanently within a few dp of a benign one in a scrolling list, which left
  * the confirmation dialog doing work the layout should have been doing. Copy sits between the
  * two: unlike Delete it gets no confirmation of its own, since it is exactly as safe as Rename -
- * choosing a destination in the list itself (`copySource`/`pickingCopy` in [ProgramsController]) is
+ * choosing a destination in the list itself (`pickSource`/`picking` in [ProgramsController]) is
  * the only decision it needs from the user.
  */
 @Composable
@@ -1318,6 +1346,7 @@ private fun RowActionsMenu(
     program: PresetSlot,
     canRename: Boolean,
     canCopy: Boolean,
+    canMove: Boolean,
     canDelete: Boolean,
     canSetFavorite: Boolean,
     canSetCategories: Boolean,
@@ -1326,6 +1355,7 @@ private fun RowActionsMenu(
     categoryCount: Int,
     onRename: () -> Unit,
     onCopy: () -> Unit,
+    onMove: () -> Unit,
     onDelete: () -> Unit,
     onSetFavorite: () -> Unit,
     onSetCategories: () -> Unit,
@@ -1358,6 +1388,18 @@ private fun RowActionsMenu(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_copy)) },
                     onClick = { expanded = false; onCopy() },
+                )
+            }
+            // **The reachable half of drag-to-reorder.** Dragging a row is a long-press gesture
+            // with no keyboard or screen-reader equivalent, which left one of this screen's four
+            // editing operations unavailable to a TalkBack user entirely. This is the same
+            // destination-picking flow Copy uses, so it costs no new interaction paradigm - and it
+            // is the only path to a move for anyone who cannot hold and drag precisely, which is a
+            // larger group than screen-reader users alone.
+            if (canMove) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_move)) },
+                    onClick = { expanded = false; onMove() },
                 )
             }
             // Before Delete: these are ordinary edits, and the destructive item stays last.

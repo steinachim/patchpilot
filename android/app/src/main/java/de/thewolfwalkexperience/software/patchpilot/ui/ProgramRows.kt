@@ -64,7 +64,7 @@ internal fun buildProgramListing(
     reported: List<PresetSlot>,
     allSlots: List<PresetSlot>,
     showEmptySlots: Boolean,
-    pickingCopy: Boolean,
+    picking: Boolean,
     searchText: String,
 ): ProgramListing {
     // Addresses that actually hold a preset - **not** simply every address the index mentioned.
@@ -93,7 +93,7 @@ internal fun buildProgramListing(
     // Picking a copy destination needs every bank on the rail, whether or not "show empty slots"
     // happens to be checked - an empty bank may be exactly where the target is.
     val bankLabels =
-        (if (showEmptySlots || pickingCopy) allSlots else reported)
+        (if (showEmptySlots || picking) allSlots else reported)
             .map { it.bankLabel }.distinct()
 
     // "Show empty slots" has to work in both directions, because the two families report
@@ -105,7 +105,7 @@ internal fun buildProgramListing(
     // Picking a copy destination overrides both the toggle and the filter: the target the user
     // needs might be hidden by either, and a filter has nothing to match against a slot with no
     // name anyway.
-    val expanded = if (pickingCopy || (showEmptySlots && searchText.isBlank())) {
+    val expanded = if (picking || (showEmptySlots && searchText.isBlank())) {
         val byAddress = reported.associateBy { it.address }
         allSlots.map { placeholder -> byAddress[placeholder.address] ?: placeholder }
     } else {
@@ -113,7 +113,7 @@ internal fun buildProgramListing(
         // which is why this also runs when the box is checked but a filter is set.
         reported.filterNot { it.isEmpty }
     }
-    val visible = if (pickingCopy || searchText.isBlank()) {
+    val visible = if (picking || searchText.isBlank()) {
         expanded
     } else {
         expanded.filter { it.name?.contains(searchText, ignoreCase = true) == true }

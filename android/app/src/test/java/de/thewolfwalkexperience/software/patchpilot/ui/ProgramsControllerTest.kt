@@ -204,12 +204,12 @@ class ProgramsControllerTest {
         val (controller, _) = controller(ops)
 
         controller.beginPicking(slot(0, 1))
-        assertTrue(controller.pickingCopy)
+        assertTrue(controller.picking)
         assertEquals("a copy's destination is always a user slot", PresetScope.USER, ops.scope.value)
 
         // Cancelling has made nothing, so it goes back where it came from.
         controller.endPicking()
-        assertFalse(controller.pickingCopy)
+        assertFalse(controller.picking)
         assertEquals(PresetScope.FACTORY, ops.scope.value)
     }
 
@@ -219,10 +219,10 @@ class ProgramsControllerTest {
         val (controller, _) = controller(ops)
 
         controller.beginPicking(slot(0, 1))
-        controller.onCopyConfirmed(slot(0, 1), slot(1, 7))
+        controller.onPickConfirmed(slot(0, 1), slot(1, 7), destinationIsEmpty = true)
         testScheduler.advanceUntilIdle()
 
-        assertFalse(controller.pickingCopy)
+        assertFalse(controller.picking)
         assertEquals(
             "the new voice is in the user banks, and that is what the user just made",
             PresetScope.USER,
@@ -237,10 +237,64 @@ class ProgramsControllerTest {
         controller.beginPicking(slot(0, 1))
         ops.failWith = InstrumentException.Timeout("copying")
 
-        controller.onCopyConfirmed(slot(0, 1), slot(1, 7))
+        controller.onPickConfirmed(slot(0, 1), slot(1, 7), destinationIsEmpty = true)
         testScheduler.advanceUntilIdle()
 
-        assertTrue("show what went wrong against the copy that was about to be made", controller.pickingCopy)
+        assertTrue("show what went wrong against the copy that was about to be made", controller.picking)
+    }
+
+    // ---- "Move to…", the reachable equivalent of the drag gesture ----
+
+    @Test
+    fun `a move pick onto an empty slot moves, and onto an occupied one swaps`() = runTest {
+        val (controller, ops) = controller()
+
+        controller.beginPicking(slot(0, 1), PickIntent.MOVE)
+        controller.onPickConfirmed(slot(0, 1), slot(0, 2), destinationIsEmpty = true)
+        testScheduler.advanceUntilIdle()
+
+        controller.beginPicking(slot(0, 1), PickIntent.MOVE)
+        controller.onPickConfirmed(slot(0, 1), slot(0, 3), destinationIsEmpty = false)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(
+            listOf("move(A1->A2,empty=true)", "move(A1->A3,empty=false)"),
+            ops.calls,
+        )
+    }
+
+    /**
+     * The whole point of the menu path: it has to reach the same operation the gesture does, not a
+     * lesser one. A move started from the menu and a move started from a drop both end in
+     * `moveProgram` with the same empty/occupied decision.
+     */
+    @Test
+    fun `a menu move and a dropped move issue the same call`() = runTest {
+        val (viaMenu, menuOps) = controller()
+        viaMenu.beginPicking(slot(0, 1), PickIntent.MOVE)
+        viaMenu.onPickConfirmed(slot(0, 1), slot(0, 3), destinationIsEmpty = false)
+        testScheduler.advanceUntilIdle()
+
+        val (viaDrag, dragOps) = controller()
+        viaDrag.onSwapDropped(slot(0, 1), slot(0, 3), setOf(SlotAddress(0, 1), SlotAddress(0, 3)))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(menuOps.calls, dragOps.calls)
+    }
+
+    @Test
+    fun `a pick remembers which operation it was started for`() = runTest {
+        val (controller, ops) = controller()
+
+        controller.beginPicking(slot(0, 1), PickIntent.MOVE)
+        assertEquals(PickIntent.MOVE, controller.pickIntent)
+        controller.endPicking()
+
+        controller.beginPicking(slot(0, 1), PickIntent.COPY)
+        controller.onPickConfirmed(slot(0, 1), slot(1, 7), destinationIsEmpty = true)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals("a copy must not become a move", listOf("copy(A1->A7)"), ops.calls)
     }
 
     // ---- Drag-to-reorder picks move or swap from what is occupied ----

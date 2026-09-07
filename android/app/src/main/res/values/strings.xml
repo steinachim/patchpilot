@@ -31,6 +31,7 @@
     <string name="action_save">Save</string>
     <string name="action_set_favorite">Set favorite</string>
     <string name="action_copy">Copy to…</string>
+    <string name="action_move">Move to…</string>
     <string name="action_share">Share</string>
     <string name="action_clear_filter">Clear filter</string>
     <string name="action_continue_anyway">Continue anyway</string>
@@ -42,9 +43,10 @@
     <string name="cd_refresh">Re-read from instrument</string>
     <string name="cd_category_badge">Category %1$s</string>
     <string name="cd_row_options">Options for %1$s</string>
-    <string name="cd_reorder">Reorder %1$s</string>
+    <string name="cd_reorder">Reorder %1$s by dragging. Move to is also in this row’s options.</string>
     <string name="cd_reorder_unavailable">Reordering is unavailable until the listing finishes</string>
     <string name="cd_copy_destination">Copy into %1$s</string>
+    <string name="cd_move_destination">Move into %1$s</string>
     <string name="cd_settings">Settings</string>
 
     <!-- Settings screen: currently just the theme picker. -->
@@ -140,6 +142,7 @@
     <string name="programs_delete_body">This erases %1$s on the instrument.</string>
     <string name="programs_delete_body_named">This erases %1$s (\"%2$s\") on the instrument.</string>
     <string name="programs_copy_title">Copy %1$s to…</string>
+    <string name="programs_move_title">Move %1$s to…</string>
     <string name="programs_error">Error: %1$s</string>
 
     <!--

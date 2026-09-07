@@ -93,19 +93,21 @@ internal class ProgramsController(
     /** Share-report dialog: null while closed, otherwise what is about to be shared. */
     var pendingShare by mutableStateOf<PendingShare?>(null)
 
-    // ---- Copy destination picking ----
+    // ---- Destination picking, for both copy and move ----
 
-    /** The row a "Copy to…" tap started from - non-null while the destination picker is open. */
-    var copySource by mutableStateOf<PresetSlot?>(null)
+    /** The row a "Copy to…" or "Move to…" tap started from, and which of the two it was. */
+    var pickSource by mutableStateOf<PresetSlot?>(null)
+        private set
+    var pickIntent by mutableStateOf(PickIntent.COPY)
         private set
 
     private var scopeBeforePicking by mutableStateOf<PresetScope?>(null)
 
     /**
-     * Non-null [copySource] doubles as "picking a copy destination is in progress" - there is no
-     * second flag that can disagree with it.
+     * Non-null [pickSource] doubles as "picking a destination is in progress" - there is no second
+     * flag that can disagree with it.
      */
-    val pickingCopy: Boolean get() = copySource != null
+    val picking: Boolean get() = pickSource != null
 
     /**
      * Runs one instrument operation, owning the busy line, the error path and the blocked-by-state
@@ -270,13 +272,14 @@ internal class ProgramsController(
      * Both exits go through [endPicking], which is what keeps them from drifting apart once there
      * is more to undo than one field.
      */
-    fun beginPicking(source: PresetSlot) {
+    fun beginPicking(source: PresetSlot, intent: PickIntent = PickIntent.COPY) {
         val browseScope = viewModel.scope.value
         if (browseScope != PresetScope.USER) {
             scopeBeforePicking = browseScope
             viewModel.setScope(PresetScope.USER)
         }
-        copySource = source
+        pickIntent = intent
+        pickSource = source
     }
 
     /**
@@ -288,22 +291,38 @@ internal class ProgramsController(
      * cancelled pick has made nothing, so it does go back.
      */
     fun endPicking(returnToPreviousScope: Boolean = true) {
-        copySource = null
+        pickSource = null
         if (returnToPreviousScope) scopeBeforePicking?.let { viewModel.setScope(it) }
         scopeBeforePicking = null
     }
 
-    fun onCopyConfirmed(source: PresetSlot, destination: PresetSlot) {
-        runEdit(
-            strings.get(
+    /**
+     * Resolves a destination pick, as whichever operation [beginPicking] was started for.
+     *
+     * @param destinationIsEmpty decides move-vs-swap for [PickIntent.MOVE], the same way a drop
+     *   does - an instrument with a separate one-way move refuses the two-way swap onto an empty
+     *   slot. Ignored for a copy, which only ever offers empty destinations.
+     */
+    fun onPickConfirmed(source: PresetSlot, destination: PresetSlot, destinationIsEmpty: Boolean) {
+        val label = when (pickIntent) {
+            PickIntent.COPY -> strings.get(
                 R.string.programs_busy_copying, source.displayId, destination.displayId,
-            ),
-        ) {
-            // The picker closes only once the copy has actually landed. On failure it stays open,
-            // same reasoning as delete: show what went wrong against the copy that was about to be
-            // made rather than dismissing first.
-            viewModel.copyProgram(source, destination)
-                .also { endPicking(returnToPreviousScope = false) }
+            )
+            PickIntent.MOVE -> strings.get(
+                if (destinationIsEmpty) R.string.programs_busy_moving else R.string.programs_busy_swapping,
+                source.displayId,
+                destination.displayId,
+            )
+        }
+        val intent = pickIntent
+        runEdit(label) {
+            // The picker closes only once the operation has actually landed. On failure it stays
+            // open, same reasoning as delete: show what went wrong against the change that was
+            // about to be made rather than dismissing first.
+            when (intent) {
+                PickIntent.COPY -> viewModel.copyProgram(source, destination)
+                PickIntent.MOVE -> viewModel.moveProgram(source, destination, destinationIsEmpty)
+            }.also { endPicking(returnToPreviousScope = false) }
         }
     }
 
