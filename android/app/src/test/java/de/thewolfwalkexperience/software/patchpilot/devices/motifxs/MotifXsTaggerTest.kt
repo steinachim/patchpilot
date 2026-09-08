@@ -438,23 +438,29 @@ class MotifXsTaggerTest {
     }
 
     /**
-     * Refused, not written: the instrument stores a mark pointing at an unassigned category quite
-     * happily and then lists the voice nowhere at all, which looks exactly like the write having
-     * silently failed.
+     * **A voice with no categories can still be favorited**, and the mark written is the one the
+     * instrument's own front panel writes.
+     *
+     * Measured on hardware (2026-09-08): marking a category-less USER voice via Category Search ->
+     * FAVORITE stores `2` and the voice then appears in the instrument's FAVORITE bank. This was
+     * refused here on the reasoning that such a mark "lists the voice nowhere", which the
+     * instrument disproves by making the same mark itself. It matters at scale rather than as a
+     * corner case: 43 of the 128 voices in the USR1 bank measured carry no category at all.
      */
     @Test
-    fun `a favorite cannot be filed under a category the voice does not have`() = runTest {
+    fun `a voice with no categories can still be favorited`() = runTest {
         // 256:256 - no assignments at all.
         val device = Device(favorites = mapOf(0x0A to ByteArray(4)))
         val (_, tagger, transport) = instrument(backgroundScope, device)
 
-        val failure = runCatching { tagger.setFavorite(userSlot, setOf(0)) }.exceptionOrNull()
-        assertNotNull("marking an unassigned category should be refused", failure)
-        assertTrue(
-            "the message should say why, was: ${failure!!.message}",
-            failure.message!!.contains("categor"),
+        tagger.setFavorite(userSlot, setOf(0))
+
+        assertEquals(
+            "the mark must be the 2 the front panel writes, not a refusal",
+            2,
+            device.marks.getValue(0x0A)[userSlot.slot].toInt(),
         )
-        assertTrue("nothing should have been written", transport.favoriteWrites().isEmpty())
+        assertTrue("the write must actually go out", transport.favoriteWrites().isNotEmpty())
     }
 
     /** An index outside the instrument's two assignment slots is a caller bug, not a value. */

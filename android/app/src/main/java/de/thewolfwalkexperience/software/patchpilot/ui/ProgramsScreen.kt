@@ -891,8 +891,37 @@ fun ProgramsScreen(
                                                     text = program.badges.joinToString("  "),
                                                     modifier = Modifier.weight(1f),
                                                     textAlign = TextAlign.End,
+                                                    // **Two lines, and the separator is where it
+                                                    // breaks.** A Motif XS voice can carry two
+                                                    // assignments, and two full labels
+                                                    // ("SyCmp / Arp  M.EFX / Arp") do not fit
+                                                    // beside the id on a portrait phone - at one
+                                                    // line the second was ellipsised away, so a
+                                                    // voice filed under two categories looked
+                                                    // like one filed under a truncated one.
+                                                    // Wrapping rather than a hard newline keeps
+                                                    // it on a single line wherever it does fit,
+                                                    // which is most of landscape.
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            } else if (tagger != null && program.name != null) {
+                                                // **Said, not left blank.** A voice with neither
+                                                // assignment set is a real and editable state,
+                                                // and an empty gap where every other row carries
+                                                // a category reads as "not loaded yet" rather
+                                                // than "filed under nothing". Only where the
+                                                // instrument has categories at all: a family
+                                                // without them would otherwise label every row.
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    text = stringResource(R.string.programs_no_category),
+                                                    modifier = Modifier.weight(1f),
+                                                    textAlign = TextAlign.End,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    style = MaterialTheme.typography.bodySmall,
                                                 )
                                             }
                                         }

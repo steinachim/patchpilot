@@ -76,13 +76,26 @@ internal fun SetFavoriteDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (assigned.isEmpty()) {
-                    // Two different dead ends worth telling apart: this preset has no categories,
-                    // or this app has no category list for its bank. Only the first is fixable
-                    // from here.
-                    Text(
-                        stringResource(
-                            if (onSetCategories == null) R.string.programs_favorite_unknown
-                            else R.string.programs_favorite_none
+                    // **Not a dead end.** A voice filed under no category can still be a
+                    // favorite: the instrument's own front panel writes the same mark this
+                    // dialog would, and lists the voice in its Favorite bank - measured on
+                    // hardware, and the reason the driver no longer refuses it. So this offers
+                    // the plain on/off the situation actually has, rather than explaining why
+                    // it cannot be done.
+                    //
+                    // `setOf(0)` is what "on" means here: it encodes to the same value the panel
+                    // writes. Which of the two assignment slots it names is immaterial to a voice
+                    // that has neither.
+                    Text(stringResource(R.string.programs_favorite_uncategorised))
+                    Spacer(Modifier.height(8.dp))
+                    val isOn = checked.isNotEmpty()
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.programs_favorite_toggle)) },
+                        leadingContent = { Checkbox(checked = isOn, onCheckedChange = null) },
+                        modifier = Modifier.toggleable(
+                            value = isOn,
+                            role = Role.Checkbox,
+                            onValueChange = { on -> checked = if (on) setOf(0) else emptySet() },
                         ),
                     )
                 } else {
@@ -115,22 +128,22 @@ internal fun SetFavoriteDialog(
             }
         },
         confirmButton = {
-            if (assigned.isEmpty()) {
-                onSetCategories?.let { open ->
-                    TextButton(onClick = open) {
-                        Text(pluralStringResource(R.plurals.action_set_categories, assignmentCount))
-                    }
-                }
-            } else {
-                // Enabled even when nothing changed: "Save" that does nothing is less confusing
-                // than a button that looks broken, and the write is a no-op the driver skips.
-                TextButton(onClick = { onConfirm(checked) }) {
-                    Text(stringResource(R.string.action_save))
-                }
+            // Enabled even when nothing changed: "Save" that does nothing is less confusing
+            // than a button that looks broken, and the write is a no-op the driver skips.
+            TextButton(onClick = { onConfirm(checked) }) {
+                Text(stringResource(R.string.action_save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            // Still offered where the voice has no categories and they can be set - now as the
+            // other thing you might want, rather than as the only button in the dialog.
+            if (assigned.isEmpty() && onSetCategories != null) {
+                TextButton(onClick = onSetCategories) {
+                    Text(pluralStringResource(R.plurals.action_set_categories, assignmentCount))
+                }
+            } else {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            }
         },
     )
 }

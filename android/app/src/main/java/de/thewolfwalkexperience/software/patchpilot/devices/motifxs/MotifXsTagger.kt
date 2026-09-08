@@ -3,7 +3,6 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.FavoriteModel
-import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
@@ -128,18 +127,17 @@ internal class MotifXsTagger(
             "A Motif XS voice has $ASSIGNMENTS category slots; $under names another."
         }
 
-        // Refused rather than written: the instrument stores a mark pointing at an unassigned
-        // category quite happily and then shows the voice under nothing at all, which looks
-        // exactly like the write having silently failed.
-        val tags = read(address)
-        val unassigned = under.filter { tags.categories[it] == null }
-        if (unassigned.isNotEmpty()) {
-            throw InstrumentException.NotSupported(
-                "favorite ${instrument.describe(address)} under a category it does not have - " +
-                    "the instrument files a favorite under one of the voice's own two " +
-                    "categories, and ${unassigned.joinToString { "slot ${it + 1}" }} is unset"
-            )
-        }
+        // **A mark against an unassigned category is legal, and the instrument makes them itself.**
+        // Measured on hardware (2026-09-08): marking a category-less USER voice from the front
+        // panel - Category Search -> FAVORITE - writes `2`, the same value `setOf(0)` encodes to
+        // here, and the voice then appears in the instrument's own FAVORITE bank. So this is not
+        // a write that "lists the voice nowhere"; it is the ordinary way to favorite a voice that
+        // is filed under nothing, and 43 of the 128 voices in the USR1 bank measured are in
+        // exactly that state. Refusing it made a third of a user bank unfavoritable from here
+        // while the panel beside it allowed the same thing.
+        //
+        // No read of the voice's own categories is needed to decide that, which is why one no
+        // longer happens on this path.
 
         val value = encodeMark(under)
         val table = instrument.readFavoriteTable(spec).copyOf()

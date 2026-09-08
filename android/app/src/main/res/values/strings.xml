@@ -97,6 +97,7 @@
     <string name="programs_show_empty">Show empty slots</string>
     <string name="programs_bank_header">Bank %1$s</string>
     <string name="programs_slot_empty">Empty</string>
+    <string name="programs_no_category">No category</string>
     <string name="programs_no_presets">This instrument reports no presets.</string>
     <string name="programs_no_matches">No presets match \"%1$s\".</string>
     <!-- Which of an instrument's listings is shown. Only instruments offering more than one
@@ -128,8 +129,8 @@
     <string name="programs_favorite_body">Show this preset under:</string>
     <string name="programs_favorite_slot">Category %1$d</string>
     <string name="programs_favorite_clear_hint">Clearing every box removes the favorite.</string>
-    <string name="programs_favorite_none">This preset has no categories, and a favorite is filed under one of them. Set a category first.</string>
-    <string name="programs_favorite_unknown">Categories for this bank are not in the shipped list, so there is nothing to file a favorite under.</string>
+    <string name="programs_favorite_uncategorised">This preset is filed under no category. It can still be a favorite — the instrument lists it in its Favorite bank, just not under a category.</string>
+    <string name="programs_favorite_toggle">Favorite</string>
     <string name="programs_categories_sub">Sub-category</string>
     <string name="programs_categories_none">None</string>
     <string name="programs_categories_no_sub">—</string>
