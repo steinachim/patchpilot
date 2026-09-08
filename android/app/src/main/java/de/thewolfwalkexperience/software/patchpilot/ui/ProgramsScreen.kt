@@ -77,6 +77,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.SoftwareKeyboardController
@@ -137,6 +138,9 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
  */
 
 private const val TAG = "ProgramsScreen"
+
+/** Material's medium width breakpoint - see `badgesFit` in [ProgramsScreen]. */
+private const val BADGE_MIN_WIDTH_DP = 600
 
 /**
  * The measurements the preset list and its floating drag ghost have to agree on.
@@ -249,6 +253,12 @@ fun ProgramsScreen(
     // Every instrument operation this screen can start, and the state each one owns - see
     // [ProgramsController]. What stays below is the state that only describes the view.
     val ops = rememberProgramsController(viewModel)
+
+    // Whether a row has room for its category badges beside the preset id. 600dp is Material's
+    // medium width breakpoint: a phone in portrait is below it, the same phone turned landscape
+    // and any tablet are above. Read from the configuration rather than measured per row, so
+    // every row in the list agrees and the column does not appear on some rows and not others.
+    val badgesFit = LocalConfiguration.current.screenWidthDp >= BADGE_MIN_WIDTH_DP
 
     var showEmptySlots by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
@@ -885,44 +895,43 @@ fun ProgramsScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             Text(program.displayId)
-                                            if (program.badges.isNotEmpty()) {
-                                                Spacer(Modifier.width(8.dp))
-                                                Text(
-                                                    text = program.badges.joinToString("  "),
-                                                    modifier = Modifier.weight(1f),
-                                                    textAlign = TextAlign.End,
-                                                    // **Two lines, and the separator is where it
-                                                    // breaks.** A Motif XS voice can carry two
-                                                    // assignments, and two full labels
-                                                    // ("SyCmp / Arp  M.EFX / Arp") do not fit
-                                                    // beside the id on a portrait phone - at one
-                                                    // line the second was ellipsised away, so a
-                                                    // voice filed under two categories looked
-                                                    // like one filed under a truncated one.
-                                                    // Wrapping rather than a hard newline keeps
-                                                    // it on a single line wherever it does fit,
-                                                    // which is most of landscape.
-                                                    maxLines = 2,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                            } else if (tagger != null && program.name != null) {
-                                                // **Said, not left blank.** A voice with neither
-                                                // assignment set is a real and editable state,
-                                                // and an empty gap where every other row carries
-                                                // a category reads as "not loaded yet" rather
-                                                // than "filed under nothing". Only where the
-                                                // instrument has categories at all: a family
-                                                // without them would otherwise label every row.
-                                                Spacer(Modifier.width(8.dp))
-                                                Text(
-                                                    text = stringResource(R.string.programs_no_category),
-                                                    modifier = Modifier.weight(1f),
-                                                    textAlign = TextAlign.End,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                )
+                                            // **Only where the row is wide enough to hold them.**
+                                            // A Motif XS voice can carry two assignments, and two
+                                            // full labels beside the id do not fit a portrait
+                                            // phone: on one line the second was ellipsised away,
+                                            // and wrapped to two the whole list read as crowded.
+                                            // Neither is worth the space it costs on every row, so
+                                            // the badge column appears from Material's medium
+                                            // width breakpoint up - a phone in landscape, or a
+                                            // tablet either way round - and the categories stay a
+                                            // row-menu question below it.
+                                            if (badgesFit) {
+                                                if (program.badges.isNotEmpty()) {
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text(
+                                                        text = program.badges.joinToString(", "),
+                                                        modifier = Modifier.weight(1f),
+                                                        textAlign = TextAlign.End,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                } else if (tagger != null && program.name != null) {
+                                                    // Said, not left blank: an empty gap where
+                                                    // every other row carries a category reads as
+                                                    // "not loaded yet" rather than "filed under
+                                                    // nothing". Only where the instrument has
+                                                    // categories at all.
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text(
+                                                        text = stringResource(R.string.programs_no_category),
+                                                        modifier = Modifier.weight(1f),
+                                                        textAlign = TextAlign.End,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                    )
+                                                }
                                             }
                                         }
                                     },

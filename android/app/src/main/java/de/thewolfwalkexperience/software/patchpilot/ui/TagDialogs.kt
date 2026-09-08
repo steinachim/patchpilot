@@ -79,13 +79,11 @@ internal fun SetFavoriteDialog(
                     // **Not a dead end.** A voice filed under no category can still be a
                     // favorite: the instrument's own front panel writes the same mark this
                     // dialog would, and lists the voice in its Favorite bank - measured on
-                    // hardware, and the reason the driver no longer refuses it. So this offers
-                    // the plain on/off the situation actually has, rather than explaining why
-                    // it cannot be done.
+                    // hardware, and the reason the driver no longer refuses it.
                     //
-                    // `setOf(0)` is what "on" means here: it encodes to the same value the panel
-                    // writes. Which of the two assignment slots it names is immaterial to a voice
-                    // that has neither.
+                    // One toggle rather than two rows both reading "No category": with neither
+                    // assignment set there is nothing to tell the two apart, and `setOf(0)`
+                    // encodes to the value the panel writes.
                     Text(stringResource(R.string.programs_favorite_uncategorised))
                     Spacer(Modifier.height(8.dp))
                     val isOn = checked.isNotEmpty()
@@ -101,11 +99,18 @@ internal fun SetFavoriteDialog(
                 } else {
                     Text(stringResource(R.string.programs_favorite_body))
                     Spacer(Modifier.height(8.dp))
-                    assigned.forEach { slot ->
-                        val label = tags.categories[slot]?.let(taxonomy::label).orEmpty()
+                    // **Every slot, not only the assigned ones.** Filing under a slot the voice
+                    // has not set is legal and visible - the instrument lists the voice in its
+                    // Favorite bank under no category - so a voice with one assignment can be
+                    // favorited either under that category or under none. Offering only the
+                    // assigned slot hid the second of those two real choices.
+                    (0 until assignmentCount).forEach { slot ->
+                        val category = tags.categories.getOrNull(slot)?.let(taxonomy::label)
                         val isOn = slot in checked
                         ListItem(
-                            headlineContent = { Text(label) },
+                            headlineContent = {
+                                Text(category ?: stringResource(R.string.programs_no_category))
+                            },
                             supportingContent = {
                                 Text(stringResource(R.string.programs_favorite_slot, slot + 1))
                             },
@@ -135,15 +140,12 @@ internal fun SetFavoriteDialog(
             }
         },
         dismissButton = {
-            // Still offered where the voice has no categories and they can be set - now as the
-            // other thing you might want, rather than as the only button in the dialog.
-            if (assigned.isEmpty() && onSetCategories != null) {
-                TextButton(onClick = onSetCategories) {
-                    Text(pluralStringResource(R.plurals.action_set_categories, assignmentCount))
-                }
-            } else {
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
-            }
+            // **Always Cancel.** This briefly offered "Set categories" here instead when the
+            // voice had none, which took the way out of the dialog away and pointed at an
+            // unrelated task. That shortcut existed to escape a dead end - "no categories, so no
+            // favorite" - and there is no dead end left to escape now that the favorite can just
+            // be set. Set categories is a row-menu action, and stays one.
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }

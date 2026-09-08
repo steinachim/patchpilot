@@ -1,8 +1,8 @@
 # Changelog
 
 ## Next release
-- Fix: a Yamaha Motif XS voice filed under no category can now be made a favorite, which the instrument's own front panel has always allowed. 43 of the 128 voices in one user bank measured carry no category, so this was a large part of a bank the app would not favorite.
-- Fix: the browser now says "No category" on a preset filed under none, rather than leaving the space blank, and a preset with two categories shows them on separate lines instead of crowding them onto one and cutting the second off.
+- Fix: a Yamaha Motif XS voice can now be favorited under a category it does not have, which the instrument's own front panel has always allowed - so a voice filed under nothing can be a favorite, and one with a single category can be filed under that category or under none. 43 of the 128 voices in one user bank measured carry no category.
+- Change: the browser shows a preset's categories beside its id only where the row is wide enough - a phone in landscape, or a tablet - and separates two of them with a comma. On a portrait phone they crowded the row and the second was cut off; they remain available from the row's menu. Where they are shown, a preset filed under no category now says so rather than leaving the space blank.
 - Add: a preset can now be moved from a row's menu ("Move to…") as well as by dragging it. Dragging needs a long press and a steady hand; the menu route needs neither, and reaches the same operation - an empty destination moves, an occupied one swaps.
 - Fix: in the Steampunk theme, the outlines around text fields, buttons and the listing selector were too faint to make out, and the status bar's clock and icons could disappear entirely when the phone itself was set to light mode.
 - Fix: a refused operation now explains itself rather than reporting only a status number. In practice that means a slot the app is showing as empty which the instrument says is occupied - a preset stored from its front panel since the last read - where the app now says so and tells you to re-read the instrument.
