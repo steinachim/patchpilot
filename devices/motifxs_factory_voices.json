@@ -12848,259 +12848,679 @@
       "voices": [
         {
           "slot": 1,
-          "name": "Power Standard Kit 1"
+          "name": "Power Standard Kit 1",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 2,
-          "name": "Power Standard Kit 2"
+          "name": "Power Standard Kit 2",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 3,
-          "name": "Hyper Standard Kit"
+          "name": "Hyper Standard Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 4,
-          "name": "Dry Standard Kit"
+          "name": "Dry Standard Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 5,
-          "name": "Modern Rock Kit"
+          "name": "Modern Rock Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 6,
-          "name": "Rock Stereo Kit 1"
+          "name": "Rock Stereo Kit 1",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 7,
-          "name": "Rock Stereo Kit 2"
+          "name": "Rock Stereo Kit 2",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 8,
-          "name": "Nu Hip Hop Kit 1"
+          "name": "Nu Hip Hop Kit 1",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 9,
-          "name": "Nu Hip Hop Kit 2"
+          "name": "Nu Hip Hop Kit 2",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 10,
-          "name": "Hip Hop Kit 1"
+          "name": "Hip Hop Kit 1",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 11,
-          "name": "Hip Hop Kit 2"
+          "name": "Hip Hop Kit 2",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 12,
-          "name": "Hip Hop Kit 3"
+          "name": "Hip Hop Kit 3",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 13,
-          "name": "Hip Hop Kit 4"
+          "name": "Hip Hop Kit 4",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 14,
-          "name": "Hip Stick Kit 1"
+          "name": "Hip Stick Kit 1",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 15,
-          "name": "Hip Stick Kit 2"
+          "name": "Hip Stick Kit 2",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 16,
-          "name": "R&B Kit 1"
+          "name": "R&B Kit 1",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 17,
-          "name": "R&B Kit 2"
+          "name": "R&B Kit 2",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 18,
-          "name": "R&B Kit 3"
+          "name": "R&B Kit 3",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 19,
-          "name": "Trance Kit"
+          "name": "Trance Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 20,
-          "name": "Psychedelic Kit"
+          "name": "Psychedelic Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 21,
-          "name": "Chill Out Kit"
+          "name": "Chill Out Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 22,
-          "name": "Brush Kit"
+          "name": "Brush Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 23,
-          "name": "Jazz Kit"
+          "name": "Jazz Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 24,
-          "name": "Pop Latin Kit"
+          "name": "Pop Latin Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Perc"
+            }
+          ]
         },
         {
           "slot": 25,
-          "name": "Analog T9 Kit"
+          "name": "Analog T9 Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 26,
-          "name": "Analog T8 Kit"
+          "name": "Analog T8 Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 27,
-          "name": "Tekno Kit"
+          "name": "Tekno Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 28,
-          "name": "House Kit 1"
+          "name": "House Kit 1",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 29,
-          "name": "House Kit 2"
+          "name": "House Kit 2",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 30,
-          "name": "House Compressed Kit"
+          "name": "House Compressed Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 31,
-          "name": "Big Kit"
+          "name": "Big Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 32,
-          "name": "Break Kit"
+          "name": "Break Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 33,
-          "name": "Drum'n'Bass Kit"
+          "name": "Drum'n'Bass Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 34,
-          "name": "Acid Kit"
+          "name": "Acid Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 35,
-          "name": "Jungle Kit"
+          "name": "Jungle Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 36,
-          "name": "Electric Kit"
+          "name": "Electric Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 37,
-          "name": "Human Kit"
+          "name": "Human Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 38,
-          "name": "Hard Kit"
+          "name": "Hard Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 39,
-          "name": "Distorted Kit"
+          "name": "Distorted Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 40,
-          "name": "Ambient Kit"
+          "name": "Ambient Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 41,
-          "name": "Garage Kit"
+          "name": "Garage Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 42,
-          "name": "Synth Pop Kit"
+          "name": "Synth Pop Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 43,
-          "name": "Orchestra Kit"
+          "name": "Orchestra Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 44,
-          "name": "Drum Machines Kit"
+          "name": "Drum Machines Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 45,
-          "name": "Rock Multiple Kits"
+          "name": "Rock Multiple Kits",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 46,
-          "name": "HipHop Multiple Kits"
+          "name": "HipHop Multiple Kits",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 47,
-          "name": "Percussion Kit"
+          "name": "Percussion Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Perc"
+            },
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 48,
-          "name": "Latin Percussion Kit"
+          "name": "Latin Percussion Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Perc"
+            },
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 49,
-          "name": "Guitar/Bass FX Kit"
+          "name": "Guitar/Bass FX Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Perc"
+            },
+            {
+              "main": "S.EFX",
+              "sub": null
+            }
+          ]
         },
         {
           "slot": 50,
-          "name": "Wacko Kit"
+          "name": "Wacko Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Perc"
+            },
+            {
+              "main": "S.EFX",
+              "sub": "SciFi"
+            }
+          ]
         },
         {
           "slot": 51,
-          "name": "Wood Bits Kit"
+          "name": "Wood Bits Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Perc"
+            },
+            {
+              "main": "S.EFX",
+              "sub": null
+            }
+          ]
         },
         {
           "slot": 52,
-          "name": "Metal Bits Kit"
+          "name": "Metal Bits Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Perc"
+            },
+            {
+              "main": "S.EFX",
+              "sub": null
+            }
+          ]
         },
         {
           "slot": 53,
-          "name": "Hands Kit"
+          "name": "Hands Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Perc"
+            }
+          ]
         },
         {
           "slot": 54,
-          "name": "Scratches"
+          "name": "Scratches",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Perc"
+            }
+          ]
         },
         {
           "slot": 55,
-          "name": "Accoustic Snares"
+          "name": "Accoustic Snares",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 56,
-          "name": "GroupedStereo Snares"
+          "name": "GroupedStereo Snares",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 57,
-          "name": "All Kicks"
+          "name": "All Kicks",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 58,
-          "name": "Dance Kicks"
+          "name": "Dance Kicks",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 59,
-          "name": "Arabic Mixed Kit"
+          "name": "Arabic Mixed Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 60,
-          "name": "Belly Dance Kit"
+          "name": "Belly Dance Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 61,
-          "name": "Dance Snares"
+          "name": "Dance Snares",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            }
+          ]
         },
         {
           "slot": 62,
-          "name": "Special SFXs"
+          "name": "Special SFXs",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Perc"
+            },
+            {
+              "main": "S.EFX",
+              "sub": null
+            }
+          ]
         },
         {
           "slot": 63,
-          "name": "Synthetic Kit"
+          "name": "Synthetic Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            },
+            {
+              "main": "S.EFX",
+              "sub": null
+            }
+          ]
         },
         {
           "slot": 64,
-          "name": "SFX Kit"
+          "name": "SFX Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Perc"
+            },
+            {
+              "main": "S.EFX",
+              "sub": null
+            }
+          ]
         }
       ]
     },
@@ -13110,7 +13530,17 @@
       "voices": [
         {
           "slot": 1,
-          "name": "Stereo GM Kit"
+          "name": "Stereo GM Kit",
+          "categories": [
+            {
+              "main": "Dr/Pc",
+              "sub": "Drums"
+            },
+            {
+              "main": "Dr/Pc",
+              "sub": null
+            }
+          ]
         }
       ]
     }

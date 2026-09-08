@@ -1292,8 +1292,8 @@ class MotifXsInstrument(
         displayId = layout.format.format(address),
         bankLabel = spec.displayLabel.ifEmpty { spec.label },
         name = factoryVoices.name(spec.label, address.slot),
-        // Empty for the two factory drum banks: Yamaha's drum voice list publishes no categories
-        // at all, so the instrument has them and no shipped table does.
+        // Present for every factory bank, the two drum banks included - theirs were read off the
+        // instrument, since Yamaha's drum voice list publishes no categories at all.
         badges = factoryCategories(spec, address.slot).mapNotNull { taxonomy?.label(it) },
     )
 

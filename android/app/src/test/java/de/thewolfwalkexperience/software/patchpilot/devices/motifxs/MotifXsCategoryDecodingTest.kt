@@ -117,19 +117,21 @@ class MotifXsCategoryDecodingTest {
     }
 
     /**
-     * A drum kit carries categories even though no published table lists them.
+     * A drum kit's categories decode from its own bytes, and the shipped table agrees.
      *
-     * `Power Standard Kit 1` reads `192:256:`, and 192 is `Dr/Pc` with sub 0. The catalog has
-     * nothing to check this against - which is exactly the gap - so the assertion is against the
-     * recorded bytes and the hardware-measured encoding, and it is why the drum banks show no
-     * badge rather than a guessed one.
+     * `Power Standard Kit 1` reads `192:256:`, and 192 is `Dr/Pc` with sub 0. Yamaha publishes no
+     * drum categories, so the table's entry for that slot was read off the instrument itself
+     * (`the reference tooling --categories PREDR`) rather than transcribed from a voice list. The two
+     * sides of this test are therefore independent measurements of the same fact - a recorded
+     * dump decoded here, and a separate pass over the instrument - not one restating the other.
      */
     @Test
-    fun `a drum kit decodes even though the shipped table lists none`() {
+    fun `a drum kit decodes to what the shipped table lists`() {
         assertEquals(listOf("Dr/Pc / Drums"), labelsOf(MotifXsFixtures.drumVoice))
-        assertTrue(
-            "the shipped table has no drum categories to check that against",
-            catalog.categories("PREDR", slot0 = 0).isEmpty(),
+        assertEquals(
+            "the voice's own bytes and the shipped table must describe the same slot",
+            factoryLabelsOf("Power Standard Kit 1"),
+            labelsOf(MotifXsFixtures.drumVoice),
         )
     }
 

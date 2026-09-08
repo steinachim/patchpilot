@@ -27,10 +27,11 @@ import kotlinx.serialization.Serializable
  * [MotifXsCategoryEncoding], which lives in the device catalog rather than here - it describes the
  * instrument, not this list.
  *
- * **PREDR and GMDR carry none.** Yamaha's `drum_voice_list.xls` has no category columns at all, so
- * the 65 drum kits are the one gap: the instrument holds their assignments and no published table
- * does. They are left null rather than guessed. Filling them needs a bench session reading
- * `--categories PREDR`/`GMDR`, which is recorded as a TODO in the reverse-engineering repo.
+ * **PREDR and GMDR came from the instrument, not from a voice list.** Yamaha's
+ * `drum_voice_list.xls` has no category columns at all, so those 65 drum kits were read off a
+ * Motif XS (`the reference tooling --categories PREDR`/`GMDR`) and added here. Every bank in this table
+ * now carries categories for every voice, which `MotifXsFactoryVoicesTest` pins - an empty bank
+ * would mean that read was lost in a re-sync rather than that one is expected to be empty.
  *
  * Bank labels match `MotifXsBank.label` in the catalog, and `MotifXsFactoryVoicesTest` pins the two
  * together so a bank renamed in one and not the other fails the build rather than quietly listing

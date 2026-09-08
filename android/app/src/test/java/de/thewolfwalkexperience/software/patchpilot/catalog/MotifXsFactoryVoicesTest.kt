@@ -124,16 +124,20 @@ class MotifXsFactoryVoicesTest {
     }
 
     /**
-     * Every factory category names something the encoding lists, and the normal banks all have
-     * one - the two drum banks are the documented gap, since Yamaha publishes no drum categories.
+     * Every factory voice carries a category, and every category names something the encoding
+     * lists.
+     *
+     * The two drum banks are the ones worth stating: Yamaha publishes no drum categories at all,
+     * so `PREDR` and `GMDR` were read off the instrument rather than transcribed from a voice
+     * list. An empty bank here would mean that read was lost in a catalog re-sync.
      */
     @Test
-    fun `every factory category resolves, and only the drum banks have none`() {
+    fun `every factory voice has a category, and every category resolves`() {
         val taxonomy = requireNotNull(encoding()).taxonomy
         val withoutCategories = table.banks.filter { bank ->
             bank.voices.any { table.categories(bank.label, it.slot - 1).isEmpty() }
         }.map { it.label }
-        assertEquals(listOf("PREDR", "GMDR"), withoutCategories)
+        assertEquals(emptyList<String>(), withoutCategories)
 
         for (bank in table.banks) {
             for (voice in bank.voices) {
