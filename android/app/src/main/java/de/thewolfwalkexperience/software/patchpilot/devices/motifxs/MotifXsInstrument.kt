@@ -23,7 +23,9 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -363,8 +365,9 @@ class MotifXsInstrument(
         override suspend fun delete(address: SlotAddress) {
             requireWritable(address)
             val blank = blankPayloadFor(address.bank)
-            write(address, blank)
-            commit()
+            committed {
+                write(address, blank)
+            }
             verify(address, blank)
         }
 
@@ -381,9 +384,10 @@ class MotifXsInstrument(
             if (a == b) return
             val payloadA = readVoicePayload(a)
             val payloadB = readVoicePayload(b)
-            write(a, payloadB)
-            write(b, payloadA)
-            commit()
+            committed {
+                write(a, payloadB)
+                write(b, payloadA)
+            }
             verify(a, payloadB)
             verify(b, payloadA)
         }
@@ -422,8 +426,9 @@ class MotifXsInstrument(
                 throw InstrumentException.NotSupported("copy onto an occupied slot")
             }
 
-            write(dst, payload)
-            commit()
+            committed {
+                write(dst, payload)
+            }
             verify(dst, payload)
             return name
         }
@@ -450,9 +455,10 @@ class MotifXsInstrument(
             // Sourced before the first write, so a bank with no blank to copy fails before
             // anything has been changed rather than after the destination is already written.
             val blank = blankPayloadFor(from.bank)
-            write(to, payload)
-            write(from, blank)
-            commit()
+            committed {
+                write(to, payload)
+                write(from, blank)
+            }
             verify(to, payload)
             verify(from, blank)
         }
@@ -550,6 +556,31 @@ class MotifXsInstrument(
          * later by an unrelated commit. It is also why [write] failing must abort the whole
          * operation rather than press on: an uncommitted write is not discarded, it is armed.
          */
+        /**
+         * Runs [writes] and the commit that applies them as **one uninterruptible unit**.
+         *
+         * **An accepted write is armed, not pending.** [commit] applies everything offered since
+         * the last commit, so a write that was acknowledged and then abandoned is not discarded -
+         * it sits on the instrument until some *later, unrelated* edit's commit applies it. A
+         * cancellation landing between the write and the commit therefore does not undo the edit,
+         * it defers it to an arbitrary future moment. For [move] and [swap], which offer two
+         * writes against one commit, landing between the two is worse still: a later commit then
+         * applies half of a swap.
+         *
+         * `viewModelScope` outliving the screen is what removes the ordinary triggers - see
+         * `InstrumentViewModel.launchEdit` - but not all of them: the scope still dies with
+         * `onCleared()`, which is an app swiped away from recents. Hence the guarantee here rather
+         * than only upstream.
+         *
+         * **The verify is deliberately outside.** It is a read; cancelling it changes nothing on
+         * the instrument, and leaving it cancellable is what lets a torn-down session stop
+         * promptly once the write is safely committed.
+         */
+        private suspend fun committed(writes: suspend () -> Unit) = withContext(NonCancellable) {
+            writes()
+            commit()
+        }
+
         private suspend fun commit() {
             try {
                 exchange.exchange(

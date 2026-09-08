@@ -8,6 +8,9 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -1387,6 +1390,56 @@ class MotifXsInstrumentTest {
         assertEquals(SlotAddress(1, 44), format.parse("USR2:045"))
         assertEquals(SlotAddress(2, 52), format.parse("USR3:053"))
     }
+
+    /**
+     * **A write and its commit are one unit, and cancelling must not split them.**
+     *
+     * `commit()` applies everything offered since the last commit, so an acknowledged-but-
+     * uncommitted write is not discarded when its coroutine dies - it is armed, and some later,
+     * unrelated edit's commit applies it. `NonCancellable` on the send loop inside
+     * `exchangeAfterAll` does not cover this: delete, copy, move and swap do not use that path,
+     * they issue plain exchanges and then commit separately.
+     *
+     * Cancellation is delivered from inside the transport, the moment the write goes out, which
+     * puts it exactly in the window this is about rather than relying on timing.
+     */
+    @Test
+    fun `a cancelled delete still commits the write it already sent`() = runTest {
+        val sent = mutableListOf<ByteArray>()
+        var job: Job? = null
+        val transport = FakeMidiTransport { request ->
+            sent += request
+            val address = MotifXsSysEx.addressOf(request)
+            // The write has just been accepted; the commit has not gone out yet.
+            if (address != null && address.first == 0x0C) job?.cancel()
+            // `F0 43 60 02 F7` - the same acknowledgement FakeSlots serves, restated here
+            // because that one is private to it.
+            listOf(byteArrayOf(0xF0.toByte(), 0x43, 0x60, 0x02, 0xF7.toByte()))
+        }
+        val motif = MotifXsInstrument(
+            SysExExchange(transport, backgroundScope, defaultTimeout = 200.milliseconds),
+            MotifXsConfig(
+                banks = listOf(
+                    MotifXsBank(label = "USR1", slotCount = 1, addressHi = 0x0C, addressMid = 0x0A,
+                        displayLabel = "USER 1", selectLsb = 0x08),
+                ),
+            ),
+            testBlanks,
+        )
+
+        job = launch(start = CoroutineStart.LAZY) {
+            runCatching { motif.editor.delete(SlotAddress(0, 0)) }
+        }
+        job!!.start()
+        job!!.join()
+
+        val committed = sent.any { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.STORE_HI }
+        assertTrue(
+            "an accepted write left uncommitted is armed, not discarded - a later unrelated " +
+                "commit would apply it",
+            committed,
+        )
+    }
 }
 
 /**
@@ -1425,4 +1478,5 @@ private fun packMsb(dense: ByteArray): ByteArray {
         i += 7
     }
     return out.toByteArray()
+
 }

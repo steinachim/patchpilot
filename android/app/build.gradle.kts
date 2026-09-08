@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.Copy
+import org.gradle.api.tasks.PathSensitivity
 import java.util.Properties
 
 // Release signing credentials live in local.properties (gitignored, never committed) rather than
@@ -249,4 +250,16 @@ tasks.named("preBuild") {
 // missing from the connect screen.
 tasks.withType<Test>().configureEach {
     systemProperty("deviceCatalogDir", deviceCatalogDir.absolutePath)
+    // **Declared as an input, or the tests that read it never re-run when it changes.**
+    // A `systemProperty` is not an input Gradle tracks, so editing a catalog left every test task
+    // UP-TO-DATE: `./gradlew testDebugUnitTest` after adding the drum banks' categories finished
+    // in 687ms having executed nothing, and the two tests that assert what the catalogs contain
+    // only failed once `--rerun-tasks` forced them. A catalog is data the tests assert against,
+    // so it belongs here beside the property that points at it.
+    //
+    // RELATIVE rather than ABSOLUTE so the cache still hits when the checkout moves; NAME_ONLY
+    // would ignore the contents, which is exactly what is being tracked.
+    inputs.dir(deviceCatalogDir)
+        .withPropertyName("deviceCatalog")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
