@@ -17,8 +17,16 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
  * content, and the instrument lets a host write it; a category is the factory voice itself.
  *
  * The flag is not a boolean. It names which of the voice's *own* assignments the instrument's
- * browser files the favorite under, so this facet can only ever offer the assignments a voice
- * already has - which is also why a voice with no categories cannot be favorited at all.
+ * browser files the favorite under - which is why this facet offers assignment *slots* rather than
+ * categories. A slot the voice has not assigned is still a legal target: the mark is written, and
+ * the instrument lists the voice in its Favorite bank under no category. So a voice with no
+ * categories at all can still be a favorite.
+ *
+ * **Verified against an XS6 (2026-09-08).** Not just the protocol - this port. A favorite written
+ * from the app left the rest of its bank's marks intact with their flag values, which is the
+ * whole-table rule and the one a port gets wrong; a category write of `Bass`/`Dr/Pc` with no sub
+ * stored `(4, 4)`/`(12, 4)`, one past each main's last sub rather than a hardcoded 5. See
+ * `the hardware measurements`, session 8b.
  */
 internal class MotifXsTagger(
     private val instrument: MotifXsInstrument,
