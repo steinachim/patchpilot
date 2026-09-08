@@ -453,10 +453,18 @@ class NordInstrument(
  * Null for anything else, which leaves the generic "refused (status N)" - honest about the fact
  * that the app has the instrument's answer and cannot interpret it, rather than inventing a
  * reason. Only one code has a documented meaning; see [NordDevice.STATUS_FILE_EXISTS].
+ *
+ * **The wording names a contradiction, because that is the only way this can be seen.** Neither
+ * copy nor move offers an occupied destination: the picker accepts empty rows only, and a drag
+ * resolves move-vs-swap from the listing. So reaching status 4 means the listing and the
+ * instrument disagree - a preset stored from the front panel since the last read - and the user
+ * is looking at a row the app is showing them as empty. Saying only "that slot already holds a
+ * preset" would read as the app contradicting itself; saying what to do about it does not.
  */
 private fun nordStatusExplanation(what: String, status: Int): String? = when (status) {
     NordDevice.STATUS_FILE_EXISTS ->
-        "Couldn't $what: that slot already holds a preset, and this needs an empty one."
+        "Couldn't $what: the instrument says that slot already holds one, though the listing " +
+            "shows it as empty. Pull down to re-read the instrument."
     else -> null
 }
 

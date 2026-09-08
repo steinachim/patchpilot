@@ -100,7 +100,8 @@ class NordFailureMappingTest {
         // The status survives for the log; what the *user* is shown has to be the condition, not
         // the code. "(status 4)" says something went wrong without saying what or what to do.
         assertEquals(
-            "Couldn't copy a preset: that slot already holds a preset, and this needs an empty one.",
+            "Couldn't copy a preset: the instrument says that slot already holds one, though the " +
+                "listing shows it as empty. Pull down to re-read the instrument.",
             failure.message,
         )
     }

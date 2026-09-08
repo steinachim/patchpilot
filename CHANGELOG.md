@@ -3,7 +3,7 @@
 ## Next release
 - Add: a preset can now be moved from a row's menu ("Move to…") as well as by dragging it. Dragging needs a long press and a steady hand; the menu route needs neither, and reaches the same operation - an empty destination moves, an occupied one swaps.
 - Fix: in the Steampunk theme, the outlines around text fields, buttons and the listing selector were too faint to make out, and the status bar's clock and icons could disappear entirely when the phone itself was set to light mode.
-- Fix: a refused operation now says what the instrument objected to - "that slot already holds a preset" - rather than only a status number.
+- Fix: a refused operation now explains itself rather than reporting only a status number. In practice that means a slot the app is showing as empty which the instrument says is occupied - a preset stored from its front panel since the last read - where the app now says so and tells you to re-read the instrument.
 - Fix: renaming a Yamaha Motif XS voice or setting its categories can no longer be interrupted part way through. Leaving the screen while one was being written abandoned the transfer and left the instrument waiting on "receiving midi bulk data" until it was power-cycled. The write now always runs to completion, and the back arrow is unavailable while one is in progress.
 - Fix: backing out of a Nord connection while it is still being established no longer reports it as a failure to read the instrument.
 - Add: a Nord program's category now shows on every row in the browser, and a row's menu offers Set category.
