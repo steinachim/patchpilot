@@ -1246,16 +1246,6 @@ fun ProgramsScreen(
                 assignmentCount = facet.assignmentCount,
                 onConfirm = { under -> ops.onFavoriteConfirmed(target.slot, under) },
                 onDismiss = { ops.favoriteTarget = null },
-                // The way out of "this preset has no categories, so it cannot be a favorite" -
-                // offered only where they can actually be set, which is not a factory bank.
-                onSetCategories = if (facet.canSetCategories(target.slot.address)) {
-                    {
-                        ops.favoriteTarget = null
-                        ops.categoriesTarget = target
-                    }
-                } else {
-                    null
-                },
             )
         }
 

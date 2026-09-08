@@ -47,15 +47,17 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 /**
  * Which of a preset's own categories the instrument should list it under.
  *
- * **The checkboxes are the preset's assignments, not the whole taxonomy**, because that is all the
- * hardware can express: a Motif XS favorite flag selects among the voice's two category
- * assignments, so a voice filed under nothing has nowhere to be a favorite. That is not a
- * simplification of a richer model - writing a mark that points at an unassigned slot produces a
- * favorite the instrument lists nowhere at all.
+ * **The checkboxes are the preset's assignment slots, not the whole taxonomy**, because that is
+ * what the hardware expresses: a Motif XS favorite flag selects among the voice's two category
+ * assignments rather than naming a category outright.
+ *
+ * **A slot the voice has not assigned is still offered.** Marking one is legal and the instrument
+ * does it itself - the voice then appears in its Favorite bank listed under no category - so a
+ * voice with one assignment can be favorited under that category or under none, and a voice with
+ * neither can still be a favorite. Those rows read "No category"; a voice with nothing assigned
+ * shows one of them rather than two indistinguishable ones.
  *
  * @param tags what is stored now; [PresetTags.categories] positions the rows.
- * @param onSetCategories non-null where this preset's categories can be changed, which offers the
- *   way out of the "no categories" dead end. Null for a factory preset.
  */
 @Composable
 internal fun SetFavoriteDialog(
@@ -65,7 +67,6 @@ internal fun SetFavoriteDialog(
     assignmentCount: Int,
     onConfirm: (Set<Int>) -> Unit,
     onDismiss: () -> Unit,
-    onSetCategories: (() -> Unit)? = null,
 ) {
     val assigned = remember(tags) { tags.assigned }
     var checked by remember(tags) { mutableStateOf(tags.favoriteUnder) }
@@ -75,61 +76,44 @@ internal fun SetFavoriteDialog(
         title = { Text(stringResource(R.string.programs_favorite_title, target.displayId)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                if (assigned.isEmpty()) {
-                    // **Not a dead end.** A voice filed under no category can still be a
-                    // favorite: the instrument's own front panel writes the same mark this
-                    // dialog would, and lists the voice in its Favorite bank - measured on
-                    // hardware, and the reason the driver no longer refuses it.
-                    //
-                    // One toggle rather than two rows both reading "No category": with neither
-                    // assignment set there is nothing to tell the two apart, and `setOf(0)`
-                    // encodes to the value the panel writes.
-                    Text(stringResource(R.string.programs_favorite_uncategorised))
-                    Spacer(Modifier.height(8.dp))
-                    val isOn = checked.isNotEmpty()
+                Text(stringResource(R.string.programs_favorite_body))
+                Spacer(Modifier.height(8.dp))
+                // **Every slot, not only the assigned ones.** Filing under a slot the voice has
+                // not set is legal and visible - the instrument's own front panel writes such a
+                // mark and lists the voice in its Favorite bank under no category - so a voice
+                // with one assignment can be favorited under that category or under none.
+                // Offering only the assigned slot hid the second of those two real choices.
+                //
+                // **One row when the voice has neither**, rather than two both reading "No
+                // category": with nothing assigned there is nothing to tell the slots apart, and
+                // slot 0 encodes to the value the panel writes. The list keeps the same shape it
+                // has everywhere else, one entry shorter.
+                val slotsShown = if (assigned.isEmpty()) 1 else assignmentCount
+                (0 until slotsShown).forEach { slot ->
+                    val category = tags.categories.getOrNull(slot)?.let(taxonomy::label)
+                    val isOn = slot in checked
                     ListItem(
-                        headlineContent = { Text(stringResource(R.string.programs_favorite_toggle)) },
+                        headlineContent = {
+                            Text(category ?: stringResource(R.string.programs_no_category))
+                        },
+                        supportingContent = {
+                            Text(stringResource(R.string.programs_favorite_slot, slot + 1))
+                        },
                         leadingContent = { Checkbox(checked = isOn, onCheckedChange = null) },
                         modifier = Modifier.toggleable(
                             value = isOn,
                             role = Role.Checkbox,
-                            onValueChange = { on -> checked = if (on) setOf(0) else emptySet() },
+                            onValueChange = { on ->
+                                checked = if (on) checked + slot else checked - slot
+                            },
                         ),
                     )
-                } else {
-                    Text(stringResource(R.string.programs_favorite_body))
-                    Spacer(Modifier.height(8.dp))
-                    // **Every slot, not only the assigned ones.** Filing under a slot the voice
-                    // has not set is legal and visible - the instrument lists the voice in its
-                    // Favorite bank under no category - so a voice with one assignment can be
-                    // favorited either under that category or under none. Offering only the
-                    // assigned slot hid the second of those two real choices.
-                    (0 until assignmentCount).forEach { slot ->
-                        val category = tags.categories.getOrNull(slot)?.let(taxonomy::label)
-                        val isOn = slot in checked
-                        ListItem(
-                            headlineContent = {
-                                Text(category ?: stringResource(R.string.programs_no_category))
-                            },
-                            supportingContent = {
-                                Text(stringResource(R.string.programs_favorite_slot, slot + 1))
-                            },
-                            leadingContent = { Checkbox(checked = isOn, onCheckedChange = null) },
-                            modifier = Modifier.toggleable(
-                                value = isOn,
-                                role = Role.Checkbox,
-                                onValueChange = { on ->
-                                    checked = if (on) checked + slot else checked - slot
-                                },
-                            ),
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        stringResource(R.string.programs_favorite_clear_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
                 }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.programs_favorite_clear_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         },
         confirmButton = {
