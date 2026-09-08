@@ -38,11 +38,13 @@ android {
     // Compile-time only: `minSdk` still decides which devices can install this, and `targetSdk`
     // still decides which runtime behaviours are opted into - neither moves with this.
     //
-    // **Not a floor imposed by Compose.** The BOM pinned in libs.versions.toml (2026.01.01)
-    // resolves to Compose 1.10.2, which builds against 35 just as well - verified, not assumed.
-    // This is simply the newest platform the project compiles against; it is the line to raise
-    // when some dependency really does demand a higher one, and the line to check first if that
-    // is ever asserted again.
+    // **37 is Compose 1.12's floor, and headroom for this build rather than its requirement.**
+    // The BOM pinned in libs.versions.toml (2026.01.01) resolves to Compose 1.10.2, whose AAR
+    // metadata declares `minCompileSdk=35`, and this app's own code reaches no further than API
+    // 33 (UsbConnectionManager's TIRAMISU branches) - so 35 compiles today, verified rather than
+    // assumed. It stays at 37 because that is what Compose 1.12's AARs declare, so moving the BOM
+    // forward needs no change here. The price is that anyone building this needs the SDK 37
+    // platform installed, which is the one reason to reconsider it.
     compileSdk = 37
 
     defaultConfig {
