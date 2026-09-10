@@ -2,6 +2,7 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -68,6 +69,18 @@ fun shareTextReport(
     }
     context.startActivity(Intent.createChooser(sendIntent, chooserTitle))
     return safeName
+}
+
+/**
+ * Writes [content] straight to a location the user picked through the system "Save to…" picker
+ * (`ActivityResultContracts.CreateDocument`, launched by the caller) - the local counterpart to
+ * [shareTextReport], for whoever generated a report with no signal to hand it on to anyone, e.g.
+ * offline in the field. No `FileProvider` involved: the picker hands back a `content://` Uri this
+ * app can write to directly, in whichever app (Files, a cloud drive already synced offline, an SD
+ * card) the user chose.
+ */
+fun saveTextReport(context: Context, uri: Uri, content: String) {
+    context.contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) }
 }
 
 /** Subdirectory of `cacheDir` holding the one report currently being shared - see

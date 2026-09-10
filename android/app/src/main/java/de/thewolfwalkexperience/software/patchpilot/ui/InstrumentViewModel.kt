@@ -220,6 +220,16 @@ class InstrumentViewModel(application: Application) :
     private var openingPhysicalKey: String? = null
 
     /**
+     * The [UsbDevice] behind the most recent successful [confirmUnknownDevice] (or silent
+     * reconnect of one) - remembered so [reconnectRememberedUnknownDeviceOrOffer] can restore it
+     * without the warning screen the next time [connect] finds nothing in the catalog, most
+     * commonly a [forceReconnect] on resume. Cleared by an explicit [disconnect] and by a real
+     * physical detach of this device in [handleUsbDetach] - not by [teardownCurrentInstrument]
+     * itself, since [forceReconnect] needs it to survive its own teardown-then-[connect].
+     */
+    private var lastConfirmedUnknownDevice: UsbDevice? = null
+
+    /**
      * Serialises every read-then-write against [instrument] with [forceReconnect]'s teardown.
      *
      * Without this, a rename/move/delete/copy/regression-test/report already in flight when the
@@ -306,6 +316,7 @@ class InstrumentViewModel(application: Application) :
             // overlap this) must not be allowed to overwrite DeviceLost with a stale
             // Connected/Error right after it is set below.
             connectJob?.cancel()
+            lastConfirmedUnknownDevice = null
             viewModelScope.launch {
                 teardownCurrentInstrument()
                 _state.value = ConnectionState.DeviceLost(name)
@@ -368,24 +379,34 @@ class InstrumentViewModel(application: Application) :
      * dropped rather than offered as a second, useless entry.
      */
     fun connect() {
-        val forcePicker = forcePickerOnNextConnect
-        forcePickerOnNextConnect = false
-        launchConnect {
-            _state.value = ConnectionState.Searching
-            val catalog = InstrumentRegistry.allDescriptors(getApplication())
-            val candidates = mergeCandidates(discoveries.map { it.scan(catalog) })
-            val known = candidates.filter { it.descriptor != null }
-            when {
-                // Nothing recognised: offer whatever else is attached, as before.
-                known.isEmpty() -> offerUnknownDeviceOrFail()
-                // Exactly one, and nobody asked to be shown the picker anyway: connect it.
-                // No question worth asking has an obvious answer.
-                known.size == 1 && !forcePicker -> connectCandidate(known.single())
-                // More than one, and this is the case that used to be wrong: it took
-                // `firstOrNull`, so somebody with two instruments plugged in got whichever
-                // the scan happened to return first, silently and with no way to choose.
-                else -> _state.value = ConnectionState.DeviceSelection(pickerEntries(known))
-            }
+        launchConnect { performConnect(consumeForcePicker()) }
+    }
+
+    /** Reads and clears [forcePickerOnNextConnect] in one step, so every caller that folds it
+     * into a connect attempt - [connect] and [forceReconnect] alike - consumes it the same way. */
+    private fun consumeForcePicker(): Boolean =
+        forcePickerOnNextConnect.also { forcePickerOnNextConnect = false }
+
+    /** The scan-then-connect body [connect] and [forceReconnect] share - factored out so
+     * [forceReconnect] can run it inside its own [launchConnect] job (see that function's doc
+     * comment) instead of through a second, untracked one. */
+    private suspend fun performConnect(forcePicker: Boolean) {
+        _state.value = ConnectionState.Searching
+        val catalog = InstrumentRegistry.allDescriptors(getApplication())
+        val candidates = mergeCandidates(discoveries.map { it.scan(catalog) })
+        val known = candidates.filter { it.descriptor != null }
+        when {
+            // Nothing recognised: reconnect a device already accepted through the "at your own
+            // risk" gate this session if it is still attached, otherwise offer whatever else is
+            // attached, as before.
+            known.isEmpty() -> reconnectRememberedUnknownDeviceOrOffer()
+            // Exactly one, and nobody asked to be shown the picker anyway: connect it.
+            // No question worth asking has an obvious answer.
+            known.size == 1 && !forcePicker -> connectCandidate(known.single())
+            // More than one, and this is the case that used to be wrong: it took
+            // `firstOrNull`, so somebody with two instruments plugged in got whichever
+            // the scan happened to return first, silently and with no way to choose.
+            else -> _state.value = ConnectionState.DeviceSelection(pickerEntries(known))
         }
     }
 
@@ -442,6 +463,32 @@ class InstrumentViewModel(application: Application) :
         when (entry) {
             is PickerEntry.Known -> launchConnect { connectCandidate(entry.candidate) }
             is PickerEntry.Unknown -> selectUnknownDevice(entry.device)
+        }
+    }
+
+    /** Nothing in the catalog matched - reconnects [lastConfirmedUnknownDevice] straight through
+     * [connectAndFinish] if it is still among the attached devices, without showing the warning
+     * again: the user already accepted it once this session. Otherwise falls through to
+     * [offerUnknownDeviceOrFail] exactly as before.
+     *
+     * This is what lets [forceReconnect] restore an unrecognised device silently - e.g. returning
+     * from the share sheet after generating its device report - instead of bouncing back to the
+     * picker/warning and reading as "disconnected" the way a cataloged device's single-candidate
+     * auto-reconnect already does not.
+     */
+    private suspend fun reconnectRememberedUnknownDeviceOrOffer() {
+        val remembered = lastConfirmedUnknownDevice
+        val stillAttached = remembered != null &&
+            connectionManager.findAllDevices().any { it.physicalKey() == remembered.physicalKey() }
+        if (remembered == null || !stillAttached) {
+            lastConfirmedUnknownDevice = null
+            offerUnknownDeviceOrFail()
+            return
+        }
+        connectAndFinish(remembered, remembered.displayLabel()) { transport ->
+            val profile =
+                DeviceProfile.unknown(remembered.displayLabel(), remembered.vendorId, remembered.productId)
+            NordInstrument(NordDevice(transport, profile))
         }
     }
 
@@ -553,6 +600,7 @@ class InstrumentViewModel(application: Application) :
             instrument = built
             connectedPhysicalKey = usbDevice.physicalKey()
         }
+        lastConfirmedUnknownDevice = usbDevice
         _state.value = connectedOrAdvisory(built)
         startIndex()
     }
@@ -603,11 +651,20 @@ class InstrumentViewModel(application: Application) :
      * False on [ConnectionState.DeviceLost]: that state exists specifically so nothing reconnects
      * until the warning is acted on, and a resume-triggered rescan would defeat it exactly as
      * surely as ConnectScreen's own auto-connect would (see that state's own doc comment).
+     *
+     * False on [ConnectionState.Opening]: that state most often means a connect attempt is
+     * sitting on `UsbConnectionManager.requestPermission()`'s system dialog, and dismissing that
+     * dialog is itself a resume - the exact moment this used to answer true and send
+     * [forceReconnect] to tear down a session the dialog's own permission grant was about to
+     * finish, leaving the original attempt's coroutine (and the "loading" screen bound to it)
+     * orphaned until the app was killed and restarted. Letting the attempt already in flight
+     * finish or fail on its own is what a resume mid-connect should do instead.
      */
     val shouldRebuildOnResume: Boolean
         get() = when (val s = state.value) {
             is ConnectionState.Connected -> s.instrument.rebuildOnResume
             is ConnectionState.DeviceLost -> false
+            is ConnectionState.Opening -> false
             else -> true
         }
 
@@ -637,6 +694,7 @@ class InstrumentViewModel(application: Application) :
 
     fun disconnect(showPicker: Boolean = false) {
         forcePickerOnNextConnect = showPicker
+        lastConfirmedUnknownDevice = null
         viewModelScope.launch {
             teardownCurrentInstrument()
             _state.value = ConnectionState.Disconnected
@@ -650,13 +708,20 @@ class InstrumentViewModel(application: Application) :
      * replugged) has been observed to leave the connection's endpoints erroring on every
      * subsequent transfer, with no clean way to detect or repair that specifically - a full
      * disconnect/reconnect is the safe default instead.
+     *
+     * Runs through [launchConnect] rather than a bare `viewModelScope.launch`, so this job lands
+     * in [connectJob] like every other connect attempt: the single-flight guard, the error
+     * handling and [handleUsbDetach]'s ability to cancel it all depend on [connectJob] actually
+     * being whatever is currently running. It used to launch untracked, so a `connect()` call
+     * made from inside it (also guarded by the same field) silently no-opped whenever this ran
+     * while an earlier attempt was still mid-flight - see [shouldRebuildOnResume] for the case
+     * that made that reachable.
      */
     fun forceReconnect() {
-        if (connectJob?.isActive == true) return
-        viewModelScope.launch {
+        launchConnect {
             teardownCurrentInstrument()
             _state.value = ConnectionState.Disconnected
-            connect()
+            performConnect(consumeForcePicker())
         }
     }
 

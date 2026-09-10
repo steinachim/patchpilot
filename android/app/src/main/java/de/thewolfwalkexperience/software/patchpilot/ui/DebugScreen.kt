@@ -1,7 +1,10 @@
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import de.thewolfwalkexperience.software.patchpilot.R
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -71,6 +74,20 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val txtSuffix = stringResource(R.string.programs_txt_suffix)
     val reportShareTitle = stringResource(R.string.programs_share_report)
     val regressionShareTitle = stringResource(R.string.debug_regression_share)
+
+    // Holds whichever report is waiting on the "Save to device" picker below to return a Uri -
+    // there is only ever one save in flight at a time, so one field covers both the device report
+    // and the regression report rather than needing a launcher each with its own.
+    var pendingSaveContent by remember { mutableStateOf<String?>(null) }
+    fun onSaveResult(uri: Uri?) {
+        val content = pendingSaveContent
+        pendingSaveContent = null
+        if (uri != null && content != null) saveTextReport(context, uri, content)
+    }
+    val saveJsonLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(JSON_MIME_TYPE)) { onSaveResult(it) }
+    val saveTextLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(TEXT_MIME_TYPE)) { onSaveResult(it) }
 
     /**
      * Puts a question to the user from inside the test engine and suspends until it is answered.
@@ -182,6 +199,19 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     ) {
                         Text(sharer.progress ?: stringResource(R.string.debug_report_action))
                     }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            sharer.prepareForSave { json ->
+                                pendingSaveContent = json
+                                saveJsonLauncher.launch(viewModel.suggestedReportFilename() + jsonSuffix)
+                            }
+                        },
+                        enabled = !sharer.isRunning && viewModel.hasReport,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.action_save_to_device))
+                    }
                     Spacer(Modifier.height(24.dp))
                     Text(stringResource(R.string.debug_regression_body), style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
@@ -272,6 +302,12 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             },
                         )
                     },
+                    onSave = {
+                        // Already in memory and synchronous, unlike the device report - no
+                        // ReportSharer round trip needed before the picker can launch.
+                        pendingSaveContent = state.report.asText()
+                        saveTextLauncher.launch("${viewModel.filenameStem}_capabilities$txtSuffix")
+                    },
                     onRunAgain = { run = RegressionRunState.Idle },
                 )
             }
@@ -323,6 +359,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
 private fun RegressionReportView(
     report: RegressionReport,
     onShare: () -> Unit,
+    onSave: () -> Unit,
     onRunAgain: () -> Unit,
 ) {
     Text(report.summary, style = MaterialTheme.typography.titleMedium)
@@ -349,6 +386,10 @@ private fun RegressionReportView(
     Spacer(Modifier.height(12.dp))
     Button(onClick = onShare, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.action_share))
+    }
+    Spacer(Modifier.height(8.dp))
+    OutlinedButton(onClick = onSave, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.action_save_to_device))
     }
     Spacer(Modifier.height(8.dp))
     OutlinedButton(onClick = onRunAgain, modifier = Modifier.fillMaxWidth()) {

@@ -33,6 +33,7 @@
     <string name="action_copy">Copy to…</string>
     <string name="action_move">Move to…</string>
     <string name="action_share">Share</string>
+    <string name="action_save_to_device">Save to device</string>
     <string name="action_clear_filter">Clear filter</string>
     <string name="action_continue_anyway">Continue anyway</string>
     <string name="action_retry_search">Retry search</string>
@@ -208,7 +209,7 @@
       is ever read by somebody who has not gone looking for it.
     -->
     <string name="debug_title">Debug</string>
-    <string name="debug_report_body">Reads everything configuration details off the instrument and shares it as JSON. Nothing is written.</string>
+    <string name="debug_report_body">Reads everything configuration details off the instrument and shares or saves it as JSON. Nothing is written.</string>
     <string name="debug_report_action">Generate device report</string>
     <string name="debug_regression_body">Runs every operation this instrument supports and reports what worked. Edits are made against a copy the test creates and deletes again; where no free slot exists, it asks first.</string>
     <string name="debug_regression_action">Run regression test</string>

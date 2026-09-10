@@ -76,6 +76,31 @@ class ReportSharer(
         }
     }
 
+    /**
+     * Reads the report and hands it to [onReady] - the "Save to device" counterpart of [share].
+     *
+     * Split from [share] because saving needs a Uri, and only the caller (which is a composable,
+     * so it can hold a `CreateDocument` `ActivityResultLauncher` this class has no way to own) can
+     * get one - it launches that picker from [onReady], then writes the content once the picker
+     * returns one. Same read, same progress reporting; this is a Uri instead of a `content://`
+     * FileProvider hop.
+     */
+    fun prepareForSave(onReady: (String) -> Unit) {
+        scope.launch {
+            error = null
+            progress = readingLabel
+            try {
+                onReady(viewModel.buildDeviceReport { step -> progress = step })
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = e.message
+            } finally {
+                progress = null
+            }
+        }
+    }
+
     private companion object {
         const val JSON_SUFFIX = ".json"
     }
