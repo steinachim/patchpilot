@@ -501,7 +501,7 @@ class InstrumentViewModel(application: Application) :
             // were scanned by the time this runs, so naming only the USB-matched half claimed a
             // narrower search than actually happened - a Pro-800 owner was told the app had
             // looked for two Nords.
-            val names = InstrumentRegistry.allDescriptors(getApplication()).map { it.name }
+            val names = InstrumentRegistry.allDescriptors(getApplication()).map { it.name }.sorted()
             _state.value = ConnectionState.NothingFound(names)
         } else {
             _state.value = ConnectionState.DeviceSelection(pickerEntries(emptyList()))
