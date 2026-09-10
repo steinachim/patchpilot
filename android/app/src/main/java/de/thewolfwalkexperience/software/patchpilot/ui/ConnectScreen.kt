@@ -4,6 +4,8 @@ import de.thewolfwalkexperience.software.patchpilot.R
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -82,9 +84,16 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
         Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.cd_settings))
     }
     Column(
+        // Scrollable, not just centred: NothingFound's supported-instrument list alone is ten
+        // names (and grows every time a device is added, see [ConnectionState.NothingFound]'s doc
+        // comment), which overflows a landscape phone's height on its own before the retry/demo
+        // buttons below it are even counted - and Arrangement.Center on a fixed-height Column
+        // clips instead of scrolling, leaving those buttons genuinely unreachable rather than just
+        // scrolled past. Short content still centres between the scroll bounds exactly as before.
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
