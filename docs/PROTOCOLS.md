@@ -2,11 +2,11 @@
 
 This document describes the wire protocols PatchPilot uses to talk to each supported instrument, limited to the commands the app actually sends. It is a reference for maintainers, not a full specification of each vendor's protocol.
 
-## Nord Stage 2EX / Nord Grand
+## Nord family
 
 **Transport**: Raw USB bulk transfers on a vendor-specific interface (not USB-MIDI). Bulk OUT endpoint `0x03`, bulk IN endpoint `0x82`; interrupt endpoint `0x81` is present but unused.
 
-**Identification**: USB vendor ID `0x0FFC` (Clavia DMI AB). Product ID `0x0021` identifies a Nord Stage 2EX, `0x002B` a Nord Grand. Both instruments speak the identical wire protocol; all behavioral differences between them are expressed as data (bank/group/slot geometry, supported firmware versions) rather than separate code paths.
+**Identification**: USB vendor ID `0x0FFC` (Clavia DMI AB). Every Nord model this app supports shares this vendor id and speaks the identical wire protocol; product id, bank/group/slot geometry and supported firmware versions are the only per-model differences, and are declared as data in `devices/nord_devices.json` (repo root) rather than as separate code paths — that file is the current, authoritative list of supported product ids, not this document. Product id `0x0021` identifies a Nord Stage 2EX and `0x002B` a Nord Grand, the two models the framing and message tables below were originally reverse-engineered against.
 
 **Framing**: Every message is a 16-byte header, a payload, and a 2-byte CRC-16 trailer, all big-endian:
 

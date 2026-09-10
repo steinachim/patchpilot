@@ -4,8 +4,14 @@ PatchPilot is a native Android app for browsing, organizing, and editing presets
 
 ## Supported instruments
 
-- Nord Stage 2EX
 - Nord Grand
+- Nord Grand 2
+- Nord Stage 2EX
+- Nord Stage 4
+- Nord Electro 7
+- Nord Piano 6
+- Nord Lead A1
+- Nord Wave 2
 - Behringer Pro-800
 - Yamaha Motif XS6/XS7/XS8 (only the XS6 tested against real hardware; XS7/XS8 USB product IDs are inferred from Yamaha's driver files and sequential-PID precedent, not yet confirmed on an actual unit)
 
@@ -13,7 +19,7 @@ Each instrument connects over USB (directly, or via USB-MIDI where the instrumen
 
 ### Will PatchPilot support other Nord instruments automatically?
 
-Likely, for another instrument in the same Nord/Clavia protocol family. Nord Stage 2EX and Nord Grand share a single protocol implementation in this app; every behavioral difference between them is expressed as data — a device-catalog entry — rather than device-specific code. Adding a further Nord instrument that speaks the same USB protocol is expected to require only a new catalog entry (vendor/product id, bank layout, supported firmware), not new protocol code. Note that for safety reason, a new firmware version will report a warning as it cannot be guaranteed that the instrument behavior will be the same.
+Likely, for another instrument in the same Nord/Clavia protocol family — this has already happened six times since the original two (Nord Stage 2EX and Nord Grand). Every Nord model above shares a single protocol implementation in this app; every behavioral difference between them is expressed as data — a device-catalog entry — rather than device-specific code. Adding a further Nord instrument that speaks the same USB protocol is expected to require only a new catalog entry (vendor/product id, bank layout, supported firmware), not new protocol code. Note that for safety reason, a new firmware version will report a warning as it cannot be guaranteed that the instrument behavior will be the same.
 The app allows using unsupported Nord devices (with a warning). There is a debug menu (5 taps on the instrument name in the preset view to open), that allows you to run a regression test and share the report. Send it to me to add the instrument.
 
 This does not extend across vendors. Behringer Pro-800 and Yamaha Motif XS each required an independent, from-scratch protocol implementation, and nothing about either implies support for other instruments from those manufacturers — a further Behringer or Yamaha instrument would need its own implementation, verified against real hardware, just as these two did.
