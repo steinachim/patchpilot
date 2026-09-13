@@ -751,7 +751,7 @@ fun ProgramsScreen(
             // The theme's own indicator, the same one ConnectScreen shows while it opens a
             // device. A bare CircularProgressIndicator here meant the two waits either side of a
             // connect looked like they belonged to different apps under the Steampunk theme, where
-            // one is a pressure gauge and the other a Material spinner.
+            // one is a compass and the other a Material spinner.
             //
             // Centred, like the empty states below, rather than left as a plain child of this
             // Column - which has no horizontal alignment, so the indicator sat in the top-left

@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
  * `MaterialTheme`-level tokens, already centralised in the one `when (appTheme)` in
  * [PatchPilotTheme], and every stock Material component (buttons, dialogs, menus, the destructive
  * Delete styling) already gets them for free. This interface exists only for the handful of
- * things a token swap alone cannot produce: bespoke composables (a pressure gauge standing in for
+ * things a token swap alone cannot produce: bespoke composables (a compass standing in for
  * a spinner) and bespoke decoration (a riveted frame, a mechanical slot bezel) that used to be a
  * `Boolean` read off the raw `AppTheme` value and a branch, scattered across `ConnectScreen`,
  * `ProgramsScreen`, `AppScaffold` and `MainActivity`.

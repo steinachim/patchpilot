@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.sp
 /**
  * The "Brass & Aether" [ThemeStyle] - every bespoke piece a `MaterialTheme` token swap alone
  * can't produce, gathered from the free functions/composables in `SteampunkComponents.kt`
- * (`steampunkFrame`, `SteampunkGauge`, etc.) into the shape screens actually call.
+ * (`steampunkFrame`, `SteampunkCompass`, etc.) into the shape screens actually call.
  */
 object SteampunkThemeStyle : ThemeStyle {
     override val dragHandleGlyph = "⚙"
@@ -51,7 +51,7 @@ object SteampunkThemeStyle : ThemeStyle {
 
     @Composable
     override fun ProgressIndicator(modifier: Modifier) {
-        SteampunkGauge(modifier)
+        SteampunkCompass(modifier)
     }
 
     @Composable

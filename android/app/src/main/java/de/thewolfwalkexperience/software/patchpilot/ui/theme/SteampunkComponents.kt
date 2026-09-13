@@ -234,43 +234,44 @@ fun Modifier.steampunkRowPanel(dragged: Boolean, dropTarget: Boolean): Modifier 
 }
 
 /**
- * The pressure gauge that stands in for `CircularProgressIndicator` while the connect screen is
+ * The compass that stands in for `CircularProgressIndicator` while the connect screen is
  * searching for or opening an instrument, and while the preset screen waits for its first rows.
  *
- * Two rendered bitmaps rather than a drawing - a dial (`steampunk_gauge_plate`) and a needle
- * (`steampunk_gauge_needle`) - because that is how the app icon got its look. A flat disc with
+ * Two rendered bitmaps rather than a drawing - a dial (`steampunk_compass_plate`) and a needle
+ * (`steampunk_compass_needle`) - because that is how the app icon got its look. A flat disc with
  * a two-pixel ring and a stroke for a needle read as a line icon next to it, and a redraw with
- * gradients and hairlines was closer but still visibly a drawing.
+ * gradients and hairlines was closer but still visibly a drawing. (A pressure gauge in the same
+ * technique came between; the compass replaced it as the better fit for "looking for".)
  *
  * The two assets are authored to one scale, which is what keeps this composable short: the
  * needle is drawn with the same scale factor as the plate, and the plate is padded so that the
  * needle's axle (the centre screw) is its exact centre. So drawing is "fit the plate, put the
  * needle's pivot on the plate's centre, rotate". [NEEDLE_PIVOT] is where the needle's own screw
- * sits in its image, as a fraction of its size; the needle points straight up at zero rotation,
- * which on this dial is the 60 mark.
+ * sits in its image, as a fraction of its size; the needle's north end points straight up at
+ * zero rotation.
  *
- * Both live in `drawable-nodpi` at 480 px, one and a half times what an 80.dp gauge needs on a
- * 4x display - the plate at its authored 923 px would be 1.6 MB for something drawn at a
- * fraction of that - and are
- * scaled here rather than by the resource system, so the two always share a factor. The
- * source art is in `android/icons/`; the drawables are derived from it by padding the plate
- * 2 px on the left and 6 px on the top (its axle is at pixel (460, 470) of 923 x 947, so that
- * moves it to the centre), then resampling both by the same factor, 480 / 953.
+ * Both live in `drawable-nodpi` at 480 px, one and a half times what an 80.dp compass needs on
+ * a 4x display - the plate at its authored 990 px would be 1.9 MB for something drawn at a
+ * fraction of that - and are scaled here rather than by the resource system, so the two always
+ * share a factor. The source art is in `android/icons/`; the drawables are derived from it by
+ * padding the plate 7 px on the right and 19 px on the top (its axle is at pixel (498, 487) of
+ * 990 x 994, so that moves it to the centre), then resampling both by the same factor,
+ * 480 / 1013.
  *
- * The needle hunts between the 40 and 80 marks unless [rememberReduceMotion] says not to, in
- * which case it holds still at 60 - the same information (something is in progress), without
- * the motion.
+ * The needle swings thirty degrees either side of north, the way a compass hunts before it
+ * settles, unless [rememberReduceMotion] says not to, in which case it holds still on north -
+ * the same information (something is in progress), without the motion.
  */
 @Composable
-fun SteampunkGauge(modifier: Modifier = Modifier) {
+fun SteampunkCompass(modifier: Modifier = Modifier) {
     val reduceMotion = rememberReduceMotion()
     val needleDeg = if (reduceMotion) {
         0f
     } else {
-        val transition = rememberInfiniteTransition(label = "steampunk-gauge")
+        val transition = rememberInfiniteTransition(label = "steampunk-compass")
         val angle by transition.animateFloat(
-            initialValue = -42f,
-            targetValue = 42f,
+            initialValue = -30f,
+            targetValue = 30f,
             animationSpec = infiniteRepeatable(
                 // A symmetric easing, so the reversed leg looks like the forward one: the needle
                 // slows into each end of its swing and out again, as a damped needle does,
@@ -282,8 +283,8 @@ fun SteampunkGauge(modifier: Modifier = Modifier) {
         )
         angle
     }
-    val plate = ImageBitmap.imageResource(R.drawable.steampunk_gauge_plate)
-    val needle = ImageBitmap.imageResource(R.drawable.steampunk_gauge_needle)
+    val plate = ImageBitmap.imageResource(R.drawable.steampunk_compass_plate)
+    val needle = ImageBitmap.imageResource(R.drawable.steampunk_compass_needle)
     Canvas(modifier = modifier.size(80.dp)) {
         val scale = min(size.width / plate.width, size.height / plate.height)
         val plateSize = IntSize((plate.width * scale).roundToInt(), (plate.height * scale).roundToInt())
@@ -304,9 +305,9 @@ fun SteampunkGauge(modifier: Modifier = Modifier) {
     }
 }
 
-/** The needle's axle within `steampunk_gauge_needle`: on its vertical axis, at pixel row 343 of
- *  412 in the source art (measured at pixel centres). */
-private val NEEDLE_PIVOT = Offset(0.5f, 343.5f / 412f)
+/** The needle's axle within `steampunk_compass_needle`: on its vertical axis, at pixel row 339
+ *  of 688 in the source art - the middle of its hub, which is 4.5 px above the image's centre. */
+private val NEEDLE_PIVOT = Offset(0.5f, 339f / 688f)
 
 /**
  * A riveted-panel-styled stand-in for the `OutlinedButton` the connect screen's device picker
