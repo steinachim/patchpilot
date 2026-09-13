@@ -1,6 +1,7 @@
 # Changelog
 
 ## Next release
+- Change: the app now targets Android 16 and is versioned 1.0; store metadata with new phone and tablet screenshots, a privacy policy and a release guide were added in preparation for F-Droid and Google Play.
 - Add: recognize six more Nord keyboards — Electro 7, Grand 2, Lead A1, Piano 6, Stage 4 and Wave 2 — each confirmed against real hardware.
 - Fix: a Yamaha Motif XS voice can now be favorited under a category it does not have, which the instrument's own front panel has always allowed - so a voice filed under nothing can be a favorite, and one with a single category can be filed under that category or under none. 43 of the 128 voices in one user bank measured carry no category.
 - Change: the browser shows a preset's categories beside its id only where the row is wide enough - a phone in landscape, or a tablet - and separates two of them with a comma. On a portrait phone they crowded the row and the second was cut off; they remain available from the row's menu. Where they are shown, a preset filed under no category now says so rather than leaving the space blank.

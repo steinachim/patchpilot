@@ -1,0 +1,1 @@
+Manage presets on your hardware synth over USB, straight from your phone

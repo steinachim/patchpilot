@@ -48,9 +48,11 @@ cd android
 
 The build reads the device catalog from `../devices` relative to `android/` (JSON descriptors and binary fixtures used to generate the app's USB device filter and asset bundle) — keep the `devices/` and `android/` directories as siblings.
 
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for a tour of the codebase and [PROTOCOLS.md](docs/PROTOCOLS.md) for the wire protocols each device implementation uses.
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for a tour of the codebase and [PROTOCOLS.md](docs/PROTOCOLS.md) for the wire protocols each device implementation uses, and [RELEASING.md](docs/RELEASING.md) for how a version is published.
 
 ## Legal
+
+Patch Pilot collects no data and has no network access - see [PRIVACY.md](PRIVACY.md).
 
 PatchPilot is an independent, unofficial project. It is not affiliated with, endorsed by, or supported by Clavia DMI AB (Nord), Music Tribe / Behringer, or Yamaha Corporation. Product and brand names are used solely to identify the hardware this app is compatible with.
 
@@ -58,4 +60,4 @@ This software interacts with your instrument's internal storage, including opera
 
 ## License
 
-PatchPilot is licensed under the GNU General Public License v3.0 — see [LICENSE](LICENSE). Third-party license notices for bundled dependencies and fonts are listed in [android/NOTICE.md](android/NOTICE.md).
+PatchPilot is licensed under the GNU General Public License v3.0 (SPDX: `GPL-3.0-only`) — see [LICENSE](LICENSE). Third-party license notices for bundled dependencies and fonts are listed in [android/NOTICE.md](android/NOTICE.md).
