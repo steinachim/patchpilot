@@ -169,10 +169,6 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     // scaffold's arrow was leaving for the programs list and skipping the menu the user had just
     // come from - which reads as the app losing your place. A finished report is a state of this
     // screen, so back clears the state; only from the menu itself does back actually leave.
-    //
-    // A run still in progress is deliberately *not* dismissable this way: it is writing to the
-    // instrument, and an arrow that abandoned it mid-sequence would be the worst affordance on
-    // the screen.
     val atMenu = run !is RegressionRunState.Done && deviceReport == null
     // Clears both; only one is ever set, since each report hides the button that starts the other.
     fun backToMenu() {
@@ -183,7 +179,28 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     // Also catches the system/gesture back, which otherwise disagrees with the arrow beside it.
     BackHandler(enabled = !atMenu) { backToMenu() }
 
-    PatchPilotScaffold(title = stringResource(R.string.debug_title), onBack = handleBack) { innerPadding ->
+    // A run in progress is not dismissable at all. It is writing to the instrument, and it runs
+    // on this screen's scope, so leaving the screen would cancel it between steps - after the
+    // test's copy is made, or between a swap and its swap-back - with nothing left to put the
+    // instrument right again. So the arrow is greyed out and the gesture swallowed, the presets
+    // screen's shape during an edit. The wait is bounded: a run is a handful of writes with
+    // pauses between them, and an instrument that stops answering fails the run through the
+    // exchange timeouts. Never enabled together with the handler above, since `Running` counts
+    // as `atMenu` - so which of the two Compose consults first does not matter.
+    //
+    // The device report read is *not* held like this: it writes nothing, so leaving mid-read
+    // costs only the read.
+    val running = run is RegressionRunState.Running
+    BackHandler(enabled = running) {
+        // Deliberately empty: refusing the gesture *is* the behaviour, and the step line already
+        // says what is running.
+    }
+
+    PatchPilotScaffold(
+        title = stringResource(R.string.debug_title),
+        onBack = handleBack,
+        backEnabled = !running,
+    ) { innerPadding ->
         Column(
             Modifier
                 .fillMaxSize()
