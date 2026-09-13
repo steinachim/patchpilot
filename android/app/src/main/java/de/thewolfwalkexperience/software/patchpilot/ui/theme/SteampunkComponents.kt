@@ -1,7 +1,7 @@
 package de.thewolfwalkexperience.software.patchpilot.ui.theme
 
 import android.provider.Settings
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -30,14 +30,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import kotlin.math.cos
-import kotlin.math.sin
+import de.thewolfwalkexperience.software.patchpilot.R
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** A brass rivet dot, radial-shaded, at one point. */
 private fun DrawScope.rivet(center: Offset, radius: Float, light: Color, dark: Color) {
@@ -86,7 +93,7 @@ fun Modifier.steampunkFrame(): Modifier = composed {
         drawRoundRect(
             color = brassDark,
             topLeft = Offset(inset, inset),
-            size = androidx.compose.ui.geometry.Size(size.width - 2 * inset, size.height - 2 * inset),
+            size = Size(size.width - 2 * inset, size.height - 2 * inset),
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(radiusPx, radiusPx),
             style = Stroke(strokeWidth),
         )
@@ -227,65 +234,79 @@ fun Modifier.steampunkRowPanel(dragged: Boolean, dropTarget: Boolean): Modifier 
 }
 
 /**
- * The pressure-gauge dial from the mockup, standing in for `CircularProgressIndicator` while the
- * connect screen is searching for or opening an instrument. The needle sweeps within the
- * "searching" band unless [rememberReduceMotion] says not to, in which case it holds still at the
- * band's centre - the same information (something is in progress), without the motion.
+ * The pressure gauge that stands in for `CircularProgressIndicator` while the connect screen is
+ * searching for or opening an instrument, and while the preset screen waits for its first rows.
+ *
+ * Two rendered bitmaps rather than a drawing - a dial (`steampunk_gauge_plate`) and a needle
+ * (`steampunk_gauge_needle`) - because that is how the app icon got its look. A flat disc with
+ * a two-pixel ring and a stroke for a needle read as a line icon next to it, and a redraw with
+ * gradients and hairlines was closer but still visibly a drawing.
+ *
+ * The two assets are authored to one scale, which is what keeps this composable short: the
+ * needle is drawn with the same scale factor as the plate, and the plate is padded so that the
+ * needle's axle (the centre screw) is its exact centre. So drawing is "fit the plate, put the
+ * needle's pivot on the plate's centre, rotate". [NEEDLE_PIVOT] is where the needle's own screw
+ * sits in its image, as a fraction of its size; the needle points straight up at zero rotation,
+ * which on this dial is the 60 mark.
+ *
+ * Both live in `drawable-nodpi` at 480 px, one and a half times what an 80.dp gauge needs on a
+ * 4x display - the plate at its authored 923 px would be 1.6 MB for something drawn at a
+ * fraction of that - and are
+ * scaled here rather than by the resource system, so the two always share a factor. The
+ * source art is in `android/icons/`; the drawables are derived from it by padding the plate
+ * 2 px on the left and 6 px on the top (its axle is at pixel (460, 470) of 923 x 947, so that
+ * moves it to the centre), then resampling both by the same factor, 480 / 953.
+ *
+ * The needle hunts between the 40 and 80 marks unless [rememberReduceMotion] says not to, in
+ * which case it holds still at 60 - the same information (something is in progress), without
+ * the motion.
  */
 @Composable
 fun SteampunkGauge(modifier: Modifier = Modifier) {
     val reduceMotion = rememberReduceMotion()
     val needleDeg = if (reduceMotion) {
-        -30f
+        0f
     } else {
         val transition = rememberInfiniteTransition(label = "steampunk-gauge")
         val angle by transition.animateFloat(
-            initialValue = -55f,
-            targetValue = -5f,
+            initialValue = -42f,
+            targetValue = 42f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1400, easing = LinearEasing),
+                // A symmetric easing, so the reversed leg looks like the forward one: the needle
+                // slows into each end of its swing and out again, as a damped needle does,
+                // rather than bouncing off it.
+                animation = tween(1600, easing = EaseInOut),
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "needle",
         )
         angle
     }
-    val brassLight = SteampunkAccents.brassLight
-    val brassDark = SteampunkAccents.brassDark
-    val amber = MaterialTheme.colorScheme.secondary
-    val panel = MaterialTheme.colorScheme.surfaceVariant
-    Canvas(modifier = modifier.size(120.dp)) {
-        val radius = size.minDimension / 2f
-        val center = Offset(size.width / 2f, size.height / 2f)
-        drawCircle(color = panel, radius = radius, center = center)
-        drawCircle(color = brassDark, radius = radius, center = center, style = Stroke(2.dp.toPx()))
-        // Ticks every 30 degrees across a 240-degree sweep (-120..120), same geometry as the mockup.
-        for (tickDeg in -120..120 step 30) {
-            val rad = Math.toRadians(tickDeg.toDouble())
-            val outer = Offset(
-                center.x + (radius * 0.92f) * cos(rad).toFloat(),
-                center.y + (radius * 0.92f) * sin(rad).toFloat(),
-            )
-            val inner = Offset(
-                center.x + (radius * 0.76f) * cos(rad).toFloat(),
-                center.y + (radius * 0.76f) * sin(rad).toFloat(),
-            )
-            drawLine(brassLight, inner, outer, strokeWidth = 2.dp.toPx())
+    val plate = ImageBitmap.imageResource(R.drawable.steampunk_gauge_plate)
+    val needle = ImageBitmap.imageResource(R.drawable.steampunk_gauge_needle)
+    Canvas(modifier = modifier.size(80.dp)) {
+        val scale = min(size.width / plate.width, size.height / plate.height)
+        val plateSize = IntSize((plate.width * scale).roundToInt(), (plate.height * scale).roundToInt())
+        val plateOffset = IntOffset(
+            ((size.width - plateSize.width) / 2f).roundToInt(),
+            ((size.height - plateSize.height) / 2f).roundToInt(),
+        )
+        drawImage(plate, dstOffset = plateOffset, dstSize = plateSize)
+        val pivot = Offset(plateOffset.x + plateSize.width / 2f, plateOffset.y + plateSize.height / 2f)
+        val needleSize = IntSize((needle.width * scale).roundToInt(), (needle.height * scale).roundToInt())
+        val needleOffset = IntOffset(
+            (pivot.x - needleSize.width * NEEDLE_PIVOT.x).roundToInt(),
+            (pivot.y - needleSize.height * NEEDLE_PIVOT.y).roundToInt(),
+        )
+        rotate(needleDeg, pivot) {
+            drawImage(needle, dstOffset = needleOffset, dstSize = needleSize)
         }
-        val needleRad = Math.toRadians(needleDeg.toDouble())
-        val tip = Offset(
-            center.x + (radius * 0.68f) * cos(needleRad).toFloat(),
-            center.y + (radius * 0.68f) * sin(needleRad).toFloat(),
-        )
-        val tail = Offset(
-            center.x - (radius * 0.18f) * cos(needleRad).toFloat(),
-            center.y - (radius * 0.18f) * sin(needleRad).toFloat(),
-        )
-        drawLine(amber, tail, tip, strokeWidth = 3.dp.toPx())
-        drawCircle(brassLight, radius = 5.dp.toPx(), center = center)
-        drawCircle(brassDark, radius = 5.dp.toPx(), center = center, style = Stroke(1.5.dp.toPx()))
     }
 }
+
+/** The needle's axle within `steampunk_gauge_needle`: on its vertical axis, at pixel row 343 of
+ *  412 in the source art (measured at pixel centres). */
+private val NEEDLE_PIVOT = Offset(0.5f, 343.5f / 412f)
 
 /**
  * A riveted-panel-styled stand-in for the `OutlinedButton` the connect screen's device picker

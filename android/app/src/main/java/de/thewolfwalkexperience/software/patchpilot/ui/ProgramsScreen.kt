@@ -752,7 +752,12 @@ fun ProgramsScreen(
             // device. A bare CircularProgressIndicator here meant the two waits either side of a
             // connect looked like they belonged to different apps under the Steampunk theme, where
             // one is a pressure gauge and the other a Material spinner.
-            index.slots.isEmpty() && index.loading -> theme.ProgressIndicator()
+            //
+            // Centred, like the empty states below, rather than left as a plain child of this
+            // Column - which has no horizontal alignment, so the indicator sat in the top-left
+            // corner. Barely noticeable for the default theme's small spinner; unmissable for the
+            // gauge, which is 120.dp of brass pinned to the left margin.
+            index.slots.isEmpty() && index.loading -> CenteredMessage { theme.ProgressIndicator() }
             else -> PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 // The gesture starts the work directly now, rather than flipping a flag an effect

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Next release
+- Change: the Steampunk theme's progress gauge is now a rendered brass dial and needle in the style of the app icon, and it is centred on the preset screen while the first rows load; previously it sat against the left margin, as did the default theme's spinner.
 - Change: the app now targets Android 16 and is versioned 1.0; store metadata with new phone and tablet screenshots, a privacy policy and a release guide were added in preparation for F-Droid and Google Play.
 - Add: recognize six more Nord keyboards — Electro 7, Grand 2, Lead A1, Piano 6, Stage 4 and Wave 2 — each confirmed against real hardware.
 - Fix: a Yamaha Motif XS voice can now be favorited under a category it does not have, which the instrument's own front panel has always allowed - so a voice filed under nothing can be a favorite, and one with a single category can be filed under that category or under none. 43 of the 128 voices in one user bank measured carry no category.
