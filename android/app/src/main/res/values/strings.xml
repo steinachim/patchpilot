@@ -209,8 +209,11 @@
       is ever read by somebody who has not gone looking for it.
     -->
     <string name="debug_title">Debug</string>
-    <string name="debug_report_body">Reads everything configuration details off the instrument and shares or saves it as JSON. Nothing is written.</string>
+    <string name="debug_report_body">Reads every configuration detail off the instrument into a JSON report, which can then be shared or saved to this device. Nothing is written to the instrument.</string>
     <string name="debug_report_action">Generate device report</string>
+    <string name="debug_report_running">Generating the device report\u2026</string>
+    <string name="debug_report_ready">Device report ready</string>
+    <string name="debug_report_ready_body">Read from the instrument: %1$d KB of JSON. Share it, or save it to this device. Going back discards it.</string>
     <string name="debug_regression_body">Runs every operation this instrument supports and reports what worked. Edits are made against a copy the test creates and deletes again; where no free slot exists, it asks first.</string>
     <string name="debug_regression_action">Run regression test</string>
     <!-- Checking the shipped factory voice names against the instrument itself. Read-only. -->

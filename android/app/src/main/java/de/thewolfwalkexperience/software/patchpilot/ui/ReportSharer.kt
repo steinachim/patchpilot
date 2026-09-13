@@ -77,15 +77,14 @@ class ReportSharer(
     }
 
     /**
-     * Reads the report and hands it to [onReady] - the "Save to device" counterpart of [share].
+     * Reads the report and hands it to [onReady] instead of to the share sheet.
      *
-     * Split from [share] because saving needs a Uri, and only the caller (which is a composable,
-     * so it can hold a `CreateDocument` `ActivityResultLauncher` this class has no way to own) can
-     * get one - it launches that picker from [onReady], then writes the content once the picker
-     * returns one. Same read, same progress reporting; this is a Uri instead of a `content://`
-     * FileProvider hop.
+     * Split from [share] for the debug screen, which reads once and then offers the result for
+     * sharing *or* saving - and saving needs a Uri, which only a composable holding a
+     * `CreateDocument` `ActivityResultLauncher` can get. Same read, same progress reporting; what
+     * happens to the JSON afterwards is the caller's.
      */
-    fun prepareForSave(onReady: (String) -> Unit) {
+    fun build(onReady: (String) -> Unit) {
         scope.launch {
             error = null
             progress = readingLabel
