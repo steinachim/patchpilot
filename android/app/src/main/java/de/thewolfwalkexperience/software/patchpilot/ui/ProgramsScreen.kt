@@ -746,6 +746,13 @@ fun ProgramsScreen(
         // Bound to a local because `index` is now a delegated property and cannot smart-cast.
         val scanError = index.error
         when {
+            // A resume rebuilds the USB session (MainActivity.onResume -> forceReconnect), and
+            // this screen stays up through the Disconnected/Searching/Opening dip on purpose -
+            // see [rendersOnProgramsScreen]. The rows it was showing are still in memory, so
+            // without this they sat under a "Not Connected" title for the second or two the
+            // rebuild takes, looking like a listing of an instrument the app had just said it
+            // was not talking to. The reconnect is a wait like any other: show the wait.
+            session !is ConnectionState.Connected -> ConnectingWait()
             scanError != null ->
                 Text(stringResource(R.string.programs_error, scanError), color = MaterialTheme.colorScheme.error)
             // The theme's own indicator, the same one ConnectScreen shows while it opens a
@@ -757,7 +764,7 @@ fun ProgramsScreen(
             // Column - which has no horizontal alignment, so the indicator sat in the top-left
             // corner. Barely noticeable for the default theme's small spinner; unmissable for the
             // gauge, which is 120.dp of brass pinned to the left margin.
-            index.slots.isEmpty() && index.loading -> CenteredMessage { theme.ProgressIndicator() }
+            index.slots.isEmpty() && index.loading -> ConnectingWait()
             else -> PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 // The gesture starts the work directly now, rather than flipping a flag an effect
@@ -1292,6 +1299,24 @@ private class DebugTapCounter {
     private companion object {
         const val TAPS_TO_OPEN = 5
         const val WINDOW_MS = 3_000L
+    }
+}
+
+/**
+ * The wait shown in place of the list: the theme's own indicator over "Connecting…", the pair
+ * ConnectScreen shows while it searches and opens. Used both for the first read after a connect
+ * and for the reconnect dip a resume goes through - the same wait from the user's side, so the
+ * same picture.
+ */
+@Composable
+private fun ConnectingWait() {
+    val theme = LocalThemeStyle.current
+    CenteredMessage {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            theme.ProgressIndicator()
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(R.string.programs_reconnecting))
+        }
     }
 }
 

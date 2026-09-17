@@ -196,6 +196,8 @@
          naming a screen, since a bug that manages to strand this title here should not also
          read as an unrelated screen name. -->
     <string name="programs_title_fallback">Not Connected</string>
+    <!-- Shown in place of the list while the first read runs and while a resume rebuilds the USB session. -->
+    <string name="programs_reconnecting">Connecting…</string>
 
     <!--
       What a delete actually does, which differs by family: a Nord empties the slot with one
