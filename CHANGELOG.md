@@ -1,6 +1,7 @@
 # Changelog
 
 ## Next release
+- Fix: sharing or saving a finished regression test or device report a second time crashes the app
 - Change: the Steampunk theme's progress indicator is now a rendered brass compass whose needle hunts about north, in the style of the app icon, and it is centred on the preset screen while the first rows load; previously it sat against the left margin, as did the default theme's spinner.
 - Change: the app now targets Android 16 and is versioned 1.0; store metadata with new phone and tablet screenshots, a privacy policy and a release guide were added in preparation for F-Droid and Google Play.
 - Add: recognize six more Nord keyboards — Electro 7, Grand 2, Lead A1, Piano 6, Stage 4 and Wave 2 — each confirmed against real hardware.

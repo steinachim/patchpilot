@@ -69,14 +69,15 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     var pending by remember { mutableStateOf<PendingConfirmation?>(null) }
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
     val sharer = rememberReportSharer(viewModel)
-    // The device report once it has been read, as the JSON it will be shared or saved as - null
-    // until then. Saved for the same reason a finished regression run is: a report that took a
-    // couple of minutes to read must not vanish on rotation. A String needs no custom Saver, and
-    // the report is bounded (the largest part of a Nord's is a few hundred program names), so
-    // it is nowhere near what a Bundle can carry. The read in progress is `sharer.progress`,
-    // which does not survive rotation any more than a regression run does, and for the same
-    // reason - see [RegressionRunStateSaver].
-    var deviceReport by rememberSaveable { mutableStateOf<String?>(null) }
+    // The device report once it has been read, with everything sharing it needs - null until
+    // then. Saved for the same reason a finished regression run is: a report that took a couple
+    // of minutes to read must not vanish on rotation. The report is bounded (the largest part of
+    // a Nord's is a few hundred program names), so it is nowhere near what a Bundle can carry.
+    // The read in progress is `sharer.progress`, which does not survive rotation any more than a
+    // regression run does, and for the same reason - see [RegressionRunStateSaver].
+    var deviceReport by rememberSaveable(stateSaver = HeldDeviceReportSaver) {
+        mutableStateOf<HeldDeviceReport?>(null)
+    }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -148,12 +149,16 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
             error = null
             run = RegressionRunState.Running(context.getString(R.string.debug_regression_starting))
             try {
+                // Resolved before the run and kept with the report: the instrument that names
+                // the file is the one about to be tested, and it is not guaranteed to still be
+                // connected when Share is tapped - see [HeldDeviceReport].
+                val stem = viewModel.filenameStem
                 val report = viewModel.runRegressionTest(
                     onConfirmSelect = { shown -> ask(PendingQuestion.ConfirmSelect(shown)) },
                     onConfirmRealSlotMutation = { reason -> ask(PendingQuestion.ConfirmRealSlotMutation(reason)) },
                     progress = { step -> run = RegressionRunState.Running(step) },
                 )
-                run = RegressionRunState.Done(report)
+                run = RegressionRunState.Done(report, stem)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -223,20 +228,20 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                 // says what each does, where "Save to device" as a second entry point did not
                 // (does it generate? must one generate first?).
                 report != null -> DeviceReportReadyView(
-                    sizeBytes = report.toByteArray().size,
+                    sizeBytes = report.json.toByteArray().size,
                     onShare = {
                         pendingShare = PendingShare(
                             title = reportShareTitle,
-                            description = viewModel.reportDescription,
+                            description = report.description,
                             suffix = jsonSuffix,
-                            initialStem = viewModel.suggestedReportFilename(),
+                            initialStem = report.stem,
                             // From memory, not `sharer.share` - that would read the instrument
                             // again, and the read is the slow part this view exists to keep.
                             onConfirm = { stem ->
                                 shareTextReport(
                                     context = context,
                                     filename = "$stem$jsonSuffix",
-                                    content = report,
+                                    content = report.json,
                                     mimeType = JSON_MIME_TYPE,
                                     chooserTitle = reportShareTitle,
                                 )
@@ -244,8 +249,8 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                         )
                     },
                     onSave = {
-                        pendingSaveContent = report
-                        saveJsonLauncher.launch(viewModel.suggestedReportFilename() + jsonSuffix)
+                        pendingSaveContent = report.json
+                        saveJsonLauncher.launch(report.stem + jsonSuffix)
                     },
                     onBackToMenu = ::backToMenu,
                 )
@@ -259,10 +264,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             title = regressionShareTitle,
                             description = state.report.summary,
                             suffix = txtSuffix,
-                            // Not `suggestedReportFilename()`: that requires the DeviceReporter
-                            // facet, which a Motif XS does not have - and this share crashed the
-                            // app there. The regression test is offered for every family.
-                            initialStem = "${viewModel.filenameStem}_capabilities",
+                            initialStem = "${state.stem}_capabilities",
                             onConfirm = { stem ->
                                 shareTextReport(
                                     context = context,
@@ -278,7 +280,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                         // Already in memory and synchronous, unlike the device report - no
                         // ReportSharer round trip needed before the picker can launch.
                         pendingSaveContent = state.report.asText()
-                        saveTextLauncher.launch("${viewModel.filenameStem}_capabilities$txtSuffix")
+                        saveTextLauncher.launch("${state.stem}_capabilities$txtSuffix")
                     },
                     onBackToMenu = ::backToMenu,
                 )
@@ -288,7 +290,19 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     // Gated on the factory-name check, whose progress and verdict live inline on
                     // this menu: a report read replaces the menu, and would hide them mid-read.
                     Button(
-                        onClick = { sharer.build { json -> deviceReport = json } },
+                        onClick = {
+                            // The stem and description are resolved in the callback, which
+                            // ReportSharer runs inside the same try as the read: a teardown
+                            // in the meantime then fails the report the way a failed read does,
+                            // instead of throwing out of this click.
+                            sharer.build { json ->
+                                deviceReport = HeldDeviceReport(
+                                    json = json,
+                                    stem = viewModel.suggestedReportFilename(),
+                                    description = viewModel.reportDescription,
+                                )
+                            }
+                        },
                         enabled = viewModel.hasReport && verifyProgress == null,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -495,12 +509,13 @@ private sealed interface RegressionRunState {
 
     data class Running(val step: String) : RegressionRunState
 
-    data class Done(val report: RegressionReport) : RegressionRunState
+    /** [stem] is the instrument's filename stem, resolved before the run - see [HeldDeviceReport]. */
+    data class Done(val report: RegressionReport, val stem: String) : RegressionRunState
 }
 
 private fun regressionRunStateToStrings(state: RegressionRunState): List<String> {
     val done = state as? RegressionRunState.Done ?: return emptyList()
-    val flattened = mutableListOf(done.report.summary)
+    val flattened = mutableListOf(done.stem, done.report.summary)
     done.report.results.forEach { result ->
         flattened.add(result.name)
         flattened.add(result.status.name)
@@ -511,12 +526,32 @@ private fun regressionRunStateToStrings(state: RegressionRunState): List<String>
 
 private fun regressionRunStateFromStrings(saved: List<String>): RegressionRunState {
     if (saved.isEmpty()) return RegressionRunState.Idle
-    val summary = saved[0]
-    val results = saved.drop(1).chunked(3).map { triple ->
+    val stem = saved[0]
+    val summary = saved[1]
+    val results = saved.drop(2).chunked(3).map { triple ->
         RegressionResult(triple[0], Status.valueOf(triple[1]), triple[2])
     }
-    return RegressionRunState.Done(RegressionReport(results, summary))
+    return RegressionRunState.Done(RegressionReport(results, summary), stem)
 }
+
+/**
+ * A device report once read, together with the filename stem and the description the share
+ * dialog shows for it - both the instrument's own wording, resolved while it was connected.
+ *
+ * **Everything a held report needs is held with it, because the instrument may be gone by the
+ * time Share is tapped.** Sharing opens the system chooser, which is an Activity of its own: the
+ * app pauses under it and resumes when it closes, and a resume rebuilds a USB session from
+ * scratch (`MainActivity.onResume`, `Instrument.rebuildOnResume`). Between the teardown and the
+ * reconnect there is no instrument, while this report - `rememberSaveable` - is still on screen
+ * with its buttons live. Reading `filenameStem` there crashed the app on a Nord Grand the second
+ * time Share was tapped (2026-09-17). The regression run keeps its stem the same way.
+ */
+private data class HeldDeviceReport(val json: String, val stem: String, val description: String)
+
+private val HeldDeviceReportSaver: Saver<HeldDeviceReport?, Any> = listSaver(
+    save = { held -> if (held == null) emptyList() else listOf(held.json, held.stem, held.description) },
+    restore = { saved -> if (saved.isEmpty()) null else HeldDeviceReport(saved[0], saved[1], saved[2]) },
+)
 
 /**
  * Saves a finished [RegressionRunState.Done] across a configuration change; [RegressionRunState

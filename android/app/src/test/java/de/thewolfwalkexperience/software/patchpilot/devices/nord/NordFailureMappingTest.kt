@@ -101,7 +101,7 @@ class NordFailureMappingTest {
         // the code. "(status 4)" says something went wrong without saying what or what to do.
         assertEquals(
             "Couldn't copy a preset: the instrument says that slot already holds one, though the " +
-                "listing shows it as empty. Pull down to re-read the instrument.",
+                "listing shows it as empty. Refresh the listing.",
             failure.message,
         )
     }

@@ -464,7 +464,7 @@ class NordInstrument(
 private fun nordStatusExplanation(what: String, status: Int): String? = when (status) {
     NordDevice.STATUS_FILE_EXISTS ->
         "Couldn't $what: the instrument says that slot already holds one, though the listing " +
-            "shows it as empty. Pull down to re-read the instrument."
+            "shows it as empty. Refresh the listing."
     else -> null
 }
 
