@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.cache
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
@@ -17,7 +20,7 @@ import org.junit.Test
 
 class CachingBrowserTest {
 
-    private val key = CacheKey("inst-a", "desc", "1.00", "A:4|B:4")
+    private val key = CacheKey("inst-a", "desc", "1.00", "A:4|B:4", "usb:/dev/bus/usb/001/004")
     private val otherInstrument = key.copy(instrument = "inst-b")
 
     private fun slot(bank: Int, index: Int, name: String?) = PresetSlot(

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import android.content.Context
@@ -21,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import de.thewolfwalkexperience.software.patchpilot.R
 import java.io.File
+import java.io.IOException
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
@@ -76,14 +80,25 @@ fun shareTextReport(
  * offline in the field. No `FileProvider` involved: the picker hands back a `content://` Uri this
  * app can write to directly, in whichever app (Files, a cloud drive already synced offline, an SD
  * card) the user chose.
+ *
+ * Blocking, and throws on failure: a provider that cannot be written to (a cloud drive that is
+ * offline, say) is the caller's to report, not something to swallow into an empty file.
  */
 fun saveTextReport(context: Context, uri: Uri, content: String) {
-    context.contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) }
+    val stream = context.contentResolver.openOutputStream(uri)
+        ?: throw IOException("The chosen location could not be opened for writing.")
+    stream.use { it.write(content.toByteArray()) }
 }
 
 /** Subdirectory of `cacheDir` holding the one report currently being shared - see
  * [shareTextReport] and the `<cache-path>` entry in `res/xml/file_paths.xml`. */
 const val SHARE_DIR = "shared"
+
+/** The MIME type a device report is shared as. Its `.json` half is `R.string.programs_json_suffix`. */
+const val JSON_MIME_TYPE = "application/json"
+
+/** The MIME type the regression report is shared as, alongside `R.string.programs_txt_suffix`. */
+const val TEXT_MIME_TYPE = "text/plain"
 
 /**
  * What a caller wants to share, before the user has had a chance to rename the file - see

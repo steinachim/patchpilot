@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.core
 
 /**
@@ -5,11 +8,10 @@ package de.thewolfwalkexperience.software.patchpilot.core
  * it, both 0-based. This is the only thing the operations in [Instrument]'s facets take, and it is
  * deliberately *not* a display string.
  *
- * The split between this and [AddressFormat] already existed inside the Nord code before it was
- * named: `NordDevice`'s canonical pair is (bank, item), and "group" appears nowhere except in
+ * `NordDevice`'s canonical pair is (bank, item), and "group" appears nowhere except in
  * `formatPresetId`/`parsePresetId`, where `item = (group - 1) * slotsPerGroup + (slot - 1)`. So a
  * Nord's `A:1:1` and a Pro-800's `A00` are two renderings of the same idea, and the difference
- * belongs in a formatter rather than in every caller.
+ * belongs in a formatter ([AddressFormat]) rather than in every caller.
  */
 data class SlotAddress(val bank: Int, val slot: Int) {
     init {
@@ -42,8 +44,8 @@ interface AddressFormat {
  * letter. A bank's slots are presented as [groupsPerBank] groups of [slotsPerGroup], matching the
  * instrument's own front-panel group/slot buttons.
  *
- * A straight lift of `NordDevice.formatPresetId`/`parsePresetId`, which keep working unchanged -
- * this exists so the *domain* can format an address without going through a connected device.
+ * The same rendering as `NordDevice.formatPresetId`/`parsePresetId`; this exists so the *domain*
+ * can format an address without going through a connected device.
  */
 class GroupedBankAddressFormat(
     private val groupsPerBank: Int,

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.core
 
 import kotlinx.coroutines.CancellationException
@@ -290,10 +293,9 @@ interface PresetEditor {
      * Duplicates [src] into the empty slot [dst], leaving [src] where it is, and returns the name
      * the *instrument* gave the copy.
      *
-     * The only edit with a default implementation, because it is the only one no family had when
-     * [PresetEditor] was written and two of the three still have no equivalent for. A family that
-     * offers it declares [EditOp.COPY] and overrides this; one that does not declares neither and
-     * inherits the refusal, which is what `EditOp.COPY !in supported` reads as everywhere.
+     * The only edit with a default implementation: a family that offers it declares [EditOp.COPY]
+     * and overrides this; one that does not declares neither and inherits the refusal, which is
+     * what `EditOp.COPY !in supported` reads as everywhere.
      *
      * The name comes back rather than being chosen by the caller because the instrument picks it:
      * a Nord appends a disambiguating number to the source's ("Synth Strings" -> "Synth Strings 2")
@@ -307,10 +309,9 @@ interface PresetEditor {
 /**
  * Reads and writes a preset's own data blob - backup and restore.
  *
- * A facet from day one even though only one family implements it yet: on a Pro-800 this
- * *is* the listing operation, so its browser is built on [read] and a "save everything" action
- * after a completed scan costs no extra round trips. The Nord side returns null for the facet
- * until its own item-data read/write path is implemented here.
+ * Only the Pro-800 implements it: there this *is* the listing operation, so its browser is built
+ * on [read] and a "save everything" action after a completed scan costs no extra round trips.
+ * The other families return null for the facet until an item-data read/write path is implemented.
  */
 interface PresetTransfer {
     suspend fun read(address: SlotAddress): ByteArray
@@ -329,9 +330,8 @@ interface DeviceReporter {
      * What the confirmation dialog tells the user this will do.
      *
      * Supplied by the reporter because the two families read completely different things: one
-     * walks categories and measures storage areas, the other dumps 400 preset addresses. The
-     * screen had the Nord wording hard-coded and showed it for a Pro-800, describing storage
-     * figures the instrument does not have.
+     * walks categories and measures storage areas, the other dumps 400 preset addresses, and a
+     * single wording in the screen would describe one of them wrongly.
      */
     val description: String
 }

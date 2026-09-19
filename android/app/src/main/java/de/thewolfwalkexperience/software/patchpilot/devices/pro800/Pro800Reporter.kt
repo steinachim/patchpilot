@@ -1,5 +1,9 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
+import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
@@ -69,7 +73,7 @@ class Pro800Reporter(
         }
         val settings = settingsHex.takeIf { it.isNotEmpty() }?.let {
             probes.probe<Pro800Settings?>("settingsParse", null) {
-                Pro800Settings.fromEncoded(Pro800SysEx.dumpPayload(hexToBytes(it)))
+                Pro800Settings.fromEncoded(Pro800SysEx.dumpPayload(it.hexToBytes()))
             }
         }
 
@@ -135,9 +139,6 @@ class Pro800Reporter(
         what: String,
         matches: (ByteArray) -> Boolean,
     ): ByteArray = exchange.exchange(request, what, matches = matches)
-
-    private fun hexToBytes(hex: String): ByteArray =
-        ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
 }
 
 /** Who answered, as the report records it. */

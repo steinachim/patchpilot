@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.cache
 
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
@@ -7,13 +10,19 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 /**
  * Which instrument's index is cached, and under what assumptions.
  *
- * More than [instrument] alone because two of the other three can change without the instrument
+ * More than [instrument] alone because the other fields can change without the instrument
  * changing, and each would make a cached index wrong rather than merely stale:
  *
  * - [firmwareVersion] — a firmware change can move or reinterpret what is stored.
  * - [layoutFingerprint] — the bank table is catalog data (the JSON files under `devices/`) precisely so it
- *   corrected without a code change, and an index cached against the old table maps its entries
- *   onto the wrong addresses.
+ *   can be corrected without a code change, and an index cached against the old table maps its
+ *   entries onto the wrong addresses.
+ * - [physicalDevice] — the USB device path or MIDI device id the session runs over. No family
+ *   reads a serial number, so [instrument] names a *model*, and two units of the same model
+ *   would otherwise share one cached listing: unplug one Nord Grand, plug in another, and the
+ *   delete dialog would name the first unit's preset while erasing the second's slot. The path
+ *   is assigned when the device enumerates, so it is stable across the resume rebuild this cache
+ *   exists to survive and changes on a physical replug, which is exactly the boundary wanted.
  *
  * There is deliberately **no decoder-version field**, which a persistent cache would need. This
  * cache lives and dies with the process, so the code that decoded its contents cannot change
@@ -25,14 +34,17 @@ data class CacheKey(
     val descriptorId: String,
     val firmwareVersion: String,
     val layoutFingerprint: String,
+    val physicalDevice: String,
 ) {
     companion object {
-        fun of(instrument: Instrument) = CacheKey(
+        /** @param physicalDevice the session's device handle - see the class doc. */
+        fun of(instrument: Instrument, physicalDevice: String) = CacheKey(
             instrument = instrument.identity.stableKey,
             descriptorId = instrument.identity.descriptorId,
             firmwareVersion = instrument.identity.firmwareVersion,
             layoutFingerprint = instrument.layout.banks
                 .joinToString("|") { "${it.label}:${it.slotCount}" },
+            physicalDevice = physicalDevice,
         )
     }
 }

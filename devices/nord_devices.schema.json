@@ -13,36 +13,11 @@
       "const": 1,
       "description": "Bump only on a breaking change to this shape. New optional fields with safe defaults don't need a bump."
     },
-    "contentVersionScales": {
-      "type": "object",
-      "description": "Content tag -> divisor for that tag's content-version field. Only the exceptions are listed; anything absent uses the default of 100, e.g. 312 -> '3.12'. Keyed by content tag rather than nested per device because tags are globally unique across instruments. The Stage 2 EX's own tags are unscaled: measured for ns2p/ns2s, and assumed for ns2l/ns2y.",
-      "additionalProperties": { "type": "integer", "minimum": 1 }
-    },
     "programCategories": {
       "type": "object",
       "description": "The master preset-category-tag catalog, id -> name, shared across the whole Nord product line (54 ids, 0-53). No instrument implements all of it: each device entry picks its own subset via 'programCategoryIds'. Keyed by id rather than by name because the master list is not injective - ids 2 and 37 are both 'Wind', 14 and 43 both 'User' - so a name -> id map cannot represent it.",
       "propertyNames": { "pattern": "^(0|[1-9][0-9]*)$" },
       "additionalProperties": { "type": "string", "minLength": 1 }
-    },
-    "sampleCategories": {
-      "type": "object",
-      "description": "The master sample-category catalog, keyed by main-category id 0-18, shared across the product line like 'programCategories'. An 'nsmp' item record's tag-specific field is a (main, sub) pair: the high half indexes this map, the low half indexes that entry's 'subCategories'. A sub-category of \"\" means the item has none, which is index 0 for every category except 'Synth' - the one that uses index 0 as a real name.",
-      "propertyNames": { "pattern": "^(0|[1-9][0-9]*)$" },
-      "additionalProperties": {
-        "type": "object",
-        "required": ["name", "short", "subCategories"],
-        "additionalProperties": false,
-        "properties": {
-          "name": { "type": "string", "minLength": 1, "description": "Full name, e.g. 'Accordion/Harm'." },
-          "short": { "type": "string", "minLength": 1, "description": "Abbreviation the instrument's own display uses, e.g. 'Accord/Harm'. Equal to 'name' where no abbreviation was needed." },
-          "subCategories": {
-            "type": "object",
-            "description": "Sub-category id -> name, complete including index 0.",
-            "propertyNames": { "pattern": "^(0|[1-9][0-9]*)$" },
-            "additionalProperties": { "type": "string" }
-          }
-        }
-      }
     },
     "devices": {
       "type": "array",

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.transport
 
 import android.hardware.usb.UsbDeviceConnection
@@ -62,11 +65,27 @@ class AndroidUsbBulkTransport(
         return buffer.copyOf(read)
     }
 
-    /** A timeout here returns -1 and is not an error - see [UsbBulkTransport.bulkReadOrEmpty]. */
+    /**
+     * A timeout here returns -1 and is not an error - see [UsbBulkTransport.bulkReadOrEmpty].
+     *
+     * `bulkTransfer` answers a timeout and a failure with the same -1, so the two are told apart
+     * by the clock: a timeout has waited out [timeoutMs], while a detached device or a closed
+     * connection fails at once. A negative result that arrives in under half the timeout is
+     * therefore a failure and is thrown, which is what lets a reader loop count failures and
+     * give up rather than spin on an endpoint that answers instantly with nothing.
+     */
     override fun bulkReadOrEmpty(bufferSize: Int, timeoutMs: Int): ByteArray {
         val buffer = ByteArray(bufferSize)
+        val started = System.nanoTime()
         val read = connection.bulkTransfer(epIn, buffer, buffer.size, timeoutMs)
-        return if (read > 0) buffer.copyOf(read) else ByteArray(0)
+        if (read > 0) return buffer.copyOf(read)
+        if (read < 0) {
+            val elapsedMs = (System.nanoTime() - started) / 1_000_000
+            check(elapsedMs >= timeoutMs / 2) {
+                "USB bulk read failed after ${elapsedMs} ms (result=$read)"
+            }
+        }
+        return ByteArray(0)
     }
 
     override fun controlTransfer(

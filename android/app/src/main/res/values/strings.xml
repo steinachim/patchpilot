@@ -42,7 +42,7 @@
     <!-- Content descriptions: spoken by a screen reader, never shown. -->
     <string name="cd_back">Back</string>
     <string name="cd_refresh">Re-read from instrument</string>
-    <string name="cd_category_badge">Category %1$s</string>
+
     <string name="cd_row_options">Options for %1$s</string>
     <string name="cd_reorder">Reorder %1$s by dragging. Move to is also in this row’s options.</string>
     <string name="cd_reorder_unavailable">Reordering is unavailable until the listing finishes</string>
@@ -226,6 +226,7 @@
     <string name="debug_verify_mismatches">%1$s: %2$d name(s) disagree with what the app ships:</string>
     <string name="debug_regression_running">Running the regression test…</string>
     <string name="debug_regression_share">Share regression report</string>
+    <string name="debug_save_failed">The report could not be saved.</string>
     <string name="debug_regression_back">Back to the debug menu</string>
     <string name="debug_confirm_select_title">Check the instrument</string>
     <string name="debug_confirm_select_body">The instrument was told to load %1$s. Is that what it is showing now?</string>

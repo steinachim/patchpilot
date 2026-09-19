@@ -12,12 +12,6 @@
         android:name="android.hardware.midi"
         android:required="false" />
 
-    <!-- Held by this app alone (protectionLevel="signature" grants it only to apps signed with
-         the same key), and required of whatever sends UsbConnectionManager's USB_PERMISSION
-         broadcast - see the receiver's own comment in UsbConnectionManager.kt for why. -->
-    <permission
-        android:name="de.thewolfwalkexperience.software.patchpilot.permission.USB_PERMISSION_CALLBACK"
-        android:protectionLevel="signature" />
 
     <!-- allowBackup is off deliberately. Nothing here is worth restoring onto another phone, and
          some of it is worth not copying off this one: the app stores no credentials and keeps the

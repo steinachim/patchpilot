@@ -16,11 +16,11 @@ Patch Pilot collects no personal data, has no network access, and never sends an
 - Your theme choice, a single preference.
 - While a report you asked to share is being handed to another app, a temporary copy of it in the app's private cache directory. It is replaced by the next share and removed when the app's cache is cleared.
 
-Preset names and other instrument data are held in memory only while the app is running. The app opts out of Android backups, so none of this is copied to a cloud backup or to another device.
+Preset names and other instrument data are held in memory only while the app is running. A finished regression report is kept, in the app's saved state, until you dismiss it or close the app. The app opts out of Android backups, so none of this is copied to a cloud backup or to another device.
 
 ## Exports you start yourself
 
-The app can produce two kinds of report, from the debug menu (five taps on the instrument name on the preset screen); the device report is also offered on the connect screen when the instrument or its firmware is one the app does not recognize. A report is written outside the app only when you tap **Share** or **Save to device**:
+The app can produce two kinds of report, from the debug menu (five taps on the instrument name on the preset screen). The device report is also offered on the preset screen when the instrument or its firmware is one the app does not recognize, and on the connect screen's firmware warning. A report is written outside the app only when you tap **Share** or **Save to device**:
 
 - **Device report**: the instrument's model, firmware version, USB vendor and product ids, the raw replies to the app's read-only configuration queries, storage figures, and counts of presets (how many slots are occupied, how many presets of each format version). It contains no preset names and no preset data.
 - **Regression report**: which operations the app tested against the instrument and whether they worked. It names the presets the test used.

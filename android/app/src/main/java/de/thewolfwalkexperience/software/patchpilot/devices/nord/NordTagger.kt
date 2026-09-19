@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
@@ -60,8 +63,10 @@ internal class NordTagger(
      * display shows as `No Cat`.
      */
     override suspend fun read(address: SlotAddress): PresetTags = deviceLock.withLock {
-        val id = categoryIdAt(address)
-        PresetTags(categories = listOf(id?.let { categories.refOf(it) }))
+        mapNordFailure("read a preset's category") {
+            val id = categoryIdAt(address)
+            PresetTags(categories = listOf(id?.let { categories.refOf(it) }))
+        }
     }
 
     /**
@@ -70,6 +75,9 @@ internal class NordTagger(
      * Refuses null rather than inventing an id for it: see [allowsUnassigned]. The read-back is
      * against the item record - the same bytes the browser lists with - so what is verified is
      * what the user will see.
+     *
+     * The argument checks stay outside [mapNordFailure]: they are caller bugs, and the mapping
+     * would read an `IllegalArgumentException` as an unparseable reply.
      */
     override suspend fun setCategories(address: SlotAddress, categories: List<CategoryRef?>) {
         val wanted = categories.firstOrNull()
@@ -80,12 +88,14 @@ internal class NordTagger(
             ?: throw IllegalArgumentException("No category ${wanted.main} on this Nord.")
 
         deviceLock.withLock {
-            device.setPresetCategory(address.bank, address.slot, id)
+            mapNordFailure("set a preset's category") {
+                device.setPresetCategory(address.bank, address.slot, id)
 
-            val stored = categoryIdAt(address)
-            check(stored == id) {
-                "set the category of ${device.formatPresetId(address.bank, address.slot)} to $id " +
-                    "but it reads back as ${stored ?: "nothing"}"
+                val stored = categoryIdAt(address)
+                check(stored == id) {
+                    "set the category of ${device.formatPresetId(address.bank, address.slot)} to $id " +
+                        "but it reads back as ${stored ?: "nothing"}"
+                }
             }
         }
     }

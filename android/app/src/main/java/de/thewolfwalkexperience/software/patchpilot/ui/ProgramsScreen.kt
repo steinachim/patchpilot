@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import de.thewolfwalkexperience.software.patchpilot.R
@@ -68,6 +71,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -254,15 +259,31 @@ fun ProgramsScreen(
     // every row in the list agrees and the column does not appear on some rows and not others.
     val badgesFit = LocalConfiguration.current.screenWidthDp >= BADGE_MIN_WIDTH_DP
 
+    val resources = LocalResources.current
     var showEmptySlots by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
 
-    // Reads the report and opens the share sheet; `progress` is non-null while it runs, because
-    // the probe walks every item on the instrument and is slow enough to need saying so.
-    val sharer = rememberReportSharer(viewModel)
+    // The device report is read in the ViewModel, so a rotation mid-read costs nothing - see
+    // DeviceReportRunner. This screen shares it as soon as it is done; the stem the user typed
+    // is saved with the screen so the share still happens if the screen was recreated meanwhile.
+    val reportRunner = viewModel.deviceReportRunner
+    val reportState by reportRunner.state.collectAsState()
+    val reportError by reportRunner.error.collectAsState()
+    var pendingReportStem by rememberSaveable { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val shareReportTitle = stringResource(R.string.programs_share_report)
+    val jsonSuffix = stringResource(R.string.programs_json_suffix)
+    val readingLabel = stringResource(R.string.share_reading_device)
+    LaunchedEffect(reportState, pendingReportStem) {
+        val stem = pendingReportStem ?: return@LaunchedEffect
+        val done = reportState as? DeviceReportState.Done ?: return@LaunchedEffect
+        pendingReportStem = null
+        reportRunner.dismiss()
+        val shared = shareTextReport(context, "$stem$jsonSuffix", done.json, JSON_MIME_TYPE, shareReportTitle)
+        ops.statusMessage = resources.getString(R.string.programs_shared_as, shared)
+    }
     val debugTaps = remember { DebugTapCounter() }
     val scope = rememberCoroutineScope()
-    val resources = LocalResources.current
     // Captured at screen level rather than inside a dialog: it is needed *as* the dialog is being
     // disposed, by which point a controller resolved inside it is already going away.
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -284,14 +305,11 @@ fun ProgramsScreen(
     // at every call site, so a screen never asks a facet a question it has already been told the
     // answer to.
     //
-    // **Keyed on the session, not on a counter this screen bumps by hand.** These six changed
-    // exactly when the connected instrument changed, but nothing about a plain getter tells
-    // Compose that - so a `refreshTrigger` was incremented at five call sites to force a re-read,
-    // and correctness depended on every future mutation remembering to bump it. One already did
-    // not: the refresh button bumped it for a re-read that changes none of these, while
-    // `disconnect()` changes all of them and bumped nothing. `state` is a StateFlow Compose
-    // already observes, and the accessors behind these are null-safe (see `connected()`), so the
-    // recompose-while-disconnected crash that made the counter look necessary cannot happen.
+    // **Keyed on the session, not on a counter this screen bumps by hand.** These change exactly
+    // when the connected instrument changes, and nothing about a plain getter tells Compose
+    // that; a hand-bumped trigger would depend on every mutation remembering to bump it. `state`
+    // is a StateFlow Compose already observes, and the accessors behind these are null-safe (see
+    // `connected()`), so recomposing while disconnected is safe.
     val session by viewModel.state.collectAsState()
     // Hands off to ConnectScreen the moment a reconnect settles somewhere this screen cannot
     // render - see [rendersOnProgramsScreen]. Keyed on the session itself, not on `Unit`: a
@@ -352,14 +370,15 @@ fun ProgramsScreen(
     // the commit, so the writes may or may not have been stored" - and a message telling somebody
     // their data might be in an unknown state must not disappear on a timer while they are looking
     // at the keyboard. One tap on the dismiss action clears it.
-    LaunchedEffect(ops.operationError, sharer.error) {
-        val message = ops.operationError ?: sharer.error ?: return@LaunchedEffect
+    LaunchedEffect(ops.operationError, reportError) {
+        val message = ops.operationError ?: reportError ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(
             message = message,
             withDismissAction = true,
             duration = SnackbarDuration.Indefinite,
         )
         ops.operationError = null
+        reportRunner.clearError()
     }
 
     // Rows render as they arrive rather than behind a spinner - the difference between usable and
@@ -386,9 +405,8 @@ fun ProgramsScreen(
      * Not merely defensive. A drag dropped onto a region that has not loaded yet has no defined
      * target, and rename and delete would be composed against an index that is still filling -
      * on a Motif XS that window is about 93 seconds, which is long enough to be used rather than
-     * long enough to be noticed. Dragging was already gated on this; the overflow menu and the
-     * device report were not, which meant the two *destructive* operations were the ones still
-     * reachable mid-scan.
+     * long enough to be noticed. The gate covers dragging, the overflow menu and the device
+     * report alike, so no destructive operation is reachable mid-scan.
      *
      * Three things deliberately stay live, because none of them is composed against the index:
      *
@@ -1161,8 +1179,6 @@ fun ProgramsScreen(
         // nobody has already written down, so it lives in the debug menu instead (five taps on
         // the title) rather than on the screen people use.
         if (hasReport && (isUnknownDevice || advisory != null)) {
-            val shareReportTitle = stringResource(R.string.programs_share_report)
-            val jsonSuffix = stringResource(R.string.programs_json_suffix)
             TextButton(
                 onClick = {
                     ops.pendingShare = PendingShare(
@@ -1173,19 +1189,18 @@ fun ProgramsScreen(
                         suffix = jsonSuffix,
                         initialStem = viewModel.suggestedReportFilename(),
                         onConfirm = { stem ->
-                            sharer.share(stem) { shared ->
-                                ops.statusMessage = resources.getString(R.string.programs_shared_as, shared)
-                            }
+                            pendingReportStem = stem
+                            reportRunner.start(readingLabel)
                         },
                     )
                 },
                 // Off while a report is already running, and off while a listing is: the report
                 // walks every item on the instrument, so starting one mid-scan puts two long
                 // reads on the same serialized bus.
-                enabled = !sharer.isRunning && editsEnabled,
+                enabled = reportState !is DeviceReportState.Running && editsEnabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(sharer.progress ?: shareReportTitle)
+                Text((reportState as? DeviceReportState.Running)?.step ?: shareReportTitle)
             }
         }
     }

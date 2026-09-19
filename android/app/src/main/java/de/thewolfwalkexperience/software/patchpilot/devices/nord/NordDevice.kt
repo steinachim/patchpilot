@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.util.Log
@@ -101,16 +104,13 @@ class UnsupportedProtocolVersionException(message: String) : IllegalStateExcepti
  *
  *  - [protocolVersionFileTransfer] is *advertised*. The device-info reply (protocol 7,
  *    sub-op 2/3) is a protocol version table: a 1-byte entry count followed
- *    by that many (command, target) byte pairs. Its pair for
- *    PROTOCOL_FILE_TRANSFER reads 10 on the Grand and 8 on the Stage 2 EX -
- *    exactly the values their profiles declare. [connect] reads it; see
- *    [parseProtocolVersions]. A profile still declares one as a fallback
- *    and cross-check (though [DeviceProfile.unknown] doesn't).
- *  - the root-category trailer length is *self-describing*, and so isn't a
- *    profile field at all. Nothing in the handshake carries it, but only
- *    one trailer length walks a root category list response and lands
- *    exactly on its end (29 on the Grand, 28 on the Stage 2 EX) - see
- *    [detectRootCategoryTrailerLen].
+ *    by that many (protocol id, version) byte pairs. Its pair for
+ *    PROTOCOL_FILE_TRANSFER reads 10 on the Grand and 8 on the Stage 2 EX.
+ *    [connect] reads it (see [parseProtocolVersions]); no profile declares one.
+ *  - the root-category trailer length follows from that version, and is
+ *    cross-checked against the reply itself: only one trailer length walks a
+ *    root category list response and lands exactly on its end (29 on the
+ *    Grand, 28 on the Stage 2 EX) - see [rootCategoryTrailerLen].
  *
  * The vendor's editor opens every session with a fixed handshake (device-info
  * query, capability query, ENTER_STATUS_MODE, content-database RESET), but
@@ -263,9 +263,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         } catch (exc: UnsupportedProtocolVersionException) {
             throw exc
         } catch (exc: CancellationException) {
-            // Backing out of a connect attempt is not a failure to report: rewrapping this as an
-            // IllegalStateException put an error screen in front of a user who had just asked to
-            // leave - see InstrumentViewModel's guarded() for the contract this restores.
+            // Backing out of a connect attempt is not a failure to report: rewrapped as an
+            // IllegalStateException it would put an error screen in front of a user who has just
+            // asked to leave - see InstrumentViewModel.launchConnect.
             throw exc
         } catch (exc: Exception) {
             throw IllegalStateException(
@@ -286,7 +286,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * message of every session.
      */
     suspend fun getProtocolVersions(): Map<Int, Int> {
-        val payload = request(PROTOCOL_CTRL, PROTOCOL_VERSION_CTRL, CtrlSubOp.DEVICE_INFO_QUERY.code)!!.payload
+        val payload = request(PROTOCOL_CTRL, PROTOCOL_VERSION_CTRL, CtrlSubOp.DEVICE_INFO_QUERY.code).payload
         return parseProtocolVersions(payload)
     }
 
@@ -305,9 +305,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      *
      * Warns rather than refuses, and the three protocols differ in why:
      *
-     *  - **UI (6)** - every instrument measured reports 1. This app's use of the UI protocol is
-     *    cosmetic (status text, progress, and the display lock around them), so a mismatch is
-     *    worth saying but is no reason to refuse to browse presets.
+     *  - **UI (6)** - every instrument measured reports 1. This app sends one UI-protocol
+     *    request, the capability query the device report records, so a mismatch is worth saying
+     *    but is no reason to refuse to browse presets.
      *  - **Ctrl (7)** - the protocol that carries the version table, so a change in it could not
      *    be announced through the table itself. Checked here so a change is noticed rather than
      *    silently absorbed.
@@ -359,13 +359,14 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             // **Warn, do not refuse** (see Instrument.advisory). Untested firmware may not behave
             // the way this app assumes - but refusing locks out the one person who could establish
             // what it actually does, and who can send back a device report saying so.
-            firmwareAdvisory =
+            val advisory =
                 "$name reports firmware version ${formatFirmwareVersion(firmwareVersion)}, which " +
                     "this app has not been tested against (tested: $supported). The app might " +
                     "still work, but it is not guaranteed that programs will be read or written " +
                     "correctly. Please consider sending in a device report, so support for this " +
                     "firmware can be added in future."
-            Log.w(TAG, firmwareAdvisory!!)
+            firmwareAdvisory = advisory
+            Log.w(TAG, advisory)
         }
     }
 
@@ -383,8 +384,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         protocolVersion: Int,
         subOp: Int,
         payload: ByteArray = ByteArray(0),
-        expectReply: Boolean = true,
-    ): NordMessage? = withContext(Dispatchers.IO) {
+    ): NordMessage = withContext(Dispatchers.IO) {
         // Anything still buffered cannot be an answer to a request that has not gone out yet -
         // this protocol answers one reply per request - so it is stale, and keeping it would
         // hand it to this call as if it were the answer. Dropped loudly rather than silently.
@@ -394,7 +394,6 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             readBuffer = ByteArray(0)
         }
         transport.bulkWrite(buildMessage(protocolId, protocolVersion, subOp, payload))
-        if (!expectReply) return@withContext null
         readReply()
     }
 
@@ -409,26 +408,24 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     private suspend fun fileTransfer(
         subOp: FileTransferSubOp,
         payload: ByteArray = ByteArray(0),
-        expectReply: Boolean = true,
-    ): NordMessage? =
-        request(PROTOCOL_FILE_TRANSFER, protocolVersionFileTransfer, subOp.code, payload, expectReply)
+    ): NordMessage =
+        request(PROTOCOL_FILE_TRANSFER, protocolVersionFileTransfer, subOp.code, payload)
 
     /**
      * A request on [PROTOCOL_UI] - the instrument's status display.
      *
      * **Sends nothing and returns null** when the instrument reports a UI protocol version this
-     * app was not written against. Only *this protocol* is refused, because everything it does
-     * here - status text, the progress push, and the display lock around them - is cosmetic, and
-     * none of browsing, moving, renaming or transferring presets depends on it.
+     * app was not written against. Only *this protocol* is refused: the one request this app
+     * sends on it is the capability query for the device report, and none of browsing, moving,
+     * renaming or transferring presets depends on it.
      *
-     * Skipping rather than guessing is the safe direction: sub-op 0/1 locks the instrument's
-     * display and inhibits playing until sub-op 2/3 releases it, and a version whose message
-     * layout may have moved is not one to send a lock to.
+     * Skipping rather than guessing is the safe direction: the protocol's other sub-opcodes lock
+     * the instrument's display and inhibit playing, and a version whose message layout may have
+     * moved is not one to send anything to.
      */
     private suspend fun ui(
         subOp: UiSubOp,
         payload: ByteArray = ByteArray(0),
-        expectReply: Boolean = true,
     ): NordMessage? {
         if (!uiProtocolUsable) {
             if (!uiProtocolWarned) {
@@ -441,7 +438,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             }
             return null
         }
-        return request(PROTOCOL_UI, PROTOCOL_VERSION_UI, subOp.code, payload, expectReply)
+        return request(PROTOCOL_UI, PROTOCOL_VERSION_UI, subOp.code, payload)
     }
 
     /** Bytes read off the IN endpoint but not yet consumed as a whole message - see [readReply]. */
@@ -455,9 +452,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * than one message or more than one, and the message's own length field is the only thing
      * that says where it ends. Every instrument seen so far delivers exactly one whole message
      * per read almost always, but a reply can still arrive split across more than one read, so
-     * a naive one-read-per-message assumption is not safe. On this side a large reply needs the
-     * reassembly regardless: [READ_BUFSIZE] is 8 KB and a READ_ITEM_DATA reply can be up to
-     * 65,532 bytes (see [MAX_MESSAGE_LEN]).
+     * a naive one-read-per-message assumption is not safe. A reply larger than [READ_BUFSIZE]
+     * (8 KB) needs the reassembly regardless; the protocol allows up to [MAX_MESSAGE_LEN].
      */
     internal suspend fun readReply(): NordMessage {
         var emptyReads = 0
@@ -569,7 +565,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * holds for swap, move, rename and set-category alike.
      */
     private suspend fun reloadPresetForDisplay(bank: Int, item: Int) {
-        val payload = fileTransfer(FileTransferSubOp.SELECT_PRESET, uint32BE(bank) + uint32BE(item))!!.payload
+        val payload = fileTransfer(FileTransferSubOp.SELECT_PRESET, uint32BE(bank) + uint32BE(item)).payload
         requireEcho("display-refresh", payload, bank, item)
     }
 
@@ -825,7 +821,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         val bankCount = categoryBankCount(categoryIndex)
 
         return withCategory(categoryIndex) {
-            val countPayload = fileTransfer(FileTransferSubOp.GET_ITEM_COUNT, uint32BE(categoryIndex))!!.payload
+            val countPayload = fileTransfer(FileTransferSubOp.GET_ITEM_COUNT, uint32BE(categoryIndex)).payload
             if (countPayload.size < 8) {
                 throw IllegalStateException(
                     "Item-count reply for category $categoryIndex is ${countPayload.size} bytes, " +
@@ -862,7 +858,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 val cursorPayload = fileTransfer(
                                         FileTransferSubOp.CURSOR_NEXT_ITEM,
                                         uint32BE(bank) + uint32BE(prevItem) + uint32BE(0),
-                                    )!!.payload
+                                    ).payload
                 val bankExhausted = readUInt32BE(cursorPayload, CursorReply.BANK_EXHAUSTED)
                 val nextVal = readUInt32BE(cursorPayload, CursorReply.NEXT_ITEM)
 
@@ -883,7 +879,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 }
 
                 val itemIndex = nextVal
-                val itemPayload = fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(bank) + uint32BE(itemIndex))!!.payload
+                val itemPayload = fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(bank) + uint32BE(itemIndex)).payload
                 items += itemPayload
                 prevItem = itemIndex
                 itemsInBank++
@@ -955,7 +951,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     suspend fun selectPreset(bank: Int, item: Int) {
         withProgramCategory {
-            val payload = fileTransfer(FileTransferSubOp.SELECT_PRESET, uint32BE(bank) + uint32BE(item))!!.payload
+            val payload = fileTransfer(FileTransferSubOp.SELECT_PRESET, uint32BE(bank) + uint32BE(item)).payload
             requireEcho("select-preset", payload, bank, item)
         }
     }
@@ -975,7 +971,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
         withProgramCategory {
             val payload = uint32BE(bank) + uint32BE(item) + uint32BE(nameBytes.size) + nameBytes
-            val respPayload = fileTransfer(FileTransferSubOp.SET_NAME, payload)!!.payload
+            val respPayload = fileTransfer(FileTransferSubOp.SET_NAME, payload).payload
             requireEcho("rename", respPayload, bank, item)
             reloadPresetForDisplay(bank, item)
         }
@@ -1000,7 +996,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     suspend fun setPresetCategory(bank: Int, item: Int, categoryId: Int) {
         withProgramCategory {
             val payload = uint32BE(bank) + uint32BE(item) + uint32BE(categoryId)
-            val respPayload = fileTransfer(FileTransferSubOp.SET_CATEGORY, payload)!!.payload
+            val respPayload = fileTransfer(FileTransferSubOp.SET_CATEGORY, payload).payload
             requireEcho("set-category", respPayload, bank, item)
             reloadPresetForDisplay(bank, item)
         }
@@ -1025,7 +1021,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             val payload = fileTransfer(
                               FileTransferSubOp.SWAP_PROGRAMS,
                               uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
-                          )!!.payload
+                          ).payload
             val status = readUInt32BE(payload, StatusEcho.STATUS)
             if (status != 0) {
                 throw NordStatusException(
@@ -1055,7 +1051,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             val payload = fileTransfer(
                               FileTransferSubOp.MOVE_PROGRAM,
                               uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
-                          )!!.payload
+                          ).payload
             val status = readUInt32BE(payload, StatusEcho.STATUS)
             if (status != 0) {
                 throw NordStatusException(
@@ -1097,7 +1093,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             val payload = fileTransfer(
                               FileTransferSubOp.COPY_PROGRAM,
                               uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
-                          )!!.payload
+                          ).payload
             val status = readUInt32BE(payload, StatusEcho.STATUS)
             if (status == STATUS_FILE_EXISTS) {
                 throw NordStatusException(
@@ -1119,7 +1115,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                         "(requested [$srcBank, $srcItem, $dstBank, $dstItem])",
                 )
             }
-            val record = fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(dstBank) + uint32BE(dstItem))!!.payload
+            val record = fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(dstBank) + uint32BE(dstItem)).payload
             val newName = parseItemName(record)
             reloadPresetForDisplay(dstBank, dstItem)
             newName
@@ -1143,7 +1139,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     suspend fun deleteItem(categoryIndex: Int, bank: Int, item: Int) {
         withCategory(categoryIndex) {
-            val payload = fileTransfer(FileTransferSubOp.DELETE_ITEM, uint32BE(bank) + uint32BE(item))!!.payload
+            val payload = fileTransfer(FileTransferSubOp.DELETE_ITEM, uint32BE(bank) + uint32BE(item)).payload
             requireEcho("delete-item", payload, bank, item)
             reloadPresetForDisplay(bank, item)
         }
@@ -1162,7 +1158,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * receives a report than the names alone.
      */
     suspend fun rootCategoryListPayload(): ByteArray =
-        fileTransfer(FileTransferSubOp.ROOT_CATEGORY_LIST)!!.payload
+        fileTransfer(FileTransferSubOp.ROOT_CATEGORY_LIST).payload
 
     /**
      * The capability query's reply (protocol 6, sub-opcode 4/5) - a protocol/capability
@@ -1179,7 +1175,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * alongside [fetchCategoryChildren]'s parse, since the parse was derived from one instrument.
      */
     suspend fun categoryChildPayload(categoryIndex: Int): ByteArray =
-        fileTransfer(FileTransferSubOp.GET_CATEGORY_CHILD, uint32BE(categoryIndex))!!.payload
+        fileTransfer(FileTransferSubOp.GET_CATEGORY_CHILD, uint32BE(categoryIndex)).payload
 
     /** One entry of a category's child list - a bank, or a piano type. See [parseCategoryChildren]. */
     data class CategoryChild(val name: String, val capacity: Int)
@@ -1329,7 +1325,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     suspend fun fetchCategorySpace(categoryIndex: Int): CategorySpace {
         return withCategory(categoryIndex) {
-            val payload = fileTransfer(FileTransferSubOp.GET_ITEM_COUNT, uint32BE(categoryIndex))!!.payload
+            val payload = fileTransfer(FileTransferSubOp.GET_ITEM_COUNT, uint32BE(categoryIndex)).payload
             // Checked rather than assumed: an instrument that answers this sub-opcode with
             // something shorter would otherwise read off the end of the array below, which is a
             // worse error to debug than this one.
@@ -1519,38 +1515,24 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
     companion object {
         /**
-         * Enough for every reply this app can currently receive: the largest is the root
-         * category list, at 408 bytes on the Grand and 436 on the Stage 2 EX (item records
-         * are under 100).
+         * One bulk read. Larger than every reply this app receives (the root category list is
+         * the largest, at 408 bytes on the Grand and 436 on the Stage 2 EX; item records are
+         * under 100), and below the 16 KB per-transfer limit `UsbDeviceConnection.bulkTransfer()`
+         * has on API levels below 28. A reply larger than this is reassembled across reads by
+         * [readReply].
          *
-         * **Raise this before porting the item-data read.** That path (sub-opcodes 12/13,
-         * 18/19, 14/15 - reading a program's or sample's data blob off the instrument,
-         * deliberately not ported here) answers with replies far larger than this, which it
-         * would silently truncate.
-         *
-         * The device serves read replies of up to **65,532 bytes** (64 KiB - 4, i.e. 65,494 of
-         * payload) and silently caps a larger request, reporting what it actually sent in the
-         * reply's own `length` field - so this buffer must cover whatever the port asks for,
-         * and the port must slice by the **returned** length, never by its own request.
-         *
-         * `UsbDeviceConnection.bulkTransfer()` has historically had a per-transfer size limit
-         * in the ~16 KB range on some devices/API levels. That is fine: the device does not
-         * require any particular size. Writes of 4,096 and even 1,000 bytes are byte-identical
-         * over a 1.6 MB sample, with no alignment requirement, against a write ceiling of
-         * 32,734. Pick whatever `bulkTransfer()` carries.
-         *
-         * One ordering constraint comes with the write path when it lands: **stream every
-         * chunk, then read the single reply.** It arrives only once the whole declared size
-         * has been received, so reading it after the first chunk blocks until the timeout.
+         * An item-data read (sub-opcodes 12/13, 14/15, 18/19, not implemented here) answers with
+         * replies of up to 65,532 bytes; the device caps a larger request and reports what it
+         * actually sent in the reply's own length field, so any such reader must slice by the
+         * returned length, never by its own request.
          */
         private const val READ_BUFSIZE = 8192
 
         /**
          * Sanity bound on a reply's declared length, used by [readReply] to tell "the rest is
          * still coming" from "this framing is unusable". Deliberately independent of
-         * [READ_BUFSIZE], which is smaller than the largest legitimate reply: the device serves
-         * up to 65,494 payload bytes in a READ_ITEM_DATA reply and caps anything larger,
-         * so such a message spans several reads and is reassembled.
+         * [READ_BUFSIZE]: the largest reply the device can serve is 65,532 bytes, and such a
+         * message spans several reads and is reassembled.
          */
         private const val MAX_MESSAGE_LEN = 65536
 
@@ -1677,9 +1659,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
          * exists against a hostile or malfunctioning device.
          *
          * Deliberately **not** applied when parsing a child list. A Stage 2 EX legitimately
-         * reports 0xFFFE for its "(Native)" categories, and vetting it at parse time threw
-         * away three whole categories' child lists - and with them their bank counts - over a
-         * value that never reaches an allocation. */
+         * reports 0xFFFE for its "(Native)" categories; vetting the value at parse time would
+         * throw away three whole categories' child lists - and with them their bank counts -
+         * over a value that never reaches an allocation. */
         private const val MAX_PLAUSIBLE_CHILD_CAPACITY = 10_000
 
         /**
@@ -1845,11 +1827,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 val name = String(payload, off, nameLen, Charsets.US_ASCII)
                 off += nameLen
                 // Recorded as reported, not vetted here. A Nord Stage 2 EX answers 0xFFFE
-                // (65534) for every "(Native)" category - a sentinel meaning "no
-                // real figure", not corruption. Rejecting
-                // the reply outright lost three of that instrument's ten categories, including
-                // their bank counts. The plausibility bound belongs where this value would
-                // actually become an addressing bound - see [deriveBankLayout].
+                // (65534) for every "(Native)" category - a sentinel meaning "no real figure",
+                // not corruption - and rejecting the reply outright would lose three of that
+                // instrument's ten categories, including their bank counts. The plausibility
+                // bound belongs where this value would actually become an addressing bound -
+                // see [deriveBankLayout].
                 val capacity = readUInt32BE(payload, off)
                 children += CategoryChild(name, capacity)
                 off += 4

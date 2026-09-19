@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import de.thewolfwalkexperience.software.patchpilot.R
@@ -25,9 +28,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.listSaver
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -37,7 +37,10 @@ import de.thewolfwalkexperience.software.patchpilot.core.OccupiedSlotReason
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionReport
 import de.thewolfwalkexperience.software.patchpilot.core.Status
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
@@ -66,16 +69,11 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val pending by runner.question.collectAsState()
     val runError by runner.error.collectAsState()
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
-    val sharer = rememberReportSharer(viewModel)
-    // The device report once it has been read, with everything sharing it needs - null until
-    // then. Saved for the same reason a finished regression run is: a report that took a couple
-    // of minutes to read must not vanish on rotation. The report is bounded (the largest part of
-    // a Nord's is a few hundred program names), so it is nowhere near what a Bundle can carry.
-    // The read in progress is `sharer.progress`, which does not survive rotation: it writes
-    // nothing, so losing it costs only the read.
-    var deviceReport by rememberSaveable(stateSaver = HeldDeviceReportSaver) {
-        mutableStateOf<HeldDeviceReport?>(null)
-    }
+    // The device report, read and held in the ViewModel like the regression run, so neither the
+    // read nor the result is lost to a rotation - see DeviceReportRunner.
+    val reportRunner = viewModel.deviceReportRunner
+    val reportState by reportRunner.state.collectAsState()
+    val reportError by reportRunner.error.collectAsState()
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -84,24 +82,42 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val reportShareTitle = stringResource(R.string.programs_share_report)
     val regressionShareTitle = stringResource(R.string.debug_regression_share)
     val regressionStartingLabel = stringResource(R.string.debug_regression_starting)
+    val readingLabel = stringResource(R.string.share_reading_device)
     val verifyStartingLabel = stringResource(R.string.debug_verify_starting)
 
-    // Holds whichever report is waiting on the "Save to device" picker below to return a Uri -
-    // there is only ever one save in flight at a time, so one field covers both the device report
-    // and the regression report rather than needing a launcher each with its own.
-    var pendingSaveContent by remember { mutableStateOf<String?>(null) }
-    fun onSaveResult(uri: Uri?) {
-        val content = pendingSaveContent
-        pendingSaveContent = null
-        if (uri != null && content != null) saveTextReport(context, uri, content)
+    // "Save to device": the content is resolved when the picker returns, from the held report
+    // it was launched for, not captured when it was launched. The picker is another Activity,
+    // and a configuration change while it is up recreates this composition; anything captured
+    // in plain `remember` is gone by the time the Uri arrives, while both reports survive in
+    // the ViewModel. Each kind of report has its own launcher, so the result already says which
+    // one it is for.
+    val saveFailed = stringResource(R.string.debug_save_failed)
+    fun onSaveResult(uri: Uri?, content: () -> String?) {
+        val text = content()
+        if (uri == null || text == null) return
+        scope.launch {
+            try {
+                // Off the main thread, and not abandonable part way: the picker has already
+                // created the document, and a cancelled write would leave it truncated.
+                withContext(Dispatchers.IO + NonCancellable) { saveTextReport(context, uri, text) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = e.message ?: saveFailed
+            }
+        }
     }
     val saveJsonLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(JSON_MIME_TYPE)) { onSaveResult(it) }
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(JSON_MIME_TYPE)) { uri ->
+            onSaveResult(uri) { (reportRunner.state.value as? DeviceReportState.Done)?.json }
+        }
     val saveTextLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(TEXT_MIME_TYPE)) { onSaveResult(it) }
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(TEXT_MIME_TYPE)) { uri ->
+            onSaveResult(uri) { (runner.state.value as? RegressionRunState.Done)?.report?.asText() }
+        }
 
     // The factory-name check: which bank the result belongs to, whether a read is running, and
-    // what it found. Deliberately not `rememberSaveable` like the regression run - a two-minute
+    // what it found. Deliberately not saved like the two reports - a two-minute
     // read is not worth resuming across process death, and a stale verdict would be worse than
     // none. The bank is kept because checking PRE1 and then PRE2 would otherwise leave a verdict
     // on screen with nothing saying which bank earned it.
@@ -133,11 +149,11 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     // scaffold's arrow was leaving for the programs list and skipping the menu the user had just
     // come from - which reads as the app losing your place. A finished report is a state of this
     // screen, so back clears the state; only from the menu itself does back actually leave.
-    val atMenu = run !is RegressionRunState.Done && deviceReport == null
+    val atMenu = run !is RegressionRunState.Done && reportState !is DeviceReportState.Done
     // Clears both; only one is ever set, since each report hides the button that starts the other.
     fun backToMenu() {
         runner.dismissReport()
-        deviceReport = null
+        reportRunner.dismiss()
     }
     val handleBack: () -> Unit = { if (atMenu) onBack() else backToMenu() }
     // Also catches the system/gesture back, which otherwise disagrees with the arrow beside it.
@@ -152,8 +168,8 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     // exchange timeouts. Never enabled together with the handler above, since `Running` counts
     // as `atMenu`, so which of the two Compose consults first does not matter.
     //
-    // The device report read is not held like this: it writes nothing, so leaving mid-read
-    // costs only the read.
+    // The device report read is not held like this: it writes nothing, and it carries on in the
+    // ViewModel if the screen is left, so coming back finds the result waiting.
     val running = run is RegressionRunState.Running
     BackHandler(enabled = running) {
         // Deliberately empty: refusing the gesture *is* the behaviour, and the step line already
@@ -172,13 +188,12 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            (error ?: runError ?: sharer.error)?.let {
+            (error ?: runError ?: reportError)?.let {
                 Text(stringResource(R.string.programs_error, it), color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(8.dp))
             }
             val state = run
-            val report = deviceReport
-            val reading = sharer.progress
+            val report = reportState
             when {
                 // Precedence, not state: at most one of the first four holds at a time, since each
                 // replaces the menu and with it the buttons that start the others. The device
@@ -186,7 +201,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                 // and for the same reason: a single "Generate" whose result offers Share and Save
                 // says what each does, where "Save to device" as a second entry point did not
                 // (does it generate? must one generate first?).
-                report != null -> DeviceReportReadyView(
+                report is DeviceReportState.Done -> DeviceReportReadyView(
                     sizeBytes = report.json.toByteArray().size,
                     onShare = {
                         pendingShare = PendingShare(
@@ -194,8 +209,8 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             description = report.description,
                             suffix = jsonSuffix,
                             initialStem = report.stem,
-                            // From memory, not `sharer.share` - that would read the instrument
-                            // again, and the read is the slow part this view exists to keep.
+                            // From the held report, not a fresh read: the read is the slow part
+                            // this view exists to keep.
                             onConfirm = { stem ->
                                 shareTextReport(
                                     context = context,
@@ -207,13 +222,11 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             },
                         )
                     },
-                    onSave = {
-                        pendingSaveContent = report.json
-                        saveJsonLauncher.launch(report.stem + jsonSuffix)
-                    },
+                    onSave = { saveJsonLauncher.launch(report.stem + jsonSuffix) },
                     onBackToMenu = ::backToMenu,
                 )
-                reading != null -> RunningView(stringResource(R.string.debug_report_running), reading)
+                report is DeviceReportState.Running ->
+                    RunningView(stringResource(R.string.debug_report_running), report.step)
                 state is RegressionRunState.Running ->
                     RunningView(stringResource(R.string.debug_regression_running), state.step)
                 state is RegressionRunState.Done -> RegressionReportView(
@@ -235,12 +248,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             },
                         )
                     },
-                    onSave = {
-                        // Already in memory and synchronous, unlike the device report - no
-                        // ReportSharer round trip needed before the picker can launch.
-                        pendingSaveContent = state.report.asText()
-                        saveTextLauncher.launch("${state.stem}_capabilities$txtSuffix")
-                    },
+                    onSave = { saveTextLauncher.launch("${state.stem}_capabilities$txtSuffix") },
                     onBackToMenu = ::backToMenu,
                 )
                 else -> {
@@ -249,19 +257,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     // Gated on the factory-name check, whose progress and verdict live inline on
                     // this menu: a report read replaces the menu, and would hide them mid-read.
                     Button(
-                        onClick = {
-                            // The stem and description are resolved in the callback, which
-                            // ReportSharer runs inside the same try as the read: a teardown
-                            // in the meantime then fails the report the way a failed read does,
-                            // instead of throwing out of this click.
-                            sharer.build { json ->
-                                deviceReport = HeldDeviceReport(
-                                    json = json,
-                                    stem = viewModel.suggestedReportFilename(),
-                                    description = viewModel.reportDescription,
-                                )
-                            }
-                        },
+                        onClick = { reportRunner.start(readingLabel) },
                         enabled = viewModel.hasReport && verifyProgress == null,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -455,23 +451,4 @@ private fun ReportActions(onShare: () -> Unit, onSave: () -> Unit, onBackToMenu:
         Text(stringResource(R.string.debug_regression_back))
     }
 }
-
-/**
- * A device report once read, together with the filename stem and the description the share
- * dialog shows for it - both the instrument's own wording, resolved while it was connected.
- *
- * **Everything a held report needs is held with it, because the instrument may be gone by the
- * time Share is tapped.** Sharing opens the system chooser, which is an Activity of its own: the
- * app pauses under it and resumes when it closes, and a resume rebuilds a USB session from
- * scratch (`MainActivity.onResume`, `Instrument.rebuildOnResume`). Between the teardown and the
- * reconnect there is no instrument, while this report - `rememberSaveable` - is still on screen
- * with its buttons live, so nothing about it may be resolved at share time. The regression run
- * keeps its stem the same way.
- */
-private data class HeldDeviceReport(val json: String, val stem: String, val description: String)
-
-private val HeldDeviceReportSaver: Saver<HeldDeviceReport?, Any> = listSaver(
-    save = { held -> if (held == null) emptyList() else listOf(held.json, held.stem, held.description) },
-    restore = { saved -> if (saved.isEmpty()) null else HeldDeviceReport(saved[0], saved[1], saved[2]) },
-)
 

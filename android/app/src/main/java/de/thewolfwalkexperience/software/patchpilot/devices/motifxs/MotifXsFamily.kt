@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import android.content.Context
@@ -251,9 +254,9 @@ object MotifXsFamily : InstrumentFamily {
      * instrument workflow and whose 20 name bytes were then cleared through the documented write
      * path, read back through `0C`.
      *
-     * Shipping them replaces a search for an empty slot *in the same bank*, which was the only
-     * way the app had to obtain one - and which fails outright on a bank with no empty slots, such
-     * as a fully populated USER DR, where delete and move would otherwise not work at all.
+     * Shipped rather than copied from an empty slot in the same bank at run time: that would fail
+     * outright on a bank with no empty slots, such as a fully populated USER DR, where delete and
+     * move would then not work at all.
      */
     private const val BLANK_NORMAL = "motifxs_blank_normal.bin"
     private const val BLANK_DRUM = "motifxs_blank_drum.bin"

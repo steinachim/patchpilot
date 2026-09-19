@@ -1,8 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 /**
  * A subset of real request/response bytes from actual Nord instruments, transcribed verbatim.
- * Used to keep this port's decoding byte-for-byte compatible with real device output.
+ * Used to keep the decoding byte-for-byte compatible with real device output.
  */
 object NordFixtures {
     /**

@@ -1,9 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.core
 
 /**
- * What went wrong, in terms the UI can act on without matching on message strings - which is what
- * it does today, and which stops working the moment a second family words its failures
- * differently.
+ * What went wrong, in terms the UI can act on without matching on message strings, which would
+ * stop working the moment a second family worded its failures differently.
  *
  * The distinction that matters to a screen is "would retrying help?": [Timeout] and
  * [TransportLost] may, [NotSupported] and [DeviceRejected] will not.
@@ -47,10 +49,9 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
      * now, and here is what would fix it" - so the screen can offer the fix instead of only
      * reporting the obstacle.
      *
-     * The case it was written for: a Motif XS ignores a voice selection unless it is in Voice
-     * mode, silently. Refusing outright was already better than the timeout it replaced, but the
-     * remedy is one documented message, and making the user walk to the instrument for something
-     * the app can do is a poor trade.
+     * The case it covers: a Motif XS ignores a voice selection unless it is in Voice mode,
+     * silently. The remedy is one documented message, and making the user walk to the instrument
+     * for something the app can do is a poor trade.
      *
      * **[remedy] changes the instrument, so it is never run without asking.** Switching a player
      * out of the Performance or Song they are using is a visible, stateful change to their setup;
@@ -73,7 +74,7 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
      * receiving what the app sends. [steps] is the button sequence, in order, so the screen can
      * show it as a list rather than as one long sentence.
      *
-     * The case it was written for: a Motif XS routes MIDI to exactly one of its ports - the DIN
+     * The case it covers: a Motif XS routes MIDI to exactly one of its ports - the DIN
      * sockets, USB, or mLAN - and set to any of the others it still enumerates as a USB device and
      * still opens, while answering nothing at all. Every operation then times out, one at a time,
      * and none of them can say why. Retrying is worth offering because the user is expected to go

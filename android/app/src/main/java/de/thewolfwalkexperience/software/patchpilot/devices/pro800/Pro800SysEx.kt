@@ -1,11 +1,17 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 /**
  * Message construction and validation for the Behringer Pro-800's SysEx protocol.
  *
  * Every message is `F0 00 20 32 00 01 24 00 <type> [params] F7` - SysEx start, the three-byte
- * Behringer manufacturer id, the three-byte Pro-800 product id, a CPU id, then the type. See
- * `docs/Pro800SysExMessages.md` in the pro800_manager_plugin repository.
+ * Behringer manufacturer id, the three-byte Pro-800 product id, the device number, then the
+ * type. The "reference implementation" the comments in this package compare against is the
+ * pro800_manager_plugin project (<https://github.com/steinachim/pro800_manager_plugin>), whose
+ * `docs/Pro800SysExMessages.md` and `Pro800ProgramConstants.h` document the messages and the
+ * record layout.
  */
 object Pro800SysEx {
 
@@ -244,7 +250,7 @@ object Pro800SysEx {
     /**
      * A bare `F0 F7` - a SysEx message with no body at all.
      *
-     * **This is how the instrument says "nothing is stored at that address" (design 11.4).**
+     * **This is how the instrument says "nothing is stored at that address".**
      * Every dump request for an address holding nothing comes back as exactly these two bytes,
      * while populated ones answer with dumps of *varying* length - so a dump means a preset
      * exists, and its length says nothing. It carries no
@@ -252,9 +258,9 @@ object Pro800SysEx {
      * be matched to the request that prompted it - it can only be accepted as "the answer to
      * whatever is currently in flight", which is safe here because exchanges are serialized.
      *
-     * Treating it as a timeout instead is expensive rather than merely wrong: it cost two full
+     * Treating it as a timeout instead would be expensive rather than merely wrong: two full
      * two-second waits per address, which on an instrument with three empty banks is around
-     * twenty minutes of a scan spent waiting for a reply that had already arrived.
+     * twenty minutes of a scan spent waiting for a reply that has already arrived.
      */
     fun isEmptyReply(message: ByteArray): Boolean =
         message.size == 2 && message[0] == HEADER[0] && message[1] == SYSEX_END

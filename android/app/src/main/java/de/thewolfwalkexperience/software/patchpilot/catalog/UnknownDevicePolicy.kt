@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
@@ -13,13 +16,14 @@ import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
  *
  * **The asymmetry is structural.** Clavia's vendor id covers several models that this project has
  * verified share one protocol, so "another Clavia device probably speaks this too" is an inference
- * with evidence. Yamaha's and Behringer's ids cover exactly *one* instrument each, and a Motif XS
- * is no evidence about Yamaha synths in general: its address map has a hole at `0x08` the
- * instrument rejects, and USER DR sits detached at `0x28` for no reason anyone has established.
+ * with evidence. Yamaha's and Behringer's ids cover one *verified* instrument each (the XS7 and
+ * XS8 are catalogued on inferred product ids, not confirmed on a unit), and a Motif XS is no
+ * evidence about Yamaha synths in general: its address map has a hole at `0x08` the instrument
+ * rejects, and USER DR sits detached at `0x28` for no reason anyone has established.
  *
- * The rule that falls out is re-derivable rather than a preference: **guess a family from a vendor
- * id only where two members have already agreed.** Revisit if a second Yamaha or Behringer
- * instrument is added and turns out to speak its sibling's protocol.
+ * The rule: **guess a family from a vendor id only where two verified members have already
+ * agreed.** [FAMILIES_ALLOWING_A_GUESS] is that rule applied by hand; revisit it if a second
+ * Yamaha or Behringer instrument is verified and turns out to speak its sibling's protocol.
  *
  * Without this gate, the picker would offer every attached USB device, and picking a keyboard, a
  * hub or a charger would claim its interface and send Clavia's vendor bulk protocol at it -

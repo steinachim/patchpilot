@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.transport
 
 import android.util.Log
@@ -34,9 +37,8 @@ private const val TAG = "UsbMidiBulkTransport"
  * identical reply. So the instrument is reachable; it just needs the packing the platform would
  * otherwise have done.
  *
- * This is the swap [MidiTransport]'s own documentation anticipated: nothing above the
- * transport layer changes, because `SysExExchange` and the families above it were always written
- * against the interface rather than against `android.media.midi`.
+ * Nothing above the transport layer changes for it: `SysExExchange` and the families above it are
+ * written against [MidiTransport], not against `android.media.midi`.
  *
  * @param cable which USB-MIDI cable to stamp on outgoing packets and accept on incoming ones.
  *   Part of the address rather than a detail of opening the link. Of the sixteen possible cables
@@ -111,16 +113,16 @@ class UsbMidiBulkTransport(
             consecutiveFailures = 0
             if (raw.isEmpty()) {
                 // The only suspension point on the idle path, and it has to be here. A read that
-                // returns nothing normally cost [readTimeoutMs] inside the driver, but nothing in
-                // this loop guarantees that: a disconnected endpoint fails immediately, and without
-                // this the loop spins as fast as the dispatcher allows, starving every other
-                // coroutine on it - including whoever is waiting on [incoming].
+                // returns nothing normally cost [readTimeoutMs] inside the driver, but a fake or
+                // a transport that returns instantly would otherwise spin this loop as fast as
+                // the dispatcher allows, starving every other coroutine on it - including whoever
+                // is waiting on [incoming]. (A real endpoint that fails instantly throws instead,
+                // see AndroidUsbBulkTransport.bulkReadOrEmpty, and is counted above.)
                 //
-                // `delay` rather than `yield` because yield reschedules without idling, which is no
-                // help at all when a failing endpoint returns instantly. It costs nothing on the
-                // normal path: reaching here means the driver already waited [readTimeoutMs] and
-                // came back with nothing, so one more millisecond is noise next to the 20 it just
-                // spent - and a read carrying data never gets here at all.
+                // `delay` rather than `yield` because yield reschedules without idling. It costs
+                // nothing on the normal path: reaching here means the driver already waited
+                // [readTimeoutMs] and came back with nothing, so one more millisecond is noise
+                // next to the 20 it just spent - and a read carrying data never gets here at all.
                 delay(IDLE_BACKOFF_MS)
                 continue
             }
@@ -148,9 +150,18 @@ class UsbMidiBulkTransport(
         withContext(Dispatchers.IO) { bulk.bulkWrite(packed) }
     }
 
+    /**
+     * Stops the reader, then closes the bulk transport **once the reader has actually stopped**.
+     *
+     * `cancel()` only asks: the reader may be inside `bulkReadOrEmpty` on an IO thread for up to
+     * [readTimeoutMs] more, and releasing the interface and closing the `UsbDeviceConnection`
+     * under a transfer still in flight is a use-after-close in the platform's USB host code.
+     * `invokeOnCompletion` runs at once if the reader has already ended (it gives up on a dead
+     * endpoint on its own), so a session that died early still releases the device here.
+     */
     override fun close() {
         reader.cancel()
-        bulk.close()
+        reader.invokeOnCompletion { bulk.close() }
     }
 
     companion object {

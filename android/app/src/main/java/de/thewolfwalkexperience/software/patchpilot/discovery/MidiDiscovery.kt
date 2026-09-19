@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.discovery
 
 import android.content.Context
@@ -217,9 +220,9 @@ private fun MidiDeviceInfo.usbDevice(): UsbDevice? =
 /**
  * A stable-ish identifier for the physical device behind a MIDI port, for cross-bus dedupe.
  *
- * Delegates to [physicalKey] rather than formatting `"usb:$vendorId:$productId"` a second time.
- * The two spellings had to agree exactly or a Nord would appear twice in the picker - once
- * usable, once not - and that agreement was asserted only in a comment.
+ * Delegates to [physicalKey] rather than formatting `"usb:$vendorId:$productId"` a second time:
+ * the two spellings have to agree exactly, or a Nord appears twice in the picker - once usable,
+ * once not.
  */
 private fun MidiDeviceInfo.physicalKey(): String = usbDevice()?.physicalKey() ?: "midi:$id"
 

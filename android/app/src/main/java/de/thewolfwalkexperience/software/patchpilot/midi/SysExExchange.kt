@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.midi
 
 import android.util.Log
@@ -13,8 +16,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -75,10 +76,6 @@ class SysExExchange(
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
-    /** Complete SysEx messages nobody was waiting for - CC echo, spontaneous status, other
-     * devices on a shared bus. Exposed rather than dropped, since that traffic is a feature
-     * (a knob being turned) as often as it is noise. */
-    val unsolicited: SharedFlow<ByteArray> = messages.asSharedFlow()
 
     init {
         // UNDISPATCHED so the collector subscribes to [transport] *during construction*, not
@@ -275,12 +272,12 @@ class SysExExchange(
     }
 
     /**
-     * Fire-and-forget: a message the instrument does not answer at all.
+     * Fire-and-forget: a message whose reply, if any, the caller does not wait for.
      *
-     * Selecting a preset on a Pro-800 is exactly this - a bank select and a program change, plain
-     * channel-voice MIDI with no status reply, no echo, nothing to correlate. It still takes
-     * the same lock, so a select issued while a 400-preset scan is running lands *between* two
-     * dumps rather than in the middle of one.
+     * A Pro-800 write is sent this way and proven by reading the slot back; a Motif XS mode
+     * change draws no reply at all and is confirmed by polling the mode. It still takes the same
+     * lock, so a message issued while a 400-preset scan is running lands *between* two dumps
+     * rather than in the middle of one.
      */
     suspend fun tell(request: ByteArray) = lock.withLock {
         transport.send(request)
@@ -305,11 +302,13 @@ class SysExExchange(
     }
 
     /**
-     * Swallows whatever is already buffered, so a retry starts clean.
+     * Absorbs, for a short window, whatever is still arriving from the previous attempt, so a
+     * retry starts clean.
      *
-     * The MIDI counterpart of clearing `NordDevice.readBuffer` before a new request: on that bus a
-     * stale reply left in the buffer got its checksum tested against a different message's bytes,
-     * and the failure was reported against the wrong sub-opcode.
+     * A late reply to the timed-out attempt would otherwise be the first thing the retry's
+     * matcher sees. With `replay = 0` nothing is buffered for a new subscriber, so this is a
+     * window in time rather than a drain of stored messages: the MIDI counterpart of
+     * `NordDevice` discarding its read buffer before a new request.
      */
     private suspend fun drainStale() {
         withTimeoutOrNull(DRAIN_WINDOW) {

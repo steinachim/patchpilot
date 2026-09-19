@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import de.thewolfwalkexperience.software.patchpilot.R
@@ -31,6 +34,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
@@ -53,9 +58,23 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
     // The instrument is already connected here (the advisory is raised after the handshake), so
     // the reporter facet is available exactly as it is on the program screen.
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
-    val sharer = rememberReportSharer(viewModel)
+    // Read in the ViewModel and shared as soon as it is done - the same shape as ProgramsScreen,
+    // for the same reason: the read is minutes on a Nord and must not restart on rotation.
+    val reportRunner = viewModel.deviceReportRunner
+    val reportState by reportRunner.state.collectAsState()
+    val reportError by reportRunner.error.collectAsState()
+    var pendingReportStem by rememberSaveable { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
     val reportShareTitle = stringResource(R.string.programs_share_report)
     val jsonSuffix = stringResource(R.string.programs_json_suffix)
+    val readingLabel = stringResource(R.string.share_reading_device)
+    LaunchedEffect(reportState, pendingReportStem) {
+        val stem = pendingReportStem ?: return@LaunchedEffect
+        val done = reportState as? DeviceReportState.Done ?: return@LaunchedEffect
+        pendingReportStem = null
+        reportRunner.dismiss()
+        shareTextReport(context, "$stem$jsonSuffix", done.json, JSON_MIME_TYPE, reportShareTitle)
+    }
 
     LaunchedEffect(Unit) {
         if (state is ConnectionState.Disconnected) viewModel.connect()
@@ -257,15 +276,18 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                                 description = viewModel.reportDescription,
                                 suffix = jsonSuffix,
                                 initialStem = viewModel.suggestedReportFilename(),
-                                onConfirm = { stem -> sharer.share(stem) },
+                                onConfirm = { stem ->
+                                    pendingReportStem = stem
+                                    reportRunner.start(readingLabel)
+                                },
                             )
                         },
-                        enabled = !sharer.isRunning,
+                        enabled = reportState !is DeviceReportState.Running,
                     ) {
-                        Text(sharer.progress ?: stringResource(R.string.programs_share_report))
+                        Text((reportState as? DeviceReportState.Running)?.step ?: reportShareTitle)
                     }
                 }
-                sharer.error?.let {
+                reportError?.let {
                     Text(it, color = MaterialTheme.colorScheme.error)
                 }
             }
@@ -311,9 +333,9 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
             state !is ConnectionState.Connected
         ) {
             Spacer(Modifier.height(24.dp))
-            // One demo device, not one per profile. DemoInstrument's second (Pro-800-shaped)
-            // profile still exists, but as a *test* fixture for the screens' facet gating;
-            // offering it here read as a second instrument the app claims to support.
+            // One demo device, not one per family: a second entry here would read as a second
+            // instrument the app claims to support. The Pro-800-shaped fixture that exercises the
+            // screens' facet gating lives in the test source set (core.NoCopyFixtureInstrument).
             TextButton(onClick = { viewModel.connectDemo() }) { Text(stringResource(R.string.action_try_demo)) }
         }
     }

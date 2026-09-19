@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.core
 
 /*
@@ -145,9 +148,9 @@ interface PresetTagger {
      * Files [address] under the assignments named by [under], or removes the favorite if it is
      * empty.
      *
-     * Every index in [under] must name a slot that currently *has* a category. An instrument has
-     * nowhere to show a favorite filed under an unassigned slot, so this refuses rather than
-     * writing a mark the user would never see.
+     * An index in [under] may name a slot that currently has no category: on a Motif XS that is a
+     * legal state its own panel produces, and the voice then appears in its Favorite bank under
+     * no category. Whether such a mark is offered is the dialog's decision, not this facet's.
      */
     suspend fun setFavorite(address: SlotAddress, under: Set<Int>)
 }

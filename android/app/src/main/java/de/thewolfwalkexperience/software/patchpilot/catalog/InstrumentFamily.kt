@@ -1,8 +1,15 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
 import android.content.Context
+import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
+
+private const val TAG = "InstrumentRegistry"
+
 
 /**
  * Everything the app needs to know about one instrument family: which devices it covers, and how
@@ -55,8 +62,14 @@ object InstrumentRegistry {
         families.flatMap { family ->
             // One family's catalog failing to load must not take the others down with it: a
             // malformed or missing asset for a family the user does not own would otherwise leave
-            // the app unable to find the instrument they do.
-            runCatching { family.descriptors(context) }.getOrElse { emptyList() }
+            // the app unable to find the instrument they do. Logged, because the only other
+            // symptom is that family's instruments silently missing from the connect screen.
+            try {
+                family.descriptors(context)
+            } catch (e: Exception) {
+                Log.e(TAG, "The '${family.id}' catalog could not be loaded; its instruments will not be found", e)
+                emptyList()
+            }
         }
 
     fun create(context: Context, descriptor: InstrumentDescriptor, transport: Transport): Instrument =

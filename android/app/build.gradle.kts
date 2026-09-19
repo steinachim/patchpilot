@@ -153,10 +153,10 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
-// devices/*.json (repo root) are the source of truth for per-instrument constants - Python reads
-// devices/nord_devices.json directly, but Android can only load bundled assets at runtime, so this
-// always overwrites the assets copies before every build. Never hand-edit anything in
-// android/app/src/main/assets/; the whole directory is generated and git-ignored.
+// devices/*.json (repo root) are the source of truth for per-instrument constants. Android can
+// only load bundled assets at runtime, so this always overwrites the assets copies before every
+// build. Never hand-edit anything in android/app/src/main/assets/; the whole directory is
+// generated and git-ignored.
 //
 // A catalog file is named for what it holds: nord_devices.json covers several Nord models,
 // behringer_pro800.json covers one instrument. The name is cosmetic - each file declares its own

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import android.util.Log
@@ -133,12 +136,13 @@ class Pro800Instrument(
         // assumes - but refusing locks out the one person who could find out what it actually
         // does, and who can send back a device report saying so. The screens raise this once and
         // keep it visible (Instrument.advisory).
-        advisory = "$deviceName reports firmware version $firmware, which this app has not been " +
-            "tested against (tested: ${supported.sorted().joinToString(", ")}). The app might " +
-            "still work, but it is not guaranteed that presets will be read or written " +
+        val warning = "$deviceName reports firmware version $firmware, which this app has not " +
+            "been tested against (tested: ${supported.sorted().joinToString(", ")}). The app " +
+            "might still work, but it is not guaranteed that presets will be read or written " +
             "correctly. Please consider sending in a device report, so support for this firmware " +
             "can be added in future."
-        Log.w(TAG, advisory!!)
+        advisory = warning
+        Log.w(TAG, warning)
     }
 
     /**
@@ -410,32 +414,22 @@ class Pro800Instrument(
      * This is the only method in this class that changes a *preset*. It is not reachable from the
      * UI except through [editor], which warns first. [select] also writes, but to the settings
      * block rather than through here - see [programNumberOf] for why the two paths are separate.
+     *
+     * **The write's status is deliberately not waited for.** A `0x78` write *is* answered -
+     * `01 00 00` for a store and an erase alike - but waiting would cost a round trip on every
+     * write and would have to be built on an exchange that retries by *re-sending*, so a slow
+     * status would mean the write went twice. Read-back stays the proof that a write landed: it
+     * is the stronger check, being the only one that catches a write accepted and silently not
+     * stored. The status is still visible in a debug build's log, since [SysExExchange] logs
+     * messages that arrive with no exchange in flight, which is precisely this case. A status
+     * carries no address, so it could not be correlated to a particular write in any case; where
+     * a code *is* actionable is on the read path, which treats a refusal as an answer - see [read].
      */
     override suspend fun write(address: SlotAddress, blob: ByteArray) {
         val programNumber = programNumberOf(address)
         exchange.tell(Pro800SysEx.writeDump(programNumber, blob))
     }
 
-    /**
-     * **A write's status is deliberately not waited for, and needs no machinery to be seen.**
-     *
-     * A `0x78` write *is* answered - `01 00 00` for a store and an erase alike - but nothing here
-     * waits for it. Waiting would cost a round trip on every write and would have to be built on an
-     * exchange that retries by *re-sending*, so a slow status would mean the write went twice.
-     * Read-back stays the proof that a write landed: it is the stronger check, being the only one
-     * that catches a write accepted and silently not stored.
-     *
-     * The status is still visible: it arrives when **no exchange is in flight**, so
-     * [SysExExchange]'s "ignoring" log - which only runs inside an exchange - never sees it, and
-     * with `replay = 0` a message with no subscriber would otherwise be emitted to nobody and gone.
-     * [SysExExchange] logs messages that arrive with no subscriber, which is precisely this case,
-     * so the code lands in the log next to the read-back that explains what the user saw - without
-     * this class collecting anything.
-     *
-     * A status carries no address, so it could not be correlated to a particular write in any case.
-     * Where a code *is* actionable is on the read path, which treats a refusal as an answer - see
-     * [read].
-     */
     override val fileExtension = "syx"
 
     /**
@@ -443,7 +437,7 @@ class Pro800Instrument(
      *
      * Bounded against [Pro800SysEx.SETTINGS_ADDRESS] as well as the program count: the settings
      * block lives in the same address space at 510, and a browsable row that overwrites global
-     * settings is not a preset (design section 7.4). [select] does write that block, but reaches it
+     * settings is not a preset. [select] does write that block, but reaches it
      * through [Pro800SysEx.writeSettings] rather than through an address that came from a row -
      * which is exactly the separation this bound exists to enforce.
      */

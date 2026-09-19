@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.cache
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
@@ -21,10 +24,10 @@ import kotlinx.coroutines.flow.flow
  * ### The rule
  *
  * A cached index is one that **finished cleanly**. On a hit, the cached slots are replayed and the
- * flow completes without a single round trip; on a miss, the delegate runs exactly as before and
- * the result is cached only if it reached [IndexUpdate.Complete] with no [IndexUpdate.Failed].
+ * flow completes without a single round trip; on a miss, the delegate runs unchanged and the
+ * result is cached only if it reached [IndexUpdate.Complete] with no [IndexUpdate.Failed].
  *
- * Two things that rule buys, both of which a subtler design got wrong first:
+ * Two things that rule buys:
  *
  * - **It never assumes which addresses the delegate walks.** A Motif XS indexes only the banks
  *   marked `indexByDefault`, not its whole layout, so a decorator that diffed the cache against
@@ -89,8 +92,8 @@ class CachingBrowser(
      * Re-reads one slot and writes it through to the cache.
      *
      * This is the whole of "a preset the app writes is dumped again to refresh its entry": the
-     * facet already existed for exactly this purpose, so an edit needs no new concept, only a
-     * caller that refreshes **every** address it touched. Move and swap touch two.
+     * facet exists for exactly this purpose, so an edit needs no new concept, only a caller that
+     * refreshes **every** address it touched. Move and swap touch two.
      */
     override suspend fun refresh(address: SlotAddress): PresetSlot =
         delegate.refresh(address).also { cache.update(key, it) }

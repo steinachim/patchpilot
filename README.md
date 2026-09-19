@@ -18,13 +18,13 @@ Patch Pilot is a native Android app for browsing, organizing and editing the pre
 | Yamaha Motif XS6 | USB (USB-MIDI packets on a vendor interface) | Verified on hardware |
 | Yamaha Motif XS7, XS8 | as XS6 | **Assumed.** Their USB product ids are inferred from Yamaha's driver files and have not been confirmed on a unit. |
 
-"Verified on hardware" means the app has been run against that model; the firmware versions it was run with are listed in the device catalog under [devices/](devices/). Connecting to a supported model with a firmware version that is not in the catalog shows a warning but is allowed.
+"Verified on hardware" means the app has been run against that model. For the Nord models and the Pro-800 the firmware versions it was run with are listed in the device catalog under [devices/](devices/), and connecting with a firmware version that is not listed shows a warning but is allowed. The Motif XS reads its firmware version for display only; no version check is made for it.
 
 ### Other Nord instruments
 
 Every Nord model above is handled by one protocol implementation; the differences between models are data in [devices/nord_devices.json](devices/nord_devices.json) (USB ids, bank layout, tested firmware). Another Nord that speaks the same USB protocol is expected to need only a catalog entry. This is an expectation, not a guarantee: a new model may differ in ways the catalog cannot express.
 
-An unrecognized Nord (Clavia USB vendor id) can be opened anyway from the connect screen, behind a warning. A hidden debug menu (five taps on the instrument name on the preset screen) runs a regression test against the connected instrument and shares the resulting report. To get such an instrument added, open an issue at <https://github.com/steinachim/patchpilot/issues> and attach that report.
+An unrecognized Nord (Clavia USB vendor id) can be opened anyway from the connect screen, behind a warning. The preset screen then offers "Share device details", a read-only device report whose `catalogEntry` section is the starting point for a catalog entry. A hidden debug menu (five taps on the instrument name on the preset screen) additionally runs a regression test against the connected instrument and shares its report. To get such an instrument added, open an issue at <https://github.com/steinachim/patchpilot/issues> and attach the device report, plus the regression report if you ran it.
 
 ### Other manufacturers
 

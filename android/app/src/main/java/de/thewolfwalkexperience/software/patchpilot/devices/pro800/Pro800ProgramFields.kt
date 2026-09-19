@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 /**
@@ -29,7 +32,7 @@ data class Pro800Field(
  * can be checked against each other and against real dumps.
  *
  * Only what the browser needs is modelled. A full parameter map is a different feature (a knob
- * editor) with no Nord counterpart, and is deliberately out of scope - see the design's section 12.
+ * editor) with no Nord counterpart, and is deliberately out of scope.
  */
 object Pro800ProgramFields {
 
@@ -98,9 +101,9 @@ object Pro800ProgramFields {
     /**
      * The self-checks that make a ported offset table safe to trust.
      *
-     * Run once from [Pro800Program]'s initializer rather than at every read: a table that overlaps
-     * itself or runs off the end of the shortest record it claims to support is a porting mistake,
-     * and finding it at startup beats finding it as a wrong value in a list row.
+     * Run once, when [Pro800Program] is first used: a table that overlaps itself or runs off the
+     * end of the shortest record it claims to support is a porting mistake, and finding it then
+     * beats finding it as a wrong value in a list row.
      */
     fun validate() {
         val fields = listOf(STORAGE_CODE, VERSION)
@@ -125,9 +128,6 @@ object Pro800ProgramFields {
  */
 class Pro800Program(val dense: ByteArray) {
 
-    init {
-        Pro800ProgramFields.validate()
-    }
 
     /**
      * True where this address holds nothing.
@@ -235,8 +235,7 @@ class Pro800Program(val dense: ByteArray) {
      *
      * **Preserves the record's version rather than upgrading it.** The reference implementation's
      * constructor resizes a short (pre-111) message and stamps it as 111, which silently converts
-     * a preset the user never asked to convert. Round-tripping a rename must not do that (design
-     * section 11.7).
+     * a preset the user never asked to convert. Round-tripping a rename must not do that.
      */
     fun withName(newName: String): Pro800Program {
         check(!isEmpty) { "cannot rename an uninitialized slot" }
@@ -275,6 +274,12 @@ class Pro800Program(val dense: ByteArray) {
     }
 
     companion object {
+        init {
+            // Once per process, when the class is first used, rather than on every one of the
+            // 400 records a scan constructs: the table is constant, so its self-checks are too.
+            Pro800ProgramFields.validate()
+        }
+
         /** What a dump message's payload decodes to. */
         fun fromEncoded(encodedPayload: ByteArray) = Pro800Program(Pro800ProgramCodec.decode(encodedPayload))
     }

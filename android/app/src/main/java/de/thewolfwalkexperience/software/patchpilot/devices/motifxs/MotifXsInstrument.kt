@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import android.util.Log
@@ -1028,33 +1031,18 @@ class MotifXsInstrument(
      * shipped name table: a 64-slot PRE DR costs 64 dumps (~67 s), not a walk of the whole
      * instrument.
      */
-    fun indexBank(bank: Int): Flow<IndexUpdate> = flow {
+    fun indexBank(bank: Int): Flow<IndexUpdate> {
         val spec = config.banks.getOrNull(bank)
             ?: error("No bank $bank; this instrument has ${config.banks.size}")
-        val batch = mutableListOf<PresetSlot>()
-        var done = 0
-        for (slot in 0 until spec.slotCount) {
-            val address = SlotAddress(bank, slot)
-            val displayId = layout.format.format(address)
-            try {
-                batch += readSlot(address, displayId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Logged, not just counted. A Failed slot reaches the user as a number - "2 slots
-                // could not be read" - which says nothing about *why*, and the difference between
-                // a timeout and a malformed reply is the difference between a slow bus and a bug.
-                Log.w(TAG, "Couldn't read $displayId", e)
-                emit(IndexUpdate.Failed(address, e.message ?: "unreadable"))
-            }
-            done++
-            if (batch.isNotEmpty()) {
-                emit(IndexUpdate.Slots(batch.toList()))
-                batch.clear()
-            }
-            emit(IndexUpdate.Progress(done, spec.slotCount, "Reading $displayId"))
-        }
-        emit(IndexUpdate.Complete)
+        return indexWalk(
+            addresses = (0 until spec.slotCount).map { SlotAddress(bank, it) },
+            total = spec.slotCount,
+            // One row per emission: a check is watched slot by slot, not in batches.
+            batchSize = 1,
+            layout = layout,
+            onFailure = { displayId, cause -> Log.w(TAG, "Couldn't read $displayId", cause) },
+            readSlot = ::readSlot,
+        )
     }
 
     /**
@@ -1375,10 +1363,10 @@ class MotifXsInstrument(
          * How long to wait for a mode change to take effect, as interval x count.
          *
          * Three seconds of wall clock, asked every 250 ms. Generous because the cost of being
-         * wrong is asymmetric and this is the failure that was actually shipped: too short and
-         * the app tells the user their switch failed while they watch it succeed on the panel,
-         * whereas too long only delays a message nobody wants to see anyway. The loop exits as
-         * soon as the instrument reports Voice, so a fast switch pays a single interval.
+         * wrong is asymmetric: too short and the app tells the user their switch failed while
+         * they watch it succeed on the panel, whereas too long only delays a message nobody wants
+         * to see anyway. The loop exits as soon as the instrument reports Voice, so a fast switch
+         * pays a single interval.
          */
         private val MODE_SETTLE_INTERVAL = 250.milliseconds
         private val MODE_SETTLE_BUDGET = 3.seconds
@@ -1449,7 +1437,8 @@ class MotifXsAddressFormat(
         return SlotAddress(bank, number - 1)
     }
 
-    override fun bankLabel(bank: Int): String = bankLabels.getOrElse(bank) { "?" }
+    /** The display label, which is what the rows carry and the bank headers group by. */
+    override fun bankLabel(bank: Int): String = displayLabel(bank)
 
     private fun displayLabel(bank: Int): String =
         displayLabels.getOrElse(bank) { bankLabels.getOrElse(bank) { "?" } }

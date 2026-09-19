@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import android.util.Log
@@ -17,8 +20,8 @@ private const val TAG = "Pro800Editor"
 /**
  * Rename, move, swap and delete on an instrument that has **none of those commands**.
  *
- * Every one is composed here from reads and writes (design §7.5), which is what
- * [isEmulated] tells the UI so it can warn before the first destructive step. The difference from
+ * Every one is composed here from reads and writes, which is what [isEmulated] tells the UI so
+ * it can warn before the first destructive step. The difference from
  * a native operation is not cosmetic: a Nord rename either happens or does not, while every
  * operation below has a moment where a preset exists in exactly one place and the next message
  * decides whether it survives.
@@ -26,8 +29,9 @@ private const val TAG = "Pro800Editor"
  * Four rules follow from that, and they are the whole design of this class:
  *
  *  1. **Verify by reading back** after every write, before anything else happens. The instrument
- *     does not acknowledge a write (the reference implementation sends them fire-and-forget with
- *     a 20 ms pause and never looks), so a read is the only evidence there is.
+ *     answers a write with a bare status that carries no address and is not waited for (see
+ *     [Pro800Instrument.write]), so a read is the only evidence that the right slot holds the
+ *     right bytes.
  *  2. **Order the destructive step last.** A move writes the destination and only then erases the
  *     source, so an interruption leaves a duplicate rather than a hole.
  *  3. **Roll back what cannot be finished.** A swap that writes the first half and fails on the
@@ -81,7 +85,7 @@ class Pro800Editor(
         val before = readProgram(address)
         if (before.isEmpty) throw InstrumentException.NotSupported("rename an empty slot")
         // Preserves the record's own format version rather than upgrading it - see
-        // Pro800Program.withName, and design §11.7.
+        // Pro800Program.withName.
         writeVerified(address, before.withName(newName), expectName = newName)
     }
 

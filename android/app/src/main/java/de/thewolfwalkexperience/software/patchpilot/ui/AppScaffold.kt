@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import de.thewolfwalkexperience.software.patchpilot.R
@@ -117,9 +120,9 @@ fun PatchPilotScaffold(
 /**
  * A centred one-line state - loading, empty, or "nothing matched".
  *
- * Exists because the app had three different ways of saying nothing-to-show, one of which was a
- * `CircularProgressIndicator` as a plain `Column` child, which renders in the top-left corner
- * rather than anywhere a user would look for it.
+ * One composable for every nothing-to-show state, so they all centre the same way; a progress
+ * indicator dropped in as a plain `Column` child renders in the top-left corner rather than
+ * anywhere a user would look for it.
  */
 @Composable
 fun CenteredMessage(modifier: Modifier = Modifier, content: @Composable () -> Unit) {

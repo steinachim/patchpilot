@@ -1,7 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import android.app.Application
 import android.hardware.usb.UsbDevice
+import android.media.midi.MidiDeviceInfo
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
@@ -96,6 +100,19 @@ private fun PickerEntry.physicalKey(): String = when (this) {
     is PickerEntry.Unknown -> device.physicalKey()
 }
 
+/**
+ * The handle the platform assigned this device when it enumerated - see [CacheKey.physicalDevice].
+ *
+ * Unlike [physicalKey], which is the model (vendor and product id), this changes on a replug.
+ */
+private fun UsbDevice.deviceHandle(): String = "usb:$deviceName"
+
+private fun Candidate.deviceHandle(): String = when (val h = handle) {
+    is UsbDevice -> h.deviceHandle()
+    is MidiDeviceInfo -> "midi:${h.id}"
+    else -> "handle:${System.identityHashCode(h)}"
+}
+
 /** Mirrors the states a connection attempt moves through, made explicit for the UI. */
 sealed class ConnectionState {
     data object Disconnected : ConnectionState()
@@ -186,6 +203,17 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     private val connectionManager = UsbConnectionManager(application)
 
     /**
+     * The device report, read and held here so a minutes-long read survives the screen that
+     * started it being torn down by a configuration change - see [DeviceReportRunner].
+     */
+    internal val deviceReportRunner = DeviceReportRunner(
+        scope = viewModelScope,
+        savedState = savedStateHandle,
+        build = { progress -> buildDeviceReport(progress) },
+        identity = { suggestedReportFilename() to reportDescription },
+    )
+
+    /**
      * The debug menu's regression run, held here so it survives the debug screen being torn down
      * by a configuration change - see [RegressionRunner].
      */
@@ -221,6 +249,14 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      * unplugging elsewhere on the bus - see [handleUsbDetach].
      */
     private var connectedPhysicalKey: String? = null
+
+    /**
+     * The handle of the device this session runs over - a USB device path, or a MIDI device id -
+     * which is what tells one unit of a model from another for the listing cache; see
+     * [CacheKey.physicalDevice]. Null while nothing is connected, and in demo mode.
+     */
+    private var connectedDeviceHandle: String? = null
+
 
     /**
      * [Candidate.physicalKey]/[UsbDevice.physicalKey] of whatever device a connect attempt is
@@ -407,7 +443,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         when {
             // Nothing recognised: reconnect a device already accepted through the "at your own
             // risk" gate this session if it is still attached, otherwise offer whatever else is
-            // attached, as before.
+            // attached.
             known.isEmpty() -> reconnectRememberedUnknownDeviceOrOffer()
             // Exactly one, and nobody asked to be shown the picker anyway: connect it.
             // No question worth asking has an obvious answer.
@@ -439,6 +475,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         instrumentMutex.withLock {
             instrument = built
             connectedPhysicalKey = candidate.physicalKey
+            connectedDeviceHandle = candidate.deviceHandle()
         }
         _state.value = connectedOrAdvisory(built)
         startIndex()
@@ -498,7 +535,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     /** Nothing in the catalog matched - reconnects [lastConfirmedUnknownDevice] straight through
      * [connectAndFinish] if it is still among the attached devices, without showing the warning
      * again: the user already accepted it once this session. Otherwise falls through to
-     * [offerUnknownDeviceOrFail] exactly as before.
+     * [offerUnknownDeviceOrFail].
      *
      * This is what lets [forceReconnect] restore an unrecognised device silently - e.g. returning
      * from the share sheet after generating its device report - instead of bouncing back to the
@@ -526,10 +563,9 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     private fun offerUnknownDeviceOrFail() {
         val allDevices = connectionManager.findAllDevices()
         if (allDevices.isEmpty()) {
-            // Every instrument the app can recognize, not just the Nord catalog. Both buses
-            // were scanned by the time this runs, so naming only the USB-matched half claimed a
-            // narrower search than actually happened - a Pro-800 owner was told the app had
-            // looked for two Nords.
+            // Every instrument the app can recognize, on both buses: both were scanned by the
+            // time this runs, so naming only the USB-matched ones would claim a narrower search
+            // than actually happened.
             val names = InstrumentRegistry.allDescriptors(getApplication()).map { it.name }.sorted()
             _state.value = ConnectionState.NothingFound(names)
         } else {
@@ -629,6 +665,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         instrumentMutex.withLock {
             instrument = built
             connectedPhysicalKey = usbDevice.physicalKey()
+            connectedDeviceHandle = usbDevice.deviceHandle()
         }
         lastConfirmedUnknownDevice = usbDevice
         _state.value = connectedOrAdvisory(built)
@@ -661,6 +698,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             instrumentMutex.withLock {
                 instrument = demo
                 connectedPhysicalKey = null
+                connectedDeviceHandle = null
             }
             _state.value = ConnectionState.Connected(demo)
             startIndex()
@@ -670,10 +708,9 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     /**
      * Whether returning to the foreground should rebuild the session.
      *
-     * Asks the connected instrument, which asks its transport - so a USB session is rebuilt and a
-     * MIDI one is left alone, which is what `Transport.rebuildOnResume` declared all along while
-     * nothing read it. Demo mode answers false through the same route rather than through a
-     * special case here.
+     * Asks the connected instrument, which asks its transport (`Transport.rebuildOnResume`) - so
+     * a USB session is rebuilt and a MIDI one is left alone. Demo mode answers false through the
+     * same route rather than through a special case here.
      *
      * True while nothing is connected: that resume is a rescan, and it is how an instrument
      * plugged in while the app was away gets picked up.
@@ -771,6 +808,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             closeQuietly(instrument)
             instrument = null
             connectedPhysicalKey = null
+            connectedDeviceHandle = null
         }
     }
 
@@ -819,8 +857,17 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      */
     private fun browser(): PresetBrowser {
         val instrument = current()
-        if (instrument is DemoInstrument) return instrument.browser
-        return CachingBrowser(instrument.browser, indexCache, CacheKey.of(instrument))
+        val key = cacheKey(instrument) ?: return instrument.browser
+        return CachingBrowser(instrument.browser, indexCache, key)
+    }
+
+    /**
+     * The cache key for [instrument]'s listing, or null where nothing is cached: demo mode,
+     * whose library is in memory already, and a session with no device handle to key on.
+     */
+    private fun cacheKey(instrument: Instrument): CacheKey? {
+        if (instrument is DemoInstrument) return null
+        return CacheKey.of(instrument, connectedDeviceHandle ?: return null)
     }
 
     // ---- The preset index, collected here rather than in the composition ----
@@ -1012,7 +1059,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      */
     private fun invalidateUserCache() {
         val instrument = instrument ?: return
-        indexCache.invalidate(CacheKey.of(instrument))
+        cacheKey(instrument)?.let { indexCache.invalidate(it) }
     }
 
     /**

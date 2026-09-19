@@ -1,8 +1,6 @@
 # Releasing
 
-How a version of Patch Pilot gets from `main` to GitHub Releases, and, once the app is listed there, to F-Droid and Google Play. Store metadata lives in `fastlane/metadata/android/en-US/`; F-Droid reads it from the repository directly, and the same files are uploaded to Play.
-
-Status: as of 2026-09-19 the app is distributed only as a signed APK attached to a GitHub Release. The F-Droid and Play steps below describe the intended procedure and have not been exercised.
+How a version of Patch Pilot gets from `main` to GitHub Releases, and, once the app is listed there, to F-Droid and Google Play. Development happens on `dev`, the repository's default branch; `main` receives releases and is the only branch CI signs. Store metadata lives in `fastlane/metadata/android/en-US/`; F-Droid reads it from the repository directly, and the same files are uploaded to Play.
 
 ## 1. Prepare the release commit
 

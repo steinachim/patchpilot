@@ -14,7 +14,7 @@ The per-instrument catalogs the app is built from. One file per instrument famil
 
 ## How the app uses this directory
 
-The `syncDeviceCatalog` Gradle task copies every `*.json` file except the schemas, plus `blanks/*.bin`, into `android/app/src/main/assets/` before every build; that directory is generated and gitignored, so never edit it by hand. Each family loads its own asset (`NordFamily.kt`, `Pro800Family.kt`, `MotifXsFamily.kt`), and `CatalogParsesTest` decodes the real files from this directory, so a malformed catalog fails the unit tests rather than only the connect screen on a phone.
+The `syncDeviceCatalog` Gradle task copies every `*.json` file except the schemas, plus `blanks/*.bin`, into `android/app/src/main/assets/` before every build; that directory is generated and gitignored, so never edit it by hand. Each family loads its own asset (`NordFamily.kt`, `Pro800Family.kt`, `MotifXsFamily.kt`), and the unit tests decode the real files from this directory (`CatalogParsesTest` for the Pro-800 and Motif XS catalogs, `NordCatalogTaggerTest` and `MotifXsFactoryVoicesTest` for the other two), so a malformed catalog fails the unit tests rather than only the connect screen on a phone.
 
 The `generateUsbDeviceFilter` task generates `android/app/src/main/res/xml/device_filter.xml` from the USB vendor/product ids in these files. Android reads that file to launch the app when a matching USB device is attached, before any app code runs, so it cannot be loaded from an asset. A device found through `MidiManager` (the Pro-800) contributes no entry; a USB-matched one (every Nord, the Motif XS) does.
 
@@ -42,11 +42,11 @@ This assumes the instrument speaks the protocol in `docs/PROTOCOLS.md`. No Kotli
 
 1. Gather the USB vendor/product id, the bank-letter/group/slot layout, the display width, the stored name length, and at least one firmware version the app has been run against. The file-transfer protocol version and each storage area's allocation unit are not catalog fields; the instrument announces both at connect time (`NordDevice.detectProtocolVersionFileTransfer()`, the root category list's trailer).
 2. Append one object to the `devices` array in `nord_devices.json`, following `nord_devices.schema.json`.
-3. List the instrument's category-tag ids in `programCategoryIds`, an index into the top-level `programCategories` master list. Do not copy another instrument's list: which ids a Nord offers is per product, and an instrument shows `No Cat` for every id it does not implement. Leave the field out rather than guessing if it has not been established; the instrument then gets no category editing. Add `programCategoryNameOverrides` only for ids the instrument displays under a different name than the master list gives them. `sampleCategories` needs no per-device entry; nothing in the app reads it yet.
-4. If the instrument has content tags of its own, check whether their content-version field is scaled the same way as the shared tags, and add any exception to `contentVersionScales`.
-5. Add a hand-written `DeviceProfile` fixture in `android/app/src/test/.../devices/nord/NordFixtures.kt`; the JVM tests do not load the asset catalog.
+3. List the instrument's category-tag ids in `programCategoryIds`, an index into the top-level `programCategories` master list. Do not copy another instrument's list: which ids a Nord offers is per product, and an instrument shows `No Cat` for every id it does not implement. Leave the field out rather than guessing if it has not been established; the instrument then gets no category editing. Add `programCategoryNameOverrides` only for ids the instrument displays under a different name than the master list gives them.
+4. Optionally, add a hand-written `DeviceProfile` fixture in `android/app/src/test/.../devices/nord/NordFixtures.kt` if the model's replies differ from the ones the protocol tests already cover; the protocol tests are driven from fixtures rather than from the catalog.
 
-The device report the app shares (debug menu) contains a `catalogEntry` object in exactly this shape, filled in with what the wire could settle, which is the intended starting point for a new entry.
+
+The device report the app shares (from the debug menu, or from the preset screen's "Share device details" for an unrecognised device) contains a `catalogEntry` object in exactly this shape, filled in with what the wire could settle, which is the intended starting point for a new entry.
 
 ## Adding an instrument of another family
 

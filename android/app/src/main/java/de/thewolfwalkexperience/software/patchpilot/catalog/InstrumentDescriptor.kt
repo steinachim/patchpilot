@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
 import kotlinx.serialization.SerialName
@@ -94,11 +97,11 @@ internal fun String.hexToBytes(): ByteArray {
  * One family's catalog file: its shared configuration, then its devices.
  *
  * **[familyConfig] at this level is not a duplicate of the per-device one.** A Nord catalog
- * carries a 54-entry `programCategories` master list and a `contentVersionScales` table that
- * belong to no single device - and the master list is deliberately not injective (ids 2 and 37 are
- * both `Wind`), which is exactly why it cannot be folded into per-device maps. The Pro-800 wants
- * the same slot for its CC map and program field table, which are properties of the model family
- * rather than of an individual unit.
+ * carries a 54-entry `programCategories` master list that belongs to no single device - and the
+ * master list is deliberately not injective (ids 2 and 37 are both `Wind`), which is exactly why
+ * it cannot be folded into per-device maps. The Motif XS catalog keeps its bank table and
+ * category encoding here for the same reason: they are properties of the model family rather
+ * than of an individual unit.
  */
 @Serializable
 data class FamilyCatalog(

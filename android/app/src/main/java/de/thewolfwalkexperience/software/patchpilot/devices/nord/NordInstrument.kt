@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.util.Log
@@ -17,6 +20,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.slugifyDeviceId
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
+import de.thewolfwalkexperience.software.patchpilot.core.Probes
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import kotlinx.coroutines.CancellationException
@@ -47,7 +51,7 @@ private val REPORT_JSON = Json { prettyPrint = true; encodeDefaults = true }
  *
  * **This is an adapter and nothing else.** There is no protocol logic here - every method below
  * either delegates to [device] or converts between [SlotAddress] and the (bank, item) pair
- * `NordDevice` already speaks. Generalization had to be additive, so it was.
+ * `NordDevice` speaks.
  */
 class NordInstrument(
     private val device: NordDevice,
@@ -105,9 +109,9 @@ class NordInstrument(
             name = device.name,
             firmwareVersion = device.formatFirmwareVersion(device.firmwareVersion),
             bus = bus,
-            // No serial number is available over this protocol, so two identical models on one
-            // phone would share a key. Acceptable: nothing keyed on it is destructive, and the
-            // alternative (a USB device path) changes on every replug, which is worse.
+            // No serial number is available over this protocol, so this names the model rather
+            // than the unit; the listing cache adds the session's USB device path to tell two
+            // units apart (see CacheKey.physicalDevice).
             stableKey = "nord:${device.vendorId}:${device.productId}:${device.profile.id}",
         )
 
@@ -126,9 +130,9 @@ class NordInstrument(
     override val report: DeviceReporter get() = this
 
     /**
-     * Null until the item data path is ported (see `NordDevice.READ_BUFSIZE`'s
-     * own KDoc, which says what has to change first). The Pro-800 implements this facet on day
-     * one; this asymmetry is exactly what nullable facets are for.
+     * Null: the item-data read/write sub-opcodes are not implemented (see
+     * `NordDevice.READ_BUFSIZE`'s KDoc for what a reader has to handle). The Pro-800 implements
+     * this facet; the asymmetry is exactly what nullable facets are for.
      */
     override val transfer: PresetTransfer? = null
 
@@ -286,47 +290,47 @@ class NordInstrument(
      *
      * **No probe here is allowed to be fatal.** A report describes an instrument nobody has
      * profiled, which is precisely where an advanced query may be unsupported, time out, or answer
-     * something this app can't parse - so every one of them runs through [probe], which records
-     * the failure and carries on with a fallback. A report missing its storage figures but
+     * something this app can't parse - so every one of them runs through [Probes.probe], which
+     * records the failure and carries on with a fallback. A report missing its storage figures but
      * carrying the categories, the child lists and the firmware version is worth far more to
      * whoever receives it than no report at all, and the failures are themselves a finding.
      */
     override suspend fun buildReport(progress: ((String) -> Unit)?): String = deviceLock.withLock {
         val d = device
-        val failures = LinkedHashMap<String, String>()
+        val probes = Probes()
 
         progress?.invoke("Reading device info...")
-        val commandTargets = probe(failures, "deviceInfo", emptyMap()) { d.getProtocolVersions() }
-        val capabilityHex = probe(failures, "capabilityQuery", "(query failed)") {
+        val commandTargets = probes.probe("deviceInfo", emptyMap()) { d.getProtocolVersions() }
+        val capabilityHex = probes.probe("capabilityQuery", "(query failed)") {
             d.capabilityQueryPayload().toHex()
         }
 
         progress?.invoke("Reading categories...")
-        val rootPayload = probe(failures, "rootCategoryList", ByteArray(0)) { d.rootCategoryListPayload() }
-        val categoryNames = probe(failures, "rootCategoryListParse", emptyList()) {
+        val rootPayload = probes.probe("rootCategoryList", ByteArray(0)) { d.rootCategoryListPayload() }
+        val categoryNames = probes.probe("rootCategoryListParse", emptyList()) {
             if (rootPayload.isEmpty()) emptyList() else d.parseRootCategoryList(rootPayload)
         }
         val childPayloads = categoryNames.mapIndexed { index, name ->
-            name to probe(failures, "categoryChild[$name]", null) { d.categoryChildPayload(index) }
+            name to probes.probe("categoryChild[$name]", null) { d.categoryChildPayload(index) }
         }
         val childHex = childPayloads.associate { (name, bytes) ->
             name to (bytes?.toHex() ?: "(query failed)")
         }
         val childLists = childPayloads.mapNotNull { (name, bytes) ->
             val parsed = bytes?.let {
-                probe(failures, "categoryChildParse[$name]", null) { NordDevice.parseCategoryChildren(it) }
+                probes.probe("categoryChildParse[$name]", null) { NordDevice.parseCategoryChildren(it) }
             }
             parsed?.let { children ->
                 name to children.map { CategoryChildReport(it.name, it.capacity) }
             }
         }.toMap()
 
-        val bankLayout = probe(failures, "bankLayout", null) { d.deriveBankLayout() }
+        val bankLayout = probes.probe("bankLayout", null) { d.deriveBankLayout() }
 
-        val areas = probe(failures, "storage", emptyList()) {
+        val areas = probes.probe("storage", emptyList()) {
             d.calibrateStorageUnits(
                 progress = { name, _ -> progress?.invoke("Measuring '$name'...") },
-                onFailure = { name, e -> failures["storage[$name]"] = e.message ?: e.toString() },
+                onFailure = { name, e -> probes.record("storage[$name]", e.message ?: e.toString()) },
             )
         }
 
@@ -334,7 +338,7 @@ class NordInstrument(
         // Each area's allocation unit as the instrument itself reports it - the first word of
         // that category's root-list trailer. The fitted value beside it in the report is a
         // cross-check on it.
-        val reportedUnits = probe(failures, "storageUnits", emptyMap<Int, Int>()) {
+        val reportedUnits = probes.probe("storageUnits", emptyMap<Int, Int>()) {
             d.parseRootCategories(rootPayload)
                 .mapIndexedNotNull { i, c -> c.unitBytes?.let { unit -> i to unit } }
                 .toMap()
@@ -360,7 +364,7 @@ class NordInstrument(
         val report = DeviceReport(
             catalogEntry = entry,
             probe = DeviceProbe(
-                failures = failures,
+                failures = probes.failures,
                 firmwareVersion = d.formatFirmwareVersion(d.firmwareVersion),
                 usbVendorId = String.format(Locale.ROOT, "0x%04X", d.vendorId),
                 usbProductId = String.format(Locale.ROOT, "0x%04X", d.productId),
@@ -403,28 +407,6 @@ class NordInstrument(
     private suspend fun <T> exclusive(what: String, block: suspend () -> T): T =
         deviceLock.withLock { mapNordFailure(what, block) }
 
-    /**
-     * Runs one probe for [buildReport], recording a failure under [what] and carrying on with
-     * [fallback] instead of losing the whole report.
-     *
-     * Not `runCatching`, which swallows [CancellationException] and would leave a cancelled report
-     * running to completion.
-     */
-    private suspend fun <T> probe(
-        failures: MutableMap<String, String>,
-        what: String,
-        fallback: T,
-        block: suspend () -> T,
-    ): T = try {
-        block()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Log.w(TAG, "Device report: '$what' failed", e)
-        failures[what] = e.message ?: e.toString()
-        fallback
-    }
-
     companion object {
         const val FAMILY = "nord"
     }
@@ -465,9 +447,10 @@ private fun nordStatusExplanation(what: String, status: Int): String? = when (st
  *
  * [what] is the operation in the user's terms, so [InstrumentException.NotSupported]'s and
  * [InstrumentException.DeviceRejected]'s sentences read correctly: "rename presets", not
- * "SET_NAME".
+ * "SET_NAME". Shared with [NordTagger], whose writes go through the same wire and deserve the
+ * same translation.
  */
-private suspend fun <T> mapNordFailure(what: String, block: suspend () -> T): T = try {
+internal suspend fun <T> mapNordFailure(what: String, block: suspend () -> T): T = try {
     block()
 } catch (e: CancellationException) {
     throw e
