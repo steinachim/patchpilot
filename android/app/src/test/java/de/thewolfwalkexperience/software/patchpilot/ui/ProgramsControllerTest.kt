@@ -21,7 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The operation rules ProgramsScreen used to hold inline.
+ * The preset screen's operation rules.
  *
  * Every one of these is a rule the screen's own comments state as deliberate - a delete dialog
  * dismissed before the work rather than after it, a copy picker that closes only on success, a

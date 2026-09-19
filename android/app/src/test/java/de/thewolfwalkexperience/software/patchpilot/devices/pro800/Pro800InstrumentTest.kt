@@ -536,9 +536,9 @@ class Pro800InstrumentTest {
     fun `an untested firmware version warns instead of refusing`() = runTest {
         val (pro800, _) = instrumentWith(firmwareReply(1, 4, 5), scope = backgroundScope)
 
-        // **It used to throw here, and that was the wrong call.** Refusing locked out the one
-        // person who could establish what an untested firmware actually does - and who can send
-        // back the device report saying so. The session is allowed; the warning rides along.
+        // A warning, not a refusal: refusing would lock out the one person who could establish
+        // what an untested firmware actually does, and who can send back the device report
+        // saying so. The session is allowed; the warning rides along.
         pro800.connect()
 
         val advisory = pro800.advisory

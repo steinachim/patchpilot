@@ -9,14 +9,9 @@ import kotlinx.serialization.json.JsonObject
  * only that family understands.
  *
  * **Why the split.** A single flat schema across families degenerates into a record that is mostly
- * null. Keeping the core small means a third family adds a factory and a JSON block and changes no
- * shared type - which is the extensibility test this design was written to pass.
- *
- * Recent history says the line is drawn in the right place. Two Nord catalog fields
- * (`storageUnitFallbackMultiplier`, `storageUnitBytesByCategory`) were deleted outright once the
- * instrument turned out to state each area's allocation unit itself, and `programCategories` was
- * restructured into a master list with per-device indices. Both churned entirely inside what is
- * [familyConfig] here; neither would have touched anything above.
+ * null. Keeping the core small means a new family adds a factory and a JSON block and changes no
+ * shared type, and a family's own fields can change without touching anything above
+ * [familyConfig].
  */
 @Serializable
 data class InstrumentDescriptor(
@@ -79,8 +74,6 @@ sealed interface DeviceMatch {
          *
          * Zero for anything with one cable, which is every instrument matched this way. Kept
          * because a class-compliant multi-port device is addressed by port, not just opened by it.
-         * The Motif XS used to be the example here; it is now matched on [Usb] instead, because
-         * it turned out to expose no MIDIStreaming interface and so gets no MIDI port at all.
          */
         val portIndex: Int = 0,
     ) : DeviceMatch {

@@ -42,15 +42,14 @@ data class CacheKey(
  *
  * **The point is surviving a reconnect, not surviving a restart.** `MainActivity.onResume` calls
  * `forceReconnect()` on every return to the foreground, which tears the session down and rebuilds
- * it — so before this existed, a Motif XS user paid a **93-second** re-index every time they
- * switched to another app and came back, not merely once per launch. Owning the cache at the
- * ViewModel means it outlives the instrument object that reconnect throws away.
+ * it; without this a Motif XS user would pay a **93-second** re-index every time they switched to
+ * another app and came back, not merely once per launch. Owning the cache at the ViewModel means
+ * it outlives the instrument object that reconnect throws away.
  *
- * Persistence to disk was **considered and declined** (2026-08-20): a full sync on the first
- * connection of a session is an acceptable cost, and persisting buys only the cold-launch case
- * while costing a physical-instrument identity this app cannot yet establish, a decoder-version
- * trap, and a staleness the UI would have to disclose. `docs/ARCHITECTURE.md`'s "Caching" section
- * records the reasoning so that revisiting it starts from the argument rather than from scratch.
+ * Deliberately not persisted to disk: a full sync on the first connection of a session is an
+ * acceptable cost, and persisting buys only the cold-launch case while costing a
+ * physical-instrument identity this app cannot establish, a decoder-version trap, and a
+ * staleness the UI would have to disclose. See `docs/ARCHITECTURE.md`, "Caching".
  *
  * A single concrete class rather than an interface with one implementation: extracting a seam for
  * a second implementation that may never exist is speculative, and the API below is small enough

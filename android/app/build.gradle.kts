@@ -18,8 +18,8 @@ plugins {
     // standalone plugin alongside it is an error rather than a redundancy.
     alias(libs.plugins.android.application)
     // The Compose compiler is a Kotlin plugin from Kotlin 2.x on, rather than a separate
-    // artifact pinned to a Kotlin version - which is what `composeOptions` used to do, and what
-    // made a Kotlin upgrade a two-part version-matching exercise.
+    // artifact pinned to a Kotlin version through `composeOptions`, so a Kotlin upgrade is one
+    // version bump rather than two that have to match.
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
@@ -196,11 +196,10 @@ val syncLicenses = tasks.register<Copy>("syncLicenses") {
 /**
  * Generates res/xml/device_filter.xml from the catalogs' USB matches.
  *
- * That file used to be maintained by hand, with a comment asking whoever added a device to
- * remember to add a line here too - a standing invitation to forget, and one that fails silently
- * (the app simply never launches on attach). It cannot be loaded from an asset, because Android's
- * PackageManager reads it to match USB_DEVICE_ATTACHED before any app code runs, so generating it
- * is the only way to have one source of truth.
+ * Generated rather than maintained by hand, because a hand-kept copy fails silently when a device
+ * is added to the catalog and not to it (the app simply never launches on attach). It cannot be
+ * loaded from an asset, because Android's PackageManager reads it to match USB_DEVICE_ATTACHED
+ * before any app code runs, so generating it is the only way to have one source of truth.
  *
  * Only USB matches produce an entry. A MIDI-attached instrument is found through MidiManager and
  * has no USB_DEVICE_ATTACHED filter to appear in.
@@ -253,11 +252,10 @@ tasks.named("preBuild") {
 tasks.withType<Test>().configureEach {
     systemProperty("deviceCatalogDir", deviceCatalogDir.absolutePath)
     // **Declared as an input, or the tests that read it never re-run when it changes.**
-    // A `systemProperty` is not an input Gradle tracks, so editing a catalog left every test task
-    // UP-TO-DATE: `./gradlew testDebugUnitTest` after adding the drum banks' categories finished
-    // in 687ms having executed nothing, and the two tests that assert what the catalogs contain
-    // only failed once `--rerun-tasks` forced them. A catalog is data the tests assert against,
-    // so it belongs here beside the property that points at it.
+    // A `systemProperty` is not an input Gradle tracks, so without this editing a catalog leaves
+    // every test task UP-TO-DATE and the tests that assert what the catalogs contain never run.
+    // A catalog is data the tests assert against, so it belongs here beside the property that
+    // points at it.
     //
     // RELATIVE rather than ABSOLUTE so the cache still hits when the checkout moves; NAME_ONLY
     // would ignore the contents, which is exactly what is being tracked.

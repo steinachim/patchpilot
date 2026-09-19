@@ -27,10 +27,9 @@ import androidx.compose.runtime.setValue
 /**
  * Hands [content] to whatever app the user picks - the one place this app talks to another.
  *
- * Extracted from the preset screen's device-report button when the debug menu gained a second
- * thing to share. The mechanism is the same for both and is not obvious: `ACTION_SEND`'s
- * `EXTRA_STREAM` needs a `content://` Uri, and the `FileProvider` behind it only serves real
- * files, so the text has to be written to `cacheDir` first even though it is already in memory.
+ * The mechanism is not obvious: `ACTION_SEND`'s `EXTRA_STREAM` needs a `content://` Uri, and the
+ * `FileProvider` behind it only serves real files, so the text has to be written to `cacheDir`
+ * first even though it is already in memory.
  *
  * [filename] carries its own extension, since the two callers share different kinds of file, and
  * is sanitised here rather than by each caller - it reaches the filesystem, and one caller takes
@@ -49,13 +48,12 @@ fun shareTextReport(
 
     // A dedicated directory rather than cacheDir's root, cleared before each share.
     //
-    // Two reasons. Reports used to be written straight into the cache root and never deleted, so
-    // every share a session ever made sat there until Android chose to evict the cache - and a
-    // device report is not nothing: it carries the user's preset names, the firmware version, the
-    // USB ids and raw protocol hex. Keeping exactly the file being shared right now is the smaller
-    // footprint. Second, it narrows what the FileProvider path in file_paths.xml actually exposes:
-    // the grant is per-Uri either way, but there is no reason for the declared path to span the
-    // whole cache when one subdirectory will do.
+    // Two reasons. Files written to the cache root would sit there until Android chose to evict
+    // the cache, and a device report is not nothing: it can carry the user's preset names, the
+    // firmware version, the USB ids and raw protocol hex. Keeping exactly the file being shared
+    // right now is the smaller footprint. Second, it narrows what the FileProvider path in
+    // file_paths.xml exposes: the grant is per-Uri either way, but there is no reason for the
+    // declared path to span the whole cache when one subdirectory will do.
     val dir = File(context.cacheDir, SHARE_DIR).apply {
         deleteRecursively()
         mkdirs()
@@ -132,10 +130,8 @@ fun ShareFilenameDialog(pending: PendingShare, onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            // Dismisses itself, rather than leaving each caller to remember. All three callers
-            // wanted the same thing and one of them forgot: ConnectScreen's report button left
-            // this dialog standing over the progress text it was meant to reveal, because its
-            // `onConfirm` was the only one of the three that did not clear its own trigger.
+            // Dismisses itself, rather than leaving each caller to remember: a caller that did
+            // not would leave this dialog standing over the progress text it was meant to reveal.
             TextButton(
                 enabled = stem.isNotBlank(),
                 onClick = { pending.onConfirm(stem); onDismiss() },

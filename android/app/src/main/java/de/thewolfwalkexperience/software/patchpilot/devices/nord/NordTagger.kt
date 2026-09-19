@@ -6,6 +6,8 @@ import de.thewolfwalkexperience.software.patchpilot.core.FavoriteModel
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * A Nord program's category tag.
@@ -22,6 +24,9 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 internal class NordTagger(
     private val device: NordDevice,
     private val categories: NordCategories,
+    /** [NordInstrument]'s lock, so a tag read or write cannot interleave with a listing or an edit.
+     * Defaulted for the tests, which drive this class on its own. */
+    private val deviceLock: Mutex = Mutex(),
 ) : PresetTagger {
 
     override val taxonomy: CategoryTaxonomy = categories.taxonomy
@@ -54,9 +59,9 @@ internal class NordTagger(
      * open. Null where the program carries an id this instrument does not name, which its own
      * display shows as `No Cat`.
      */
-    override suspend fun read(address: SlotAddress): PresetTags {
+    override suspend fun read(address: SlotAddress): PresetTags = deviceLock.withLock {
         val id = categoryIdAt(address)
-        return PresetTags(categories = listOf(id?.let { categories.refOf(it) }))
+        PresetTags(categories = listOf(id?.let { categories.refOf(it) }))
     }
 
     /**
@@ -74,12 +79,14 @@ internal class NordTagger(
         val id = this.categories.idOf(wanted)
             ?: throw IllegalArgumentException("No category ${wanted.main} on this Nord.")
 
-        device.setPresetCategory(address.bank, address.slot, id)
+        deviceLock.withLock {
+            device.setPresetCategory(address.bank, address.slot, id)
 
-        val stored = categoryIdAt(address)
-        check(stored == id) {
-            "set the category of ${device.formatPresetId(address.bank, address.slot)} to $id " +
-                "but it reads back as ${stored ?: "nothing"}"
+            val stored = categoryIdAt(address)
+            check(stored == id) {
+                "set the category of ${device.formatPresetId(address.bank, address.slot)} to $id " +
+                    "but it reads back as ${stored ?: "nothing"}"
+            }
         }
     }
 

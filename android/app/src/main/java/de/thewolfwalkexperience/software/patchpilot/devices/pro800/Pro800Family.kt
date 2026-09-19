@@ -53,7 +53,7 @@ data class Pro800Config(
  * The Pro-800 family: `devices/behringer_pro800.json` plus a factory.
  *
  * Its catalog is written in the generic [FamilyCatalog] shape directly, unlike the Nord one, which
- * keeps its own native shape because Python reads that file too. Both arrive at the registry
+ * keeps its own native shape because other tooling reads that file too. Both arrive at the registry
  * as descriptors either way - which is the point of letting each family load its own file.
  *
  * "Family" here is the code-level dispatch key, not a claim about how many instruments the file
@@ -75,6 +75,8 @@ object Pro800Family : InstrumentFamily {
     ): Instrument {
         val midi = transport as? MidiTransport
             ?: error("A Pro-800 speaks MIDI SysEx, not ${transport::class.simpleName}.")
+        // Resolved before the exchange starts its collector, so a catalog fault cannot leave a
+        // collector running on a transport nobody owns.
         val config = catalog.format.decodeFromJsonElement(Pro800Config.serializer(), catalog.load(context).familyConfig)
         // The exchange owns the collector draining this transport, so its scope has to outlive
         // any single operation. It ends when the transport is closed and the instrument with it.

@@ -45,9 +45,8 @@ interface Instrument {
      *
      * **Usable but not vouched for.** Set during [connect] by a family that got far enough to talk
      * to the device and then found something it cannot stand behind - today, a firmware version
-     * nobody has tested this app against. Both families used to *throw* there, which meant the
-     * one person able to report what an untested firmware actually does was the one person locked
-     * out of using the app at all.
+     * nobody has tested this app against. A warning rather than a refusal, because refusing would
+     * lock out the one person able to report what an untested firmware actually does.
      *
      * Not an error channel: a facet that cannot work must still be null, and a failure that makes
      * the session useless must still throw. This is for "it will probably work, and you should
@@ -65,8 +64,7 @@ interface Instrument {
      *
      * **Declared here because `Transport` is not reachable from where the decision is taken.**
      * `MainActivity.onResume` is the caller, and the transport lives two layers down inside each
-     * family's instrument - which is why `Transport.rebuildOnResume` sat overridden by all four
-     * transports and read by none, while every session was rebuilt regardless.
+     * family's instrument.
      *
      * Defaults to true: rebuilding an already-working session costs a reconnect, while failing to
      * rebuild a dead one leaves the app unusable until the user backs out by hand.
@@ -177,8 +175,8 @@ sealed interface IndexUpdate {
  * factory voices at 12,468 B/s, the other has 400 addresses and no way to learn a name except by
  * reading the whole preset - and both need the same three things: rows in front of the user as
  * they arrive, one unreadable slot costing only itself, and progress that means something. That
- * is this loop, and having it once is what stops the two copies drifting on the details that
- * matter (whether a failure aborts the walk; whether the final partial batch is emitted at all).
+ * is this loop, and having it once keeps the two families agreeing on the details that matter
+ * (whether a failure aborts the walk; whether the final partial batch is emitted at all).
  *
  * What genuinely differs stays a parameter: [batchSize] is tuned per family (a Pro-800's 25 slots
  * against a Motif XS's 8, whose reads are an order of magnitude larger), and [onFailure] lets a
@@ -275,9 +273,8 @@ interface PresetEditor {
      * The longest name this instrument will store, or null where no limit is known.
      *
      * Declared so the rename dialog can cap the input rather than letting the user type a name
-     * the instrument will silently truncate - which is how it surfaced: a Pro-800 asked to store
-     * "I don't know my name" kept the first sixteen characters, and the only sign was the
-     * verification failing afterwards.
+     * the instrument will silently truncate: a Pro-800 asked to store a longer name keeps the
+     * first sixteen characters, and the only sign is the read-back verification failing.
      */
     val maxNameLength: Int? get() = null
 

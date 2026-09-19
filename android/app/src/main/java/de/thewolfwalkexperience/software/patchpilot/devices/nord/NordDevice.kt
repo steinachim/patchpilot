@@ -191,9 +191,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     }
 
     /**
-     * ENTER_STATUS_MODE/EXIT_STATUS_MODE reply with no useful data, but they toggle the
-     * instrument's "status message" display mode, which also inhibits playing. The other
-     * status-mode sub-opcodes were removed from this class with the Show Text screen.
+     * The one UI-protocol request this app sends. The protocol's other sub-opcodes toggle the
+     * instrument's "status message" display mode, which also inhibits playing, and are not used.
      */
     enum class UiSubOp(val code: Int) {
         CAPABILITY_QUERY(4), // protocol/capability version block (4/5)
@@ -253,14 +252,12 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * The file-transfer protocol version, read from the instrument. No fallback: if this cannot be
      * read, [connect] fails.
      *
-     * A declared value used to sit in `devices/nord_devices.json` as a safety net, and was removed
-     * once there was nothing left for it to do. The version selects the wire format, and the
-     * instrument is the only authority on which one it speaks - so a declared value could only ever
-     * agree with what was read (adding nothing) or disagree with it (in which case using it means
-     * parsing the instrument's responses against the wrong layout, on the protocol that carries the
-     * writes). And the case it was meant to cover cannot arise usefully: the query that carries the
-     * version is the first bulk message of every session, so an instrument that will not answer it
-     * is one nothing else here would work against either.
+     * No catalog value stands in for it. The version selects the wire format and the instrument is
+     * the only authority on which one it speaks, so a declared value could only agree with what
+     * was read (adding nothing) or disagree with it (parsing the instrument's responses against the
+     * wrong layout, on the protocol that carries the writes). The query that carries the version
+     * is the first bulk message of every session, so an instrument that will not answer it is one
+     * nothing else here would work against either.
      */
     private suspend fun resolveProtocolVersionFileTransfer(): Int =
         try {
@@ -468,11 +465,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     internal suspend fun readReply(): NordMessage {
         var emptyReads = 0
         while (true) {
-            // **Cancellable.** This used to be a plain function with no suspension point inside the
-            // loop, called from inside `withContext(Dispatchers.IO)` - so neither job cancellation
-            // nor a `withTimeout` around it could interrupt a single iteration, and the loop below
-            // could not be escaped at all. Disconnecting mid-read therefore stranded the thread
-            // rather than ending the read.
+            // **Cancellable.** Nothing else in this loop suspends, so without this neither job
+            // cancellation nor a `withTimeout` around it could interrupt an iteration, and
+            // disconnecting mid-read would strand the thread rather than end the read.
             currentCoroutineContext().ensureActive()
 
             takeBufferedMessage()?.let { return it }
@@ -481,10 +476,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             if (chunk.isEmpty()) {
                 // **A zero-length transfer is a legitimate USB reply, and it makes no progress.**
                 // `bulkRead` guards `read >= 0`, so a ZLP passes that check and hands back an empty
-                // array; the loop then asks again forever. A device answering every request this
-                // way - hostile or merely broken - used to pin an IO thread for the life of the
-                // process, one more per reconnect. Bounded rather than banned, because a stray ZLP
-                // between the pieces of a split reply is not itself an error.
+                // array; unbounded, a device answering every request this way - hostile or merely
+                // broken - would pin an IO thread for the life of the process. Bounded rather than
+                // banned, because a stray ZLP between the pieces of a split reply is not itself an
+                // error.
                 if (++emptyReads >= MAX_EMPTY_READS) {
                     val buffered = readBuffer.size
                     readBuffer = ByteArray(0)
@@ -652,11 +647,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * The same sub-opcode 0/1 response, decoded into [RootCategory] entries that keep each
      * category's **allocation unit** as well as its name - the first word of its trailer.
      *
-     * This is where the storage unit comes from. It used to be a per-device constant in
-     * devices/nord_devices.json, fitted by summing ceil(size / U) over an area's records
-     * against its reported `used`; the instrument states it outright and exactly, and two of
-     * the fitted constants were wrong - the Nord Grand's `Piano` was configured at 131,072
-     * where the instrument says 130,816, leaving 33 of its 15,427 units unexplained.
+     * This is where the storage unit comes from: the instrument states it outright and exactly,
+     * so no catalog value carries one. A unit fitted from an area's item sizes instead can land on
+     * a rounder but wrong figure - 131,072 for a Nord Grand's `Piano` where the instrument says
+     * 130,816, leaving 33 of its 15,427 units unexplained - which is why the fit in
+     * [calibrateStorageUnits] is a cross-check on this and not a source.
      *
      * A byte-counted area reports 1, so callers need no special case.
      */
@@ -727,17 +722,17 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     /**
      * Strips control characters from text the *instrument* chose.
      *
-     * **The length of a name was checked here; its contents were not.** US-ASCII decoding already
-     * turns anything above 0x7F into U+FFFD, so bidi overrides and zero-width characters cannot
-     * survive - but 0x00-0x1F passed through untouched, which includes NUL, CR and LF. A preset
-     * name carrying a newline renders as two rows in the browser, and the user picks delete targets
-     * off that list; one carrying NUL or ESC reaches the shared device-report JSON and logcat.
+     * US-ASCII decoding already turns anything above 0x7F into U+FFFD, so bidi overrides and
+     * zero-width characters cannot survive - but 0x00-0x1F would pass through, which includes NUL,
+     * CR and LF. A preset name carrying a newline renders as two rows in the browser, and the user
+     * picks delete targets off that list; one carrying NUL or ESC reaches the shared device-report
+     * JSON and logcat.
      *
-     * The same rule is applied two other places in this app for the same reason, which is what made
-     * its absence here an inconsistency rather than an oversight: [rootCategoryListFits] rejects any
-     * category-name byte outside 0x20..0x7E, and `UsbConnectionManager.sanitizeUsbString` strips
-     * control and bidi characters from a USB product string because that label sits beside a trust
-     * decision. Outbound names are validated on both families too ([renamePreset], `Pro800Editor`).
+     * The same rule applies wherever device text is shown: [rootCategoryListFits] rejects any
+     * category-name byte outside 0x20..0x7E, and `core.sanitizeDeviceText` strips control and bidi
+     * characters from a USB or MIDI product string because that label sits beside a trust
+     * decision. Outbound names are validated on every family too ([renamePreset], `Pro800Editor`,
+     * the Motif XS editor).
      *
      * Strips rather than rejects: a real instrument with one odd byte in one slot should still show
      * the other thirty-one characters of its name, not fail the whole listing.
@@ -778,11 +773,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     /**
      * Selects [categoryIndex], runs [block], and always unlocks afterwards.
      *
-     * **Eight operations had their own copy of this three-line bracket**, each with its own
-     * paragraph restating the same discipline: `SELECT_CATEGORY` locks the instrument, and
+     * The one bracket every operation goes through: `SELECT_CATEGORY` locks the instrument, and
      * [unlockCategorySelection] has to run whether the operation succeeded or threw - a lock left
-     * standing makes the instrument's own front panel unresponsive until the session ends. Eight
-     * copies is eight chances to forget the `finally`.
+     * standing makes the instrument's own front panel unresponsive until the session ends.
      */
     private suspend fun <T> withCategory(categoryIndex: Int, block: suspend () -> T): T {
         fileTransfer(FileTransferSubOp.SELECT_CATEGORY, uint32BE(categoryIndex))
@@ -811,19 +804,18 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * gets back, incrementing bank only when told the current one is
      * exhausted.
      *
-     * **The item count is a cross-check, not the loop condition.** It used
-     * to be the latter, which broke on the Nord Stage 2 EX's `Live` and
-     * `Settings` categories: both report a count of 0 while holding items,
-     * so the walk returned nothing before its first cursor request. The vendor's editor walks those categories anyway despite the zero count.
-     * The walk ends on whichever comes first: the item count where it is
-     * non-zero (which keeps the Nord Grand's traffic exactly as it was,
-     * stopping without probing the bank after the last populated one), or
-     * an **empty bank** - one that reports itself exhausted having yielded
-     * nothing. ...or **running out of banks**, the bound for which comes
-     * from [categoryBankCount] - the category's own child list, NOT
+     * **The item count is a cross-check, not the loop condition.** The Nord
+     * Stage 2 EX's `Live` and `Settings` categories report a count of 0
+     * while holding items, so a walk bounded by the count would return
+     * nothing before its first cursor request. The walk ends on whichever
+     * comes first: the item count where it is non-zero (which stops without
+     * probing the bank after the last populated one), an **empty bank** -
+     * one that reports itself exhausted having yielded nothing - or
+     * **running out of banks**, the bound for which comes from
+     * [categoryBankCount] - the category's own child list, NOT
      * [maxBankLetter], which describes the `Program` area alone and has no
      * bearing on any other category. A non-zero count the cursor then
-     * fails to deliver is still an error, as it always was.
+     * fails to deliver is an error.
      *
      * SELECT_CATEGORY locks the instrument (see [FileTransferSubOp]'s doc);
      * [unlockCategorySelection] always runs before returning, even on
@@ -854,7 +846,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
             val items = mutableListOf<ByteArray>()
             var bank = 0
-            var prevItem = -1 // bit pattern 0xFFFFFFFF, matches the Python sentinel
+            var prevItem = -1 // 0xFFFFFFFF on the wire: the cursor's "start of bank" value
             var itemsInBank = 0
             val safetyLimit = maxOf(totalCount, 1) * 4 + maxBanks * 8 + 32
             var steps = 0
@@ -1000,10 +992,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * operation with a different sub-opcode and a three-word payload: same lock/unlock bracket,
      * same echo check, same trailing re-select so the instrument's own display catches up.
      *
-     * the vendor editor's rename dialog always commits *both* the name and the category on OK,
-     * whichever the user actually touched, but the two calls are independent - confirmed live on
-     * a Nord Stage 2 EX (2026-08-08). So this writes the category alone and leaves the name
-     * untouched.
+     * The two writes are independent (measured on a Nord Stage 2 EX), so this writes the category
+     * alone and leaves the name untouched, even though the vendor's own editor commits both
+     * together.
      *
      * [categoryId] is not validated against the instrument's own set here: every value from 0 to
      * 31 is accepted and stored, and one the instrument cannot name simply displays as `No Cat`.
@@ -1188,8 +1179,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
     /**
      * One category's child list reply (sub-opcode 2/3), raw. The report ships these bytes
-     * alongside [fetchCategoryChildren]'s parse, since the parse is young and was derived from
-     * one instrument.
+     * alongside [fetchCategoryChildren]'s parse, since the parse was derived from one instrument.
      */
     suspend fun categoryChildPayload(categoryIndex: Int): ByteArray =
         fileTransfer(FileTransferSubOp.GET_CATEGORY_CHILD, uint32BE(categoryIndex))!!.payload
@@ -1255,9 +1245,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * **Throws** if the instrument can't be asked; null means only that it answered with no
      * children. Both callers tolerate a failure, and each wants to say something different about
      * it - the device report records the reason in its failure map, the connect path logs and
-     * carries on - so swallowing it here would rob them of the reason. It did exactly that once:
-     * a report generated while the instrument lost power came back with a null bank layout and
-     * nothing to say why, where every other probe explained itself.
+     * carries on - so swallowing it here would rob them of the reason.
      */
     suspend fun deriveBankLayout(): BankLayout? {
         val children = fetchCategoryChildren(getProgramCategoryIndex())
@@ -1638,9 +1626,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
          * The per-entry trailer length a file-transfer protocol version implies, or null when
          * the version is unknown or newer than anything decoded here.
          *
-         * From `the root-category reply layout`: ten flag bytes unconditionally, the erase and deps
-         * flags at version >= 5, one more at version >= 10 - so 26 / 28 / 29, and 29 and 28 are
-         * what the Nord Grand (10) and the Nord Stage 2 EX (8) measure.
+         * Ten flag bytes unconditionally, two more (erase, dependencies) at version >= 5, one
+         * more at version >= 10 - so 26 / 28 / 29, and 29 and 28 are what the Nord Grand (10) and
+         * the Nord Stage 2 EX (8) measure.
          *
          * Null above [MAX_KNOWN_FILE_TRANSFER_VERSION] on purpose: a later revision could add a
          * fifteenth flag exactly as version 10 added the fourteenth, and answering 29 would parse
@@ -1777,10 +1765,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
          *
          * The check lives here rather than at the twenty-odd call sites because every one of them
          * reads a status word or an echo at a fixed offset in a reply whose length the instrument
-         * chose - and a short reply used to mean [ArrayIndexOutOfBoundsException] rather than a
-         * protocol error. Two call sites did guard (`fetchCategorySpace`, `fetchCategoryItems`);
-         * the rest relied on a `catch (e: Exception)` several layers up in the ViewModel, which
-         * contained the damage but reported an index-out-of-bounds where a diagnosis belonged.
+         * chose, and a short reply should be reported as a protocol error rather than as an
+         * [ArrayIndexOutOfBoundsException] caught several layers up.
          *
          * A CRC is verified before any of this runs, so reaching here with a short payload means a
          * device that computes a valid checksum over a reply that is not the shape its sub-opcode

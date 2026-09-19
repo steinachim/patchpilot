@@ -1,6 +1,6 @@
 # Architecture
 
-PatchPilot is a native Android app for browsing, organizing, and editing presets on supported hardware synthesizers over USB. It is a thin client: there is no server, no account system, and no persistent storage beyond an in-memory session cache. All state lives either on the connected instrument or in the current app session.
+Patch Pilot is a native Android app for browsing, organizing and editing presets on supported hardware synthesizers over USB. It is a thin client: there is no server and no account system. The only state persisted across launches is the theme choice; everything else lives on the connected instrument or in memory for the life of the process.
 
 ## Package layout
 
@@ -8,87 +8,99 @@ All source lives under `de.thewolfwalkexperience.software.patchpilot`.
 
 | Package | Responsibility |
 |---|---|
-| `core/` | Device-agnostic domain model. The `Instrument` interface is the central abstraction the rest of the app is built around. |
-| `transport/` | Byte-level I/O. `Transport` and its `AndroidUsbBulkTransport`/`AndroidMidiTransport`/`UsbMidiBulkTransport` implementations carry bytes with no protocol knowledge, so device code can be tested without hardware. |
-| `midi/` | SysEx message framing (`SysExFramer`) and request/response correlation (`SysExExchange`), shared by the two families that use SysEx. |
-| `discovery/` | Finds candidate instruments on USB and MIDI buses and merges them into one deduplicated list. |
-| `catalog/` | Loads per-family JSON device descriptors and maps a discovered device to the family implementation that should handle it. |
+| `core/` | Device-agnostic domain model. The `Instrument` interface is the central abstraction the rest of the app is built around. Also `RegressionTester`, the facet-driven self-test behind the debug menu. |
+| `transport/` | Byte-level I/O. `Transport` and its `AndroidUsbBulkTransport`, `AndroidMidiTransport` and `UsbMidiBulkTransport` implementations carry bytes with no protocol knowledge, so device code can be tested without hardware. |
+| `midi/` | SysEx message framing (`SysExFramer`) and request/response correlation (`SysExExchange`), shared by the two families that speak SysEx (Pro-800, Motif XS). |
+| `discovery/` | Finds candidate instruments on the USB host bus and through Android's MIDI service, and merges them into one deduplicated list. |
+| `catalog/` | Loads the per-family JSON device descriptors and maps a discovered device to the family implementation that handles it. |
 | `devices/nord/`, `devices/pro800/`, `devices/motifxs/` | One protocol implementation per device family, each adapting its wire protocol onto `core.Instrument`. |
-| `demo/` | An in-memory fake instrument for exploring the UI without hardware. |
-| `usb/` | Android USB host APIs: device enumeration and runtime permission handling. |
-| `cache/` | An in-memory decorator that caches a browsed preset index across app-foreground cycles. |
+| `demo/` | An in-memory instrument for exploring the UI without hardware. |
+| `usb/` | Android USB host APIs: device enumeration, runtime permission and interface claiming. |
+| `cache/` | An in-memory decorator that keeps a completed preset listing across the reconnects the app performs on every return to the foreground. |
 | `ui/` | Jetpack Compose screens, one shared ViewModel, and navigation. |
-| `ui/theme/` | The theme system: light/dark Material and an alternate "Steampunk" skin, and the seam screens use to draw themselves differently per theme. |
+| `ui/theme/` | The theme system: Material 3 following the system setting, an alternate "Steampunk" skin, and the seam screens use to draw themselves differently per theme. |
 
 ## The `Instrument` abstraction
 
-`core.Instrument` is an interface with a mandatory `browser` facet (list/select presets) and several optional, nullable facets (`editor`, `selector`, `transfer`, `report`, ...). A device family implements only the facets its instrument actually supports; the UI checks for a facet's presence rather than catching an "unsupported operation" exception. This was chosen over a single fat interface (which would force every family to implement no-ops for capabilities it lacks) and over a capability-enum-plus-fat-interface split (which still requires every caller to check the enum before calling). Nullability makes the check and the capability the same piece of information.
+`core.Instrument` is an interface with a mandatory `browser` facet (list and re-read presets) and optional, nullable facets: `selector` (load a preset), `editor` (rename, move, swap, delete, copy), `transfer` (read and write a preset's raw data), `report` (a read-only device report) and `tagger` (categories and favorites). A family implements only the facets its instrument supports, and the UI checks for a facet's presence rather than catching an "unsupported operation" exception. Nullability makes the check and the capability the same piece of information: there is no separate capability set that could drift from what is implemented.
 
-The abstraction is deliberately drawn above the wire-message level: the UI consumes "a list of named, addressable slots," not the shape of any device's protocol messages. There is no shared message or plugin-ABI type across families — a CRC-framed bulk protocol (Nord), a SysEx byte stream over class-compliant MIDI (Pro-800), and a SysEx byte stream over raw bulk (Motif XS) have no useful common representation below the operation level.
+The abstraction sits above the wire-message level: the UI consumes "a list of named, addressable slots", not the shape of any device's messages. There is no shared message or plugin type across families. A CRC-framed bulk protocol (Nord), a SysEx stream over class-compliant MIDI (Pro-800) and a SysEx stream over raw bulk (Motif XS) have no useful common representation below the operation level.
 
 Related types:
-- `SlotAddress` — a canonical `(bank, slot)` address, with a per-family `AddressFormat` responsible for rendering and parsing the family's own id shape. The UI never parses an id string itself.
-- `IndexUpdate` / `Flow<IndexUpdate>` — preset listing is a stream, not a single suspending call, because some instruments (Pro-800, Motif XS) have no directory and must be queried slot-by-slot to learn each preset's name. Rows appear incrementally as they arrive rather than only after a complete scan.
-- `InstrumentException` — distinguishes a device-state block (`BlockedByDeviceState`, e.g. wrong mode) from a capability gap (`NotSupported`), so the UI can react differently to each.
-- `RegressionTester` — a facet-driven, family-agnostic self-test that exercises whatever facets an instrument exposes.
+
+- `SlotAddress`: a canonical 0-based `(bank, slot)` pair, with a per-family `AddressFormat` responsible for rendering and parsing that family's own id shape (`A:1:1` on a Nord, `A00` on a Pro-800, `USER 1 - A:01` on a Motif XS). The UI never parses an id string itself; `PresetSlot` carries its display id and bank label.
+- `SlotLayout` and `BankSpec`: the instrument's addressable preset space. `BankSpec.readOnly` lives on the layout rather than on each row, so which addresses a copy may target and which rows offer an edit derive from one field.
+- `IndexUpdate` and `Flow<IndexUpdate>`: listing is a stream, not a single suspending call, because the Pro-800 and the Motif XS have no directory and must be read slot by slot to learn each preset's name. Rows appear as they arrive; one unreadable slot is reported as `IndexUpdate.Failed` and does not abort the walk. `indexWalk` in `core/` is the shared loop.
+- `InstrumentException`: a sealed hierarchy the UI branches on by type, never by message text. `BlockedByDeviceState` carries an optional remedy the app can apply after asking (a Motif XS in Performance mode ignores a voice selection; the remedy switches it to Voice mode). `NeedsManualSetting` carries the steps for a fix only the user can make at the instrument's panel (a Motif XS routing MIDI to its DIN ports instead of USB).
+- `PresetTagger`: categories and favorites, shaped for both a Nord program (one category, no sub-categories, no favorites) and a Motif XS voice (two assignments of main plus sub-category, and a favorite mark that names which of them the instrument files the voice under).
 
 ## Transport and discovery
 
-`transport.Transport` is the shared interface; `AndroidUsbBulkTransport`, `AndroidMidiTransport`, and `UsbMidiBulkTransport` are its production implementations (the last hand-packs USB-MIDI event packets over a raw bulk endpoint, for a device with no class-compliant MIDI interface). Device code depends only on `Transport`, so protocol logic is unit-testable against a scripted fake with no hardware or emulator involved.
+`transport.Transport` is the shared marker interface with two specializations: `UsbBulkTransport` (paired bulk endpoints plus the control pipe, implemented by `AndroidUsbBulkTransport`) and `MidiTransport` (a MIDI byte stream in and out, implemented by `AndroidMidiTransport` over `android.media.midi` and by `UsbMidiBulkTransport`, which packs USB-MIDI event packets by hand over a raw bulk endpoint for a device with no class-compliant MIDI interface). Device code depends only on these interfaces, so protocol logic is unit-tested against scripted fakes with no hardware or emulator.
 
-`discovery.DeviceDiscovery` merges USB and MIDI candidates into a `DeviceMatch` (`Usb` or `MidiIdentity`). A MIDI device is always matched by an identity probe — a read-only, idempotent request the family declares — never by port name, since port names are not a reliable way to identify an instrument.
+`discovery.DeviceDiscovery` has one implementation per bus. `UsbHostDiscovery` matches USB vendor and product ids against the catalog. `MidiDiscovery` never matches on port name; it identifies a port by sending the read-only, idempotent probe the catalog declares and checking the reply. `mergeCandidates` keeps one entry per physical device, USB host first, because a Nord also exposes a class-compliant MIDI interface that cannot manage presets.
 
-## Catalog and adding a new device family
+## Catalog and adding a device family
 
-Each family is described by one JSON file under `devices/` (vendor/product id or MIDI identity match, bank geometry, supported firmware versions). `InstrumentRegistry` maps a family name to its factory. Android's `res/xml/device_filter.xml` — which the OS reads to decide whether to launch the app when a USB device is attached — is generated from these JSON files by a Gradle task rather than maintained by hand, so a new device can't be added to the catalog without also being wired into USB attach handling.
+Each family is described by one JSON file under `devices/` (see [devices/README.md](../devices/README.md)). `InstrumentRegistry` is a compile-time list of families, each of which loads its own catalog and builds its `Instrument` on an opened transport. `res/xml/device_filter.xml`, which Android reads to launch the app when a matching USB device is attached, is generated from the catalogs' USB ids by a Gradle task before every build.
 
-Adding a new device that speaks an already-implemented family's protocol (see "Nord family scope" below) is a catalog entry: vendor/product id, bank layout, and supported firmware version. Adding a genuinely new protocol requires a new package under `devices/`, implementing at minimum `Instrument.browser`, with no shared wire-level type to conform to.
+Adding a device that speaks an already-implemented family's protocol is a catalog entry. Adding a new protocol is a new package under `devices/` implementing at least `Instrument.browser`, plus one entry in `InstrumentRegistry`.
 
-`catalog.UnknownDevicePolicy` governs whether an unrecognized USB device may be opened on a guess against a known family's protocol. This is permitted only for a vendor id belonging to a family with at least two verified members sharing one protocol — today, only Nord/Clavia. A single-member family (Behringer, Yamaha) contributes no inference about sibling devices from the same vendor.
+`catalog.UnknownDevicePolicy` decides whether an unrecognized USB device may be opened on a guess against a known family's protocol. This is allowed only for a vendor id whose family has at least two verified members sharing one protocol, which today is Nord/Clavia alone. A single-member family (Behringer, Yamaha) provides no evidence about sibling devices from the same vendor.
 
 ### Nord family scope
 
-Nord Stage 2EX and Nord Grand are two catalog entries sharing one implementation (`devices/nord/NordDevice.kt`, `NordInstrument.kt`); every protocol-level behavioral difference between them is expressed as data derived from the instrument's own reported protocol version, not as per-device code branches. This is why a new device already speaking this protocol is expected to require only a catalog entry.
+Every supported Nord model (eight in the catalog) shares one implementation, `devices/nord/NordDevice.kt` and `NordInstrument.kt`. Per-model differences are catalog data: USB product id, bank/group/slot layout, name length and tested firmware versions. Two further values are read from the instrument at connect time rather than configured: the file-transfer protocol version, which selects the reply layouts, and each storage area's allocation unit. An unrecognized Nord starts with generous guessed bank bounds and replaces them with the bank count and capacity its own `Program` category reports.
 
 ## Caching
 
-`cache.CachingBrowser` decorates a family's `PresetBrowser` and caches a browsed preset index in memory, keyed by instrument identity, firmware version, and bank layout — so a decoder or layout change invalidates the cache by construction rather than requiring an explicit version bump. It targets the cost of resuming a session (re-scanning on every app-foreground event), not first connection, since re-scanning was the actual repeated cost. It is wired only at the ViewModel; no device or family code is aware caching exists. The cache is never persisted to disk: there is no durable identity for a physical instrument across app restarts, and a decoder fix with no wire-protocol change would otherwise require a cache-invalidation mechanism with no reliable trigger.
+`cache.CachingBrowser` decorates a family's `PresetBrowser` and keeps a completed user listing in `PresetIndexCache`, keyed by instrument identity, firmware version and bank layout, so a layout change invalidates the cache by construction. It exists because the app rebuilds a USB session on every return to the foreground (`Instrument.rebuildOnResume`), and without it a Motif XS user paid a full re-read of all 416 user voices (about 93 seconds) every time they switched apps. The cache is owned by the ViewModel, so it outlives the instrument object a reconnect replaces. No family knows it exists.
 
-**Only the user listing is cached.** A browser can offer more than one `PresetScope` (see "Preset scopes" below), and `CachingBrowser` passes every other scope straight through to the delegate. The guard is inside the decorator rather than at its call site because `CacheKey` carries no scope: two scopes cached under one key would overwrite each other, and a factory listing could be served in answer to a favorites one. Nothing is lost by it — a factory listing is built from a table that ships with the app and costs no round trips to rebuild, and a favorites listing is precisely the thing that changes while the app is not looking, since the marks are set on the instrument's own panel.
+Only a listing that completed without a single failed slot is cached, since a missing address would be indistinguishable from an empty slot. Only the user listing is cached: a factory listing is built from a shipped table and costs no round trips, and a favorites listing is exactly what changes behind the app's back when marks are set on the instrument's panel.
+
+The cache is never written to disk. There is no durable identity for a physical instrument across app restarts, and a decoder fix with no wire-protocol change would need a cache-invalidation trigger that does not exist.
 
 ## Preset scopes
 
-`PresetBrowser` declares a `scopes: List<PresetScope>` and takes one on `index(scope)`. `USER` is the default and the only scope most families offer, so their screens are unchanged and no selector is drawn. The Motif XS adds `FACTORY` — its eleven read-only banks, named from `devices/motifxs_factory_voices.json` with no device I/O, because reading them costs about seven and a half minutes — and `FAVORITES`, the marks the instrument itself holds across both factory and user banks, read over an undocumented bulk-dump address family (see `docs/PROTOCOLS.md`).
+`PresetBrowser` declares `scopes: List<PresetScope>` and takes one on `index(scope)`. `USER` is the default and the only scope most families offer, so their screens show no selector. The Motif XS adds `FACTORY`, its eleven read-only banks named from `devices/motifxs_factory_voices.json` with no device I/O, and `FAVORITES`, the marks the instrument holds across factory and user banks, read from a per-bank table (see [PROTOCOLS.md](PROTOCOLS.md)).
 
-Two consequences shape the layers above. `BankSpec.readOnly` lives on the layout rather than on `PresetSlot`, so which addresses a copy may target and which rows offer an edit both derive from one field that no family can forget to set; a row-level flag would default to "writable" in the direction that offers a Delete the instrument refuses. And `InstrumentViewModel` keeps one `PresetIndexState` per scope rather than one re-collected on every switch, because two questions cross scopes: a copy's destinations are the free *user* slots even while the factory listing is displayed, and an edit made from the favorites listing changes a row the user listing also holds.
+`InstrumentViewModel` keeps one listing state and one collector job per scope rather than re-collecting on every switch, because two questions cross scopes: a copy's destinations are the free user slots even while the factory listing is displayed, and an edit made from the favorites listing changes a row the user listing also holds.
 
 ## UI and concurrency
 
-The UI is Jetpack Compose with Navigation-Compose across a small fixed set of routes (connect, programs, settings, the open-source licenses screens, and a hidden debug/regression screen), backed by one `InstrumentViewModel` that owns the currently connected `Instrument` and exposes a `StateFlow<ConnectionState>`. The ViewModel constructs `UsbConnectionManager` directly rather than through dependency injection — a known simplification, not a pattern to extend.
+The UI is Jetpack Compose with Navigation Compose across a fixed set of routes: connect, programs, settings, the open-source licence screens, and a hidden debug screen reached by five taps on the instrument name. One `InstrumentViewModel` owns the connected `Instrument`, exposes a `StateFlow<ConnectionState>`, and constructs `UsbConnectionManager` and the discoveries directly; there is no dependency injection.
 
-All blocking device I/O runs on `Dispatchers.IO` under structured concurrency (`viewModelScope` / `rememberCoroutineScope()`). Cleanup code (releasing a device lock) runs under `NonCancellable` so it completes even if the enclosing coroutine is cancelled, and every `catch` block in `ui/` rethrows `CancellationException` before handling any other exception, so cancellation is never mistaken for a failure.
+Long-running work is placed by lifetime:
+
+- Listings run in `viewModelScope`, so they survive rotation and are cancelled when the session is torn down.
+- Edits also run in `viewModelScope` (`launchEdit`), not in the screen's composition scope, so navigating away cannot abandon a write mid-sequence. A Motif XS left in the middle of a block sequence waits on "receiving midi bulk data" until it is completed or power-cycled, so the send loop of a block sequence additionally runs under `NonCancellable`, as do the write-plus-commit of every Motif XS edit and the cleanup that releases a Nord's category lock. The debug menu's regression test, which also writes, runs in `RegressionRunner` under the ViewModel for the same reason, with its confirmation questions exposed as state the debug screen answers; a finished report is kept in `SavedStateHandle`.
+- Every `catch` in the UI and device layers rethrows `CancellationException` before handling anything else, so backing out of an operation is never reported as a failure.
+- `instrumentMutex` in the ViewModel serializes edits, reports and the regression test against session teardown, so a resume that rebuilds the session waits for an edit in flight rather than closing the transport under it. Listings are deliberately not under this mutex; teardown cancels them instead. Each family serializes its own bus below that: `SysExExchange` holds a lock per request/reply, and `NordInstrument` holds one per operation, since a Nord operation is a request sequence inside a category lock that must not interleave with a listing.
+- A connect attempt that fails after the transport is open (a handshake timeout, a Motif XS routed away from USB, the user backing out) closes the transport before reporting, so a MIDI port or USB interface is never left claimed by a session that does not exist.
+
+All blocking I/O runs on `Dispatchers.IO`: `NordDevice` wraps every request, the SysEx transports read on a dedicated `Dispatchers.IO` scope (`transportScope`), and `MidiTransport.send` is a suspending call that moves the write there too.
 
 ## Theming
 
-`AppTheme` is a two-value enum — `Default` (stock Material 3: follows the system light/dark setting, with dynamic wallpaper-derived color on API 31+) and `Steampunk` (a single committed dark look that does not follow the system setting, closer to a fixed application skin than a Material variant). The user's choice is persisted across launches by `ThemePreferences`, backed by DataStore and keyed by the enum's name rather than its ordinal, so an unrecognized stored value (e.g. after an enum reorder) falls back to `Default` instead of silently landing on the wrong theme.
+`AppTheme` is a two-value enum: `Default` (Material 3, following the system light/dark setting, with dynamic colour on API 31 and later) and `Steampunk` (a fixed dark look that does not follow the system setting). The choice is persisted by `ThemePreferences` (Preferences DataStore), stored by enum name so an unrecognized value falls back to `Default`.
 
-`PatchPilotTheme` maps the active `AppTheme` to a `ColorScheme`/`Typography`/`Shapes` triple and wraps the app in one `MaterialTheme` — every stock Material component (buttons, dialogs, menus) gets the swap for free. That covers tokens, but not bespoke composables and decoration a token swap can't produce: a compass standing in for the progress indicator, a riveted screen frame, a mechanical slot bezel. Those live behind a separate `ThemeStyle` interface (`DefaultThemeStyle` is stock components/no-op decoration; `SteampunkThemeStyle` draws the bespoke ones), provided as `LocalThemeStyle` alongside `MaterialTheme`. Screens read `LocalThemeStyle.current` and never branch on the raw `AppTheme` value directly, so adding a third theme is implementing `ThemeStyle` once and mapping it in `AppTheme.style` — no screen file changes.
+`PatchPilotTheme` maps the active `AppTheme` to a colour scheme, typography and shapes and wraps the app in one `MaterialTheme`, so stock Material components pick up the swap. Bespoke drawing that tokens cannot express (a compass in place of the progress indicator, a riveted screen frame, a slot bezel) lives behind the `ThemeStyle` interface, provided as `LocalThemeStyle`. Screens read `LocalThemeStyle.current` and never branch on `AppTheme` directly, so a third theme is one `ThemeStyle` implementation plus a mapping in `AppTheme.style`.
 
-**`MaterialTheme`/the navigation host are composed from exactly one call site**, never once per branch of a `when (appTheme)`. Calling them from two different branches gives the content two different positions in the composition's slot table, so switching themes reads as "the old position's subtree went away, a new one appeared" — which tears down and rebuilds the whole subtree, silently resetting the nav controller's back stack to the start destination. This was caught on a real device (picking Steampunk from Settings dropped straight back to the connect screen), not in review; the fix is to compute the color/type/shape values first and call `MaterialTheme`/content once, after the `when`s, so a theme switch only ever changes what `MaterialTheme` resolves to.
+`MaterialTheme` and the navigation host are composed from exactly one call site, never once per branch of a `when (appTheme)`. Two call sites would give the content two positions in the composition, and switching themes would then tear the whole subtree down, including the navigation controller and its back stack.
 
 ## Demo mode
 
-`demo.DemoInstrument` implements `core.Instrument` directly against an in-memory `DemoLibrary`, rather than simulating wire bytes through a fake transport. This was chosen once a second device family existed, to avoid maintaining a second fake wire protocol purely for demo purposes.
+`demo.DemoInstrument` implements `core.Instrument` directly against an in-memory `DemoLibrary` rather than simulating wire bytes through a fake transport, so there is no second fake wire protocol to maintain for the sake of the UI. It is shaped like a Nord: grouped addressing, one category per preset, native edits, no favorites.
 
 ## Testing
 
-The test suite is JUnit-only JVM unit tests against a stubbed Android SDK jar; there are no instrumented tests and no Compose UI tests. `usb/` is thin enough to be verified against real hardware directly rather than through an instrumented test. There is no `InstrumentViewModel` test suite, since it has no dependency-injection seam to substitute `UsbConnectionManager`; decisions worth testing in isolation (e.g. `UnknownDevicePolicy`) are extracted into standalone units instead.
+The test suite is JUnit-only JVM unit tests against the stubbed Android SDK jar (`isReturnDefaultValues = true`); there are no instrumented tests and no Compose UI tests. Device protocol tests run against scripted fake transports (`ReplayTransport` for Nord, `FakeMidiTransport` and `FakePro800` for the SysEx families) that serve fixed request/response pairs and assert message ordering. Fixture byte sequences are captured from instruments or hand-written to cover documented edge cases rather than generated by the code under test, so a failure reflects a decoding defect rather than an encoder and decoder agreeing by construction.
 
-Device protocol tests run against a scripted fake transport (`ReplayTransport` for Nord, equivalents for the other families) that serves fixed request/response pairs and asserts message ordering. Fixture byte sequences are representative sample data covering documented edge cases (variable-length fields, boundary addresses, malformed or spliced replies) rather than values generated by the same code under test, so a test failure reflects a real decoding defect rather than the encoder and decoder agreeing with each other by construction.
+`ProgramsController` holds the preset screen's operation logic behind the `ProgramsOperations` interface so it can be tested without an `Application` or a session. `InstrumentViewModel` itself has no test suite, since it has no seam to substitute `UsbConnectionManager`; decisions worth testing in isolation (`UnknownDevicePolicy`, `PresetIndexState`) are extracted into standalone units. `CatalogParsesTest` decodes the real catalog files from `devices/`, which the build hands to the tests as a system property and declares as a task input.
 
 ## Known limitations
 
 - No dependency injection; the ViewModel constructs its dependencies directly.
-- The app manages exactly one connected instrument at a time.
-- No on-disk persistence of the preset index cache or user preferences beyond Android's own settings storage.
+- The app manages exactly one connected instrument at a time. Two instruments of the same model connected at once collapse to one candidate, because the physical key is the USB vendor and product id.
+- No on-disk persistence of the preset listing.
 - No instrumented or Compose UI test coverage.

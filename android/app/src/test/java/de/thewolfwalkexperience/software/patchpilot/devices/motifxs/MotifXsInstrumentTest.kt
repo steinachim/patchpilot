@@ -593,7 +593,6 @@ class MotifXsInstrumentTest {
         motif.connect()
         assertEquals("Yamaha Motif XS", motif.identity.name)
         // USB, not MIDI: this instrument is matched by USB ids and has no MIDI port at all.
-        // This assertion used to enshrine the hardcoded "MIDI" the identity reported.
         assertEquals(Bus.USB, motif.identity.bus)
         assertEquals("6.0.0.127", motif.identity.firmwareVersion)
     }
@@ -601,11 +600,10 @@ class MotifXsInstrumentTest {
     /**
      * A transport that answers nothing at all is refused, not accepted with a blank firmware.
      *
-     * **This used to assert the opposite**, on the reasoning that an unanswered inquiry is a
-     * cosmetic loss and the voices are what the user came for. That holds for the inquiry alone -
-     * see `an unanswered identity inquiry alone still connects` - but not for an instrument
-     * answering nothing, which has no voices to offer either: every operation would time out on
-     * its own, and none of them could explain why.
+     * An unanswered inquiry alone is a cosmetic loss and the voices are what the user came for -
+     * see `an unanswered identity inquiry alone still connects` - but an instrument answering
+     * nothing has no voices to offer either: every operation would time out on its own, and none
+     * of them could explain why.
      */
     @Test
     fun `connect refuses an instrument that answers nothing at all`() = runTest {
@@ -645,9 +643,8 @@ class MotifXsInstrumentTest {
      * **Total silence is refused, with the fix spelled out.**
      *
      * A Motif XS routes MIDI to one destination - DIN, USB or mLAN - and set to any but USB it
-     * still enumerates, still opens, and then ignores everything. The session used to be built
-     * anyway, so the user got a working-looking app in which each operation timed out separately
-     * and none could say why.
+     * still enumerates, still opens, and then ignores everything. A session built anyway would be
+     * a working-looking app in which each operation times out separately and none can say why.
      */
     @Test
     fun `an instrument answering nothing is refused, with the setting to change`() = runTest {
@@ -1154,7 +1151,7 @@ class MotifXsInstrumentTest {
         val before = motif.browser.refresh(SlotAddress(0, 0)).name
         assertNotNull(before)
 
-        // The write on its own - exactly what the app used to send - changes nothing.
+        // The write on its own changes nothing.
         transport.send(
             MotifXsSysEx.bulkDump(
                 0, 0x0C, 0x0A, 0,

@@ -98,10 +98,9 @@ class NordDeviceProtocolTest {
     }
 
     /**
-     * There is no declared value left to fall back to, and that is deliberate.
+     * There is no declared value to fall back to, and that is deliberate.
      *
-     * A profile field used to hold one and stand in when the instrument could not be asked. It was
-     * removed because it could only ever agree with what was read (adding nothing) or disagree with
+     * A catalog value could only ever agree with what was read (adding nothing) or disagree with
      * it - in which case trusting it means parsing the instrument's responses against the wrong
      * layout, on the protocol that carries the writes. The query is the first bulk message of every
      * session and needs no prerequisite, so an instrument that will not answer it is one nothing
@@ -177,8 +176,8 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `an implausible capacity is still refused as an addressing bound`() = runTest {
-        // The security property the parser's guard used to provide, kept where the value
-        // actually becomes one: deriveBankLayout feeds InstrumentViewModel.allSlots.
+        // The plausibility bound sits where the value becomes an addressing bound, not in the
+        // parser: deriveBankLayout feeds InstrumentViewModel.allSlots.
         val root = parseMessage(NordFixtures.GRAND_ROOT_LIST_RESPONSE).payload
         val device = NordFixtures.device(
             ReplayTransport(listOf(1 to root, 3 to childListPayload(listOf("Bank 1" to 9_999_999)))),
@@ -207,10 +206,9 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `parseRootCategories reads each area's allocation unit from its trailer`() {
-        // The first word of a category's trailer is its storage area's
-        // allocation unit in bytes. These are both instruments' own root lists, and
-        // the figures are what the devices state - not the 131072/65536 and 262144/196608 that
-        // devices/nord_devices.json used to configure.
+        // The first word of a category's trailer is its storage area's allocation unit in
+        // bytes. These are both instruments' own root lists, and the figures are what the
+        // devices state.
         val grand = NordFixtures.device(ReplayTransport(emptyList()), NordFixtures.GRAND_PROFILE)
             .parseRootCategories(parseMessage(NordFixtures.GRAND_ROOT_LIST_RESPONSE).payload)
             .associate { it.name to it.unitBytes }
@@ -1014,7 +1012,7 @@ class NordDeviceProtocolTest {
      * Answers every read with a zero-length transfer, after an optional first chunk.
      *
      * A ZLP is a legal USB reply carrying no bytes, so `bulkRead`'s `read >= 0` guard passes it
-     * through as an empty array - which is exactly why it used to hang rather than fail.
+     * through as an empty array, and an unbounded reader would hang on it rather than fail.
      */
     private class EmptyReadTransport(private val first: ByteArray? = null) : UsbBulkTransport {
         private var sentFirst = false

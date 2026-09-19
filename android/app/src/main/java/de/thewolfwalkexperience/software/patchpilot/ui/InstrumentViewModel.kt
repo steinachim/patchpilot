@@ -4,6 +4,7 @@ import android.app.Application
 import android.hardware.usb.UsbDevice
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.update
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
@@ -173,16 +174,27 @@ sealed class ConnectionState {
  * screens drive.
  *
  * **Nothing here knows what family is connected.** Every action below goes through a facet, and a
- * facet that is null is an operation the screens do not offer at all - which is why this
- * class no longer has a `NordDevice` in it, and why adding a second family did not add a `when`.
+ * facet that is null is an operation the screens do not offer at all, so adding a family adds no
+ * `when` here.
  *
  * There is no content-database "session" to open/close: each operation that locks an instrument
  * cleans up after itself, which is what keeps the instrument's own display/play state usable
  * between actions without this class wrapping every call in an open/close pair.
  */
-class InstrumentViewModel(application: Application) :
+class InstrumentViewModel(application: Application, savedStateHandle: SavedStateHandle) :
     AndroidViewModel(application), ProgramsOperations {
     private val connectionManager = UsbConnectionManager(application)
+
+    /**
+     * The debug menu's regression run, held here so it survives the debug screen being torn down
+     * by a configuration change - see [RegressionRunner].
+     */
+    internal val regressionRunner = RegressionRunner(
+        scope = viewModelScope,
+        savedState = savedStateHandle,
+        run = ::runRegressionTest,
+        filenameStem = { filenameStem },
+    )
 
     /**
      * The buses to look on, in priority order.
@@ -279,11 +291,10 @@ class InstrumentViewModel(application: Application) :
      *
      * **The scope an edit runs in decides whether navigating away can abandon it mid-write.** A
      * `rememberCoroutineScope()` in ProgramsScreen is cancelled the moment that screen leaves the
-     * composition, so tapping back during a write cancelled the write itself - and on a Motif XS a
-     * write is a header, up to 81 blocks and a footer, with the instrument sitting on *receiving
-     * midi bulk data* until it is completed or power-cycled. Tying an edit's lifetime to the
-     * instrument's instead of to the screen's is what makes backing out safe rather than merely
-     * discouraged.
+     * composition, which would cancel a write with it - and on a Motif XS a write is a header, up
+     * to 81 blocks and a footer, with the instrument sitting on *receiving midi bulk data* until
+     * it is completed or power-cycled. Tying an edit's lifetime to the instrument's instead of to
+     * the screen's is what makes backing out safe rather than merely discouraged.
      *
      * `SysExExchange.exchangeAfterAll` refuses to be interrupted mid-sequence in any case; this is
      * the other half of that guarantee, and the half that also keeps a slow single-message write
@@ -339,10 +350,8 @@ class InstrumentViewModel(application: Application) :
     /**
      * Runs one connection attempt, unless another is already in flight.
      *
-     * The four entry points below - auto-connect, a picked row, an unrecognised device, demo mode -
-     * each had their own copy of this guard, this launch and this catch pair. They had already
-     * started to drift: only one re-checked the guard inside its branch, and only one varied the
-     * fallback message.
+     * The single guard, launch and catch pair for the four entry points: auto-connect, a picked
+     * row, an unrecognised device and demo mode.
      *
      * `CancellationException` is rethrown rather than caught, so backing out of a connect does not
      * land on the error screen; that is the reason this is not `runCatching`.
@@ -403,9 +412,8 @@ class InstrumentViewModel(application: Application) :
             // Exactly one, and nobody asked to be shown the picker anyway: connect it.
             // No question worth asking has an obvious answer.
             known.size == 1 && !forcePicker -> connectCandidate(known.single())
-            // More than one, and this is the case that used to be wrong: it took
-            // `firstOrNull`, so somebody with two instruments plugged in got whichever
-            // the scan happened to return first, silently and with no way to choose.
+            // More than one: let the user choose rather than taking whichever the scan
+            // happened to return first.
             else -> _state.value = ConnectionState.DeviceSelection(pickerEntries(known))
         }
     }
@@ -424,14 +432,35 @@ class InstrumentViewModel(application: Application) :
             return
         }
         openingPhysicalKey = null
-        val built = InstrumentRegistry.create(getApplication(), descriptor, transport)
-        built.connect()
+        val built = closingOnFailure(transport::close) {
+            InstrumentRegistry.create(getApplication(), descriptor, transport)
+        }
+        closingOnFailure({ closeQuietly(built) }) { built.connect() }
         instrumentMutex.withLock {
             instrument = built
             connectedPhysicalKey = candidate.physicalKey
         }
         _state.value = connectedOrAdvisory(built)
         startIndex()
+    }
+
+    /**
+     * Runs [block], releasing what [close] names if it throws - including on cancellation.
+     *
+     * A transport opened for a connect attempt is owned by nobody until the instrument built on
+     * it is published as the session, so a failing handshake (a timeout, a Motif XS routed away
+     * from USB, backing out of the attempt) has to release it here: a MIDI port left open cannot
+     * be probed by the next scan, and a claimed USB interface outlives the attempt.
+     */
+    private inline fun <T> closingOnFailure(close: () -> Unit, block: () -> T): T = try {
+        block()
+    } catch (e: Throwable) {
+        try {
+            close()
+        } catch (closeFailure: Exception) {
+            e.addSuppressed(closeFailure)
+        }
+        throw e
     }
 
     private fun discoveryFor(candidate: Candidate): DeviceDiscovery =
@@ -529,13 +558,12 @@ class InstrumentViewModel(application: Application) :
      * Read from the catalog rather than written as a constant, so adding a Nord model needs
      * no code change here, and so this cannot drift from the ids the registry actually matches.
      *
-     * **Nord and nothing else, and the asymmetry is structural rather than historical.** Clavia's
-     * vendor id covers two models this project has verified share one protocol, so "another
-     * Clavia device probably speaks this too" is an inference with evidence behind it. Yamaha's
-     * and Behringer's cover exactly one instrument each, and a Motif XS is no
-     * evidence about Yamaha synths in general - its address map was hard-won, `0x08` is a hole and
-     * USER DR sits detached at `0x28`. Guess a family from a vendor id only where two members have
-     * already agreed (decided 2026-08-21).
+     * **Nord and nothing else, and the asymmetry is structural.** Clavia's vendor id covers
+     * several models this project has verified share one protocol, so "another Clavia device
+     * probably speaks this too" is an inference with evidence behind it. Yamaha's and Behringer's
+     * cover exactly one instrument each, and a Motif XS is no evidence about Yamaha synths in
+     * general - its address map has holes (`0x08`) and detached banks (USER DR at `0x28`). A
+     * family is guessed from a vendor id only where two members have already agreed.
      *
      * Fails closed: if the catalog cannot be read this is empty and every device is refused, which
      * is the safe direction for a path whose whole job is to avoid talking to strangers.
@@ -588,14 +616,16 @@ class InstrumentViewModel(application: Application) :
         openingPhysicalKey = null
 
         val transport = connectionManager.openTransport(usbDevice)
-        val built = factory(transport)
-        built.connect()
-        // An unrecognized device starts on DeviceProfile.unknown()'s deliberately generous bank
-        // bounds ('Z', 100 groups), which are guesses rather than this instrument's. Its own
-        // Program category announces the real ones, so ask - best-effort, since a device that
-        // has no Program category at all is exactly the sort this path exists to survive. A
-        // catalog device keeps its configured bounds untouched.
-        built.applyDerivedBankLayoutIfUnknown(displayName)
+        val built = closingOnFailure(transport::close) { factory(transport) }
+        closingOnFailure({ closeQuietly(built) }) {
+            built.connect()
+            // An unrecognized device starts on DeviceProfile.unknown()'s deliberately generous
+            // bank bounds ('Z', 100 groups), which are guesses rather than this instrument's. Its
+            // own Program category announces the real ones, so ask - best-effort, since a device
+            // that has no Program category at all is exactly the sort this path exists to
+            // survive. A catalog device keeps its configured bounds untouched.
+            built.applyDerivedBankLayoutIfUnknown(displayName)
+        }
         instrumentMutex.withLock {
             instrument = built
             connectedPhysicalKey = usbDevice.physicalKey()
@@ -654,11 +684,9 @@ class InstrumentViewModel(application: Application) :
      *
      * False on [ConnectionState.Opening]: that state most often means a connect attempt is
      * sitting on `UsbConnectionManager.requestPermission()`'s system dialog, and dismissing that
-     * dialog is itself a resume - the exact moment this used to answer true and send
-     * [forceReconnect] to tear down a session the dialog's own permission grant was about to
-     * finish, leaving the original attempt's coroutine (and the "loading" screen bound to it)
-     * orphaned until the app was killed and restarted. Letting the attempt already in flight
-     * finish or fail on its own is what a resume mid-connect should do instead.
+     * dialog is itself a resume. Rebuilding then would tear down the session the dialog's own
+     * permission grant is about to finish and orphan the original attempt's coroutine; the
+     * attempt already in flight is left to finish or fail on its own instead.
      */
     val shouldRebuildOnResume: Boolean
         get() = when (val s = state.value) {
@@ -712,10 +740,7 @@ class InstrumentViewModel(application: Application) :
      * Runs through [launchConnect] rather than a bare `viewModelScope.launch`, so this job lands
      * in [connectJob] like every other connect attempt: the single-flight guard, the error
      * handling and [handleUsbDetach]'s ability to cancel it all depend on [connectJob] actually
-     * being whatever is currently running. It used to launch untracked, so a `connect()` call
-     * made from inside it (also guarded by the same field) silently no-opped whenever this ran
-     * while an earlier attempt was still mid-flight - see [shouldRebuildOnResume] for the case
-     * that made that reachable.
+     * being whatever is currently running.
      */
     fun forceReconnect() {
         launchConnect {
@@ -736,14 +761,9 @@ class InstrumentViewModel(application: Application) :
     private suspend fun teardownCurrentInstrument() {
         // **Stop the listing before closing what it is reading from.** A scan outlives this call
         // otherwise - it runs in viewModelScope, not in the composition - and every remaining slot
-        // then fails instantly with "USB bulk write failed: sent -1 of 12 bytes" against a handle
-        // that is already shut.
-        //
-        // That is not hypothetical: MainActivity.onResume() calls forceReconnect(), so merely
-        // backgrounding the app mid-scan and coming back produced 300+ unreadable slots, none of
-        // them retried, and the browser lost three quarters of its rows. Moving the scan into this
-        // ViewModel is what let it outlive the transport; tying its lifetime to the instrument's
-        // is the other half of that change.
+        // then fails instantly against a handle that is already shut, none of them retried.
+        // MainActivity.onResume() calls forceReconnect(), so backgrounding the app mid-scan is
+        // enough to get here.
         cancelIndex()
         // Waits for any edit/report/regression-test already in flight to finish on its own terms
         // before the instrument it is using is closed out from under it - see [instrumentMutex].
@@ -805,14 +825,9 @@ class InstrumentViewModel(application: Application) :
 
     // ---- The preset index, collected here rather than in the composition ----
     //
-    // **This is why it is here and not in the screen.** It used to be a `produceState` inside
-    // ProgramsScreen, so the scan lived in the composition's coroutine scope - and a rotation
-    // destroys that. Turning the phone mid-listing cancelled the collector and started the whole
-    // thing again, which on a Motif XS is 93 seconds thrown away. It looked fine once the scan
-    // had finished only because a completed index is served from the cache (see
-    // docs/ARCHITECTURE.md, "Caching").
-    //
-    // A ViewModel survives configuration changes, so the scan does now too.
+    // A scan in the composition's coroutine scope would be cancelled and restarted by a rotation,
+    // which on a Motif XS is 93 seconds thrown away. A ViewModel survives configuration changes,
+    // so the scan does too.
 
     // Each scope keeps its own state, rather than one state re-collected on every switch. Two
     // things need that, and neither is optional:
@@ -906,8 +921,7 @@ class InstrumentViewModel(application: Application) :
      * Called from two places, and idempotent so that both are safe: ProgramsScreen on first
      * composition, and this class itself whenever a session begins. The second is what covers a
      * reconnect - the screen cannot notice one without collecting the session into its
-     * composition, which made it recompose while disconnected and crash on the first call that
-     * needs an instrument.
+     * composition, which would recompose it while disconnected.
      */
     fun startIndex() {
         val key = instrument?.identity?.stableKey ?: return
@@ -943,8 +957,7 @@ class InstrumentViewModel(application: Application) :
      *
      * Returns the generation it started, or null if nothing is connected - so a caller can tell
      * *its* refresh finishing from something else finishing; see [PresetIndexState.generation] for
-     * why `complete` alone cannot. Null rather than the `-1` this used to answer: that sentinel is
-     * an `Int` the generation comparison could in principle meet, in a language with `Int?`.
+     * why `complete` alone cannot.
      */
     fun refreshIndex(): Int? {
         invalidateIndex()
@@ -1222,9 +1235,8 @@ class InstrumentViewModel(application: Application) :
      *
      * [suggestedReportFilename] belongs to the [DeviceReporter] and requires it. The regression
      * test does not: it is a debug action offered for every family, including one whose `report`
-     * is null - and calling the reporter's helper from there crashed the app on a Motif XS the
-     * moment Share was tapped. A null facet means "cannot do this at all", so anything
-     * outside that facet has to derive its own name.
+     * is null. A null facet means "cannot do this at all", so anything outside that facet has to
+     * derive its own name.
      */
     val filenameStem: String
         get() = stemFor(current())
@@ -1247,8 +1259,8 @@ class InstrumentViewModel(application: Application) :
      *
      * [instrumentMutex] is held for the whole run, confirmation callbacks included - so a resume
      * mid-test waits out a pending "confirm this real-slot mutation" dialog rather than closing
-     * the instrument under it. Sub-opcode 36 has no confirmation and no undo, so a
-     * background/foreground cycle must not be able to answer that question by accident.
+     * the instrument under it. A background/foreground cycle must not be able to answer that
+     * question by accident.
      */
     suspend fun runRegressionTest(
         onConfirmSelect: suspend (String) -> Boolean,
@@ -1353,9 +1365,8 @@ class InstrumentViewModel(application: Application) :
     val supportedEdits: Set<EditOp> get() = connected()?.editor?.supported ?: emptySet()
 
     /** True where an edit is composed host-side from reads and writes rather than being one
-     * device command. Still declared, and still true for the Pro-800 - the UI no longer stops to
-     * warn about it, since the composed operations proved reliable on hardware, but the
-     * distinction remains real and is what the rollback and undo buffer exist for. */
+     * device command. The UI does not warn about it - the composed operations verify themselves -
+     * but the distinction is what the rollback and undo buffer exist for. */
     fun isEmulatedEdit(op: EditOp): Boolean = connected()?.editor?.isEmulated(op) ?: false
 
     /** The longest preset name the connected instrument will store, or null if unlimited/unknown -
@@ -1366,10 +1377,9 @@ class InstrumentViewModel(application: Application) :
     /**
      * Whether tapping a preset can actually load it.
      *
-     * A first-iteration family may browse and nothing else - the Motif XS does, because this app
-     * does not yet know how to select a voice on that instrument. Without this the row is still
-     * clickable and answers with "This instrument cannot load a preset", which is honest but is
-     * an error message standing in for a UI decision.
+     * A family may browse and nothing else. Without this the row would still be clickable and
+     * answer with "This instrument cannot load a preset" - an error message standing in for a UI
+     * decision.
      */
     val canSelect: Boolean get() = connected()?.selector != null
 
@@ -1388,10 +1398,9 @@ class InstrumentViewModel(application: Application) :
      * True once connected to something the catalog does not recognise - see [DeviceProfile.unknown]
      * and [confirmUnknownDevice].
      *
-     * What the preset screen's "Share device details" button is gated on. That gate was lifted
-     * while the report's contents were still settling, so the button appeared for every device;
-     * this is the property it was always meant to come back to. Read off the identity rather than
-     * off a Nord profile, since nothing above the instrument layer knows what family is connected.
+     * What the preset screen's "Share device details" button is gated on. Read off the identity
+     * rather than off a Nord profile, since nothing above the instrument layer knows what family
+     * is connected.
      */
     val isUnknownDevice: Boolean get() = connected()?.identity?.descriptorId == DeviceProfile.UNKNOWN_ID
 
@@ -1401,8 +1410,8 @@ class InstrumentViewModel(application: Application) :
      *
      * A field here rather than anywhere nearer the hardware because of what it has to survive:
      * [forceReconnect] runs on every return to the foreground and replaces [instrument]
-     * wholesale. Before this, a Motif XS re-read all 416 user voices - about 93 seconds - every
-     * time the user switched apps and came back.
+     * wholesale. Without it a Motif XS re-reads all 416 user voices - about 93 seconds - every
+     * time the user switches apps and comes back.
      *
      * Dies with the process, deliberately. Persistence was considered and declined; the reasoning
      * is in `docs/ARCHITECTURE.md`, under "Caching".

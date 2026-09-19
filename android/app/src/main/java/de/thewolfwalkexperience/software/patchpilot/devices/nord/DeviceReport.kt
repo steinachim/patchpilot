@@ -10,13 +10,11 @@ import kotlinx.serialization.Serializable
  *
  *  - [catalogEntry] is a [DeviceProfile], field-for-field devices/nord_devices.schema.json's
  *    `$defs/device` shape, meant to be lifted straight into that file's `devices` array. It is
- *    filled in with everything the wire can actually settle: the file-transfer protocol version, the
- *    firmware version, and - via the read-only calibration - the storage
- *    allocation units, which are otherwise the one value a new instrument needs and nothing
- *    announces. What it still cannot fill is the bank/group/slot layout (guessed by
- *    [DeviceProfile.unknown]) and `programCategoryIds`, since the wire only ever carries a
- *    category's numeric id - which ids an instrument offers, and what it calls them, is
- *    knowable only from the vendor's editor.
+ *    filled in with everything the wire can settle: the USB ids, the firmware version, and the
+ *    bank count and capacity the `Program` category reports. What it cannot fill is the grouping
+ *    of a bank's slots (nothing announces it) and `programCategoryIds`, since the wire only ever
+ *    carries a category's numeric id - which ids an instrument offers, and what it calls them,
+ *    has to be established from the names the instrument displays.
  *  - [probe] is the evidence behind it, plus the replies nothing in this repo decodes yet, kept
  *    as raw hex rather than a guessed parse. That is the half worth having when the question is
  *    "what does this instrument actually do", as opposed to "how do I add it to the catalog".

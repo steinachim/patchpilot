@@ -10,11 +10,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The index fold, which used to live inside a `produceState` in ProgramsScreen.
- *
- * Testable at all only because it moved: the collector now runs in the ViewModel so a
- * configuration change does not restart a 93-second listing, and pulling the fold out to get
- * there turned three rules that were previously only assertable by hand into unit tests.
+ * The index fold, kept pure so the collector can run in the ViewModel and so its three rules can
+ * be asserted here rather than only by hand.
  */
 class PresetIndexStateTest {
 

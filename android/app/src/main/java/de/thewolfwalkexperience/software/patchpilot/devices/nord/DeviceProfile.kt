@@ -27,10 +27,8 @@ data class DeviceProfile(
     /**
      * How many characters the instrument's display holds.
      *
-     * **Nothing in this app reads it any more** - the Show Text screen and the `DisplayText`
-     * facet were removed. It stays because this class mirrors `devices/nord_devices.json`,
-     * whose schema still declares the field. Deleting it here would put the two out of step
-     * to save nothing.
+     * **Nothing in this app reads it.** It stays because this class mirrors
+     * `devices/nord_devices.json`, whose schema declares the field.
      */
     val maxDisplayTextLen: Int,
     /**
@@ -65,10 +63,9 @@ data class DeviceProfile(
         /**
          * The [id] [unknown] stamps on a device the catalog does not recognise.
          *
-         * Named because two callers in another package compare against it to decide whether to
+         * Named because callers in another package compare against it to decide whether to
          * derive a bank layout and whether to offer the device report - see
-         * `InstrumentViewModel.isUnknownDevice`. It was the string `"unknown"` at all three sites,
-         * one of them the producer, while [DEMO_ID] beside it was already a constant.
+         * `InstrumentViewModel.isUnknownDevice`.
          */
         const val UNKNOWN_ID = "unknown"
 

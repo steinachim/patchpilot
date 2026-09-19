@@ -19,9 +19,8 @@ class Pro800Settings(private val dense: ByteArray) {
      * The raw `MIDI RX Channel` setting: 0 = ALL, 1 = the rear dip switches, 2..17 = channel 1..16,
      * 18 = OFF.
      *
-     * **Nothing depends on this any more.** Selection is pure SysEx and needs no channel at all, so
-     * this is read purely as a property of the instrument worth reporting - it is what the device
-     * report surfaces, and it is the field that used to decide whether selection could work.
+     * **Nothing depends on this.** Selection is pure SysEx and needs no channel at all, so this is
+     * read purely as a property of the instrument worth reporting in the device report.
      */
     val midiRxChannelSetting: Int?
         get() = if (dense.size > RX_CHANNEL_DENSE) {

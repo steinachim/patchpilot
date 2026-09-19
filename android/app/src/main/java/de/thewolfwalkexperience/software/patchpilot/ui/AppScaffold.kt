@@ -28,16 +28,15 @@ import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 /**
  * The frame every screen sits in: a Material `Scaffold` with a real `TopAppBar`.
  *
- * Written because the app had none. Each screen used to open with a bare `Column` whose first row
- * was a `TextButton("← Back")` beside a `titleLarge` `Text`, which diverges from the platform in
- * more ways than it looks:
+ * One shared frame rather than a per-screen header row, because the platform's own does several
+ * things a hand-rolled one does not:
  *
- * - The back affordance was a text glyph rather than the system arrow, and `←` does not mirror in
- *   a right-to-left locale. [Icons.AutoMirrored.Filled.ArrowBack] does.
- * - The title's position moved with the width of whatever sat beside it, so headings shifted
- *   between screens.
- * - Nothing scrolled *under* anything, so the app never showed the elevation cue Android uses to
- *   say "there is more above this".
+ * - The back affordance is the system arrow, [Icons.AutoMirrored.Filled.ArrowBack], which mirrors
+ *   in a right-to-left locale where a `←` glyph does not.
+ * - The title sits in the same place on every screen rather than moving with whatever is beside
+ *   it.
+ * - Content scrolls *under* the bar, which is the elevation cue Android uses to say "there is
+ *   more above this".
  * - `Scaffold` is also what applies window insets, which is what makes edge-to-edge work at all
  *   (see `MainActivity`) rather than something each screen has to remember.
  *

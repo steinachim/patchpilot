@@ -17,13 +17,7 @@ object MotifXsSysEx {
     /** Yamaha. */
     const val MANUFACTURER = 0x43
 
-    /**
-     * Bank bytes at or above this are drum banks: `20` PRE DR, `21` GM DR, `28` USER DR.
-     *
-     * Here rather than at the top level of `MotifXsFamily.kt`, where it was the only protocol
-     * constant in the file that defines the catalog shape - and the only one anywhere in this
-     * family outside this object.
-     */
+    /** Bank bytes at or above this are drum banks: `20` PRE DR, `21` GM DR, `28` USER DR. */
     const val FIRST_DRUM_BANK = 0x20
 
     /**
@@ -63,9 +57,7 @@ object MotifXsSysEx {
      *
      * **Two bytes earlier, because only a dump carries a byte count.** A request is
      * `F0 43 2n 7F 03 <addr> F7` and a dump is `F0 43 0n 7F 0B <count> <addr> <data> <sum> F7`, so
-     * reading a request at the dump's offset picks up its last address byte and its `F7`. That is
-     * not hypothetical - it is what [addressOf] did until a test fake asked a request what address
-     * it was for and got null, which then failed every read for the right reason by accident.
+     * reading a request at the dump's offset would pick up its last address byte and its `F7`.
      */
     const val REQUEST_ADDRESS_INDEX = 5
 

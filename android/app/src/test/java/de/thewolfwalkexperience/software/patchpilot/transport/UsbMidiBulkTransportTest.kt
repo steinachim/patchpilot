@@ -114,7 +114,7 @@ class UsbMidiBulkTransportTest {
     @Test
     fun `sending anything but a complete message is refused`() = withTransport(FakeBulk()) { transport, bulk ->
         assertThrows(IllegalArgumentException::class.java) {
-            transport.send(hex("f0 7e 00 06 01"))
+            runBlocking { transport.send(hex("f0 7e 00 06 01")) }
         }
         assertTrue(bulk.written.isEmpty())
     }
@@ -125,9 +125,8 @@ class UsbMidiBulkTransportTest {
      * On a **real** dispatcher rather than `runTest`'s, deliberately. The reader is a polling loop
      * whose only suspension point is the idle `yield`, and `tryEmit` into a buffered flow never
      * suspends - so under a single-threaded test scheduler the loop can run without ever letting
-     * the collector resume. That is a property of this design, not of the test, and the first
-     * version of this file hung on it. A real dispatcher and a wall-clock timeout test what the
-     * phone will actually do.
+     * the collector resume, and the test hangs. That is a property of this design, not of the
+     * test. A real dispatcher and a wall-clock timeout test what the phone will actually do.
      */
     @Test
     fun `a reply on the right cable reaches the incoming flow`() {
@@ -135,7 +134,7 @@ class UsbMidiBulkTransportTest {
         // Served on every read, so the collector cannot miss it by subscribing a moment late.
         val bulk = FakeBulk(always = UsbMidiBulkTransport.packSysEx(reply, cable = 3) + ByteArray(20))
         withTransport(bulk) { transport, _ ->
-            transport.send(hex("f0 7e 00 06 01 f7"))
+            runBlocking { transport.send(hex("f0 7e 00 06 01 f7")) }
             assertArrayEquals(hex("34 f0 7e 00 37 06 01 f7"), bulk.written.single())
             runBlocking {
                 assertArrayEquals(reply, withTimeout(5_000) { transport.incoming.first() })

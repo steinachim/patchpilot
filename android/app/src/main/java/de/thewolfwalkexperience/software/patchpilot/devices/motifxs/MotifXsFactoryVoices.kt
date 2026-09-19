@@ -27,11 +27,10 @@ import kotlinx.serialization.Serializable
  * [MotifXsCategoryEncoding], which lives in the device catalog rather than here - it describes the
  * instrument, not this list.
  *
- * **PREDR and GMDR came from the instrument, not from a voice list.** Yamaha's
- * `drum_voice_list.xls` has no category columns at all, so those 65 drum kits were read off a
- * Motif XS (`the reference tooling --categories PREDR`/`GMDR`) and added here. Every bank in this table
- * now carries categories for every voice, which `MotifXsFactoryVoicesTest` pins - an empty bank
- * would mean that read was lost in a re-sync rather than that one is expected to be empty.
+ * **PREDR's and GMDR's categories came from the instrument, not from a voice list.** Yamaha's
+ * drum voice list has no category columns at all, so those 65 drum kits' assignments were read
+ * off a Motif XS and added here. Every bank in this table carries categories for every voice,
+ * which `MotifXsFactoryVoicesTest` pins.
  *
  * Bank labels match `MotifXsBank.label` in the catalog, and `MotifXsFactoryVoicesTest` pins the two
  * together so a bank renamed in one and not the other fails the build rather than quietly listing
@@ -73,9 +72,9 @@ data class MotifXsFactoryVoices(
     /**
      * The assignments at [slot0] of [bankLabel] (0-based), **by name**.
      *
-     * Empty for a voice this table has no categories for, which is every drum kit - see the class
-     * note. Resolving a name to an index is [MotifXsCategoryEncoding]'s job, since that is the
-     * instrument's format rather than this list's.
+     * Empty for a voice this table has no categories for. Resolving a name to an index is
+     * [MotifXsCategoryEncoding]'s job, since that is the instrument's format rather than this
+     * list's.
      */
     fun categories(bankLabel: String, slot0: Int): List<MotifXsFactoryCategory> =
         voice(bankLabel, slot0)?.categories.orEmpty()
@@ -95,9 +94,8 @@ data class MotifXsFactoryBank(
 /**
  * One voice: its **1-based** slot within the bank, its name, and its category assignments.
  *
- * [categories] is null where the source table publishes none - every drum kit - and distinct from
- * an empty list, which would claim the voice genuinely has no assignment. Nothing downstream needs
- * to tell those apart today, but the file does, and flattening it here would throw that away.
+ * [categories] is null where the table carries none, distinct from an empty list, which would
+ * claim the voice genuinely has no assignment.
  */
 @Serializable
 data class MotifXsFactoryVoice(

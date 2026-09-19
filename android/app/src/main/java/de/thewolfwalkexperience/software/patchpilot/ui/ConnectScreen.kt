@@ -76,8 +76,8 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
             .let { theme.screenFrame(it) },
     ) {
     Box(
-        // Clears the system bars itself under edge-to-edge, same as before - just no longer the
-        // box the frame itself is measured against.
+        // Clears the system bars itself under edge-to-edge; the frame above is measured against
+        // the full screen, not against this.
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
     IconButton(onClick = onOpenSettings, modifier = Modifier.align(Alignment.TopEnd)) {
@@ -115,13 +115,12 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
             is ConnectionState.Opening -> {
                 theme.ProgressIndicator()
                 Spacer(Modifier.height(8.dp))
-                // One message for both buses. The USB branch used to claim "Waiting for USB
-                // permission...", which is true only the first time an instrument is plugged in:
+                // One message for both buses, and it does not mention the permission prompt:
                 // `UsbConnectionManager.requestPermission` returns immediately once permission
-                // has been granted, and this state also covers opening the endpoints and the
-                // family's handshake - so for every connection after the first it named a step
-                // that never happened. Nothing is lost by dropping it: when a prompt really is
-                // raised, the system puts its own dialog on top of this.
+                // has been granted, so "waiting for permission" would be true only the first
+                // time an instrument is plugged in, and this state also covers opening the
+                // endpoints and the family's handshake. When a prompt really is raised, the
+                // system puts its own dialog on top of this.
                 Text(stringResource(R.string.connect_opening, s.displayName, s.bus.label))
             }
             is ConnectionState.Error -> {

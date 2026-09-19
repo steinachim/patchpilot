@@ -39,7 +39,7 @@ class UnknownDevicePolicyTest {
     }
 
     /**
-     * The decision of 2026-08-21, asserted rather than only documented.
+     * The policy's rule, asserted rather than only documented.
      *
      * Two Nord models have been verified to share one protocol; Yamaha and Behringer contribute
      * one instrument each, and one instrument is no evidence about a vendor.

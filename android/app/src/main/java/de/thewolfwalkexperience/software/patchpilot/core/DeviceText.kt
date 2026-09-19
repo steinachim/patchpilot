@@ -18,13 +18,10 @@ private const val MAX_DEVICE_TEXT_LEN = 64
  * choice. A name free to contain bidi overrides and zero-width characters could visually disguise
  * one device as another.
  *
- * Shared rather than duplicated. The USB and MIDI discovery paths each had their own copy - the
- * same regex, the same 64-character cap, the same ellipsis - and the MIDI copy's comment said so
- * outright ("sanitized exactly as a USB string descriptor is, and for the same reason"). Two
- * copies of a security-adjacent rule are two rules that can drift.
+ * Shared by the USB and MIDI discovery paths rather than duplicated: two copies of a
+ * security-adjacent rule are two rules that can drift.
  *
- * Returns null rather than a placeholder so each caller can name its own fallback, which is the
- * only thing the two copies genuinely disagreed about.
+ * Returns null rather than a placeholder so each caller can name its own fallback.
  */
 fun sanitizeDeviceText(raw: String?): String? {
     val cleaned = raw?.replace(UNSAFE_DEVICE_TEXT, "")?.trim() ?: return null

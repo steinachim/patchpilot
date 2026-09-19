@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
 import android.hardware.usb.UsbDevice
@@ -166,15 +167,21 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
         return AndroidMidiTransport(device, inputPort, outputPort)
     }
 
+    /**
+     * A device the framework refuses to open is a failure of this port, reported as an exception
+     * so the caller can skip the port; it is not a cancellation of the caller. A device that
+     * arrives after the caller has already been cancelled is closed here, since nothing else
+     * will ever hold it.
+     */
     private suspend fun openDevice(manager: MidiManager, info: MidiDeviceInfo): MidiDevice =
         suspendCancellableCoroutine { continuation ->
             manager.openDevice(
                 info,
                 { device ->
                     if (device == null) {
-                        continuation.cancel(IllegalStateException("Couldn't open ${info.label()}."))
+                        continuation.resumeWithException(IllegalStateException("Couldn't open ${info.label()}."))
                     } else {
-                        continuation.resume(device)
+                        continuation.resume(device) { device.close() }
                     }
                 },
                 handler,
@@ -199,9 +206,9 @@ private fun ByteArray.startsWith(prefix: ByteArray): Boolean =
 /**
  * The `UsbDevice` behind a MIDI port, where the platform exposes one.
  *
- * One accessor rather than the two identical lookups this replaced, which also confines the
- * deprecation to a single site: `Bundle.get(String)` is deprecated in favour of the typed
- * `getParcelable(String, Class)` from API 33, and this app's minSdk is 26.
+ * One accessor, which confines the deprecation to a single site: `Bundle.get(String)` is
+ * deprecated in favour of the typed `getParcelable(String, Class)` from API 33, and this app's
+ * minSdk is 26.
  */
 @Suppress("DEPRECATION")
 private fun MidiDeviceInfo.usbDevice(): UsbDevice? =

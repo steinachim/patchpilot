@@ -37,9 +37,8 @@ private const val TAG = "SysExExchange"
  *
  * @param scope the collector's lifetime; cancelling it stops draining [transport]. **Ownership
  *   passes to this object**: [close] cancels the whole scope, not merely the collector it started.
- *   Both families construct one solely to hand it here, so there is no second stakeholder - and
- *   the alternative left the scope alive for the process's lifetime, resting on every child
- *   remembering to cancel itself.
+ *   Both families construct one solely to hand it here, so there is no second stakeholder, and a
+ *   scope nobody cancels would live for the process's lifetime.
  */
 class SysExExchange(
     private val transport: MidiTransport,
@@ -66,9 +65,9 @@ class SysExExchange(
      * is many messages long, and DROP_OLDEST discards from the *front* - so a buffer smaller than
      * the sequence silently eats its opening, which is where the header and the Common block are.
      * A Motif XS drum voice answers a documented read with **83** messages against a normal
-     * voice's 26; at the old capacity of 64 the drum read lost its first nineteen and reported
-     * "carried 0 Common blocks". A unit test catches this reliably, because the sequence length
-     * is a fixed property of the instrument rather than a timing fluke.
+     * voice's 26; a capacity of 64 would lose the drum read's first nineteen. A unit test pins
+     * this, because the sequence length is a fixed property of the instrument rather than a
+     * timing fluke.
      */
     private val messages = MutableSharedFlow<ByteArray>(
         replay = 0,
@@ -87,9 +86,8 @@ class SysExExchange(
         //
         // This is not a tidiness point. Both this flow and the transports' own use replay = 0, and
         // a SharedFlow with no subscriber discards what is emitted to it - so a reply arriving in
-        // the window between constructing this and the collector actually starting is gone, and
-        // the exchange that wanted it waits out its whole timeout before retrying. Found by the
-        // Pro-800 index test, which asked for ten dumps and watched eleven go out.
+        // the window between constructing this and the collector actually starting would be gone,
+        // and the exchange that wanted it would wait out its whole timeout before retrying.
         collector = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             transport.incoming.collect { chunk ->
                 framer.feed(chunk).forEach {
@@ -97,8 +95,7 @@ class SysExExchange(
                     // rejects, but only while it is running; a message arriving when no exchange is
                     // in flight has no subscriber, and with replay = 0 it is emitted to nobody and
                     // gone. That is exactly where a fire-and-forget write's status reply lands, so
-                    // without this the instrument's own account of a refusal is unobservable - as a
-                    // hardware run showed, eight writes producing not one line about their status.
+                    // without this the instrument's own account of a refusal is unobservable.
                     //
                     // Gated on there being no subscriber, which is what makes it quiet: during a
                     // 400-slot scan every dump has one, so this logs none of them.
@@ -121,8 +118,8 @@ class SysExExchange(
      *
      * Retries [retries] times before giving up, since on a stream transport a single dropped
      * message is normal and making a 400-slot scan fail on the first hiccup would be unusable.
-     * Each attempt starts from a clean framer and a drained buffer, so a late reply to the
-     * previous attempt cannot satisfy this one.
+     * Each retry starts from a drained buffer, so a late reply to the previous attempt cannot
+     * satisfy this one.
      */
     suspend fun exchange(
         request: ByteArray,
@@ -136,13 +133,11 @@ class SysExExchange(
                 Log.w(TAG, "retrying '$what' (attempt ${attempt + 1})")
                 drainStale()
             }
-            // There is deliberately no framer.reset() here. It was called at this point, from
-            // *this* coroutine, while the collector coroutine feeds the same framer - a plain data
-            // race on its buffer, which could truncate a reply that was mid-arrival and turn it
-            // into the timeout the reset was meant to help with. It also bought nothing: SysEx is
+            // There is deliberately no framer.reset() here: the collector coroutine feeds the
+            // same framer, so a reset from this coroutine would be a data race on its buffer that
+            // could truncate a reply mid-arrival. It would also buy nothing: SysEx is
             // self-delimiting, and the framer already abandons a partial message when the next F0
-            // arrives. Suspected in a live scan that timed out on scattered slots and succeeded on
-            // the retry every time.
+            // arrives.
             val reply = withTimeoutOrNull(timeout) {
                 coroutineScope {
                     // Subscribe *before* sending, or a reply that arrives in between is emitted
@@ -297,14 +292,12 @@ class SysExExchange(
      * **A MIDI port that is never closed stays claimed.** Android hands one out per device, so
      * leaking it does not merely waste a handle - the next connection attempt cannot open the
      * device to probe it, and the app reports finding no instrument at all while the instrument is
-     * plugged in and working. That is exactly what happened on hardware once the app had been
-     * backgrounded: `Pro800Instrument.close()` did nothing, so nothing ever released the port.
+     * plugged in and working.
      */
     fun close() {
         // The whole scope, not just [collector]. On a USB-backed session the reader loop inside
         // UsbMidiBulkTransport is the scope's other child, and cancelling only what this class
-        // started left the guarantee resting on every sibling remembering to cancel itself - one
-        // new child away from a coroutine that outlives the instrument and reads a closed handle.
+        // started would leave the guarantee resting on every sibling remembering to cancel itself.
         // transport.close() still runs below, since cancelling a coroutine does not release a
         // USB interface or a MIDI port.
         scope.cancel()
@@ -326,12 +319,12 @@ class SysExExchange(
 
     private companion object {
         val DRAIN_WINDOW = 50.milliseconds
-
-        /** Enough of a message to identify it (header, type, address) without dumping a whole
-         * 210-byte program into the log. */
-        const val PREFIX_BYTES = 12
     }
 }
 
+/** Enough of a message to identify it (header, type, address) without dumping a whole 210-byte
+ * program into the log. */
+private const val PREFIX_BYTES = 12
+
 private fun ByteArray.prefixHex(): String =
-    take(12).joinToString(" ") { "%02x".format(it) } + if (size > 12) " ..." else ""
+    take(PREFIX_BYTES).joinToString(" ") { "%02x".format(it) } + if (size > PREFIX_BYTES) " ..." else ""

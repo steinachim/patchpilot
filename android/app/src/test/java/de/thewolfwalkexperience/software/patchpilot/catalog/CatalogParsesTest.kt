@@ -143,8 +143,8 @@ class CatalogParsesTest {
      *
      * `label` is the internal shorthand used to address a bank;
      * `displayLabel` is what the instrument's own panel says, and what the browser's headers and
-     * row ids show; `shortLabel` is what fits the index rail, where `USER DR` wraps to
-     * three unreadable stacked lines at the narrower width this used to be.
+     * row ids show; `shortLabel` is what fits the index rail, where a label like `USER DR`
+     * would otherwise wrap to stacked lines.
      */
     @Test
     fun `each bank carries a panel label and a rail label`() {
@@ -203,11 +203,10 @@ class CatalogParsesTest {
     /**
      * The Motif XS is found on the **USB host bus**, not through `MidiManager`.
      *
-     * It used to be a `midiIdentity` match on port 3, on the assumption that a class-compliant
-     * host would expose one port per cable. The instrument declares no MIDIStreaming interface at
-     * all - one vendor-specific interface, class 0xFF - so `MidiManager` never enumerates it and
-     * there is no port to match. The bulk endpoints do carry ordinary USB-MIDI event packets,
-     * which is why the family still speaks SysEx over them.
+     * The instrument declares no MIDIStreaming interface at all - one vendor-specific interface,
+     * class 0xFF - so `MidiManager` never enumerates it and there is no port to match. The bulk
+     * endpoints do carry ordinary USB-MIDI event packets, which is why the family still speaks
+     * SysEx over them.
      *
      * The cable is asserted because losing it in an edit is easy and diagnosing that is not.
      * Cable 0 works as well as cable 3 on this instrument, so a fallback to 0

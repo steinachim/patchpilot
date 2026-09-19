@@ -389,7 +389,7 @@ class Pro800DecodingTest {
         val spliced = a48.copyOfRange(0, a48.size - 1) +
             a00.copyOfRange(Pro800SysEx.DATA_START_INDEX, a00.size)
 
-        // Everything the matcher used to rely on still says this is our reply.
+        // Header, type and address all still say this is our reply; only the length betrays it.
         assertTrue("the manufacturer header survives a splice", Pro800SysEx.isOurs(spliced))
         assertEquals(Pro800SysEx.TYPE_DUMP, Pro800SysEx.typeOf(spliced))
         assertEquals(

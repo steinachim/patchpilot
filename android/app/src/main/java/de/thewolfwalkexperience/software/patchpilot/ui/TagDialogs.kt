@@ -36,7 +36,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 
-/**
+/*
  * The preset screen's two tagging dialogs.
  *
  * Same rule as `ProgramDialogs`: each takes plain data and callbacks, reads no screen state and no
@@ -124,11 +124,8 @@ internal fun SetFavoriteDialog(
             }
         },
         dismissButton = {
-            // **Always Cancel.** This briefly offered "Set categories" here instead when the
-            // voice had none, which took the way out of the dialog away and pointed at an
-            // unrelated task. That shortcut existed to escape a dead end - "no categories, so no
-            // favorite" - and there is no dead end left to escape now that the favorite can just
-            // be set. Set categories is a row-menu action, and stays one.
+            // **Always Cancel**, even when the voice has no categories: a favorite can be set
+            // regardless, and Set categories is a row-menu action, not a way out of this dialog.
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )

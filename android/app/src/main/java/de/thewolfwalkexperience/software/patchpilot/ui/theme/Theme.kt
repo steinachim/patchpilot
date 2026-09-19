@@ -18,10 +18,10 @@ import androidx.core.view.WindowCompat
 /**
  * Wraps [content] in the chosen [AppTheme].
  *
- * [AppTheme.Default] is untouched from before this file grew a second theme: it follows the
- * system light/dark setting (minSdk 26 predates the "force dark" APIs, so this is the only
- * reliable signal), with dynamic (wallpaper-derived) color on API 31+ and a static scheme below
- * that. Anyone who never opens Settings sees exactly that, unconditionally.
+ * [AppTheme.Default] is stock Material: it follows the system light/dark setting (minSdk 26
+ * predates the "force dark" APIs, so this is the only reliable signal), with dynamic
+ * (wallpaper-derived) color on API 31+ and a static scheme below that. Anyone who never opens
+ * Settings sees exactly that, unconditionally.
  *
  * [AppTheme.Steampunk] is a single committed dark look - like a real WinAmp skin, it does not
  * follow the system setting - built from [SteampunkColorScheme]/[steampunkTypography]/
@@ -34,11 +34,10 @@ import androidx.core.view.WindowCompat
  * theme `when`. [content] is `PatchPilotApp`'s `NavHost`, and calling it from two different
  * branches gives it two different positions in the composition's slot table - switching themes
  * then reads as "the old position's subtree went away, a new one appeared", which tears the whole
- * subtree down and rebuilds it. That silently reset `rememberNavController()` (and its back
- * stack) to the start destination on every theme change - caught live on a real device, not in
- * review: picking Steampunk from Settings dropped straight back to the connect screen. Computing
- * the values first and calling `MaterialTheme`/[content] once, after the `when`s, keeps `content`
- * at one stable position, so a theme switch only ever changes what `MaterialTheme` resolves to.
+ * subtree down and rebuilds it - and with it `rememberNavController()` and its back stack, which
+ * would reset to the start destination on every theme change. Computing the values first and
+ * calling `MaterialTheme`/[content] once, after the `when`s, keeps `content` at one stable
+ * position, so a theme switch only ever changes what `MaterialTheme` resolves to.
  */
 @Composable
 fun PatchPilotTheme(

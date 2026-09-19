@@ -50,8 +50,7 @@ class NoCopyFixtureInstrument : Instrument, PresetBrowser, PresetSelector, Prese
     override val selector: PresetSelector get() = this
     override val editor: PresetEditor get() = this
 
-    /** No device report, same as the two real families this shape used to stand in for. */
-    /** A fixture: it exists to exercise one editor gap, and tags are not part of it. */
+    /** A fixture: it exists to exercise one editor gap, and reports and tags are not part of it. */
     override val tagger: PresetTagger? = null
 
     override val report: DeviceReporter? = null

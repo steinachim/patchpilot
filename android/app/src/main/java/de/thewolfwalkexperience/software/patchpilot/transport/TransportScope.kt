@@ -12,15 +12,15 @@ private const val TAG = "TransportScope"
 /**
  * The scope a transport's reader loop and its exchange collector live in.
  *
- * Both families used to build this inline as `CoroutineScope(SupervisorJob())`, which was wrong in
- * two ways that only show up when something goes wrong on the bus.
+ * A bare `CoroutineScope(SupervisorJob())` would be wrong in two ways that only show up when
+ * something goes wrong on the bus.
  *
  * **A `SupervisorJob` does not swallow exceptions; it only stops siblings being cancelled.** An
  * uncaught throw in a child still reaches the context's [CoroutineExceptionHandler], and with none
- * installed - there was none anywhere in this app - it reaches the platform's default one, which
- * kills the process. That made an ordinary endpoint error a crash. The handler below is the
- * last-resort net for that; the loops themselves are expected to handle their own failures (see
- * [UsbMidiBulkTransport]'s reader), and anything arriving here is a bug worth the error log.
+ * installed it reaches the platform's default one, which kills the process - so an ordinary
+ * endpoint error would be a crash. The handler below is the last-resort net for that; the loops
+ * themselves are expected to handle their own failures (see [UsbMidiBulkTransport]'s reader), and
+ * anything arriving here is a bug worth the error log.
  *
  * **A scope with no dispatcher inherits [Dispatchers.Default]**, a pool sized to the core count and
  * shared with the rest of the app's background work. A blocking read loop does not belong there:

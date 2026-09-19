@@ -20,18 +20,12 @@ private const val ROUTE_LICENSE_TEXT = "licenses/{asset}"
 private const val ARG_LICENSE_ASSET = "asset"
 
 /**
- * Two screens: find an instrument, then browse it. Plus a third nobody finds by accident - the
- * debug menu, which has no button anywhere and opens only on five taps of the instrument name.
+ * Two screens: find an instrument, then browse it. Plus settings, the licence screens, and a
+ * debug menu nobody finds by accident - it has no button anywhere and opens only on five taps of
+ * the instrument name.
  *
- * There were five. `CategoriesScreen`, `CategoryItemsScreen` and `ShowTextScreen` were reachable
- * only from two buttons in the Presets app bar left over from an earlier version of the debug
- * menu, and all three were removed with them - there is no point keeping screens nothing can
- * open. The underlying instrument commands - listing categories and showing text - are
- * unaffected; this app simply does not expose UI for them.
- *
- * The demo-mode banner went at the same time. It existed to make sure a fake session could never
- * be mistaken for a real one, which the app bar now does better: it shows the connected
- * instrument's own name, and in demo mode that name says so.
+ * There is no demo-mode banner: the app bar shows the connected instrument's own name, and in
+ * demo mode that name says so.
  */
 @Composable
 fun PatchPilotApp(
@@ -50,35 +44,17 @@ private fun PatchPilotNavHost(
     modifier: Modifier = Modifier,
 ) {
     // Guards every navigate()/popBackStack() call below against firing while the *current*
-    // destination hasn't actually finished becoming the foreground screen yet.
+    // destination has not finished becoming the foreground screen.
     //
-    // **Confirmed root cause of a rapid-tap navigation fault, 2026-08-28**, with a fully
-    // deterministic, scriptable reproduction: spamming taps on a route's back arrow (or any
-    // other nav-triggering icon) raced NavController's own back-stack transition closely enough
-    // that NavHost stopped composing anything at all - the window stayed up, `MainActivity`
-    // stayed resumed, nothing crashed, and `uiautomator dump` showed an empty `ComposeView` with
-    // no content whatsoever. Reproduced identically on a real Pixel 6 and the emulator, both from
-    // genuine rapid tapping and from concurrent `adb shell input tap` injection. This is the same
-    // shape the 2026-08-23 sighting described - "no nav destination wanted the back press" - just
-    // with a trigger that took until now to isolate.
-    //
-    // **Two earlier attempts at this guard did not hold, both confirmed by re-running the exact
-    // same reproduction against them:**
-    // 1. A `Boolean` keyed off [androidx.navigation.compose.currentBackStackEntryAsState] instead
-    //    of a timer - Compose's back-stack state updates as soon as `navigate()` mutates it,
-    //    which is *before* the destination-swap transition animation has actually finished
-    //    playing, so a second `navigate()` fired into that still-animating window still broke it.
-    // 2. A flat 500ms cooldown - safely longer than Compose Navigation's default ~300ms
-    //    crossfade, and it still reproduced with two taps 700ms apart. `ProgramsScreen` is heavy
-    //    enough (a `LazyColumn`, drag-to-reorder state, the index collector's own effects) that
-    //    however long it actually takes to settle is not a constant this file can guess at - two
-    //    seconds between taps was reliably safe in testing, which only says the true number is
-    //    somewhere in between and screen-dependent.
-    //
-    // What finally held: the destination's own [NavBackStackEntry.getLifecycle], which Navigation
-    // Compose itself only advances to [Lifecycle.State.RESUMED] once that destination has
-    // actually become the active, settled top of the stack - not a duration this file has to
-    // guess, the same signal the library's own transition machinery uses internally.
+    // Rapid taps on a back arrow (or any other navigation-triggering icon) race NavController's
+    // own back-stack transition; a second `navigate()` fired into a still-animating transition
+    // leaves NavHost composing nothing at all - a live window with an empty `ComposeView`,
+    // recoverable only by force-stopping the app. Neither `currentBackStackEntryAsState` (which
+    // updates before the transition animation has finished) nor a fixed cooldown (the settle
+    // time depends on how heavy the screen is) is a reliable guard. The destination's own
+    // [NavBackStackEntry.getLifecycle] is: Navigation Compose advances it to
+    // [Lifecycle.State.RESUMED] only once the destination is the active, settled top of the
+    // stack, which is the same signal the library's own transition machinery uses.
     fun currentEntryIsResumed(): Boolean =
         navController.currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED
 
@@ -97,14 +73,10 @@ private fun PatchPilotNavHost(
     // `onSessionLost` is driven by `LaunchedEffect(session)`, and a session that cycles through
     // more than one unrenderable state in quick succession - a failed reconnect retried, for
     // instance - re-runs that effect for each one. Once the first call has already left
-    // `programs`, `popUpTo(ROUTE_PROGRAMS)` matches nothing and `navigate` just pushes a second
-    // `connect` on top of the first - confirmed on-device 2026-08-28, a back stack that had
-    // accumulated four of them after a long session with several reconnect failures. Checking
-    // the current destination first, rather than trusting which composable's callback fired, is
-    // what makes repeated calls harmless instead of cumulative. `guardedNavigate`'s own lifecycle
-    // check on top of that is what stops a *single* burst of taps from re-entering `navigate()`
-    // while the transition is still playing, which is the sharper and more common way to hit the
-    // same class of bug.
+    // `programs`, `popUpTo(ROUTE_PROGRAMS)` matches nothing and `navigate` would push a second
+    // `connect` on top of the first. Checking the current destination first is what makes
+    // repeated calls harmless instead of cumulative; `guardedNavigate`'s lifecycle check on top
+    // of that stops a single burst of taps from re-entering `navigate()` mid-transition.
     fun returnToConnect() {
         if (navController.currentDestination?.route == ROUTE_CONNECT) return
         guardedNavigate(ROUTE_CONNECT) { popUpTo(ROUTE_PROGRAMS) { inclusive = true } }
@@ -133,9 +105,7 @@ private fun PatchPilotNavHost(
                 // **`popUpTo(ROUTE_PROGRAMS)`, not `popUpTo(0)`.** Under route-based navigation
                 // the graph's own id is 0, so `popUpTo(0)` pops the graph *itself* and leaves the
                 // host with an empty back stack and no destination to render - a live window with
-                // no content in it, recoverable only by force-stopping the app. That was one
-                // candidate shape for the 2026-08-23 fault; the confirmed one, found 2026-08-28,
-                // is `guardedNavigate`'s doc comment above.
+                // no content in it, recoverable only by force-stopping the app.
                 onBack = {
                     viewModel.disconnect(showPicker = true)
                     returnToConnect()

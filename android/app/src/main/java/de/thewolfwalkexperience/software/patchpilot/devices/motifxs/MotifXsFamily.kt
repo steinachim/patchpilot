@@ -58,9 +58,7 @@ data class MotifXsBank(
     /**
      * Whether the instrument refuses writes here. True for the factory banks.
      *
-     * Carried even though nothing writes yet, because the browser has to know not to offer an
-     * action the instrument would reject - and because the write path, when it exists, must not
-     * have to rediscover which banks are factory ones.
+     * The browser does not offer an edit here, and the editor refuses one.
      */
     val readOnly: Boolean = false,
     /**
@@ -83,8 +81,8 @@ data class MotifXsBank(
      *
      * False for the factory banks. Indexing every one costs about **7.5 minutes** - 1,633 voices
      * at ~220 ms each, and ~1.05 s for every drum kit - against 93 s for the user banks alone.
-     * They are read-only and never change, so paying that on every connect buys nothing; they are
-     * fetched when opened instead (option 1 of three, chosen 2026-08-19).
+     * They are read-only and never change, so paying that on every connect buys nothing; their
+     * names ship with the app instead (see [MotifXsFactoryVoices]).
      */
     val indexByDefault: Boolean = true,
     /**
@@ -268,12 +266,20 @@ object MotifXsFamily : InstrumentFamily {
         descriptor: InstrumentDescriptor,
         transport: Transport,
     ): Instrument {
-        val scope = transportScope(descriptor.name)
-        val midi = midiOver(transport, descriptor, scope)
+        // Everything that can fail is resolved before the transport is wrapped: wrapping starts
+        // the reader coroutine, and a throw after that point would leave it running on a transport
+        // nobody owns.
         val config = resolvedConfig(catalog.load(context).familyConfig, descriptor.familyConfig, catalog.format)
         require(config.banks.isNotEmpty()) {
             "${descriptor.name} has no banks configured; the catalog entry is incomplete."
         }
+        val blanks = MotifXsBlanks(
+            normal = context.assets.open(BLANK_NORMAL).use { it.readBytes() },
+            drum = context.assets.open(BLANK_DRUM).use { it.readBytes() },
+        )
+        val factoryVoices = loadFactoryVoices(context)
+        val scope = transportScope(descriptor.name)
+        val midi = midiOver(transport, descriptor, scope)
         return MotifXsInstrument(
             // Three attempts, not the default two. A dropped message on this bus is ordinary
             // rather than exceptional - see UsbMidiBulkTransport's buffer note for what causes it
@@ -286,13 +292,10 @@ object MotifXsFamily : InstrumentFamily {
             // is addressed there; this is what remains for genuinely lost transfers.
             SysExExchange(midi, scope, framer = SysExFramer(MAX_MESSAGE_BYTES), retries = 2),
             config,
-            MotifXsBlanks(
-                normal = context.assets.open(BLANK_NORMAL).use { it.readBytes() },
-                drum = context.assets.open(BLANK_DRUM).use { it.readBytes() },
-            ),
+            blanks,
             descriptorId = descriptor.id,
             catalogName = descriptor.name,
-            factoryVoices = loadFactoryVoices(context),
+            factoryVoices = factoryVoices,
         )
     }
 
@@ -318,8 +321,8 @@ object MotifXsFamily : InstrumentFamily {
      * off the bulk endpoint directly.
      *
      * A [MidiTransport] is still accepted, because nothing here is Motif-specific except which
-     * bus that particular instrument turned out to be on, and a Motif XF or a class-compliant
-     * sibling would arrive the other way.
+     * bus that particular instrument is on, and a Motif XF or a class-compliant sibling would
+     * arrive the other way.
      */
     private fun midiOver(
         transport: Transport,

@@ -16,12 +16,12 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
 
 private const val ACTION_USB_PERMISSION = "de.thewolfwalkexperience.software.patchpilot.USB_PERMISSION"
-/** Interface 0 on every device this app opens so far - Nord, Motif XS alike. Named for what it
- * is rather than for the one family it was written against: it is simply the first interface. */
+/** Interface 0 on every device this app opens so far - Nord and Motif XS alike. */
 private const val DEVICE_INTERFACE_INDEX = 0
 
 /** Declared in AndroidManifest.xml with protectionLevel="signature", so only this app (or
@@ -42,8 +42,7 @@ private const val USB_PERMISSION_CALLBACK_PERMISSION =
  * device_filter.xml auto-granted it on attach), and claims an interface.
  *
  * Family-agnostic: [UsbHostDiscovery] matches whatever this returns against the catalog, and the
- * endpoint addresses come from the matched descriptor. It used to say "discovers connected Nord
- * instruments", which was true when the app spoke one protocol.
+ * endpoint addresses come from the matched descriptor.
  *
  * No kernel-driver-detach step is needed here - that is a desktop-libusb concern that does not
  * apply to Android's own USB host stack.
@@ -70,9 +69,16 @@ class UsbConnectionManager(private val context: Context) {
             )
 
             val receiver = object : BroadcastReceiver() {
+                private val unregistered = AtomicBoolean(false)
+
+                /** Once only: the reply and a cancellation can both try, and the second would throw. */
+                fun unregister() {
+                    if (unregistered.compareAndSet(false, true)) context.unregisterReceiver(this)
+                }
+
                 override fun onReceive(receiverContext: Context, intent: Intent) {
                     if (intent.action != ACTION_USB_PERMISSION) return
-                    receiverContext.unregisterReceiver(this)
+                    unregister()
                     val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
                     if (cont.isActive) cont.resume(granted)
                 }
@@ -88,7 +94,7 @@ class UsbConnectionManager(private val context: Context) {
                 @Suppress("UnspecifiedRegisterReceiverFlag")
                 context.registerReceiver(receiver, filter, USB_PERMISSION_CALLBACK_PERMISSION, null)
             }
-            cont.invokeOnCancellation { context.unregisterReceiver(receiver) }
+            cont.invokeOnCancellation { receiver.unregister() }
 
             usbManager.requestPermission(device, pendingIntent)
         }

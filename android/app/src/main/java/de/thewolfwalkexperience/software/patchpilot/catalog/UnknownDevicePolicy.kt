@@ -11,25 +11,19 @@ import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
  *
  * ### Why Nord and nothing else
  *
- * **The asymmetry is structural, not an accident of what was built first.** Clavia's vendor id
- * covers *two* models that this project has verified share one protocol - so
- * "another Clavia device probably speaks this too" is an inference with evidence. Yamaha's and
- * Behringer's ids cover exactly *one* instrument each, and a Motif XS is no evidence about Yamaha
- * synths in general: its address map was hard-won, `0x08` is a hole the instrument rejects, and
- * USER DR sits detached at `0x28` for no reason anyone has established.
+ * **The asymmetry is structural.** Clavia's vendor id covers several models that this project has
+ * verified share one protocol, so "another Clavia device probably speaks this too" is an inference
+ * with evidence. Yamaha's and Behringer's ids cover exactly *one* instrument each, and a Motif XS
+ * is no evidence about Yamaha synths in general: its address map has a hole at `0x08` the
+ * instrument rejects, and USER DR sits detached at `0x28` for no reason anyone has established.
  *
  * The rule that falls out is re-derivable rather than a preference: **guess a family from a vendor
  * id only where two members have already agreed.** Revisit if a second Yamaha or Behringer
- * instrument is added and turns out to speak its sibling's protocol (decided 2026-08-21).
+ * instrument is added and turns out to speak its sibling's protocol.
  *
- * ### Why this exists at all
- *
- * Before it, `confirmUnknownDevice` built a `NordInstrument` for **whatever the user picked**,
- * and the picker listed every attached USB device unfiltered. Selecting a keyboard, a hub or a
- * charger claimed its interface and sent Clavia's vendor bulk protocol at it - unsolicited and far
- * from read-only, since `NordDevice` carries destructive sub-opcodes. It survived
- * because the feature predates the multi-family work: when the app only spoke Nord, "unknown
- * device" could only mean "an unrecognised Nord", and the assumption was true.
+ * Without this gate, the picker would offer every attached USB device, and picking a keyboard, a
+ * hub or a charger would claim its interface and send Clavia's vendor bulk protocol at it -
+ * unsolicited and far from read-only, since `NordDevice` carries destructive sub-opcodes.
  */
 object UnknownDevicePolicy {
 

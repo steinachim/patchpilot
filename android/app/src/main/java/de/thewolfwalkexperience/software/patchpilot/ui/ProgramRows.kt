@@ -34,18 +34,6 @@ internal data class ProgramListing(
 )
 
 /**
- * Turns a listing plus the screen's filters into the rows to draw.
- *
- * **Pure, and out of the composable on purpose.** This was six `remember` blocks inside a very
- * long composable, which made the rules below - each accounting for a different way an instrument
- * can report its slots - impossible to test without running Compose. Nothing here touches the UI
- * toolkit, so `ProgramRowsTest` can hold every one of them.
- *
- * @param reported what the instrument actually answered with. A Nord lists only what it holds; a
- *   Pro-800 answers for every address, empty ones included.
- * @param allSlots every address the instrument's layout allows, in device order.
- */
-/**
  * Where a copy could be written: every address the layout allows that does not already hold one.
  *
  * **Its own function, because it is not a property of what is on screen.** Copying a factory voice
@@ -60,6 +48,18 @@ internal fun freeSlots(reported: List<PresetSlot>, allSlots: List<PresetSlot>): 
     return allSlots.filterNot { it.address in occupied }
 }
 
+/**
+ * Turns a listing plus the screen's filters into the rows to draw.
+ *
+ * **Pure, and out of the composable on purpose.** This was six `remember` blocks inside a very
+ * long composable, which made the rules below - each accounting for a different way an instrument
+ * can report its slots - impossible to test without running Compose. Nothing here touches the UI
+ * toolkit, so `ProgramRowsTest` can hold every one of them.
+ *
+ * @param reported what the instrument actually answered with. A Nord lists only what it holds; a
+ *   Pro-800 answers for every address, empty ones included.
+ * @param allSlots every address the instrument's layout allows, in device order.
+ */
 internal fun buildProgramListing(
     reported: List<PresetSlot>,
     allSlots: List<PresetSlot>,

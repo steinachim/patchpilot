@@ -1,6 +1,6 @@
 # Privacy policy
 
-*Applies to Patch Pilot (package `de.thewolfwalkexperience.software.patchpilot`), all versions. Last updated 2026-09-13.*
+*Applies to Patch Pilot (package `de.thewolfwalkexperience.software.patchpilot`), all versions. Last updated 2026-09-19.*
 
 ## In short
 
@@ -8,21 +8,24 @@ Patch Pilot collects no personal data, has no network access, and never sends an
 
 ## What the app can access
 
-- **The connected instrument.** The app talks to a synthesizer over USB or USB-MIDI to read and change the presets stored on it. Android asks for your permission the first time each instrument is connected. Nothing read from the instrument leaves the device except through the exports described below, which you start yourself.
-- **Nothing else.** The app declares no Android permissions: no internet, no storage, no location, no contacts, no camera, no microphone. It contains no advertising, analytics, or crash-reporting libraries.
+- **The connected instrument.** The app talks to a synthesizer over USB to read and change the presets stored on it. For an instrument the app opens directly over USB (the Nord and Yamaha models), Android asks for your permission the first time that instrument is connected. For a class-compliant USB-MIDI instrument (the Behringer Pro-800), Android's MIDI service handles the connection and no permission prompt is shown. Nothing read from the instrument leaves the device except through the exports described below, which you start yourself.
+- **Nothing else.** The app declares no Android permissions: no internet, no storage, no location, no contacts, no camera, no microphone. It contains no advertising, analytics or crash-reporting libraries.
 
 ## What the app stores on your device
 
-- Your theme choice (a single preference).
-- While preparing a report you have asked to share (see below), a temporary copy of it in the app's private cache directory. It is replaced on the next share and removed when the app's cache is cleared.
+- Your theme choice, a single preference.
+- While a report you asked to share is being handed to another app, a temporary copy of it in the app's private cache directory. It is replaced by the next share and removed when the app's cache is cleared.
 
-Preset names and other instrument data are held in memory only while the app is open. The app is excluded from Android backups, so none of this is copied to a cloud backup.
+Preset names and other instrument data are held in memory only while the app is running. The app opts out of Android backups, so none of this is copied to a cloud backup or to another device.
 
 ## Exports you start yourself
 
-Two features write data outside the app, and both happen only when you tap them:
+The app can produce two kinds of report, from the debug menu (five taps on the instrument name on the preset screen); the device report is also offered on the connect screen when the instrument or its firmware is one the app does not recognize. A report is written outside the app only when you tap **Share** or **Save to device**:
 
-- **Share device info / Save to device** (debug menu and regression test): produces a report about the connected instrument - model, firmware version, USB vendor and product ids, the results of the app's probes, and the names of the presets on it. "Share" hands the report to an app you pick through the Android share sheet; "Save to device" writes it to a location you choose. Where it goes from there is up to you and that app. Nothing about you or your phone is included, and the instrument's serial number is not read.
+- **Device report**: the instrument's model, firmware version, USB vendor and product ids, the raw replies to the app's read-only queries, storage figures, and, depending on the instrument, the names of the presets on it. For the Behringer Pro-800 the report also contains the full data of a handful of presets, chosen as decoding samples.
+- **Regression report**: which operations the app tested against the instrument and whether they worked. It names the presets the test used.
+
+**Share** hands the report to an app you pick through the Android share sheet; **Save to device** writes it to a location you choose. Where it goes from there is up to you and that app. Nothing about you or your phone is included, and the instrument's serial number is not read.
 
 If you send a report to the developer to help support an instrument, it is used for that purpose only.
 

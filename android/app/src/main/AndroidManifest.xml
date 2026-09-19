@@ -20,13 +20,10 @@
         android:protectionLevel="signature" />
 
     <!-- allowBackup is off deliberately. Nothing here is worth restoring onto another phone, and
-         some of it is worth not copying off this one: the app stores no credentials and
-         PresetIndexCache is deliberately in-memory (see its own note on why persistence was
-         declined), so a backup would carry little more than the cache directory - which is where
-         shared device reports, containing the user's preset names, are staged. Turned off now
-         rather than when that changes: the cache's documentation already contemplates a
-         disk-backed variant, and that is exactly the change that would make an inherited default
-         matter. -->
+         some of it is worth not copying off this one: the app stores no credentials and keeps the
+         preset listing in memory only, so a backup would carry little more than the theme
+         preference and the cache directory - which is where shared device reports, which can
+         contain the user's preset names, are staged. -->
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -51,9 +48,8 @@
                 android:resource="@xml/device_filter" />
         </activity>
 
-        <!-- Shares the JSON built by InstrumentViewModel.buildDeviceReport() (see
-             ProgramsScreen's "Share device info" button) as a content:// file, since
-             ACTION_SEND with EXTRA_STREAM needs a content Uri, not a raw file:// path. -->
+        <!-- Shares the device and regression reports (see ui/Sharing.kt) as content:// files,
+             since ACTION_SEND with EXTRA_STREAM needs a content Uri, not a raw file:// path. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

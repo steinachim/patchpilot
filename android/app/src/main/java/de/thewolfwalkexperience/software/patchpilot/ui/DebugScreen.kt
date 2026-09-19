@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.annotation.StringRes
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
@@ -22,6 +21,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -35,10 +35,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.core.OccupiedSlotReason
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionReport
-import de.thewolfwalkexperience.software.patchpilot.core.RegressionResult
 import de.thewolfwalkexperience.software.patchpilot.core.Status
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -52,29 +50,29 @@ import androidx.compose.runtime.setValue
  * Two entries, both of which exist for the same reason - putting the instrument, rather than the
  * app, under test:
  *
- * - **the device report**, which used to be a button on the preset screen for every device. That
- *   was a temporary testing affordance; it now lives here, where it is always available, and the
- *   preset screen's own button is back to appearing only for a device outside the catalog. Read
- *   once, then offered for sharing or saving - the regression test's shape, rather than a share
- *   button and a save button that each read the instrument on their own.
+ * - **the device report**, always available here; the preset screen offers it only for a device
+ *   outside the catalog or on untested firmware. Read once, then offered for sharing or saving,
+ *   rather than a share button and a save button that each read the instrument on their own.
  * - **the regression test**, which exercises every operation the connected instrument declares
  *   and says what happened. See [de.thewolfwalkexperience.software.patchpilot.core.RegressionTester]
  *   for what it will and will not do to an instrument.
  */
 @Composable
 fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
-    var run by rememberSaveable(stateSaver = RegressionRunStateSaver) {
-        mutableStateOf<RegressionRunState>(RegressionRunState.Idle)
-    }
-    var pending by remember { mutableStateOf<PendingConfirmation?>(null) }
+    // The run itself lives in the ViewModel, so a configuration change mid-run neither cancels
+    // it nor loses the dialog it is waiting on - see RegressionRunner.
+    val runner = viewModel.regressionRunner
+    val run by runner.state.collectAsState()
+    val pending by runner.question.collectAsState()
+    val runError by runner.error.collectAsState()
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
     val sharer = rememberReportSharer(viewModel)
     // The device report once it has been read, with everything sharing it needs - null until
     // then. Saved for the same reason a finished regression run is: a report that took a couple
     // of minutes to read must not vanish on rotation. The report is bounded (the largest part of
     // a Nord's is a few hundred program names), so it is nowhere near what a Bundle can carry.
-    // The read in progress is `sharer.progress`, which does not survive rotation any more than a
-    // regression run does, and for the same reason - see [RegressionRunStateSaver].
+    // The read in progress is `sharer.progress`, which does not survive rotation: it writes
+    // nothing, so losing it costs only the read.
     var deviceReport by rememberSaveable(stateSaver = HeldDeviceReportSaver) {
         mutableStateOf<HeldDeviceReport?>(null)
     }
@@ -85,6 +83,8 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val txtSuffix = stringResource(R.string.programs_txt_suffix)
     val reportShareTitle = stringResource(R.string.programs_share_report)
     val regressionShareTitle = stringResource(R.string.debug_regression_share)
+    val regressionStartingLabel = stringResource(R.string.debug_regression_starting)
+    val verifyStartingLabel = stringResource(R.string.debug_verify_starting)
 
     // Holds whichever report is waiting on the "Save to device" picker below to return a Uri -
     // there is only ever one save in flight at a time, so one field covers both the device report
@@ -100,23 +100,6 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val saveTextLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(TEXT_MIME_TYPE)) { onSaveResult(it) }
 
-    /**
-     * Puts a question to the user from inside the test engine and suspends until it is answered.
-     *
-     * The engine knows nothing about Compose - it is handed two suspending lambdas and awaits
-     * them. This is the half that turns one into a dialog: park a [CompletableDeferred] in screen
-     * state, let the dialog below complete it, and hand the answer back to whoever was waiting.
-     */
-    suspend fun ask(question: PendingQuestion): Boolean {
-        val answer = CompletableDeferred<Boolean>()
-        pending = PendingConfirmation(question, answer)
-        return try {
-            answer.await()
-        } finally {
-            pending = null
-        }
-    }
-
     // The factory-name check: which bank the result belongs to, whether a read is running, and
     // what it found. Deliberately not `rememberSaveable` like the regression run - a two-minute
     // read is not worth resuming across process death, and a stale verdict would be worse than
@@ -131,7 +114,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
         scope.launch {
             error = null
             verifyResult = null
-            verifyProgress = context.getString(R.string.debug_verify_starting)
+            verifyProgress = verifyStartingLabel
             try {
                 verifyResult = viewModel.verifyFactoryNames(bank) { step -> verifyProgress = step }
             } catch (e: CancellationException) {
@@ -140,30 +123,6 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                 error = e.message
             } finally {
                 verifyProgress = null
-            }
-        }
-    }
-
-    fun onRunRegressionTest() {
-        scope.launch {
-            error = null
-            run = RegressionRunState.Running(context.getString(R.string.debug_regression_starting))
-            try {
-                // Resolved before the run and kept with the report: the instrument that names
-                // the file is the one about to be tested, and it is not guaranteed to still be
-                // connected when Share is tapped - see [HeldDeviceReport].
-                val stem = viewModel.filenameStem
-                val report = viewModel.runRegressionTest(
-                    onConfirmSelect = { shown -> ask(PendingQuestion.ConfirmSelect(shown)) },
-                    onConfirmRealSlotMutation = { reason -> ask(PendingQuestion.ConfirmRealSlotMutation(reason)) },
-                    progress = { step -> run = RegressionRunState.Running(step) },
-                )
-                run = RegressionRunState.Done(report, stem)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                run = RegressionRunState.Idle
-                error = e.message
             }
         }
     }
@@ -177,23 +136,23 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val atMenu = run !is RegressionRunState.Done && deviceReport == null
     // Clears both; only one is ever set, since each report hides the button that starts the other.
     fun backToMenu() {
-        run = RegressionRunState.Idle
+        runner.dismissReport()
         deviceReport = null
     }
     val handleBack: () -> Unit = { if (atMenu) onBack() else backToMenu() }
     // Also catches the system/gesture back, which otherwise disagrees with the arrow beside it.
     BackHandler(enabled = !atMenu) { backToMenu() }
 
-    // A run in progress is not dismissable at all. It is writing to the instrument, and it runs
-    // on this screen's scope, so leaving the screen would cancel it between steps - after the
-    // test's copy is made, or between a swap and its swap-back - with nothing left to put the
-    // instrument right again. So the arrow is greyed out and the gesture swallowed, the presets
+    // A run in progress is not dismissable. It survives the screen (it runs in the ViewModel),
+    // but its confirmation dialogs are shown only here, and it holds the instrument mutex while
+    // it waits on one - so leaving would strand the run on a question nobody can see and block
+    // every edit behind it. The arrow is greyed out and the gesture swallowed, the presets
     // screen's shape during an edit. The wait is bounded: a run is a handful of writes with
     // pauses between them, and an instrument that stops answering fails the run through the
     // exchange timeouts. Never enabled together with the handler above, since `Running` counts
-    // as `atMenu` - so which of the two Compose consults first does not matter.
+    // as `atMenu`, so which of the two Compose consults first does not matter.
     //
-    // The device report read is *not* held like this: it writes nothing, so leaving mid-read
+    // The device report read is not held like this: it writes nothing, so leaving mid-read
     // costs only the read.
     val running = run is RegressionRunState.Running
     BackHandler(enabled = running) {
@@ -213,7 +172,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            (error ?: sharer.error)?.let {
+            (error ?: runError ?: sharer.error)?.let {
                 Text(stringResource(R.string.programs_error, it), color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(8.dp))
             }
@@ -312,7 +271,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     Text(stringResource(R.string.debug_regression_body), style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
                     Button(
-                        onClick = { onRunRegressionTest() },
+                        onClick = { runner.start(regressionStartingLabel) },
                         enabled = verifyProgress == null,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -498,43 +457,6 @@ private fun ReportActions(onShare: () -> Unit, onSave: () -> Unit, onBackToMenu:
 }
 
 /**
- * Where the regression run has got to.
- *
- * A sub-state of this screen rather than a fourth navigation route: nothing outside can link to a
- * finished run, and a report that survived leaving the screen would be a claim about an instrument
- * the app may no longer be connected to.
- */
-private sealed interface RegressionRunState {
-    data object Idle : RegressionRunState
-
-    data class Running(val step: String) : RegressionRunState
-
-    /** [stem] is the instrument's filename stem, resolved before the run - see [HeldDeviceReport]. */
-    data class Done(val report: RegressionReport, val stem: String) : RegressionRunState
-}
-
-private fun regressionRunStateToStrings(state: RegressionRunState): List<String> {
-    val done = state as? RegressionRunState.Done ?: return emptyList()
-    val flattened = mutableListOf(done.stem, done.report.summary)
-    done.report.results.forEach { result ->
-        flattened.add(result.name)
-        flattened.add(result.status.name)
-        flattened.add(result.detail)
-    }
-    return flattened
-}
-
-private fun regressionRunStateFromStrings(saved: List<String>): RegressionRunState {
-    if (saved.isEmpty()) return RegressionRunState.Idle
-    val stem = saved[0]
-    val summary = saved[1]
-    val results = saved.drop(2).chunked(3).map { triple ->
-        RegressionResult(triple[0], Status.valueOf(triple[1]), triple[2])
-    }
-    return RegressionRunState.Done(RegressionReport(results, summary), stem)
-}
-
-/**
  * A device report once read, together with the filename stem and the description the share
  * dialog shows for it - both the instrument's own wording, resolved while it was connected.
  *
@@ -543,8 +465,8 @@ private fun regressionRunStateFromStrings(saved: List<String>): RegressionRunSta
  * app pauses under it and resumes when it closes, and a resume rebuilds a USB session from
  * scratch (`MainActivity.onResume`, `Instrument.rebuildOnResume`). Between the teardown and the
  * reconnect there is no instrument, while this report - `rememberSaveable` - is still on screen
- * with its buttons live. Reading `filenameStem` there crashed the app on a Nord Grand the second
- * time Share was tapped (2026-09-17). The regression run keeps its stem the same way.
+ * with its buttons live, so nothing about it may be resolved at share time. The regression run
+ * keeps its stem the same way.
  */
 private data class HeldDeviceReport(val json: String, val stem: String, val description: String)
 
@@ -553,57 +475,3 @@ private val HeldDeviceReportSaver: Saver<HeldDeviceReport?, Any> = listSaver(
     restore = { saved -> if (saved.isEmpty()) null else HeldDeviceReport(saved[0], saved[1], saved[2]) },
 )
 
-/**
- * Saves a finished [RegressionRunState.Done] across a configuration change; [RegressionRunState
- * .Idle] and a run still [RegressionRunState.Running] both save as nothing and restore to `Idle`.
- *
- * A run in progress could not meaningfully survive regardless of what this saved: its coroutine
- * lives in this screen's `rememberCoroutineScope()`, which a configuration change tears down along
- * with the rest of the composition, so a restored `Running` would show a progress bar nothing is
- * ever going to advance again. Idle is the honest state to land on instead - the buttons that
- * started it are right there.
- *
- * [RegressionReport] carries no `@Parcelize` (this project has no reason for that plugin
- * otherwise), so this flattens it to the flat string list `rememberSaveable` already knows how to
- * put in a Bundle rather than adding a dependency for one screen's state.
- *
- * Confirmed reproducible without this: rotating away from a finished run's report silently
- * reverted the screen to the plain menu, even though navigation itself stayed on `debug` the whole
- * time (2026-08-28).
- *
- * Typed `Saver<RegressionRunState, Any>`, not the `List<Saveable>` its name and samples suggest:
- * `listSaver`'s own declared return type is `Saver<Original, Any>` in this Compose version, since
- * it boxes the list itself rather than parameterising over its element type.
- */
-private val RegressionRunStateSaver: Saver<RegressionRunState, Any> = listSaver(
-    save = { state -> regressionRunStateToStrings(state) },
-    restore = { saved -> regressionRunStateFromStrings(saved) },
-)
-
-/** A question the run is blocked on, and the answer it is waiting for. */
-private class PendingConfirmation(
-    val question: PendingQuestion,
-    val answer: CompletableDeferred<Boolean>,
-)
-
-private sealed interface PendingQuestion {
-    @get:StringRes val title: Int
-
-    @get:StringRes val confirm: Int
-
-    @get:StringRes val decline: Int
-
-    /** Only the person holding the instrument can see what its display says. */
-    data class ConfirmSelect(val shownOnDevice: String) : PendingQuestion {
-        override val title = R.string.debug_confirm_select_title
-        override val confirm = R.string.debug_confirm_select_yes
-        override val decline = R.string.debug_confirm_select_no
-    }
-
-    /** The one prompt covering rename, move and swap against a slot holding real data. */
-    data class ConfirmRealSlotMutation(val reason: OccupiedSlotReason) : PendingQuestion {
-        override val title = R.string.debug_confirm_occupied_title
-        override val confirm = R.string.debug_confirm_occupied_yes
-        override val decline = R.string.action_cancel
-    }
-}

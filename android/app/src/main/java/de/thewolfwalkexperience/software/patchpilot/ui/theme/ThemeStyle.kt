@@ -26,9 +26,8 @@ import androidx.compose.ui.unit.dp
  * [PatchPilotTheme], and every stock Material component (buttons, dialogs, menus, the destructive
  * Delete styling) already gets them for free. This interface exists only for the handful of
  * things a token swap alone cannot produce: bespoke composables (a compass standing in for
- * a spinner) and bespoke decoration (a riveted frame, a mechanical slot bezel) that used to be a
- * `Boolean` read off the raw `AppTheme` value and a branch, scattered across `ConnectScreen`,
- * `ProgramsScreen`, `AppScaffold` and `MainActivity`.
+ * a spinner) and bespoke decoration (a riveted frame, a mechanical slot bezel), so no screen
+ * branches on the raw `AppTheme` value itself.
  *
  * **Adding a third theme** means implementing this interface once (see [SteampunkThemeStyle] for
  * the shape of it) and mapping it in [AppTheme.style] below - no screen file changes, since they
@@ -79,8 +78,8 @@ interface ThemeStyle {
 }
 
 /**
- * Plain Material, unchanged from before this app had a second theme: every function here either
- * hands back [base] untouched or renders the stock component it always rendered.
+ * Plain Material: every function here either hands back [base] untouched or renders the stock
+ * component.
  */
 object DefaultThemeStyle : ThemeStyle {
     override val dragHandleGlyph = "⠿"

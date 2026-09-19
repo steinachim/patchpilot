@@ -29,7 +29,7 @@ class FakeMidiTransport(
     override val incoming: Flow<ByteArray> = _incoming.asSharedFlow()
     override val rebuildOnResume = false
 
-    override fun send(bytes: ByteArray) {
+    override suspend fun send(bytes: ByteArray) {
         sent += bytes
         respond(bytes).forEach { _incoming.tryEmit(it) }
     }

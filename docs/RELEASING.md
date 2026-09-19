@@ -1,23 +1,17 @@
 # Releasing
 
-How a version of PatchPilot gets from `main` to GitHub Releases, F-Droid and Google Play. Store
-metadata lives in `fastlane/metadata/android/en-US/` and is read by F-Droid directly from the
-repo; Play is fed the same files.
+How a version of Patch Pilot gets from `main` to GitHub Releases, and, once the app is listed there, to F-Droid and Google Play. Store metadata lives in `fastlane/metadata/android/en-US/`; F-Droid reads it from the repository directly, and the same files are uploaded to Play.
+
+Status: as of 2026-09-19 the app is distributed only as a signed APK attached to a GitHub Release. The F-Droid and Play steps below describe the intended procedure and have not been exercised; see [TODO.md](../TODO.md) for what has to happen before they can be.
 
 ## 1. Prepare the release commit
 
 On a release branch off `main`:
 
-1. In `android/app/build.gradle.kts`, bump `versionName` and increase `versionCode` by one.
-   `versionCode` must never go down or repeat - Play rejects the upload and F-Droid pins each
-   build to it.
-2. In `CHANGELOG.md`, rename the "Next release" heading to the version and start a fresh
-   "Next release" section above it.
-3. Add `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt` (500 characters at most -
-   Play's limit; a condensed version of the changelog section).
-4. Refresh screenshots in `fastlane/metadata/android/en-US/images/` if the UI changed. Play
-   accepts PNG/JPEG without alpha, each side 320-3840 px, longest side no more than twice the
-   shortest.
+1. In `android/app/build.gradle.kts`, bump `versionName` and increase `versionCode` by one. `versionCode` must never go down or repeat: Play rejects the upload, and F-Droid pins each build to it.
+2. In `CHANGELOG.md`, rename the "Next release" heading to the version and start a fresh "Next release" section above it.
+3. Add `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`, at most 500 characters (Play's limit), condensed from the changelog section.
+4. Refresh the screenshots in `fastlane/metadata/android/en-US/images/` if the UI changed. Play accepts PNG or JPEG without alpha, each side 320 to 3840 px, longest side at most twice the shortest.
 
 ## 2. Build and check
 
@@ -26,12 +20,11 @@ cd android
 ./gradlew testDebugUnitTest assembleRelease bundleRelease
 ```
 
-Outputs: `app/build/outputs/apk/release/patchpilot-v<version>.apk` (signed with the release key
-from `local.properties`) and `app/build/outputs/bundle/release/app-release.aab`.
+Outputs: `app/build/outputs/apk/release/patchpilot-v<version>.apk`, signed with the release key from `local.properties`, and `app/build/outputs/bundle/release/app-release.aab`.
 
-Install the release APK - not a debug build - on a phone, connect a real instrument, and run
-the regression test from the debug menu (five taps on the instrument name). R8 is only exercised
-by release builds.
+Install the release APK, not a debug build, on a phone, connect a real instrument and run the regression test from the debug menu (five taps on the instrument name). R8 runs only for release builds, so a missing keep rule shows up only there.
+
+`./gradlew lintRelease` passes with warnings only and is worth running before a release; CI does not run it.
 
 ## 3. Tag and publish on GitHub
 
@@ -42,32 +35,19 @@ gh release create v<version> android/app/build/outputs/apk/release/patchpilot-v<
     --title v<version> --notes-file <(sed -n '/^## <version>/,/^## /p' CHANGELOG.md | sed '1d;$d')
 ```
 
-## 4. F-Droid
+## 4. F-Droid (once listed)
 
-*not yet supported*
+Nothing to do. With `UpdateCheckMode: Tags` in the fdroiddata metadata, the F-Droid bot picks up the new `v*` tag, opens a merge request with the new `versionCode`, and the build server builds it from the tag. A build failure is reported in the fdroiddata issue tracker.
 
-Nothing to do. `UpdateCheckMode: Tags` in the fdroiddata metadata picks up the new `v*` tag,
-opens a merge request with the new `versionCode`, and the build server builds it from the tag.
-If the build fails, the F-Droid bot reports it in the fdroiddata issue tracker.
+## 5. Google Play (once listed)
 
-## 5. Google Play
-
-*not yet supported*
-
-Upload `app-release.aab` to the production track in the Play Console (or to a testing track
-first), paste the changelog entry as the release notes, and roll out. This can later be
-automated with `fastlane supply` against the same metadata directory.
+Upload `app-release.aab` to the production track in the Play Console (or to a testing track first), paste the changelog entry as the release notes, and roll out. This can later be automated with `fastlane supply` against the same metadata directory.
 
 ## Signing
 
-The local-only release key in `android/keystore/patchpilot-release.jks` signs GitHub APKs
-and is the Play upload key. Losing it means GitHub users can no longer update in place,
-so keep a backup of the keystore and `local.properties` outside this machine.
+The release key in `android/keystore/patchpilot-release.jks` signs the GitHub APKs. Both the keystore directory and `local.properties` are gitignored and have never been committed. Losing the key means GitHub users can no longer update in place, so keep a backup of the keystore and of `local.properties` outside this machine. The plan is to use the same key as the Play upload key; see TODO.md, "Signatures across channels".
 
-CI (`.github/workflows/android.yml`) signs `main` builds with the same key, read from four repository
-secrets that mirror the `local.properties` keys: `RELEASE_KEYSTORE_BASE64` (the `.jks` file,
-base64-encoded), `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD`. To set
-them from a machine that has the keystore and `local.properties`:
+CI (`.github/workflows/android.yml`) signs `main` builds with the same key, read from four repository secrets that mirror the `local.properties` keys: `RELEASE_KEYSTORE_BASE64` (the `.jks` file, base64-encoded), `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD`. To set them from a machine that has the keystore and `local.properties`:
 
 ```
 cd android
@@ -77,5 +57,4 @@ for k in RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
 done
 ```
 
-A push to `main` without these secrets fails at the signing step rather than producing an unsigned
-APK. Pull-request builds never use the key.
+A push to `main` without these secrets fails at the signing step rather than producing an unsigned APK. Pull-request builds never use the key.

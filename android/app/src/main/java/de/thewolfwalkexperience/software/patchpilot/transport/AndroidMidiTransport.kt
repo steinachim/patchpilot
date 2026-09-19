@@ -4,10 +4,12 @@ import android.media.midi.MidiDevice
 import android.media.midi.MidiInputPort
 import android.media.midi.MidiOutputPort
 import android.media.midi.MidiReceiver
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.withContext
 
 /**
  * [MidiTransport] over `android.media.midi`.
@@ -66,8 +68,9 @@ class AndroidMidiTransport(
         outputPort.connect(receiver)
     }
 
-    override fun send(bytes: ByteArray) {
-        inputPort.send(bytes, 0, bytes.size)
+    /** [MidiInputPort.send] writes to the MIDI service's socket, so it runs off the caller's thread. */
+    override suspend fun send(bytes: ByteArray) {
+        withContext(Dispatchers.IO) { inputPort.send(bytes, 0, bytes.size) }
     }
 
     /** Closes in reverse order of acquisition, and never lets an early failure skip the rest -

@@ -6,13 +6,11 @@ import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
  * A synthetic Nord instrument: answers every request [NordDevice] can send with a
  * protocol-correct reply built from [catalog], instead of talking to real hardware.
  *
- * **This is a test fixture, and no longer what the app's demo mode runs on.** It used to be
- * both. Being a *wire-level* fake is exactly what makes it valuable in a test - the real
- * [NordDevice] parses these bytes, so its framing, its cursor walk and its lock discipline are all
- * genuinely exercised - and exactly what made it the wrong basis for demo mode once a second
- * family existed, since showing the UI would then have needed a second fake wire (a fake Pro-800
- * answering SysEx) for no gain. Demo mode now lives one layer up, in
- * [de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument].
+ * **This is a test fixture, not what the app's demo mode runs on.** Being a *wire-level* fake is
+ * what makes it valuable in a test - the real [NordDevice] parses these bytes, so its framing, its
+ * cursor walk and its lock discipline are all genuinely exercised. Demo mode lives one layer up,
+ * in [de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument], so that showing the UI
+ * needs no fake wire per family.
  *
  * Structurally this is [ReplayTransport] with a live instrument's state machine instead of a
  * fixed script: it tracks which category is currently SELECT_CATEGORY-locked (mirroring the lock
@@ -232,11 +230,10 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
 
     companion object {
         /**
-         * **10, and not an arbitrary number.** This used to be 90, from when the field was read as
-         * a target id and nothing depended on its value. It is the file-transfer protocol version,
-         * so it has to be one this app accepts - outside 3-10 the connection is now
-         * refused - and it has to agree with what this fake actually serves:
-         * [ROOT_CATEGORY_TRAILER_LEN] below is 29, which is the version-10 layout.
+         * **10, and not an arbitrary number.** It is the file-transfer protocol version, so it has
+         * to be one this app accepts - outside 3-10 the connection is refused - and it has to
+         * agree with what this fake actually serves: [ROOT_CATEGORY_TRAILER_LEN] below is 29,
+         * which is the version-10 layout.
          */
         private const val DEMO_PROTOCOL_VERSION_FILE_TRANSFER = 10
         private const val ROOT_CATEGORY_TRAILER_LEN = 29

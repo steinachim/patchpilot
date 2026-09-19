@@ -36,8 +36,7 @@ interface InstrumentFamily {
  * Family id -> family, resolved at compile time.
  *
  * Order matters where more than one instrument is connected at once: the first family with a
- * match wins, exactly as the Nord catalog's own list order used to decide between two connected
- * Nords.
+ * match wins, as the Nord catalog's own list order decides between two connected Nords.
  */
 object InstrumentRegistry {
     private val families: List<InstrumentFamily> by lazy {

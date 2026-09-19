@@ -22,9 +22,9 @@ data class SlotAddress(val bank: Int, val slot: Int) {
  * Renders and parses the ids an instrument's own UI and manual use, so that nothing above this
  * has to know what they look like.
  *
- * The UI must never take an id apart itself. `ProgramsScreen` used to recover a bank letter with
- * `presetId.substringBefore(':')`, which is correct for `A:1:1` and silently wrong for `A00` -
- * hence [PresetSlot.bankLabel], which travels on the row rather than being re-derived.
+ * The UI must never take an id apart itself: recovering a bank letter with
+ * `presetId.substringBefore(':')` is correct for `A:1:1` and silently wrong for `A00` - hence
+ * [PresetSlot.bankLabel], which travels on the row rather than being re-derived.
  */
 interface AddressFormat {
     /** e.g. `"A:1:1"` on a Nord Grand, `"A00"` on a Pro-800. */

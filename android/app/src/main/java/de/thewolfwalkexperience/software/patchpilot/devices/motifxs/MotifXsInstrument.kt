@@ -115,9 +115,7 @@ class MotifXsInstrument(
             firmwareVersion = firmware,
             // USB, not MIDI. This instrument exposes no MIDIStreaming interface and gets no
             // MIDI port at all, so its catalog entry is a `usb` match and UsbHostDiscovery is what
-            // finds it - see InstrumentDescriptor.MidiIdentity.portIndex's note. It reported
-            // "MIDI" here for as long as the match had been USB, and nothing could notice while
-            // this was a string.
+            // finds it.
             bus = Bus.USB,
             stableKey = "motifxs:$descriptorId",
         )
@@ -180,9 +178,9 @@ class MotifXsInstrument(
      * **A Motif XS routes MIDI to exactly one destination** - its DIN sockets, USB, or mLAN - and
      * set to any but USB it still enumerates, still gets permission, still opens its bulk
      * endpoints, and then ignores every byte the app sends. Nothing about the connection looks
-     * wrong; the instrument is simply listening somewhere else. Before this check the session was
-     * built anyway and the user got a working-looking app where each operation timed out
-     * separately, none of them able to say why.
+     * wrong; the instrument is simply listening somewhere else. Without this check the session
+     * would be built anyway, and every operation would time out separately with no way to say
+     * why.
      *
      * **Two different probes have to be silent, not one.** The identity inquiry is a Universal
      * SysEx message and the mode request is Yamaha's own; one going unanswered is thin evidence,
@@ -349,9 +347,6 @@ class MotifXsInstrument(
             }
         }
 
-
-
-
         /**
          * Erases a slot by writing an initialised voice over it.
          *
@@ -374,8 +369,8 @@ class MotifXsInstrument(
         /**
          * Swap: read both, write each to the other's address.
          *
-         * Needs no fabricated payload - every byte written was read off this instrument moments
-         * earlier - which is why it is the safer of the two and why it is implemented first.
+         * Needs no blank payload: every byte written was read off this instrument moments
+         * earlier.
          */
         override suspend fun swap(a: SlotAddress, b: SlotAddress) {
             requireWritable(a)
@@ -436,10 +431,7 @@ class MotifXsInstrument(
         /**
          * Move: write the voice to the destination, then clear the source.
          *
-         * The clear needs an **initialised voice payload**, and this app does not have one - the
-         * vendor's editor sent a 1,903-byte one it built itself. Rather than fabricate bytes that
-         * have never been on this wire, the payload is taken from a slot the instrument itself
-         * reports empty. If the bank holds none, the move is refused rather than half-done.
+         * The clear writes the shipped blank for the bank's kind of voice - see [blankPayloadFor].
          *
          * Both writes are offered before the single commit, which makes the move atomic: if the
          * source-clearing write is refused, nothing has been committed and the voice is still
@@ -490,8 +482,6 @@ class MotifXsInstrument(
             )
         }
 
-
-
         /**
          * An initialised-voice payload to write over a cleared slot, per kind of voice.
          *
@@ -511,8 +501,8 @@ class MotifXsInstrument(
          * disagrees with its length are all answered with no acknowledgement at all, and none of
          * them is buffered.
          *
-         * This used to be `exchange.tell` - fire and forget - which threw away the one signal the
-         * write path has.
+         * Waited for rather than fired and forgotten, because the acknowledgement is the one
+         * signal the write path has.
          *
          * **A failure here is not always "nothing happened".** A refused write leaves nothing
          * pending, but an *earlier* accepted write in the same operation is still held by the
@@ -545,18 +535,6 @@ class MotifXsInstrument(
         }
 
         /**
-         * Commits every write offered since the last commit.
-         *
-         * `11 00 00`, a zero-payload bulk dump. Its acknowledgement takes ~160 ms against ~19 ms
-         * for a data dump, which is the flash write happening.
-         *
-         * **Scope is "everything pending", not "the writes I just made".** That is worth stating
-         * because an accepted-but-uncommitted write can survive being left abandoned - even
-         * across the instrument being reconnected to a different host - and then get applied
-         * later by an unrelated commit. It is also why [write] failing must abort the whole
-         * operation rather than press on: an uncommitted write is not discarded, it is armed.
-         */
-        /**
          * Runs [writes] and the commit that applies them as **one uninterruptible unit**.
          *
          * **An accepted write is armed, not pending.** [commit] applies everything offered since
@@ -581,6 +559,18 @@ class MotifXsInstrument(
             commit()
         }
 
+        /**
+         * Commits every write offered since the last commit.
+         *
+         * `11 00 00`, a zero-payload bulk dump. Its acknowledgement takes ~160 ms against ~19 ms
+         * for a data dump, which is the flash write happening.
+         *
+         * **Scope is "everything pending", not "the writes I just made".** That is worth stating
+         * because an accepted-but-uncommitted write can survive being left abandoned - even
+         * across the instrument being reconnected to a different host - and then get applied
+         * later by an unrelated commit. It is also why [write] failing must abort the whole
+         * operation rather than press on: an uncommitted write is not discarded, it is armed.
+         */
         private suspend fun commit() {
             try {
                 exchange.exchange(
@@ -655,12 +645,11 @@ class MotifXsInstrument(
                 if (MotifXsSysEx.isCommonBlock(block)) patchedCommonBlock(block, patch)
                 else MotifXsSysEx.rebuildForHost(config.deviceNumber, block)
             }
-        // **No expected block count.** A Normal Voice is 24 blocks and a Drum Voice is 81, and
-        // hard-coding either is what used to refuse the other. The shape comes from the
-        // instrument and every byte but the patched ones goes straight back, so the checks that
-        // matter are about integrity rather than about recognising a layout: a header and a
-        // footer arrived, every block is well-formed, and exactly one Common block is present to
-        // patch. Those hold whatever the instrument sent.
+        // **No expected block count.** A Normal Voice is 24 blocks and a Drum Voice is 81; the
+        // shape comes from the instrument and every byte but the patched ones goes straight back,
+        // so the checks that matter are about integrity rather than about recognising a layout:
+        // a header and a footer arrived, every block is well-formed, and exactly one Common block
+        // is present to patch. Those hold whatever the instrument sent.
         check(body.isNotEmpty()) { "the documented read of $where carried no blocks" }
 
         val sequence = buildList {
@@ -853,17 +842,16 @@ class MotifXsInstrument(
     /**
      * Refuses a selection the instrument would silently ignore.
      *
-     * Selection works in Voice mode only: in Performance and
-     * Song mode the three parameter sets draw **no echo at all** and change nothing - not the
-     * Performance, not any part's voice assignment. Before this check the app waited out its
-     * timeout and reported "the instrument did not answer", which is true and useless; the player
-     * needs to be told their instrument is in the wrong mode.
+     * Selection works in Voice mode only: in Performance and Song mode the three parameter sets
+     * draw **no echo at all** and change nothing - not the Performance, not any part's voice
+     * assignment. Without this check the selection would time out and report "the instrument did
+     * not answer", which is true and useless; the player needs to be told their instrument is in
+     * the wrong mode.
      *
-     * **Refusing rather than switching is deliberate**, a decision deferred until the behaviour
-     * was measured. The mode change is a documented message and would be easy
-     * to send - but taking a player out of the Performance or Song they are using is a visible,
-     * stateful change to their setup, and doing it silently to make a browser row work is a worse
-     * failure than the one it fixes. The message says what to press.
+     * **Refusing rather than switching silently is deliberate.** The mode change is a documented
+     * message and easy to send - but taking a player out of the Performance or Song they are
+     * using is a visible, stateful change to their setup, so it is offered as a remedy and sent
+     * only after they accept.
      *
      * **An unreadable mode does not block anything.** If the instrument will not answer the mode
      * request, the selection is attempted anyway: this check exists to turn a silent failure into
@@ -897,9 +885,8 @@ class MotifXsInstrument(
         exchange.tell(MotifXsSysEx.setMode(config.deviceNumber, MotifXsMode.VOICE))
 
         // **Poll until it settles; do not read it back once.** Changing mode is not instant - the
-        // instrument tears down a Performance and loads a voice - and the first version read the
-        // mode immediately after sending, got the *old* value every time, and reported a switch
-        // that had plainly worked as having failed.
+        // instrument tears down a Performance and loads a voice - and a read straight after the
+        // send returns the *old* value, reporting a switch that works as having failed.
         //
         // Polled rather than given a fixed delay because a constant here is wrong in one
         // direction or the other: too short and this comes back, too long and every switch pays
@@ -996,12 +983,6 @@ class MotifXsInstrument(
                     reply.size > 8 && (reply[7].toInt() and 0xFF) == MotifXsSysEx.SELECT_PROGRAM
             }
         }
-
-        /**
-         * The instrument echoes each set back, so this can claim more than a Pro-800's "sent" -
-         * but less than a Nord's verified read-back, because the echo is of the request rather
-         * than of the resulting state.
-         */
     }
 
     // ---- PresetBrowser ----
@@ -1043,10 +1024,9 @@ class MotifXsInstrument(
      * full [index] would skip.
      *
      * Same streaming shape and the same per-slot failure isolation as [index]; the only
-     * difference is the range. No catalogued bank sets `indexByDefault` to false today, so this
-     * is unreachable from the current catalog - it exists for when the factory banks are added
-     * (see [layout]'s doc comment): a caller that opened a 64-slot PRE DR then would pay 64
-     * dumps (~67 s), not a walk of the whole instrument.
+     * difference is the range. The debug menu uses it to check one factory bank against the
+     * shipped name table: a 64-slot PRE DR costs 64 dumps (~67 s), not a walk of the whole
+     * instrument.
      */
     fun indexBank(bank: Int): Flow<IndexUpdate> = flow {
         val spec = config.banks.getOrNull(bank)
@@ -1240,10 +1220,9 @@ class MotifXsInstrument(
     /**
      * Re-reads one row after an edit.
      *
-     * **A factory row is rebuilt from the table, not dumped.** Nothing used to arrive here with a
-     * read-only address, because no edit could target one; favoriting a factory voice can. Its
-     * name and categories cannot have changed anyway - only the mark did, and the mark is not
-     * carried on the row.
+     * **A factory row is rebuilt from the table, not dumped.** The one edit that can target a
+     * read-only address is favoriting, and that changes neither the name nor the categories -
+     * only the mark, which is not carried on the row.
      */
     override suspend fun refresh(address: SlotAddress): PresetSlot {
         val spec = config.banks[address.bank]
@@ -1269,12 +1248,10 @@ class MotifXsInstrument(
             // possibility rather than a theoretical one, and accepting it would put one voice's
             // name on another's row.
             //
-            // **Well-formedness is part of the match, and that is the point.** It used to be
-            // checked *after* the exchange returned, which meant a truncated dump was accepted as
-            // "the reply", the retry machinery never saw it, and the slot failed permanently on
-            // a fault that is transient by nature. On a live 416-voice scan that showed up as a
-            // handful of slots reading "arrived damaged" with zero retries logged against them.
-            // Rejecting it here instead lets `exchange` do what it is for.
+            // **Well-formedness is part of the match, and that is the point.** Checked after the
+            // exchange returned, a truncated dump would be accepted as "the reply", the retry
+            // machinery would never see it, and the slot would fail permanently on a fault that
+            // is transient by nature. Rejecting it here lets `exchange` retry.
             MotifXsSysEx.typeOf(message) == MotifXsSysEx.TYPE_BULK_DUMP &&
                 MotifXsSysEx.addressOf(message) ==
                 Triple(bank.addressHi, bank.addressMid, address.slot) &&

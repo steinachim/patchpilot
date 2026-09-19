@@ -24,9 +24,8 @@ interface Transport {
 /**
  * The vendor-protocol bus: paired bulk endpoints plus the control pipe.
  *
- * [controlTransfer] is generic on purpose. It used to be `controlReadFirmware(wLength)`, which is
- * not a transport concept at all - it is Nord vendor request 4, and it now lives in the Nord
- * device layer where the rest of that protocol's constants are.
+ * [controlTransfer] is generic on purpose: which request reads what (Nord vendor request 4 reads
+ * the firmware version) is a property of a protocol, and lives in that device layer.
  */
 interface UsbBulkTransport : Transport {
     fun bulkWrite(data: ByteArray)
@@ -60,6 +59,13 @@ interface UsbBulkTransport : Transport {
  * for the other touches no code above this line.
  */
 interface MidiTransport : Transport {
-    fun send(bytes: ByteArray)
+    /**
+     * Writes one message to the port.
+     *
+     * Suspending, so an implementation can move a blocking write off the caller's thread: a USB
+     * bulk transfer blocks until the device has accepted the data, and the caller is usually a
+     * coroutine on the main dispatcher.
+     */
+    suspend fun send(bytes: ByteArray)
     val incoming: Flow<ByteArray>
 }

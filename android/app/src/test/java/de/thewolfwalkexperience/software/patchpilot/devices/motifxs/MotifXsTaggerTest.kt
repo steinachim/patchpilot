@@ -441,11 +441,10 @@ class MotifXsTaggerTest {
      * **A voice with no categories can still be favorited**, and the mark written is the one the
      * instrument's own front panel writes.
      *
-     * Measured on hardware (2026-09-08): marking a category-less USER voice via Category Search ->
-     * FAVORITE stores `2` and the voice then appears in the instrument's FAVORITE bank. This was
-     * refused here on the reasoning that such a mark "lists the voice nowhere", which the
-     * instrument disproves by making the same mark itself. It matters at scale rather than as a
-     * corner case: 43 of the 128 voices in the USR1 bank measured carry no category at all.
+     * Measured on hardware: marking a category-less USER voice via Category Search -> FAVORITE
+     * stores `2` and the voice then appears in the instrument's FAVORITE bank, so such a mark
+     * does not "list the voice nowhere". It matters at scale rather than as a corner case: 43 of
+     * the 128 voices in the USR1 bank measured carry no category at all.
      */
     @Test
     fun `a voice with no categories can still be favorited`() = runTest {

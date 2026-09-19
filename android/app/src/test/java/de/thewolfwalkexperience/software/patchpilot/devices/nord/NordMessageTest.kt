@@ -62,9 +62,9 @@ class NordMessageTest {
     }
 
     /**
-     * Trailing bytes belong to whatever comes next, not to this message's checksum. This used to
-     * read the last two bytes of the *buffer* as the CRC, which is right only when the buffer
-     * holds exactly one whole message.
+     * Trailing bytes belong to whatever comes next, not to this message's checksum. Reading the
+     * last two bytes of the *buffer* as the CRC is right only when the buffer holds exactly one
+     * whole message.
      */
     @Test
     fun `parse is delimited by the declared length, not the buffer size`() {

@@ -22,6 +22,8 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.Locale
@@ -70,6 +72,17 @@ class NordInstrument(
     private val categories: NordCategories? = NordCategories.resolve(device.profile, programCategories)
 
     /**
+     * Serialises every operation against [device].
+     *
+     * The protocol allows one outstanding request, and every operation is a sequence of them
+     * inside a category lock; [NordDevice] itself keeps no lock. The listing and the edits are
+     * launched independently by the ViewModel, so this is where two of them are kept from
+     * interleaving on the same endpoint. Shared with [NordTagger], which talks to the same
+     * device.
+     */
+    private val deviceLock = Mutex()
+
+    /**
      * Rebuilt from [NordDevice.profile] on every read rather than captured once, because
      * `applyDerivedBankLayout()` replaces an unknown device's guessed bounds with the
      * instrument's own during [connect] - a layout captured in the constructor would be the guess
@@ -108,12 +121,9 @@ class NordInstrument(
      * with no master name list - rather than a facet offering an empty list of categories and
      * refusing every write. Same rule the Motif XS applies to a catalog with no encoding.
      */
-    override val tagger: PresetTagger? = categories?.let { NordTagger(device, it) }
+    override val tagger: PresetTagger? = categories?.let { NordTagger(device, it, deviceLock) }
 
     override val report: DeviceReporter get() = this
-
-    /** Nothing about a Nord needs the user to fill it in: everything is read from the instrument
-     * or fixed by the protocol. */
 
     /**
      * Null until the item data path is ported (see `NordDevice.READ_BUFSIZE`'s
@@ -126,7 +136,7 @@ class NordInstrument(
 
     override val advisory: String? get() = device.firmwareAdvisory
 
-    override suspend fun connect() = mapNordFailure("connecting") { device.connect() }
+    override suspend fun connect() = exclusive("connecting") { device.connect() }
 
     override fun close() = device.close()
 
@@ -138,7 +148,7 @@ class NordInstrument(
      * instead.
      */
     suspend fun deriveBankLayout() {
-        device.applyDerivedBankLayout()
+        deviceLock.withLock { device.applyDerivedBankLayout() }
     }
 
     // ---- PresetBrowser ----
@@ -154,7 +164,7 @@ class NordInstrument(
      * that leads nowhere.
      */
     override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
-        val items = mapNordFailure("listing presets") {
+        val items = exclusive("listing presets") {
             device.collectItemNames(device.fetchCategoryItems(device.getProgramCategoryIndex()))
         }
         emit(IndexUpdate.Slots(items.map { it.toPresetSlot() }))
@@ -167,7 +177,7 @@ class NordInstrument(
      * a Nord (one walk), and only called after an edit.
      */
     override suspend fun refresh(address: SlotAddress): PresetSlot {
-        val items = mapNordFailure("re-reading a preset") {
+        val items = exclusive("re-reading a preset") {
             device.collectItemNames(device.fetchCategoryItems(device.getProgramCategoryIndex()))
         }
         val displayId = device.formatPresetId(address.bank, address.slot)
@@ -180,11 +190,8 @@ class NordInstrument(
         return PresetSlot(
             address = SlotAddress(parsed.bank, parsed.item),
             displayId = presetId,
-            // Asked of the formatter, not recovered from the id with `substringBefore(':')`.
-            // That shortcut is correct for a Nord's `A:1:1` and silently wrong for a flat `A00`,
-            // which is the whole reason [PresetSlot.bankLabel] travels on the row - see
-            // [de.thewolfwalkexperience.software.patchpilot.core.AddressFormat]. It was taken out
-            // of ProgramsScreen and left standing here, ten lines above [emptySlot] doing it right.
+            // Asked of the formatter, not recovered from the id with `substringBefore(':')` -
+            // see [de.thewolfwalkexperience.software.patchpilot.core.AddressFormat].
             bankLabel = addressFormat().bankLabel(parsed.bank),
             name = name,
             // Free: the tag is in the item record this row was already built from. Empty for an
@@ -203,9 +210,11 @@ class NordInstrument(
     // ---- PresetSelector ----
 
     override suspend fun select(address: SlotAddress) =
-        mapNordFailure("load a preset") { device.selectPreset(address.bank, address.slot) }
+        exclusive("load a preset") { device.selectPreset(address.bank, address.slot) }
 
-    /** A fact, not a hope: sub-opcode 47/48 echoes the address back and `selectPreset` checks it. */
+    // `confirmationFor` keeps its default: sub-opcode 47/48 echoes the address back and
+    // `selectPreset` checks it, so "Selected" is a fact.
+
     // ---- PresetEditor ----
 
     override val supported = setOf(EditOp.RENAME, EditOp.MOVE, EditOp.SWAP, EditOp.DELETE, EditOp.COPY)
@@ -229,13 +238,13 @@ class NordInstrument(
     override val maxNameLength: Int get() = device.profile.maxProgramNameLen
 
     override suspend fun rename(address: SlotAddress, newName: String) =
-        mapNordFailure("rename a preset") { device.renamePreset(address.bank, address.slot, newName) }
+        exclusive("rename a preset") { device.renamePreset(address.bank, address.slot, newName) }
 
     override suspend fun move(from: SlotAddress, to: SlotAddress) =
-        mapNordFailure("move a preset") { device.moveProgram(from.bank, from.slot, to.bank, to.slot) }
+        exclusive("move a preset") { device.moveProgram(from.bank, from.slot, to.bank, to.slot) }
 
     override suspend fun swap(a: SlotAddress, b: SlotAddress) =
-        mapNordFailure("swap two presets") { device.swapPrograms(a.bank, a.slot, b.bank, b.slot) }
+        exclusive("swap two presets") { device.swapPrograms(a.bank, a.slot, b.bank, b.slot) }
 
     /**
      * Sub-opcode 20/21 - the instrument empties the slot itself.
@@ -248,12 +257,12 @@ class NordInstrument(
      * still be told there is none.
      */
     override suspend fun delete(address: SlotAddress) =
-        mapNordFailure("delete a preset") { device.deleteProgram(address.bank, address.slot) }
+        exclusive("delete a preset") { device.deleteProgram(address.bank, address.slot) }
 
     /** Sub-opcode 22/23 - the instrument duplicates the
      * record and names the copy itself, which is why the name it chose comes back. */
     override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String =
-        mapNordFailure("copy a preset") { device.copyProgram(src.bank, src.slot, dst.bank, dst.slot) }
+        exclusive("copy a preset") { device.copyProgram(src.bank, src.slot, dst.bank, dst.slot) }
 
     // ---- DeviceReporter ----
 
@@ -266,9 +275,8 @@ class NordInstrument(
 
     /**
      * Everything the app can read off the connected instrument without changing anything on it,
-     * as JSON. Moved here verbatim from `InstrumentViewModel`, which is where it lived while
-     * there was only one family; the report's *shape* is Nord-specific (protocol version table, root
-     * categories, storage areas), so it belongs to the Nord adapter and not to a shared screen.
+     * as JSON. The report's *shape* is Nord-specific (protocol version table, root categories,
+     * storage areas), so it belongs to the Nord adapter and not to a shared screen.
      *
      * **Reads only.** Every call below is a query. The one side effect is that per-category
      * SELECT_CATEGORY briefly locks the instrument into status-message mode,
@@ -283,7 +291,7 @@ class NordInstrument(
      * carrying the categories, the child lists and the firmware version is worth far more to
      * whoever receives it than no report at all, and the failures are themselves a finding.
      */
-    override suspend fun buildReport(progress: ((String) -> Unit)?): String {
+    override suspend fun buildReport(progress: ((String) -> Unit)?): String = deviceLock.withLock {
         val d = device
         val failures = LinkedHashMap<String, String>()
 
@@ -324,8 +332,8 @@ class NordInstrument(
 
         progress?.invoke("Building report...")
         // Each area's allocation unit as the instrument itself reports it - the first word of
-        // that category's root-list trailer. Nothing derives or configures
-        // this any more; the fitted value beside it in the report is a cross-check on it.
+        // that category's root-list trailer. The fitted value beside it in the report is a
+        // cross-check on it.
         val reportedUnits = probe(failures, "storageUnits", emptyMap<Int, Int>()) {
             d.parseRootCategories(rootPayload)
                 .mapIndexedNotNull { i, c -> c.unitBytes?.let { unit -> i to unit } }
@@ -388,8 +396,12 @@ class NordInstrument(
             ),
         )
 
-        return REPORT_JSON.encodeToString(report)
+        REPORT_JSON.encodeToString(report)
     }
+
+    /** [block] under [deviceLock], with its failures translated by [mapNordFailure]. */
+    private suspend fun <T> exclusive(what: String, block: suspend () -> T): T =
+        deviceLock.withLock { mapNordFailure(what, block) }
 
     /**
      * Runs one probe for [buildReport], recording a failure under [what] and carrying on with
@@ -419,35 +431,6 @@ class NordInstrument(
 }
 
 /**
- * Turns a display name like "USB device (0x1234:0x5678)" into a devices/nord_devices.json-style
- * machine id - runs of anything but a-z0-9 collapse to one underscore, since the schema's `id`
- * pattern (`^[a-z][a-z0-9_]*$`) allows nothing else. A leading digit (or a name that collapses to
- * nothing at all) gets an underscore-joined "device" prefix, since that pattern also requires
- * starting with a letter.
- */
-
-/**
- * Translates a Nord failure into the [InstrumentException] the screens act on.
- *
- * **The Nord family was the last one throwing raw `IllegalStateException`s.** Pro-800 and Motif XS
- * adopted [InstrumentException] when they were written; this family predates it, so the sealed
- * hierarchy whose own doc says the UI must not match on message strings had exactly one family it
- * did not cover - the one most users have.
- *
- * The classification is by type, not by message:
- *
- *  - [NordStatusException] - the instrument answered and said no. Its code travels verbatim.
- *  - `IllegalArgumentException` - a reply this app cannot parse: a CRC
- *    mismatch, a short payload, a cursor that ran off the end.
- *  - [UnsupportedProtocolVersionException] - answered clearly, in a protocol nobody has profiled.
- *  - anything else, including the transport's own `IllegalStateException`s ("USB bulk write
- *    failed") - the link is gone, which is the one case a retry can actually fix.
- *
- * [what] is the operation in the user's terms, so [InstrumentException.NotSupported]'s and
- * [InstrumentException.DeviceRejected]'s sentences read correctly: "rename presets", not
- * "SET_NAME".
- */
-/**
  * Plain-language meaning for the status codes this protocol's replies are known to use.
  *
  * Null for anything else, which leaves the generic "refused (status N)" - honest about the fact
@@ -468,6 +451,22 @@ private fun nordStatusExplanation(what: String, status: Int): String? = when (st
     else -> null
 }
 
+/**
+ * Translates a Nord failure into the [InstrumentException] the screens act on.
+ *
+ * The classification is by type, not by message:
+ *
+ *  - [NordStatusException] - the instrument answered and said no. Its code travels verbatim.
+ *  - `IllegalArgumentException` - a reply this app cannot parse: a CRC
+ *    mismatch, a short payload, a cursor that ran off the end.
+ *  - [UnsupportedProtocolVersionException] - answered clearly, in a protocol nobody has profiled.
+ *  - anything else, including the transport's own `IllegalStateException`s ("USB bulk write
+ *    failed") - the link is gone, which is the one case a retry can actually fix.
+ *
+ * [what] is the operation in the user's terms, so [InstrumentException.NotSupported]'s and
+ * [InstrumentException.DeviceRejected]'s sentences read correctly: "rename presets", not
+ * "SET_NAME".
+ */
 private suspend fun <T> mapNordFailure(what: String, block: suspend () -> T): T = try {
     block()
 } catch (e: CancellationException) {

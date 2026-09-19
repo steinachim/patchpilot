@@ -22,11 +22,10 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
  * the instrument lists the voice in its Favorite bank under no category. So a voice with no
  * categories at all can still be a favorite.
  *
- * **Verified against an XS6 (2026-09-08).** Not just the protocol - this port. A favorite written
- * from the app left the rest of its bank's marks intact with their flag values, which is the
- * whole-table rule and the one a port gets wrong; a category write of `Bass`/`Dr/Pc` with no sub
- * stored `(4, 4)`/`(12, 4)`, one past each main's last sub rather than a hardcoded 5. See
- * `the hardware measurements`, session 8b.
+ * **Verified against an XS6.** A favorite written from the app leaves the rest of its bank's
+ * marks intact with their flag values (the whole-table rule), and a category write of
+ * `Bass`/`Dr/Pc` with no sub stores `(4, 4)`/`(12, 4)`, one past each main's last sub rather
+ * than a fixed 5.
  */
 internal class MotifXsTagger(
     private val instrument: MotifXsInstrument,
@@ -136,16 +135,12 @@ internal class MotifXsTagger(
         }
 
         // **A mark against an unassigned category is legal, and the instrument makes them itself.**
-        // Measured on hardware (2026-09-08): marking a category-less USER voice from the front
-        // panel - Category Search -> FAVORITE - writes `2`, the same value `setOf(0)` encodes to
-        // here, and the voice then appears in the instrument's own FAVORITE bank. So this is not
-        // a write that "lists the voice nowhere"; it is the ordinary way to favorite a voice that
-        // is filed under nothing, and 43 of the 128 voices in the USR1 bank measured are in
-        // exactly that state. Refusing it made a third of a user bank unfavoritable from here
-        // while the panel beside it allowed the same thing.
-        //
-        // No read of the voice's own categories is needed to decide that, which is why one no
-        // longer happens on this path.
+        // Measured on hardware: marking a category-less USER voice from the front panel -
+        // Category Search -> FAVORITE - writes `2`, the same value `setOf(0)` encodes to here,
+        // and the voice then appears in the instrument's own FAVORITE bank. So this is the
+        // ordinary way to favorite a voice that is filed under nothing (43 of the 128 voices in
+        // one USR1 bank measured are in that state), and no read of the voice's own categories
+        // is needed to decide it.
 
         val value = encodeMark(under)
         val table = instrument.readFavoriteTable(spec).copyOf()

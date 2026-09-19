@@ -27,16 +27,11 @@ import de.thewolfwalkexperience.software.patchpilot.core.Bus
  * edits - the shape "Try demo mode" on the connect screen shows, and the only one this class is
  * responsible for being faithful to.
  *
- * **This is demo mode's new home, one layer up from where it used to live.**
- * `DemoUsbTransport` fabricates *Nord wire bytes* so that the real `NordDevice` parses them, which
- * is genuinely valuable and stays - as a **test fixture**. It was the wrong basis for demo mode
- * once the app grew a second family, because it would have demanded a second fake wire (a fake
- * Pro-800 answering SysEx) purely to show the UI.
- *
- * A second, Pro-800-shaped profile used to live here too, kept only so the screens' facet-gating
- * could be exercised without hardware - never reachable from the UI itself. It has moved to
- * `core.NoCopyFixtureInstrument` in the test source set, which is what it always was: a test
- * fixture, not a second demo mode.
+ * Built on [Instrument] rather than on a fake transport, so that showing the UI does not require
+ * a fake wire protocol per family. `DemoUsbTransport` in the test source set does fabricate Nord
+ * wire bytes for the real `NordDevice` to parse, and is a test fixture; so is
+ * `core.NoCopyFixtureInstrument`, a Pro-800-shaped profile that exercises the screens'
+ * facet-gating without hardware.
  */
 class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, DeviceReporter {
 
@@ -75,13 +70,10 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
 
     override val report: DeviceReporter? = this
 
-    /** Demo mode has no unknowable settings - there is no instrument to be configured. */
-
     /** Demo mode doesn't pretend to hand out preset blobs; there is nothing meaningful to hand. */
     override val transfer: PresetTransfer? = null
 
-    /** There is no hardware to repair, so a resume must not tear this session down - which is
-     * what the `isDemoMode` special case in `MainActivity` used to be for. */
+    /** There is no hardware to repair, so a resume must not tear this session down. */
     override val rebuildOnResume = false
 
     override suspend fun connect() = Unit

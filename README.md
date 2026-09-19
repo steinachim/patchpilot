@@ -1,37 +1,38 @@
-# PatchPilot
+# Patch Pilot
 
-PatchPilot is a native Android app for browsing, organizing, and editing presets on hardware synthesizers over USB — renaming, copying, moving, and deleting presets directly from your phone or tablet, without needing a computer or the manufacturer's own editor software.
+Patch Pilot is a native Android app for browsing, organizing and editing the presets stored on a hardware synthesizer, over USB, from a phone or tablet. It renames, copies, moves and deletes presets on the instrument itself; no computer and no manufacturer editor is needed.
 
 ## Supported instruments
 
-- Nord Grand
-- Nord Grand 2
-- Nord Stage 2EX
-- Nord Stage 4
-- Nord Electro 7
-- Nord Piano 6
-- Nord Lead A1
-- Nord Wave 2
-- Behringer Pro-800
-- Yamaha Motif XS6/XS7/XS8 (only the XS6 tested against real hardware; XS7/XS8 USB product IDs are inferred from Yamaha's driver files and sequential-PID precedent, not yet confirmed on an actual unit)
+| Instrument | Connection | Status |
+|---|---|---|
+| Nord Electro 7 | USB (vendor protocol) | Verified on hardware |
+| Nord Grand | USB (vendor protocol) | Verified on hardware |
+| Nord Grand 2 | USB (vendor protocol) | Verified on hardware |
+| Nord Lead A1 | USB (vendor protocol) | Verified on hardware |
+| Nord Piano 6 | USB (vendor protocol) | Verified on hardware |
+| Nord Stage 2 EX | USB (vendor protocol) | Verified on hardware |
+| Nord Stage 4 | USB (vendor protocol) | Verified on hardware |
+| Nord Wave 2 | USB (vendor protocol) | Verified on hardware |
+| Behringer Pro-800 | USB-MIDI (class compliant) | Verified on hardware |
+| Yamaha Motif XS6 | USB (USB-MIDI packets on a vendor interface) | Verified on hardware |
+| Yamaha Motif XS7, XS8 | as XS6 | **Assumed.** Their USB product ids are inferred from Yamaha's driver files and have not been confirmed on a unit. |
 
-Each instrument connects over USB (directly, or via USB-MIDI where the instrument supports it).
+"Verified on hardware" means the app has been run against that model; the firmware versions it was run with are listed in the device catalog under [devices/](devices/). Connecting to a supported model with a firmware version that is not in the catalog shows a warning but is allowed.
 
-### Will PatchPilot support other Nord instruments automatically?
+### Other Nord instruments
 
-Likely, for another instrument in the same Nord/Clavia protocol family — this has already happened six times since the original two (Nord Stage 2EX and Nord Grand). Every Nord model above shares a single protocol implementation in this app; every behavioral difference between them is expressed as data — a device-catalog entry — rather than device-specific code. Adding a further Nord instrument that speaks the same USB protocol is expected to require only a new catalog entry (vendor/product id, bank layout, supported firmware), not new protocol code. Note that for safety reasons, a new firmware version will report a warning as it cannot be guaranteed that the instrument behavior will be the same. It will not prevent you from using the app, though.
+Every Nord model above is handled by one protocol implementation; the differences between models are data in [devices/nord_devices.json](devices/nord_devices.json) (USB ids, bank layout, tested firmware). Another Nord that speaks the same USB protocol is expected to need only a catalog entry. This is an expectation, not a guarantee: a new model may differ in ways the catalog cannot express.
 
-The app allows using unsupported Nord devices (with a warning). There is a debug menu (5 taps on the instrument name in the preset view to open), that allows you to run a regression test and share the report. Send it to me to add the instrument.
+An unrecognized Nord (Clavia USB vendor id) can be opened anyway from the connect screen, behind a warning. A hidden debug menu (five taps on the instrument name on the preset screen) runs a regression test against the connected instrument and shares the resulting report. To get such an instrument added, open an issue at <https://github.com/steinachim/patchpilot/issues> and attach that report.
 
-### Will PatchPilot support other instruments?
+### Other manufacturers
 
-The generalization of the connection protocols does not extend across vendors. Behringer Pro-800 and Yamaha Motif XS each required an independent, from-scratch protocol implementation, and nothing about either implies support for other instruments from those manufacturers — a further Behringer or Yamaha instrument would need its own implementation, verified against real hardware, just as these two did.
-
-I'll be adding more instruments when I get my hands on them (I have some still in the pipeline) and if they provide enough of a connection surface to allow reliable use of the app. In case you have specific requests, let me know and I'll see what I can do.
+The Behringer Pro-800 and the Yamaha Motif XS each have their own protocol implementation, and neither says anything about other instruments from the same manufacturer. A further Behringer or Yamaha instrument needs its own implementation, verified against real hardware. Requests are welcome as issues; support depends on access to the instrument.
 
 ## Screenshots
 
-As you can see, the app exists in two themes. More might follow if I'm feeling inspired.
+The app has two themes, System Default and Steampunk.
 
 <p>
   <img src="docs/screenshots/connect.png" alt="Connecting to an instrument" width="30%">
@@ -39,7 +40,11 @@ As you can see, the app exists in two themes. More might follow if I'm feeling i
   <img src="docs/screenshots/presets-system.png" alt="Preset browser (System theme)" width="30%">
 </p>
 
+Without an instrument, the connect screen offers a demo mode with a simulated instrument.
+
 ## Building
+
+Requirements: JDK 17 or newer to launch Gradle, and the Android SDK with platform 37 installed (`compileSdk` is 37). Gradle provisions its own daemon JDK as configured in [android/gradle/gradle-daemon-jvm.properties](android/gradle/gradle-daemon-jvm.properties).
 
 ```
 cd android
@@ -53,28 +58,33 @@ cd android
 ./gradlew testDebugUnitTest
 ```
 
-The build reads the device catalog from `../devices` relative to `android/` (JSON descriptors and binary fixtures used to generate the app's USB device filter and asset bundle) — keep the `devices/` and `android/` directories as siblings.
+The build reads the device catalog from `../devices` relative to `android/` (the JSON descriptors and the binary blanks under `devices/blanks/`) and copies it into the app's assets; it also generates the USB device filter from the catalog's USB ids. Keep `devices/` and `android/` as siblings.
 
 ### Continuous integration
 
-[GitHub Actions](.github/workflows/android.yml) runs the unit tests and `assembleRelease bundleRelease` on every pull request and on every push to `main`. Pushes to `dev` or to a feature branch without a pull request do not trigger a build. A failing test or build fails the run, and the test reports are then attached to it as an artifact.
+[GitHub Actions](.github/workflows/android.yml) runs the unit tests and `assembleRelease bundleRelease` on every pull request and on every push to `main`. Pushes to other branches without a pull request do not trigger a build. On `main` the release APK and bundle are signed with the release key held in repository secrets (see [RELEASING.md](docs/RELEASING.md#signing)) and attached to the run as an artifact for 30 days. Pull-request builds are unsigned.
 
-On `main` the release APK and bundle are signed with the release key, held in repository secrets (see [RELEASING.md](docs/RELEASING.md#signing)), and attached to the run as an artifact for 30 days. Pull-request builds are unsigned.
+## Documentation
 
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for a tour of the codebase and [PROTOCOLS.md](docs/PROTOCOLS.md) for the wire protocols each device implementation uses, and [RELEASING.md](docs/RELEASING.md) for how a version is published.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): a tour of the codebase.
+- [docs/PROTOCOLS.md](docs/PROTOCOLS.md): the wire protocol each device implementation uses.
+- [docs/RELEASING.md](docs/RELEASING.md): how a version is built and published.
+- [devices/README.md](devices/README.md): the device catalog and how to add an instrument.
+- [TODO.md](TODO.md): what remains before the app is listed on F-Droid and Google Play.
+- [CHANGELOG.md](CHANGELOG.md).
 
 ## Legal
 
-Patch Pilot collects no data and has no network access - see [PRIVACY.md](PRIVACY.md).
+Patch Pilot collects no data and has no network access; see [PRIVACY.md](PRIVACY.md).
 
-PatchPilot is an independent, unofficial project. It is not affiliated with, endorsed by, or supported by Clavia DMI AB (Nord), Music Tribe / Behringer, or Yamaha Corporation. Product and brand names are used solely to identify the hardware this app is compatible with.
+Patch Pilot is an independent, unofficial project. It is not affiliated with, endorsed by, or supported by Clavia DMI AB (Nord), Music Tribe / Behringer, or Yamaha Corporation. Product and brand names are used solely to identify the hardware this app is compatible with.
 
-This software interacts with your instrument's internal storage, including operations that overwrite or delete presets. It is provided "AS IS", without warranty of any kind, as permitted by the license below. Use with real hardware is at your own risk.
+This software changes your instrument's internal storage, including operations that overwrite or delete presets. It is provided "AS IS", without warranty of any kind, as permitted by the license below. Use with real hardware is at your own risk.
 
 ## License
 
-PatchPilot is licensed under the GNU General Public License v3.0 (SPDX: `GPL-3.0-only`) — see [LICENSE](LICENSE). Third-party license notices for bundled dependencies and fonts are listed in [android/NOTICE.md](android/NOTICE.md).
+Patch Pilot is licensed under the GNU General Public License v3.0 (SPDX: `GPL-3.0-only`); see [LICENSE](LICENSE). Third-party license notices for bundled dependencies and fonts are listed in [android/NOTICE.md](android/NOTICE.md).
 
-## Thank You
+## Thank you
 
-Thanks to both my bands [The Wolfwalk Experience](https://www.youtube.com/@thewolfwalkexperience) and [The Jukes](https://www.youtube.com/@thejukesmusicgermany) without whom I'd never have started this project. Go and give them a listen!
+Thanks to both my bands, [The Wolfwalk Experience](https://www.youtube.com/@thewolfwalkexperience) and [The Jukes](https://www.youtube.com/@thejukesmusicgermany), without whom this project would not have started. Go and give them a listen.

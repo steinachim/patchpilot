@@ -3,6 +3,7 @@ package de.thewolfwalkexperience.software.patchpilot.transport
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val TAG = "UsbMidiBulkTransport"
 
@@ -62,27 +64,18 @@ class UsbMidiBulkTransport(
      *
      * **Sized against the largest message and the longest stall, not against a typical one.**
      * One element is emitted per 64-byte USB transfer, each carrying only ~6 MIDI bytes, so a
-     * 1.9 kB voice is ~320 elements and a 12.6 kB drum kit ~2,100 - already four times the 512
-     * this used to hold. The buffer only actually fills when the collector falls behind, and the
-     * thing that makes it fall behind is not slow code: a **148 ms GC pause** during a live scan,
-     * at the ~473 us the instrument leaves between transfers, is ~310 elements of backlog on its
-     * own.
+     * 1.9 kB voice is ~320 elements and a 12.6 kB drum kit ~2,100. The buffer only fills when
+     * the collector falls behind, and what makes it fall behind is not slow code: a **148 ms GC
+     * pause** during a live scan, at the ~473 us the instrument leaves between transfers, is
+     * ~310 elements of backlog on its own.
      *
-     * When it does overflow, DROP_OLDEST discards the *front* of a message in flight. The framer
-     * then sees a truncated stream, drops it, and the read times out - which is exactly the
-     * "2 slots could not be read" that scattered itself across 416-voice scans and succeeded on
-     * the retry every time. Retries hid it; they did not fix it.
-     *
-     * 8192 covers the worst message plus a stall several times longer than any yet seen. The cost
-     * is bounded and small: elements are ~6-byte arrays, so a full buffer is a couple of hundred
-     * kilobytes, and it is only ever *reached* in the pathological case this exists to survive.
-     *
-     * **Honest about what this did and did not fix.** Truncated dumps kept arriving after this
-     * change at the same rate as before it; what stopped them costing a slot was making
-     * well-formedness part of the read's matcher, so the retry could act on them (see
-     * `MotifXsInstrument.readSlot`). This buffer is defensible on the arithmetic above and was
-     * *not* measured to reduce the corruption rate. If this ever needs re-justifying, that is the
-     * experiment: put it back to 512 and count damaged replies.
+     * When it does overflow, DROP_OLDEST discards the *front* of a message in flight; the framer
+     * then sees a truncated stream, drops it, and the read is retried (see
+     * `MotifXsInstrument.readSlot`, which makes well-formedness part of the match so the retry
+     * can act on it). 8192 covers the worst message plus a stall several times longer than any
+     * measured, at a bounded cost: elements are ~6-byte arrays, so a full buffer is a couple of
+     * hundred kilobytes, and it is only reached in the case this exists to survive. The size was
+     * chosen on this arithmetic; it was not measured to change the corruption rate.
      */
     private val _incoming = MutableSharedFlow<ByteArray>(
         replay = 0,
@@ -103,11 +96,10 @@ class UsbMidiBulkTransport(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // **Never rethrown.** This used to be `if (isActive) throw it`, which handed the
-                // exception to the scope - and a SupervisorJob does not consume one, it only spares
-                // the siblings. With no CoroutineExceptionHandler installed anywhere it reached the
-                // platform's default handler, so an endpoint erroring mid-session took the whole
-                // process down. A dead endpoint is a session outcome, not a programming error.
+                // **Never rethrown.** An exception handed to the scope is not consumed by its
+                // SupervisorJob, which only spares the siblings; it reaches the scope's
+                // CoroutineExceptionHandler, and a dead endpoint is a session outcome, not a
+                // programming error worth that.
                 if (++consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
                     Log.w(TAG, "Giving up on the IN endpoint after $consecutiveFailures " +
                         "consecutive failures; this session is over.", e)
@@ -145,12 +137,15 @@ class UsbMidiBulkTransport(
      * states how many bytes it carries, which cannot be known until the `F7` is in hand. A
      * transport that silently packed a fragment would produce a stream no receiver can reassemble.
      */
-    override fun send(bytes: ByteArray) {
+    override suspend fun send(bytes: ByteArray) {
         require(bytes.size >= 2 && bytes.first() == 0xF0.toByte() && bytes.last() == 0xF7.toByte()) {
             "UsbMidiBulkTransport sends complete F0..F7 messages; got ${bytes.size} bytes " +
                 "starting ${bytes.firstOrNull()?.toInt()?.and(0xFF)?.toString(16)}"
         }
-        bulk.bulkWrite(packSysEx(bytes, cable))
+        // A bulk write blocks until the instrument has taken the data - a whole drum kit at the
+        // rate it accepts - and the caller is normally a coroutine on the main dispatcher.
+        val packed = packSysEx(bytes, cable)
+        withContext(Dispatchers.IO) { bulk.bulkWrite(packed) }
     }
 
     override fun close() {
@@ -179,7 +174,7 @@ class UsbMidiBulkTransport(
          * Short, because a timeout here is the normal idle case rather than an error - the loop
          * simply asks again. Long enough that an idle instrument does not spin the CPU.
          *
-         * With [DEFAULT_READ_BUFFER] at one packet this no longer affects throughput at all; it
+         * With [DEFAULT_READ_BUFFER] at one packet this does not affect throughput at all; it
          * only sets how often an idle transport wakes up.
          */
         const val DEFAULT_READ_TIMEOUT_MS = 20

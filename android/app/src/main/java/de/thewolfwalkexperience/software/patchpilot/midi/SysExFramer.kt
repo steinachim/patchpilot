@@ -7,11 +7,9 @@ package de.thewolfwalkexperience.software.patchpilot.midi
  * **A read is not a message.** Android's MIDI callback hands over whatever bytes have arrived, so
  * one `F0 ... F7` message may span any number of callbacks and split at any byte - including
  * between `F0` and the manufacturer id. Every rule below is a real MIDI hazard rather than
- * defensive padding, and the equivalent rules turned out to be load-bearing on the *other* bus
- * too: `NordDevice.readReply()` reassembles across bulk reads, delimits by the reply's own length
- * field, bounds that length, and discards stale bytes before a new request - a defense against
- * exactly the kind of malformed reply where 93 bytes of a declared 408 arrive with an earlier
- * reply's tail still stuck on the end. Same four rules, arrived at independently.
+ * defensive padding, and the same four rules hold on the *other* bus: `NordDevice.readReply()`
+ * reassembles across bulk reads, delimits by the reply's own length field, bounds that length,
+ * and discards stale bytes before a new request.
  *
  * Not thread-safe: [SysExExchange] owns one of these and feeds it from a single collector.
  */

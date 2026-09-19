@@ -3,18 +3,12 @@ package de.thewolfwalkexperience.software.patchpilot.core
 /**
  * Which bus a session runs over.
  *
- * **A type rather than the `String` this used to be**, because the string was never only a label:
+ * **A type rather than a label string**, because it is not only a label:
  * `InstrumentViewModel.discoveryFor()` picks the discovery to open a candidate with by comparing
- * it, and `ConnectScreen` picks its wording the same way. Two of those comparisons decide
- * behaviour, and none of them could be checked.
+ * it, and `ConnectScreen` picks its wording the same way. A string could carry "MIDI" on an
+ * instrument found on the USB bus and nothing would notice.
  *
- * That cost something real. A Motif XS is matched on [Bus.USB] - its catalog entry is a `usb`
- * match, and `InstrumentDescriptor` records why: it exposes no MIDIStreaming interface and gets no
- * MIDI port at all. Its identity nevertheless reported `"MIDI"`, hardcoded, because the match moved
- * to USB and the string did not follow. Nothing could notice: `Candidate.busLabel` said `"USB"` and
- * `InstrumentIdentity.busLabel` said `"MIDI"` for one session, and both were just strings.
- *
- * [label] is what the user sees, so the displayed wording is unchanged.
+ * [label] is what the user sees.
  */
 enum class Bus(val label: String) {
     /** The USB host bus - a claimed vendor or USB-MIDI interface this app drives itself. */

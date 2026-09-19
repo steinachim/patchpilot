@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 
-/**
+/*
  * The preset screen's three question dialogs.
  *
  * Lifted out of `ProgramsScreen` together: each is self-contained, none of them reads the screen's

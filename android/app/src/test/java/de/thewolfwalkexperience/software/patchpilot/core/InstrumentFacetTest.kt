@@ -50,7 +50,7 @@ class InstrumentFacetTest {
 
     private object NullMidiTransport : MidiTransport {
         override val rebuildOnResume = false
-        override fun send(bytes: ByteArray) = Unit
+        override suspend fun send(bytes: ByteArray) = Unit
         override val incoming: Flow<ByteArray> = emptyFlow()
         override fun close() = Unit
     }

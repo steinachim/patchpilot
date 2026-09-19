@@ -6,7 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
@@ -30,12 +30,9 @@ internal data class TagTarget(val slot: PresetSlot, val tags: PresetTags)
 /**
  * Everything ProgramsScreen *does*, as opposed to everything it draws.
  *
- * **Why this is not thirteen `remember { mutableStateOf(...) }` calls and fourteen local
- * functions in the composable.** It was, and the result was a ~1,200-line composable in which the
- * rule "a delete dialog is dismissed before the work starts, not after it finishes" sat between a
- * `Row` and a `LazyColumn`. Two things follow from separating them: the operation logic can be
- * read - and changed - without scrolling through layout, and it stops being reachable only by
- * standing up a whole composition, which is what kept it untested.
+ * **Why this is not a set of `remember { mutableStateOf(...) }` calls and local functions in the
+ * composable.** Separated, the operation logic can be read - and changed - without scrolling
+ * through layout, and it can be tested without standing up a whole composition.
  *
  * **State that is genuinely about the view stays in the composable.** The search box's text, the
  * "show empty slots" tick, the pull-to-refresh spinner and the list's scroll position describe
@@ -360,8 +357,8 @@ internal class ProgramsController(
  */
 @Composable
 internal fun rememberProgramsController(viewModel: InstrumentViewModel): ProgramsController {
-    val context = LocalContext.current
-    return remember(viewModel, context) {
-        ProgramsController(viewModel) { resId, args -> context.getString(resId, *args) }
+    val resources = LocalResources.current
+    return remember(viewModel, resources) {
+        ProgramsController(viewModel) { resId, args -> resources.getString(resId, *args) }
     }
 }

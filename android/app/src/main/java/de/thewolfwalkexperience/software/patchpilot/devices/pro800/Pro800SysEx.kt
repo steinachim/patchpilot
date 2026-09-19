@@ -59,10 +59,7 @@ object Pro800SysEx {
     // ---- Hazards: named on purpose, sent never (except 0x32 with parameter 0x00) ----
     //
     // **An unnamed hazard gets rediscovered by whoever probes next, and gets rediscovered by
-    // *sending* it.** That is not hypothetical on either family this app speaks to: a blind sweep
-    // of 0x50 below blanked the name of every occupied preset in a Pro-800's library, and the Nord
-    // side lost 202 programs to an equally unlabelled sub-opcode. Naming each one, saying what it
-    // does and where it was measured, is what stops the next person finding out the same way.
+    // *sending* it.** Naming each one and saying what it does is what stops that.
     //
     // None of these has a UI path, and nothing in this app sends any of them - the one exception
     // being 0x32 with parameter 0x00, which is the documented preset reload (see [reloadPreset]).
@@ -227,8 +224,8 @@ object Pro800SysEx {
      *
      * **Read from [STATUS_CODE_INDEX] (offset 10), not offset 9.** A write answers `01 00 00`; a
      * read of an out-of-range address answers `01 00 01` - offset 9 is a constant `00` in both, so
-     * reading the code from there reports **every** status as a success, including every
-     * rejection. It had no callers yet, which is the only reason it never mattered.
+     * reading the code from there would report **every** status as a success, including every
+     * rejection.
      */
     fun statusCodeOf(message: ByteArray): Int? =
         if (typeOf(message) == TYPE_STATUS && message.size > STATUS_CODE_INDEX) {

@@ -32,11 +32,8 @@ private const val TAG = "Pro800Instrument"
  * checksum, no directory service - which is why the abstraction they meet at is the *operation*
  * and why there is no common message type anywhere beneath this.
  *
- * **What ships here is read-only, plus selection.** Browsing 400 presets and loading any of them
- * needs neither the write path nor a confirmed answer to what marks an empty slot, so it is
- * useful on its own and risks nothing on a user's instrument. The editor facet is deliberately
- * absent until the write path lands with its read-back verification and undo buffer (design
- * section 7.5, stage 5).
+ * Browsing, selection and the raw preset transfer live here; every edit is composed from that
+ * transfer by [Pro800Editor], with read-back verification after every write.
  */
 class Pro800Instrument(
     private val exchange: SysExExchange,
@@ -83,17 +80,17 @@ class Pro800Instrument(
     override val selector: PresetSelector get() = this
     override val transfer: PresetTransfer get() = this
 
-    /**
-     * Every edit here is a host-composed read-write-erase sequence that can lose a preset if
-     * interrupted, so it ships *with* its read-back verification, its destructive-step-last
-     * ordering and its undo buffer, or not at all. See [Pro800Editor].
-     */
+    /** Set by [validateFirmware] where the firmware is untested; see [Instrument.advisory]. */
     override var advisory: String? = null
         private set
 
+    /**
+     * Every edit is a host-composed read-write-erase sequence that can lose a preset if
+     * interrupted, so it comes with read-back verification, destructive-step-last ordering and
+     * an undo buffer - see [Pro800Editor].
+     */
     override val editor: PresetEditor = Pro800Editor(this, layout)
 
-    /** Read-only, and the source of the sample fixtures used in tests - see [Pro800Reporter]. */
     /** A Pro-800 preset has no category and no favorite mark. */
     override val tagger: PresetTagger? = null
 
@@ -113,10 +110,9 @@ class Pro800Instrument(
     }
 
     /**
-     * Refuses to continue on a firmware this app has not been tested against, matching what
+     * Raises an advisory on a firmware this app has not been tested against, matching what
      * `NordDevice.validateFirmwareVersion` does for the other family: untested firmware may not
-     * behave the way the decoding here assumes, and finding that out by mis-reading someone's
-     * presets is worse than declining.
+     * behave the way the decoding here assumes.
      *
      * An empty [Pro800Config.supportedFirmwareVersions] means "skip the check".
      */
@@ -248,12 +244,12 @@ class Pro800Instrument(
      * Moves the instrument's own selection pointer, then makes it act on it. **Pure SysEx: no MIDI
      * channel is involved anywhere.**
      *
-     * This replaced a bank select plus a program change, and the reason is that the channel-voice
-     * path could not be made to work. Nothing acknowledges either message, so a channel mismatch is
-     * a button that silently does nothing; and the channel is not always knowable - the instrument
-     * takes it from its rear DIP switches in one mode and refuses MIDI entirely in another, and a
-     * separate `MIDI PC Mode` setting can disable program-change reception on top of that. Writing
-     * the pointer works in every one of those cases, and is confirmed rather than hoped for.
+     * Not a bank select plus a program change, because the channel-voice path cannot be made
+     * reliable. Nothing acknowledges either message, so a channel mismatch is a button that
+     * silently does nothing; and the channel is not always knowable - the instrument takes it
+     * from its rear DIP switches in one mode and refuses MIDI entirely in another, and a separate
+     * `MIDI PC Mode` setting can disable program-change reception on top of that. Writing the
+     * pointer works in every one of those cases, and is confirmed rather than hoped for.
      *
      * Four steps, and the order of the last two is the whole design:
      *

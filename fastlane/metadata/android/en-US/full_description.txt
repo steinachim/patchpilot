@@ -2,7 +2,7 @@ Patch Pilot lets you browse, organize and edit the presets stored on a hardware 
 
 Supported instruments
 
-- Nord Grand, Nord Grand 2, Nord Stage 2EX, Nord Stage 4, Nord Electro 7, Nord Piano 6, Nord Lead A1, Nord Wave 2
+- Nord Grand, Nord Grand 2, Nord Stage 2 EX, Nord Stage 4, Nord Electro 7, Nord Piano 6, Nord Lead A1, Nord Wave 2
 - Behringer Pro-800
 - Yamaha Motif XS6 (the XS7 and XS8 are recognized as well, but not yet confirmed on real hardware)
 

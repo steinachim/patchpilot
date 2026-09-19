@@ -177,10 +177,9 @@ object MotifXsVoice {
      * it as decimal ASCII in front of the name. So `227:146:` is `227 = 14*16 + 3` (M.EFX / Hit)
      * and `146 = 9*16 + 2` (Pads / Brite), and `256 = 16*16 + 0` is `NoAsg`.
      *
-     * A search for the four *raw* bytes in this payload finds no consistent offset, which is what
-     * had this recorded as "not present in `0C`" - correct about the bytes, and wrong about the
-     * information. Validated against the shipped factory catalog on every user voice in the
-     * project's full-sync capture whose name matches a factory voice: 205 of 205, no mismatches.
+     * The four *raw* bytes appear at no consistent offset in this payload; the information is
+     * carried in the figures. Validated against the shipped factory catalog on every user voice
+     * in a full capture whose name matches a factory voice: 205 of 205, no mismatches.
      *
      * **Read-only, and it has to stay that way.** The figures are variable width, so writing a
      * category by patching them here would shift every byte of the dense stream after them. The

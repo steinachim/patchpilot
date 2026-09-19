@@ -13,8 +13,8 @@ import android.hardware.usb.UsbInterface
  * the catalog entry (`DeviceMatch.Usb`) for the same reason the bank table does - a wrong one
  * should be a data edit.
  *
- * The firmware read's `bmRequestType`/`bRequest` used to live here too; they are now in
- * `NordDevice`, because they describe that vendor protocol rather than this bus.
+ * Nothing protocol-specific lives here: the Nord firmware read's `bmRequestType`/`bRequest` are
+ * in `NordDevice`, because they describe that vendor protocol rather than this bus.
  */
 class AndroidUsbBulkTransport(
     private val connection: UsbDeviceConnection,

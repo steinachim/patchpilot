@@ -17,8 +17,8 @@ import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
  * Built from two halves that are stored separately for a reason: the catalog's family-level
  * `programCategories` master list (54 entries, shared across Clavia's whole line) and the device's
  * own [DeviceProfile.programCategoryIds] subset, plus any
- * [DeviceProfile.programCategoryNameOverrides] . See [DeviceCatalog.programCategories] on why the master
- * list cannot simply be inverted.
+ * [DeviceProfile.programCategoryNameOverrides]. See [DeviceCatalog.programCategories] on why the
+ * master list cannot simply be inverted.
  */
 internal class NordCategories private constructor(
     /** Wire ids, in taxonomy order - so `ids[ref.main]` is what sub-opcode 51 carries. */

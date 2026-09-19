@@ -21,10 +21,8 @@ const val TEXT_MIME_TYPE = "text/plain"
 /**
  * Builds the connected instrument's device report and hands it to the share sheet.
  *
- * **One holder rather than the three copies this replaces.** `ProgramsScreen`, `ConnectScreen` and
- * `DebugScreen` each had the same launch, the same `"Reading device..."`, the same `"$stem.json"`,
- * the same MIME type and the same try/catch/finally - and they had already drifted apart in how
- * they reported the result. Three copies is where a shape stops being a coincidence.
+ * One holder for the three screens that offer the report (`ProgramsScreen`, `ConnectScreen` and
+ * `DebugScreen`): the same launch, progress label, filename, MIME type and error handling.
  *
  * [progress] is non-null while a report is being read, which is what each screen puts on its
  * button; the probe walks every item on the instrument, so it is slow enough to need saying.

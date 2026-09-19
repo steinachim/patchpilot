@@ -41,10 +41,9 @@ class MainActivity : ComponentActivity() {
             // parameter rather than left for PatchPilotApp to rememberNavController() itself:
             // NavHostController owns the back stack outside Compose's slot table, but the
             // `remember` call that hands out *this session's* instance still lives in whatever
-            // composition position calls it - and that position turned out not to be as
-            // theme-independent as it looked (see PatchPilotTheme's doc comment). Anchoring it at
+            // composition position calls it (see PatchPilotTheme's doc comment). Anchoring it at
             // the outermost, unconditional position keeps the same controller across a theme
-            // switch instead of losing the back stack to a fresh one every time.
+            // switch instead of losing the back stack to a fresh one.
             val navController = rememberNavController()
             val appTheme by themePreferences.theme.collectAsState(initial = AppTheme.Default)
             PatchPilotTheme(appTheme = appTheme) {

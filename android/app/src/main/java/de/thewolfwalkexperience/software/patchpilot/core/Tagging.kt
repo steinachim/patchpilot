@@ -1,6 +1,6 @@
 package de.thewolfwalkexperience.software.patchpilot.core
 
-/**
+/*
  * The categories a preset can be filed under, and whether it is one of the user's favorites.
  *
  * **A facet in its own right rather than more surface on [PresetEditor].** Everything on that

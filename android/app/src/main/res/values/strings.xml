@@ -2,10 +2,10 @@
 <!--
   Every string the user can read.
 
-  Extracted from inline Kotlin literals on 2026-08-21. Not for localization -
-  this is a single-purpose tool with one language - but because a string in a
-  resource is one somebody can find, review and change without reading Compose,
-  and because a wording change stops being a code change.
+  Resources rather than inline literals, not for localization - this is a
+  single-purpose tool with one language - but because a string in a resource is
+  one somebody can find, review and change without reading Compose, and because
+  a wording change stops being a code change.
 
   What is deliberately NOT here: the messages the instrument layer raises
   (`devices/*`), which explain a protocol condition and are written to be read by
@@ -148,7 +148,7 @@
     <!--
       What the progress line says while an operation runs. Each is also the phrase the failure
       message and the log line are built from, with the ellipsis trimmed - so "Selecting A:1:1\u2026"
-      becomes "Selecting A:1:1 failed." rather than the lowercase second copy these used to carry.
+      becomes "Selecting A:1:1 failed." with no second copy of the wording to keep in step.
     -->
     <string name="programs_busy_selecting">Selecting %1$s\u2026</string>
     <string name="programs_busy_deleting">Deleting %1$s\u2026</string>

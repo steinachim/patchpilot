@@ -161,8 +161,8 @@ class MotifXsFactoryReadsTest {
     }
 
     /**
-     * **The path this feature made reachable.** `refresh` used to dump unconditionally, and no
-     * edit could target a read-only bank - until favoriting one could.
+     * Favoriting is the one edit that can target a read-only bank, so `refresh` has to know not
+     * to dump one.
      */
     @Test
     fun `refreshing a factory row after a favorite rebuilds it from the table`() = runTest {

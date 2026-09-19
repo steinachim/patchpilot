@@ -1,42 +1,53 @@
 # devices/
 
-Per-instrument catalogs. One file per instrument family, named for what it holds — the name is cosmetic, since each file declares its own `family` and that is what the Android registry dispatches on:
+The per-instrument catalogs the app is built from. One file per instrument family, named for what it holds; the name is cosmetic, since each file declares its own `family` and that is what the Android registry dispatches on.
 
 | File | Covers | Shape |
 |---|---|---|
-| `nord_devices.json` | every supported Nord model | its own native shape |
-| `behringer_pro800.json` | one Behringer Pro-800 | the generic `FamilyCatalog` shape |
-| `yamaha_motif_xs.json` | the Yamaha Motif XS6/XS7/XS8 family | the generic `FamilyCatalog` shape |
-| `motifxs_factory_voices.json` | the Motif XS's 1,217 factory voice names | its own shape (bank → slot → name) |
+| `nord_devices.json` | every supported Nord model | its own native shape, described by `nord_devices.schema.json` |
+| `behringer_pro800.json` | the Behringer Pro-800 | the generic `FamilyCatalog` shape |
+| `yamaha_motif_xs.json` | the Yamaha Motif XS6, XS7 and XS8 | the generic `FamilyCatalog` shape |
+| `motifxs_factory_voices.json` | the Motif XS's 1,217 factory voice names and category assignments | its own shape (bank → slot → name and categories) |
+| `blanks/*.bin` | the payloads the Motif XS family writes over a slot to erase it | raw SysEx payloads; see `blanks/README.md` |
 
-`nord_devices.schema.json` documents `nord_devices.json`'s shape (also usable directly with any JSON Schema validator/editor plugin). `blanks/` holds binary payloads the Motif XS family writes to erase a slot — see `blanks/README.md`.
+`nord_devices.schema.json` is a JSON Schema for `nord_devices.json` and can be used with any schema validator or editor plugin.
 
-`motifxs_factory_voices.json` is the one file here that is **transcribed rather than measured**: its names come from Yamaha's own Data List spreadsheets, not from an instrument this project has talked to. It exists because the eleven read-only banks never change and reading them over MIDI costs about seven and a half minutes, so the browser's Factory listing names them from here and issues no round trips at all. It is display text the app never transmits, which is why it does not fall under `blanks/README.md`'s rule that this project never invents bytes for a wire — a wrong entry here is a wrong label, not a malformed write. The browser says where the names came from, and the hidden debug screen can read one bank off a real instrument and diff it against this file. `MotifXsFactoryVoicesTest` pins its bank labels and slot counts against `yamaha_motif_xs.json`, so the two cannot drift apart silently.
+## How the app uses this directory
 
-Everything below concerns `nord_devices.json` specifically.
+The `syncDeviceCatalog` Gradle task copies every `*.json` file except the schemas, plus `blanks/*.bin`, into `android/app/src/main/assets/` before every build; that directory is generated and gitignored, so never edit it by hand. Each family loads its own asset (`NordFamily.kt`, `Pro800Family.kt`, `MotifXsFamily.kt`), and `CatalogParsesTest` decodes the real files from this directory, so a malformed catalog fails the unit tests rather than only the connect screen on a phone.
 
-## devices/nord_devices.json
+The `generateUsbDeviceFilter` task generates `android/app/src/main/res/xml/device_filter.xml` from the USB vendor/product ids in these files. Android reads that file to launch the app when a matching USB device is attached, before any app code runs, so it cannot be loaded from an asset. A device found through `MidiManager` (the Pro-800) contributes no entry; a USB-matched one (every Nord, the Motif XS) does.
 
-The source of truth for per-instrument USB/protocol constants, read by the Android app (`android/app/.../devices/nord/NordFamily.kt`) via a bundled asset copy, synced from this file automatically by the `syncDeviceCatalog` Gradle task before every build (see `android/app/build.gradle.kts`). Never hand-edit anything in `android/app/src/main/assets/` — the whole directory is generated and gitignored.
+## Match types
 
-That task also generates `android/app/src/main/res/xml/device_filter.xml` from the USB ids in these catalogs, so adding a device here is enough to make the app launch when it is attached. A MIDI-matched instrument (the Pro-800) contributes no entry, because it is found through `MidiManager` rather than a `USB_DEVICE_ATTACHED` filter.
+A device entry's `match` decides which bus finds it and how:
 
-The Motif XS *does* contribute one, and is the reason `DeviceMatch.Usb` carries more than a VID/PID pair. It declares no MIDIStreaming interface, so `MidiManager` never sees it and it has to be matched on the USB bus like a Nord — but unlike a Nord its bulk endpoints carry USB-MIDI event packets rather than a vendor protocol. Hence `endpointOut`/`endpointIn` (it uses `0x01` OUT, not the Nord's `0x03`) and `midiCable`, whose presence is what tells the family to wrap the bulk transport in a `UsbMidiBulkTransport`.
+- `usb`: a USB vendor/product id pair, opened on the USB host bus. `endpointOut`/`endpointIn` default to the Nord vendor interface's `0x03`/`0x82`; the Motif XS uses `0x01`/`0x82`. `midiCable`, when present, says the bulk endpoints carry USB-MIDI event packets on that cable rather than a vendor protocol, and the family wraps the transport in a `UsbMidiBulkTransport`.
+- `midiIdentity`: a MIDI port whose device answers `probeHex` with a reply starting `replyPrefixHex`. `usbHint` narrows which ports are probed and never decides on its own. The probe must be read-only and idempotent.
 
-See `docs/PROTOCOLS.md` for the Nord wire protocol every entry here is used by, and `android/app/.../devices/nord/NordDevice.kt` for the implementation.
+The Nord file is in its own shape and every entry is a `usb` match on Clavia's vendor id `0x0FFC`.
 
-## Adding a new instrument
+## What is measured and what is transcribed
 
-This assumes the instrument's wire protocol is already understood — vendor/product id, message framing, and the operations needed to browse and manage presets. Adding it to the catalog is then:
+Everything in `nord_devices.json`, `behringer_pro800.json` and `yamaha_motif_xs.json` was read off an instrument or from its behaviour on the wire, with these exceptions:
 
-1. Gather what the catalog needs: the USB vendor/product id, the bank-letter/group/slot layout, the display width, and at least one known-good firmware version. The file-transfer protocol version is *not* one of them — the instrument announces it at connect time, and no catalog entry declares it.
-2. Append one object to the `devices` array in `nord_devices.json`, following `nord_devices.schema.json`. There is no file-transfer protocol version to supply and no root-category trailer length to configure: both are derived from the instrument's own responses at runtime (see `NordDevice.detectProtocolVersionFileTransfer()` and `NordDevice.detectRootCategoryTrailerLen()`).
-3. List the instrument's category-tag ids in `programCategoryIds` — an index into the top-level `programCategories` master list. Don't copy another instrument's list: which ids a given Nord offers is genuinely per-product, and an instrument shows `"No Cat"` for every id it doesn't implement. This is the one value here that can't be read off the wire — the wire only ever carries the numeric id — so it has to be determined per instrument and left off (rather than guessed) if it hasn't been. Add `programCategoryNameOverrides` only for ids the instrument displays under a different name than the master list gives them.
+- The Motif XS7 and XS8 product ids (`0x1043`, `0x1044`) are inferred from Yamaha's driver files and have not been confirmed on a unit; see `docs/PROTOCOLS.md`.
+- `programCategoryIds` and the category name tables in `nord_devices.json` cannot be read off the wire, which only carries numeric ids; they have to be established from the names the instrument itself displays for each id.
 
-   **Nothing to do for `sampleCategories`.** The other top-level master list holds the sample categories nothing in this app currently reads — it exists so a future listing can name a sample's category rather than print two numbers, and needs no per-device subset.
-4. **Nothing to do for the storage units.** The instrument states each area's allocation unit itself, in the first word of that category's trailer in the root category list (see `docs/PROTOCOLS.md`), so there is nothing to measure or configure. No catalog field carries a unit — a previously-configured constant here turned out to disagree with what several instruments actually report, which is why the app derives it live instead of trusting a per-device value.
-5. If the instrument has content tags of its own, check whether their content-version field is scaled the same way as the shared tags, and add any exception to the top-level `contentVersionScales`.
-6. Add a Kotlin test fixture: a hand-written `DeviceProfile` constant in `android/app/src/test/.../devices/nord/NordFixtures.kt` (the JVM tests don't load the asset catalog).
-7. **Nothing to do for `device_filter.xml`.** It is generated from the USB ids in these catalogs by the `generateUsbDeviceFilter` Gradle task before every build, so adding the device here is enough. Adding the pair by hand instead is a standing invitation to forget, and it fails silently — the app simply never launches on attach. That is why the task exists.
+`motifxs_factory_voices.json` is transcribed rather than measured: its names and categories come from Yamaha's published voice lists, except the two drum banks' categories, which were read off an instrument because the drum voice list publishes none. The eleven read-only banks never change and reading them over MIDI costs about seven and a half minutes, so the browser's Factory listing names them from this file and issues no round trips. It is display text the app never transmits, so the rule in `blanks/README.md` that the app never invents bytes for a wire does not apply to it: a wrong entry here is a wrong label, not a malformed write. The browser says where the names came from, and the hidden debug screen can read one bank off a real instrument and diff it against this file. `MotifXsFactoryVoicesTest` pins its bank labels and slot counts against `yamaha_motif_xs.json`.
 
-No new Kotlin source files are needed for a new Nord instrument — that's the point of this catalog.
+## Adding a Nord instrument
+
+This assumes the instrument speaks the protocol in `docs/PROTOCOLS.md`. No Kotlin source changes are needed.
+
+1. Gather the USB vendor/product id, the bank-letter/group/slot layout, the display width, the stored name length, and at least one firmware version the app has been run against. The file-transfer protocol version and each storage area's allocation unit are not catalog fields; the instrument announces both at connect time (`NordDevice.detectProtocolVersionFileTransfer()`, the root category list's trailer).
+2. Append one object to the `devices` array in `nord_devices.json`, following `nord_devices.schema.json`.
+3. List the instrument's category-tag ids in `programCategoryIds`, an index into the top-level `programCategories` master list. Do not copy another instrument's list: which ids a Nord offers is per product, and an instrument shows `No Cat` for every id it does not implement. Leave the field out rather than guessing if it has not been established; the instrument then gets no category editing. Add `programCategoryNameOverrides` only for ids the instrument displays under a different name than the master list gives them. `sampleCategories` needs no per-device entry; nothing in the app reads it yet.
+4. If the instrument has content tags of its own, check whether their content-version field is scaled the same way as the shared tags, and add any exception to `contentVersionScales`.
+5. Add a hand-written `DeviceProfile` fixture in `android/app/src/test/.../devices/nord/NordFixtures.kt`; the JVM tests do not load the asset catalog.
+
+The device report the app shares (debug menu) contains a `catalogEntry` object in exactly this shape, filled in with what the wire could settle, which is the intended starting point for a new entry.
+
+## Adding an instrument of another family
+
+The Pro-800 and Motif XS files each describe one protocol implementation. A new instrument that speaks one of those protocols is a new object in that file's `devices` array (for the Motif XS, with its own `banks` table if its memory map differs from the shared one in `familyConfig`). A new protocol needs a new package under `android/app/src/main/java/.../devices/`, a new catalog file here, and an entry in `InstrumentRegistry`; see `docs/ARCHITECTURE.md`.

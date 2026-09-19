@@ -34,12 +34,9 @@ data class PresetIndexState(
     val loading: Boolean get() = !complete && error == null
 
     /**
-     * Folds one update in. Pure, so the collector can live anywhere.
-     *
-     * It used to be inline in a `produceState` inside the screen, which is what tied the whole
-     * scan to the composition - and a rotation therefore restarted a 93-second listing. Pulling
-     * the fold out is what let the collector move into the ViewModel, and it made the rule that
-     * `Failed` is never fatal into something a unit test can hold.
+     * Folds one update in. Pure, so the collector can live anywhere - in the ViewModel, where a
+     * rotation cannot restart a 93-second listing - and so the rule that `Failed` is never fatal
+     * is something a unit test can hold.
      */
     fun plus(update: IndexUpdate): PresetIndexState = when (update) {
         is IndexUpdate.Slots -> copy(slots = slots + update.slots)

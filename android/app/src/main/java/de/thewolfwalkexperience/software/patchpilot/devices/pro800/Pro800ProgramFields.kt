@@ -45,12 +45,8 @@ object Pro800ProgramFields {
      * inside that span (176 and 184), giving 16 characters.
      *
      * **172, not 173.** `docs/Pro800SysExMessages.md` says 173; `Pro800ProgramConstants.h` says
-     * `{172, 1, "Preset Name (first char)"}`. The header is right, and this file's own note above
-     * already said to trust it - which did not stop the first version of this table from being
-     * ported from the markdown. Getting this wrong shows up immediately: every preset name comes
-     * back with its first character missing - "Classical Brass" as "lassical Brass", "Organ I" as
-     * "rgan I". A one-character shift is exactly what an off-by-one in a fixed-span string field
-     * looks like, and it is the reason the offsets come from the header.
+     * `{172, 1, "Preset Name (first char)"}`, and the header is right. At 173 every preset name
+     * comes back with its first character missing - "Classical Brass" as "lassical Brass".
      */
     val NAME_DENSE_OFFSET = Pro800ProgramCodec.denseIndexOf(172)
     const val NAME_LENGTH = 16
@@ -83,9 +79,8 @@ object Pro800ProgramFields {
      * That makes [Pro800Program.withName]'s growth a correctness question rather than a padding
      * question, and the margin is exactly one byte: the name field ends at dense 165, and format
      * 110's first appended byte is dense 166. Growing to [NAME_DENSE_END] therefore stops
-     * precisely at the boundary and adds nothing version-gated - but nothing *said* so until now,
-     * and a future change to [NAME_LENGTH] or a new appended field would cross it silently.
-     * [Pro800Program.withName] now checks against this.
+     * precisely at the boundary and adds nothing version-gated; a change to [NAME_LENGTH] or a
+     * new appended field would cross it, which is what [Pro800Program.withName]'s check is for.
      *
      * The boundaries match the record lengths a full-length preset of each format actually
      * reaches: 166 dense bytes for format 109, 173 for format 111.
@@ -142,12 +137,10 @@ class Pro800Program(val dense: ByteArray) {
      * ([Pro800SysEx.isEmptyReply]), which arrives here as a zero-length record. That is the whole
      * test.
      *
-     * An earlier version required the record to be long enough to carry every field up to the
-     * name, and was wrong in both directions. **Records are variable length** -
-     * the instrument truncates trailing padding, so the same firmware returned 173, 166, 158 and
-     * 157 dense bytes for four consecutive populated slots, and everything under 166 was reported
-     * as an empty slot the user could see was not empty. And a preset may legitimately carry **no
-     * name at all** (one did, at B01), so a name cannot stand in for existence either.
+     * Neither length nor name can stand in for that test. **Records are variable length**: the
+     * instrument truncates trailing padding, so the same firmware returns 173, 166, 158 and 157
+     * dense bytes for four consecutive populated slots. And a preset may legitimately carry **no
+     * name at all** (one measured did), so an empty name is not an empty slot either.
      */
     val isEmpty: Boolean get() = dense.isEmpty()
 
