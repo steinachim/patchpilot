@@ -36,8 +36,8 @@ internal sealed interface DeviceReportState {
  * composition is cancelled by a rotation and starts over. The read only queries, so cancelling
  * it changes nothing on the instrument; it is the minutes that are worth keeping. A finished
  * report also survives process death through [savedState]. The report is bounded (the largest
- * part of a Nord's is a few hundred program names and category hex), so it is nowhere near what
- * a Bundle can carry.
+ * part of a Nord's is the raw hex of its category replies; it carries no preset names or data),
+ * so it is nowhere near what a Bundle can carry.
  *
  * Three screens use it: the debug menu holds the result and offers Share and Save, while the
  * preset and connect screens share it straight away and then [dismiss] it.

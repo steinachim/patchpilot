@@ -133,7 +133,7 @@ fun CenteredMessage(modifier: Modifier = Modifier, content: @Composable () -> Un
     )
 }
 
-/** The muted styling an empty slot gets, in place of the old `--- EMPTY ---` text. */
+/** The muted styling an empty slot gets. */
 @Composable
 fun EmptySlotText(modifier: Modifier = Modifier) {
     Text(

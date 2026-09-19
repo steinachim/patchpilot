@@ -22,9 +22,8 @@ import kotlin.math.roundToInt
  * Drag-to-reorder state for the preset list: which row is held, where the finger is, and the
  * edge auto-scroll that lets a target off-screen be reached.
  *
- * **Lifted out of `ProgramsScreen`, where four `var`s, three density conversions, a hit-test and a
- * `LaunchedEffect` were spread across four hundred lines of an already long composable.** They are
- * one mechanism and they only ever change together, which is what makes them worth a type.
+ * **One type rather than loose state in `ProgramsScreen`**: four `var`s, three density
+ * conversions, a hit-test and an auto-scroll loop are one mechanism and only ever change together.
  *
  * Deliberately knows nothing about `ProgramRow`: which rows may be picked up and which may be
  * dropped on are questions about the *listing*, and change on every recomposition, so they arrive

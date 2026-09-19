@@ -102,10 +102,30 @@ class PresetIndexCache {
      *
      * Deliberately does **not** create an entry when there is none: a cache holding one slot would
      * claim to be a completed index of one preset.
+     *
+     * An address the index does not hold yet is **inserted in address order**, not appended. A
+     * Nord lists only the slots it holds, so a copy or a move into an empty slot writes through an
+     * address the cached listing never had; appended, that row would replay after the last bank
+     * and the browser would draw its bank header a second time at the bottom of the list. Every
+     * family lists in `(bank, slot)` order, so that order is device order.
      */
     fun update(key: CacheKey, slot: PresetSlot) = synchronized(lock) {
-        entries[key]?.let { it[slot.address] = slot }
-        Unit
+        val index = entries[key] ?: return
+        if (slot.address in index) {
+            index[slot.address] = slot
+            return
+        }
+        val reordered = LinkedHashMap<SlotAddress, PresetSlot>(index.size + 1)
+        var inserted = false
+        for ((address, cached) in index) {
+            if (!inserted && ADDRESS_ORDER.compare(slot.address, address) < 0) {
+                reordered[slot.address] = slot
+                inserted = true
+            }
+            reordered[address] = cached
+        }
+        if (!inserted) reordered[slot.address] = slot
+        entries[key] = reordered
     }
 
     /** Forgets one instrument's index, so the next listing re-reads it from the hardware. */
@@ -117,4 +137,9 @@ class PresetIndexCache {
     /** Whether [key] has a cached index. Used by the tests; nothing in the UI distinguishes a
      * cached row from a freshly read one today. */
     fun holds(key: CacheKey): Boolean = synchronized(lock) { entries.containsKey(key) }
+
+    private companion object {
+        /** Device order on every family: bank first, then slot within it. */
+        val ADDRESS_ORDER: Comparator<SlotAddress> = compareBy({ it.bank }, { it.slot })
+    }
 }

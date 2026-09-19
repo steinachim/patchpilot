@@ -104,7 +104,7 @@ Class-compliant USB-MIDI through Android's `MidiManager`; no USB host permission
 
 ### Identification
 
-USB vendor id `0x1397`, product id `0x125F`, used only to narrow which MIDI ports are probed. The port is identified by sending the device-name request (type `0x06`) and checking that the reply starts with the Pro-800 header and type `0x07`; port names are never used.
+The instrument enumerates with USB vendor id `0x1397`, product id `0x125F`, but the app does not match on them: every MIDI port Android's MIDI service publishes is probed, and a port is identified by sending the device-name request (type `0x06`) and checking that the reply starts with the Pro-800 header and type `0x07`. Port names are never used. The catalog format allows a `usbHint` that would restrict the probe to ports backed by a given USB device; the Pro-800 entry sets none, so a Pro-800 reached through a separate USB-MIDI interface is found as well.
 
 ### Framing
 
@@ -175,7 +175,7 @@ The instrument paces its output at about 12,468 bytes per second in full 64-byte
 
 USB vendor id `0x0499` (Yamaha), product id `0x1042` for the XS6. **Assumption:** `0x1043` and `0x1044` are catalogued as the XS7 and XS8. Yamaha's Windows driver package ships `yum1043.inf` and `yum1044.inf` alongside the XS6's `yum1042.inf`, and the two previous Motif generations assigned sequential product ids by keybed size, but no Yamaha text ties these ids to the model names and neither has been confirmed on a unit. All three share one catalog configuration, since Yamaha's combined MIDI implementation chart documents one protocol for the three.
 
-On connect the app sends a Universal Device Inquiry, `F0 7E 00 06 01 F7` (device id `0x00`, which is what the vendor's editor uses; whether the `7F` broadcast id is answered is untested), and accepts any reply shaped `F0 7E .. 02 .. F7`. Only the four bytes before `F7` are read, as the firmware version; the manufacturer, family and model fields are not checked, and the session continues if no reply arrives. The reply distinguishes the three models (family member code `35 06` / `36 06` / `37 06`), but the product id already has.
+On connect the app sends a Universal Device Inquiry, `F0 7E 00 06 01 F7` (device id `0x00`, which is what the vendor's editor uses; whether the `7F` broadcast id is answered is untested), and accepts any reply whose second byte is `7E` and fifth byte is `02` (`F0 7E nn 06 02 ... F7`). Only the four bytes before `F7` are read, as the firmware version; the manufacturer, family and model fields are not checked, and the session continues if no reply arrives. The reply distinguishes the three models (family member code `35 06` / `36 06` / `37 06`), but the product id already has.
 
 ### MIDI routing
 

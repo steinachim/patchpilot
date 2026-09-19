@@ -72,10 +72,9 @@ interface ThemeStyle {
      *
      * Zero unless a theme paints something into the rail's own ends. A theme that does has no
      * other way to say so: [railDecoration] draws *over* the rail after its content is laid out,
-     * so the labels know nothing about it and will happily sit underneath. That went unnoticed
-     * while the longest rail had four banks and cells tall enough to keep every label clear of the
-     * ends by luck; the Motif XS's factory listing has eleven, and the first and last labels
-     * landed on top of the decoration.
+     * so the labels know nothing about it and will sit underneath. With four banks the cells are
+     * tall enough that every label clears the ends anyway; with the Motif XS's eleven factory
+     * banks the first and last labels land on the decoration.
      */
     val railEndInset: Dp get() = 0.dp
 }

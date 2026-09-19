@@ -402,28 +402,21 @@ class Pro800Instrument(
     /**
      * Stores a preset's raw blob at [address], or clears the address when [blob] is empty.
      *
-     * **Fire-and-forget, deliberately.** The instrument *does* answer a write, with a
-     * [Pro800SysEx.TYPE_STATUS] carrying the OK code, for both a store and an erase. It is still
-     * not waited for: the reference implementation sends these with a 20 ms
-     * pause and never inspects a reply, and a status byte is the weaker check anyway. Proof that
-     * the write landed comes from reading the address back, which [Pro800Editor] does after every
-     * single write, and that is what catches a write accepted and silently not stored. The
-     * unconsumed status message is therefore real traffic rather than a hypothetical, and it
-     * cannot be mistaken for anything, since every matcher here checks a type and an address.
+     * **Fire-and-forget, deliberately.** A `0x78` write *is* answered - a [Pro800SysEx.TYPE_STATUS]
+     * of `01 00 00` for a store and an erase alike - but it is not waited for. Waiting would cost
+     * a round trip on every write and would have to be built on an exchange that retries by
+     * *re-sending*, so a slow status would mean the write went twice; and a status carries no
+     * address, so it could not be correlated to a particular write anyway. Proof that the write
+     * landed comes from reading the address back, which [Pro800Editor] does after every single
+     * write - the stronger check, and the only one that catches a write accepted and silently not
+     * stored. The unconsumed status is real traffic: it shows in a debug build's log, since
+     * [SysExExchange] logs messages that arrive with no exchange in flight, and it cannot be
+     * mistaken for a reply, since every matcher here checks a type and an address. Where a status
+     * code *is* actionable is on the read path, which treats a refusal as an answer - see [read].
      *
      * This is the only method in this class that changes a *preset*. It is not reachable from the
      * UI except through [editor], which warns first. [select] also writes, but to the settings
      * block rather than through here - see [programNumberOf] for why the two paths are separate.
-     *
-     * **The write's status is deliberately not waited for.** A `0x78` write *is* answered -
-     * `01 00 00` for a store and an erase alike - but waiting would cost a round trip on every
-     * write and would have to be built on an exchange that retries by *re-sending*, so a slow
-     * status would mean the write went twice. Read-back stays the proof that a write landed: it
-     * is the stronger check, being the only one that catches a write accepted and silently not
-     * stored. The status is still visible in a debug build's log, since [SysExExchange] logs
-     * messages that arrive with no exchange in flight, which is precisely this case. A status
-     * carries no address, so it could not be correlated to a particular write in any case; where
-     * a code *is* actionable is on the read path, which treats a refusal as an answer - see [read].
      */
     override suspend fun write(address: SlotAddress, blob: ByteArray) {
         val programNumber = programNumberOf(address)

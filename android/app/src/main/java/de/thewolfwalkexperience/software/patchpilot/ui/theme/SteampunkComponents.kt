@@ -77,12 +77,10 @@ private fun rememberReduceMotion(): Boolean {
  * (`drawWithContent`, not `drawBehind`), so it always reads as sitting on top.
  *
  * One frame, one placement rule, used identically everywhere a screen wants it -
- * `ConnectScreen`'s root and (via `PatchPilotScaffold`) every `Scaffold`-based screen. The first
- * cut of this feature had two different, inconsistent rivet treatments (plain corner dots on
- * `ConnectScreen`, two bar-only dots on the app bar elsewhere) with no border to justify either -
- * rivets floating near a sharp rectangular corner with nothing rounded to fasten don't read as
- * anything. This is also why they only make sense *with* [SteampunkShapes]'s generous rounding:
- * the corner they sit on has to actually be a corner.
+ * `ConnectScreen`'s root and (via `PatchPilotScaffold`) every `Scaffold`-based screen. Rivets
+ * only read as rivets when there is a rounded border for them to fasten; floating near a sharp
+ * rectangular corner they read as nothing. That is also why they depend on [SteampunkShapes]'s
+ * generous rounding: the corner they sit on has to actually be a corner.
  */
 fun Modifier.steampunkFrame(): Modifier = composed {
     val brassLight = SteampunkAccents.brassLight

@@ -54,10 +54,10 @@ internal fun freeSlots(reported: List<PresetSlot>, allSlots: List<PresetSlot>): 
 /**
  * Turns a listing plus the screen's filters into the rows to draw.
  *
- * **Pure, and out of the composable on purpose.** This was six `remember` blocks inside a very
- * long composable, which made the rules below - each accounting for a different way an instrument
- * can report its slots - impossible to test without running Compose. Nothing here touches the UI
- * toolkit, so `ProgramRowsTest` can hold every one of them.
+ * **Pure, and out of the composable on purpose.** The rules below each account for a different
+ * way an instrument can report its slots, and inside a composable they could only be tested by
+ * running Compose. Nothing here touches the UI toolkit, so `ProgramRowsTest` can hold every one
+ * of them.
  *
  * @param reported what the instrument actually answered with. A Nord lists only what it holds; a
  *   Pro-800 answers for every address, empty ones included.
@@ -85,13 +85,12 @@ internal fun buildProgramListing(
     // "A:1:1" yields its bank to substringBefore(':') and "A00" does not, and no screen should
     // know which shape it is looking at.
     //
-    // **In device order, which is the order they arrive in - not sorted.** `distinct` already
-    // preserves it, and sorting destroyed it. That was invisible for as long as every instrument's
-    // labels happened to sort into device order ("USER 1".."USER DR"), and stops being invisible
-    // the moment a bank is called "PRE1" and another "PRE DR": a space sorts before a digit, so
-    // the rail would offer GM, GM DR, PRE DR, PRE1..PRE8 against a list running PRE1..PRE8, GM,
-    // PRE DR, GM DR. Taps would still land, since the jump is a lookup by label, but dragging the
-    // rail scrubs through the labels in order and would jump backwards and forwards.
+    // **In device order, which is the order they arrive in - not sorted.** `distinct` preserves
+    // it. Sorted, the labels agree with device order only by luck ("USER 1".."USER DR") and
+    // disagree as soon as a bank is called "PRE1" and another "PRE DR": a space sorts before a
+    // digit, so the rail would offer GM, GM DR, PRE DR, PRE1..PRE8 against a list running
+    // PRE1..PRE8, GM, PRE DR, GM DR. Taps would still land, since the jump is a lookup by label,
+    // but dragging the rail scrubs through the labels in order and would jump back and forth.
     //
     // Picking a copy destination needs every bank on the rail, whether or not "show empty slots"
     // happens to be checked - an empty bank may be exactly where the target is.

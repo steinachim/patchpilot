@@ -1222,9 +1222,21 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     override suspend fun setFavorite(slot: PresetSlot, under: Set<Int>): String = instrumentMutex.withLock {
         requireFacet(current().tagger, "favorite presets").setFavorite(slot.address, under)
         refreshEdited(slot.address)
-        _indexes.update { it - PresetScope.FAVORITES }
+        dropFavoritesListing()
         if (under.isEmpty()) str(R.string.result_favorite_cleared, slot.displayId)
         else str(R.string.result_favorite_set, slot.displayId)
+    }
+
+    /**
+     * Forgets the favorites listing, and stops a scan still filling it.
+     *
+     * The job goes with the state: a scan left running would keep writing rows read *before* the
+     * edit into a fresh state, and [setScope] would then show that half-stale listing as settled
+     * rather than re-reading it. The next visit to the favorites listing starts a new scan.
+     */
+    private fun dropFavoritesListing() {
+        indexJobs.remove(PresetScope.FAVORITES)?.cancel()
+        _indexes.update { it - PresetScope.FAVORITES }
     }
 
     /** Replaces [slot]'s category assignments, nulls included. */
@@ -1235,7 +1247,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             refreshEdited(slot.address)
             // A favorite is filed under the voice's own categories, so changing one moves where
             // the instrument lists it - the same reason setFavorite drops that listing.
-            _indexes.update { it - PresetScope.FAVORITES }
+            dropFavoritesListing()
             val shown = categories.mapNotNull { ref -> ref?.let { tagger.taxonomy.label(it) } }
             if (shown.isEmpty()) str(R.string.result_categories_cleared, slot.displayId)
             else str(R.string.result_categories_set, slot.displayId, shown.joinToString(", "))
@@ -1412,8 +1424,8 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     val supportedEdits: Set<EditOp> get() = connected()?.editor?.supported ?: emptySet()
 
     /** True where an edit is composed host-side from reads and writes rather than being one
-     * device command. The UI does not warn about it - the composed operations verify themselves -
-     * but the distinction is what the rollback and undo buffer exist for. */
+     * device command. The delete dialog words its warning differently for the two: a composed
+     * erase overwrites the slot with an initialised preset, a native one empties it. */
     fun isEmulatedEdit(op: EditOp): Boolean = connected()?.editor?.isEmulated(op) ?: false
 
     /** The longest preset name the connected instrument will store, or null if unlimited/unknown -
@@ -1439,7 +1451,14 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     val instrumentName: String?
         get() = (state.value as? ConnectionState.Connected)?.instrument?.identity?.name
 
-    val hasReport: Boolean get() = connected()?.report != null
+    /**
+     * Whether the connected instrument can describe itself.
+     *
+     * Read off [connectedOrPending] rather than [connected], because the connect screen offers the
+     * report from the untested-firmware gate, where the session is
+     * [ConnectionState.AdvisoryWarning] and not yet [ConnectionState.Connected].
+     */
+    val hasReport: Boolean get() = connectedOrPending()?.report != null
 
     /**
      * True once connected to something the catalog does not recognise - see [DeviceProfile.unknown]
@@ -1481,6 +1500,16 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      * [current] stays strict for everything a user action invokes, where "not connected" is a bug.
      */
     private fun connected(): Instrument? = (state.value as? ConnectionState.Connected)?.instrument
+
+    /**
+     * [connected], or the instrument held behind the advisory gate: the session exists and its
+     * facets work there too, the user just has not said "continue" yet.
+     */
+    private fun connectedOrPending(): Instrument? = when (val s = state.value) {
+        is ConnectionState.Connected -> s.instrument
+        is ConnectionState.AdvisoryWarning -> s.instrument
+        else -> null
+    }
 
     private fun current(): Instrument = instrument ?: error("Not connected to an instrument")
 

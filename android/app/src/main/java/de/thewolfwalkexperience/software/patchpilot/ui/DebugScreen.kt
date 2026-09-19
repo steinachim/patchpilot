@@ -382,9 +382,9 @@ private fun RunningView(title: String, step: String) {
 /**
  * The device report, read and waiting to go somewhere - the counterpart of [RegressionReportView].
  *
- * The JSON itself is not shown: for a Nord it is tens of kilobytes, most of it hex payloads and
- * program names, and the useful thing to do with it is to send it on rather than read it on a
- * phone. What is shown is enough to know the read happened and roughly what it produced.
+ * The JSON itself is not shown: for a Nord it is tens of kilobytes, most of it hex payloads, and
+ * the useful thing to do with it is to send it on rather than read it on a phone. What is shown
+ * is enough to know the read happened and roughly what it produced.
  */
 @Composable
 private fun DeviceReportReadyView(

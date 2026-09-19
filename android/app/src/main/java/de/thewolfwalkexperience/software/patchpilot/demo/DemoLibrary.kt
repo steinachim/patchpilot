@@ -40,15 +40,6 @@ class DemoLibrary(
 
     private val programs: MutableMap<SlotAddress, Program> = seedPrograms().toMutableMap()
 
-    /** Unused by anything today - kept because nothing established it should go with this change. */
-    private val categories: Map<String, List<String>> = linkedMapOf(
-        "Program" to emptyList(),
-        "Piano" to listOf("Grand Piano A", "Bright Grand", "Mellow Upright", "Honky Tonk", "Studio Grand"),
-        "Live" to listOf("Live Set 1", "Live Set 2", "Live Set 3"),
-        "Samp Lib" to listOf("Strings Lib", "Brass Lib", "Choir Lib"),
-        "Settings" to listOf("Global Settings"),
-    )
-
     /** Every occupied slot, in device order, as browser rows. */
     fun slots(layout: SlotLayout): List<PresetSlot> =
         layout.allAddresses()
@@ -118,27 +109,6 @@ class DemoLibrary(
     fun delete(address: SlotAddress) {
         requireOccupied(address)
         programs.remove(address)
-    }
-
-    fun categoryNames(): List<String> = categories.keys.toList()
-
-    fun itemsIn(categoryName: String, layout: SlotLayout): List<PresetSlot> {
-        if (categoryName.equals("Program", ignoreCase = true)) return slots(layout)
-        val names = categories.entries
-            .firstOrNull { it.key.equals(categoryName, ignoreCase = true) }
-            ?.value
-            ?: error("No '$categoryName' category on this instrument.")
-        // A category's items live in their own address space on a real instrument; one bank of
-        // consecutive slots is close enough for a demo and keeps the rows renderable.
-        return names.mapIndexed { index, name ->
-            val address = SlotAddress(0, index)
-            PresetSlot(
-                address = address,
-                displayId = layout.format.format(address),
-                bankLabel = layout.format.bankLabel(0),
-                name = name,
-            )
-        }
     }
 
     /**

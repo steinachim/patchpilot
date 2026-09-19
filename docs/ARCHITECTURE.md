@@ -42,7 +42,7 @@ Related types:
 
 ## Catalog and adding a device family
 
-Each family is described by one JSON file under `devices/` (see [devices/README.md](../devices/README.md)). `InstrumentRegistry` is a compile-time list of families, each of which loads its own catalog and builds its `Instrument` on an opened transport. `res/xml/device_filter.xml`, which Android reads to launch the app when a matching USB device is attached, is generated from the catalogs' USB ids by a Gradle task before every build.
+Each family is described by one JSON file under `devices/` (see [devices/README.md](../devices/README.md)). `InstrumentRegistry` is a compile-time list of families, each of which loads its own catalog and builds its `Instrument` on an opened transport. `res/xml/device_filter.xml`, which Android reads to launch the app when a matching USB device is attached, is generated from the catalogs' USB ids by a Gradle task before every build. Unlike the copied assets, the generated file is committed, so the manifest's reference to it resolves in a fresh checkout before the first build; the task overwrites it whenever the catalog changes.
 
 Adding a device that speaks an already-implemented family's protocol is a catalog entry. Adding a new protocol is a new package under `devices/` implementing at least `Instrument.browser`, plus one entry in `InstrumentRegistry`.
 

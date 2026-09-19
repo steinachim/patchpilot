@@ -11,7 +11,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -110,10 +109,8 @@ private const val BADGE_MIN_WIDTH_DP = 600
 /**
  * The measurements the preset list and its floating drag ghost have to agree on.
  *
- * **Named because two of them were asserted in prose.** The ghost's end padding carried a comment
- * reading "Matches the list's own end padding", and the handle box's size was repeated between the
- * row and the ghost - a constant asked for by name in both cases. The ghost is meant to sit exactly
- * over the row it was lifted from, so these genuinely are one value each rather than two that
+ * Named constants rather than literals repeated between the row and the ghost: the ghost is meant
+ * to sit exactly over the row it was lifted from, so each of these is one value, not two that
  * happen to coincide.
  */
 private object ProgramListMetrics {
@@ -394,10 +391,10 @@ fun ProgramsScreen(
     // startIndex() itself when a session begins - and a rotation must leave a scan already
     // running alone.
     //
-    // Collecting the session here was once a defect in its own right: the screen recomposed
-    // *while disconnected* and the accessors it reads threw on the first call needing an
-    // instrument. They answer null now (see `InstrumentViewModel.connected()`), which is what
-    // makes the collection above safe - but the listing still must not be keyed on it.
+    // The screen recomposes *while disconnected* during that dip, so every accessor it reads
+    // during composition answers null rather than throwing (see `InstrumentViewModel.connected()`);
+    // that is what makes collecting the session above safe, and it is a separate question from
+    // what the listing is keyed on.
     LaunchedEffect(Unit) { viewModel.startIndex() }
     /*
      * Editing is off while the listing is still arriving.
@@ -466,9 +463,8 @@ fun ProgramsScreen(
     }
     val programs = index.slots
 
-    // Everything the list needs, derived in one pure pass - see [buildProgramListing], which is
-    // where the rules about how the two families report occupancy now live, and where they can
-    // finally be tested without running Compose.
+    // Everything the list needs, derived in one pure pass - see [buildProgramListing], which
+    // holds the rules about how the families report occupancy and is testable without Compose.
     // `scope` is a key even though it is not an argument: `viewModel.allSlots(scope)` is a plain
     // call, so nothing else here would tell Compose the address space had changed underneath it.
     val listing = remember(programs, showEmptySlots, searchText, ops.picking, browseScope) {
@@ -740,7 +736,7 @@ fun ProgramsScreen(
             }
         }
 
-        // Bound to a local because `index` is now a delegated property and cannot smart-cast.
+        // Bound to a local because `index` is a delegated property and cannot smart-cast.
         val scanError = index.error
         when {
             // A resume rebuilds the USB session (MainActivity.onResume -> forceReconnect), and
@@ -1391,12 +1387,12 @@ private fun PresetScope.noteRes(): Int? = when (this) {
 /**
  * Per-row Rename / Copy / Delete, behind one overflow button.
  *
- * Replaces two always-visible `TextButton`s. Beyond the visual weight, the old arrangement put a
- * destructive action permanently within a few dp of a benign one in a scrolling list, which left
- * the confirmation dialog doing work the layout should have been doing. Copy sits between the
- * two: unlike Delete it gets no confirmation of its own, since it is exactly as safe as Rename -
- * choosing a destination in the list itself (`pickSource`/`picking` in [ProgramsController]) is
- * the only decision it needs from the user.
+ * One menu rather than always-visible buttons: in a 128-row bank those are hundreds of controls
+ * competing with the preset names, and a destructive action sitting permanently a few dp from a
+ * benign one in a scrolling list leaves the confirmation dialog doing work the layout should do.
+ * Copy sits between the two: unlike Delete it gets no confirmation of its own, since it is
+ * exactly as safe as Rename - choosing a destination in the list itself (`pickSource`/`picking`
+ * in [ProgramsController]) is the only decision it needs from the user.
  */
 @Composable
 private fun RowActionsMenu(
@@ -1547,14 +1543,13 @@ private fun BankIndex(
     ) {
         banks.forEach { letter ->
             // An equal weighted share of the rail each, and the **whole cell** is the target -
-            // not just the glyph plus 3.dp. With `SpaceEvenly` and a wrap-height label, most of
-            // the rail was dead space between letters, so a tap that looked on-target did
-            // nothing.
+            // not just the glyph plus its padding, or most of the rail is dead space between
+            // letters and a tap that looks on-target does nothing.
             //
-            // It also makes the two ways of using the rail agree. `jumpToY` maps a y position by
+            // It also makes the two ways of using the rail agree: `jumpToY` maps a y position by
             // dividing the rail's height into `banks.size` equal bands, which is exactly what
-            // these weights now produce - so dragging and tapping resolve the same letter at the
-            // same place. Before, the drag bands and the tap targets were subtly different.
+            // these weights produce, so dragging and tapping resolve the same letter at the same
+            // place.
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier

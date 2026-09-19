@@ -14,12 +14,9 @@ import kotlinx.serialization.Serializable
  * which is a price worth paying exactly never for data that is identical on every Motif XS ever
  * built. The user banks are the opposite case and are still read from the instrument every time.
  *
- * This is a departure from the rule stated in `devices/blanks/README.md`, that this project ships
- * only real instrument data, and it is worth being explicit about why it is not a violation. That
- * rule is about *bytes on a wire* - payloads the app sends to an instrument, which it must never
- * fabricate. These are display strings the app never transmits. The failure mode of a wrong entry
- * here is a row with the wrong label on it, not a malformed write; and the browser says where the
- * names came from, so nobody is invited to believe the instrument was asked.
+ * The rule in `devices/blanks/README.md` - never fabricate bytes for a wire - does not apply here:
+ * these are display strings the app never transmits. A wrong entry is a row with the wrong label
+ * on it, not a malformed write, and the browser says where the names came from.
  *
  * **The categories are here for the same reason, and one more.** Reading them is cheap now (see
  * [MotifXsVoice.categoriesOf]), but "cheap" still means a dump per voice, and the factory listing

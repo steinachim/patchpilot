@@ -1,10 +1,10 @@
 # Releasing
 
-How a version of Patch Pilot gets from `main` to GitHub Releases, and, once the app is listed there, to F-Droid and Google Play. Development happens on `dev`, the repository's default branch; `main` receives releases and is the only branch CI signs. Store metadata lives in `fastlane/metadata/android/en-US/`; F-Droid reads it from the repository directly, and the same files are uploaded to Play.
+How a version of Patch Pilot gets from `dev` to GitHub Releases, and, once the app is listed there, to F-Droid and Google Play. Development happens on `dev`, the repository's default branch; `main` receives releases by fast-forward and is the only branch CI signs. Store metadata lives in `fastlane/metadata/android/en-US/`; F-Droid reads it from the repository directly, and the same files are uploaded to Play.
 
 ## 1. Prepare the release commit
 
-On a release branch off `main`:
+On `dev`:
 
 1. In `android/app/build.gradle.kts`, bump `versionName` and increase `versionCode` by one. `versionCode` must never go down or repeat: Play rejects the upload, and F-Droid pins each build to it.
 2. In `CHANGELOG.md`, rename the "Next release" heading to the version and start a fresh "Next release" section above it.
@@ -26,7 +26,10 @@ Install the release APK, not a debug build, on a phone, connect a real instrumen
 
 ## 3. Tag and publish on GitHub
 
+Fast-forward `main` to the release commit, tag it there, and push both; the push to `main` also runs the signed CI build.
+
 ```
+git checkout main && git merge --ff-only dev
 git tag v<version>
 git push origin main v<version>
 gh release create v<version> android/app/build/outputs/apk/release/patchpilot-v<version>.apk \

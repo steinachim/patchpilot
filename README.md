@@ -44,7 +44,7 @@ Without an instrument, the connect screen offers a demo mode with a simulated in
 
 ## Building
 
-Requirements: JDK 17 or newer, and the Android SDK with platform 37 installed (`compileSdk` is 37). The build runs on whatever JDK launches Gradle (`JAVA_HOME`, or the Gradle JDK configured in Android Studio); nothing is downloaded beyond the Maven dependencies.
+Requirements: JDK 17 or newer, and the Android SDK with platform 37 installed (`compileSdk` is 37). The build runs on whatever JDK launches Gradle (`JAVA_HOME`, or the Gradle JDK configured in Android Studio); beyond the Gradle distribution the wrapper fetches and the Maven dependencies, nothing is downloaded.
 
 ```
 cd android

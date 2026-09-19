@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-feature
         android:name="android.hardware.usb.host"
@@ -13,13 +14,18 @@
         android:required="false" />
 
 
-    <!-- allowBackup is off deliberately. Nothing here is worth restoring onto another phone, and
+    <!-- Backups are off deliberately. Nothing here is worth restoring onto another phone, and
          some of it is worth not copying off this one: the app stores no credentials and keeps the
          preset listing in memory only, so a backup would carry little more than the theme
          preference and the cache directory - which is where shared reports, one of which names
-         the user's presets, are staged. -->
+         the user's presets, are staged. allowBackup and fullBackupContent cover Android 11 and
+         earlier; dataExtractionRules says the same for Android 12 and later, which read that
+         attribute instead (both files are under res/xml/). -->
     <application
         android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        tools:targetApi="tiramisu"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"

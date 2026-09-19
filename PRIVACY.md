@@ -9,7 +9,7 @@ Patch Pilot collects no personal data, has no network access, and never sends an
 ## What the app can access
 
 - **The connected instrument.** The app talks to a synthesizer over USB to read and change the presets stored on it. For an instrument the app opens directly over USB (the Nord and Yamaha models), Android asks for your permission the first time that instrument is connected. For a class-compliant USB-MIDI instrument (the Behringer Pro-800), Android's MIDI service handles the connection and no permission prompt is shown. Nothing read from the instrument leaves the device except through the exports described below, which you start yourself.
-- **Nothing else.** The app declares no Android permissions: no internet, no storage, no location, no contacts, no camera, no microphone. It contains no advertising, analytics or crash-reporting libraries.
+- **Nothing else.** The app requests no Android permissions: no internet, no storage, no location, no contacts, no camera, no microphone. (The one permission in its manifest is a private one the AndroidX library generates so that only the app itself can deliver its USB broadcasts; it grants access to nothing.) It contains no advertising, analytics or crash-reporting libraries.
 
 ## What the app stores on your device
 
