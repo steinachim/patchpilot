@@ -44,11 +44,15 @@ gh release create v<version> android/app/build/outputs/apk/release/patchpilot-v<
 
 ## 4. F-Droid
 
+*not yet supported*
+
 Nothing to do. `UpdateCheckMode: Tags` in the fdroiddata metadata picks up the new `v*` tag,
 opens a merge request with the new `versionCode`, and the build server builds it from the tag.
 If the build fails, the F-Droid bot reports it in the fdroiddata issue tracker.
 
 ## 5. Google Play
+
+*not yet supported*
 
 Upload `app-release.aab` to the production track in the Play Console (or to a testing track
 first), paste the changelog entry as the release notes, and roll out. This can later be
@@ -56,6 +60,22 @@ automated with `fastlane supply` against the same metadata directory.
 
 ## Signing
 
-The release key in `android/keystore/patchpilot-release.jks` signs GitHub APKs and is the Play
-upload key. Losing it means GitHub users can no longer update in place, so keep a backup of the
-keystore and `local.properties` outside this machine.
+The local-only release key in `android/keystore/patchpilot-release.jks` signs GitHub APKs
+and is the Play upload key. Losing it means GitHub users can no longer update in place,
+so keep a backup of the keystore and `local.properties` outside this machine.
+
+CI (`.github/workflows/android.yml`) signs `main` builds with the same key, read from four repository
+secrets that mirror the `local.properties` keys: `RELEASE_KEYSTORE_BASE64` (the `.jks` file,
+base64-encoded), `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD`. To set
+them from a machine that has the keystore and `local.properties`:
+
+```
+cd android
+gh secret set RELEASE_KEYSTORE_BASE64 --body "$(base64 -i keystore/patchpilot-release.jks)"
+for k in RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
+  sed -n "s/^$k=//p" local.properties | gh secret set "$k"
+done
+```
+
+A push to `main` without these secrets fails at the signing step rather than producing an unsigned
+APK. Pull-request builds never use the key.
