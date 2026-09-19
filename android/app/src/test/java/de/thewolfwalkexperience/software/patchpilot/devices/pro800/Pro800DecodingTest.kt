@@ -107,34 +107,33 @@ class Pro800DecodingTest {
 
     @Test
     fun `a preset decodes to the name the instrument shows`() {
-        val program = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_A00)))
+        val program = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_B00)))
         assertFalse(program.isEmpty)
         assertEquals(111, program.version)
-        assertEquals("Organ I", program.name)
+        assertEquals("RandomTest", program.name)
     }
 
     /**
-     * **Records are variable length.** This one is 190 bytes where A00 is 210, and the old test
-     * called anything under 166 dense bytes an empty slot - which reported 98 of this
-     * instrument's 100 bank-A presets as empty.
+     * **Records are variable length.** This one is 190 bytes where B00 is 210; a decoder that
+     * called anything under 166 dense bytes an empty slot would report most of a bank as empty.
      */
     @Test
     fun `the shortest record is a preset, not an empty slot`() {
-        val message = bytes(Pro800Fixtures.DUMP_A48)
+        val message = bytes(Pro800Fixtures.DUMP_109_SHORT_NAME)
         assertEquals(190, message.size)
         val program = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(message))
         assertFalse("a 190-byte record is still a preset", program.isEmpty)
         assertEquals(109, program.version)
-        assertEquals("Harp", program.name)
+        assertEquals("Rand", program.name)
     }
 
     /** In format 109 the name is the last field, so a longer name means a longer record. */
     @Test
     fun `record length tracks name length in the older preset format`() {
-        val harp = bytes(Pro800Fixtures.DUMP_A48)
-        val brass = bytes(Pro800Fixtures.DUMP_A01)
-        assertEquals("Harp", Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(harp)).name)
-        assertEquals("Classical Brass", Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(brass)).name)
+        val harp = bytes(Pro800Fixtures.DUMP_109_SHORT_NAME)
+        val brass = bytes(Pro800Fixtures.DUMP_109_LONG_NAME)
+        assertEquals("Rand", Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(harp)).name)
+        assertEquals("RandomTest 109L", Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(brass)).name)
         assertTrue("the longer name should give the longer record", brass.size > harp.size)
     }
 
@@ -149,7 +148,7 @@ class Pro800DecodingTest {
 
     @Test
     fun `an empty address is a bare F0 F7`() {
-        val message = bytes(Pro800Fixtures.DUMP_B00_EMPTY)
+        val message = bytes(Pro800Fixtures.DUMP_EMPTY_REPLY)
         assertArrayEquals(byteArrayOf(0xF0.toByte(), 0xF7.toByte()), message)
         assertTrue(Pro800SysEx.isEmptyReply(message))
         assertTrue(Pro800Program.fromEncoded(ByteArray(0)).isEmpty)
@@ -160,9 +159,9 @@ class Pro800DecodingTest {
     @Test
     fun `every record survives a decode-encode round trip`() {
         listOf(
-            Pro800Fixtures.DUMP_A00,
-            Pro800Fixtures.DUMP_A01,
-            Pro800Fixtures.DUMP_A48,
+            Pro800Fixtures.DUMP_B00,
+            Pro800Fixtures.DUMP_109_LONG_NAME,
+            Pro800Fixtures.DUMP_109_SHORT_NAME,
             Pro800Fixtures.DUMP_B01,
             Pro800Fixtures.SETTINGS_DUMP,
         ).forEach { hex ->
@@ -183,9 +182,9 @@ class Pro800DecodingTest {
     @Test
     fun `the browser reads sample replies correctly end to end`() = runTest {
         val byNumber = mapOf(
-            0 to Pro800Fixtures.DUMP_A00,
-            1 to Pro800Fixtures.DUMP_A01,
-            2 to Pro800Fixtures.DUMP_A48,
+            0 to Pro800Fixtures.DUMP_B00,
+            1 to Pro800Fixtures.DUMP_109_LONG_NAME,
+            2 to Pro800Fixtures.DUMP_109_SHORT_NAME,
             3 to Pro800Fixtures.DUMP_B01,
         )
         // The settings block is kept, not re-served from the fixture, because selection writes it
@@ -205,7 +204,7 @@ class Pro800DecodingTest {
                         // The sample dumps echo their own original addresses, so re-address
                         // them to whatever this small fixture instrument is being asked for.
                         byNumber[number]?.let { listOf(readdress(bytes(it), number)) }
-                            ?: listOf(bytes(Pro800Fixtures.DUMP_B00_EMPTY))
+                            ?: listOf(bytes(Pro800Fixtures.DUMP_EMPTY_REPLY))
                     }
                 }
                 Pro800SysEx.TYPE_DUMP -> {
@@ -232,9 +231,9 @@ class Pro800DecodingTest {
         val slots = pro800.browser.index().toList()
             .filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }
         assertEquals(5, slots.size)
-        assertEquals("Organ I", slots[0].name)
-        assertEquals("Classical Brass", slots[1].name)
-        assertEquals("Harp", slots[2].name)
+        assertEquals("RandomTest", slots[0].name)
+        assertEquals("RandomTest 109L", slots[1].name)
+        assertEquals("Rand", slots[2].name)
         assertEquals(Pro800Instrument.UNNAMED, slots[3].name)
         assertNull(slots[4].name)
 
@@ -264,15 +263,15 @@ class Pro800DecodingTest {
     /**
      * Renaming a record that was truncated for a *shorter* name.
      *
-     * A48 "Harp" comes back 155 dense bytes long - the instrument stops after the last meaningful
+     * The 109 record "Rand" is 155 dense bytes long - the instrument stops after the last meaningful
      * byte, eleven short of where the 16-wide name field ends. Writing "PatchPilot" into that
      * without growing the record first fails outright ("string at 150..165 runs past a 155-byte
      * record"). A fake built from full-length records could never catch this: it always has room.
      */
     @Test
     fun `a longer name fits a record that was truncated for a shorter one`() {
-        val original = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_A48)))
-        assertEquals("Harp", original.name)
+        val original = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_109_SHORT_NAME)))
+        assertEquals("Rand", original.name)
         assertTrue("the record really is short", original.dense.size < Pro800ProgramFields.NAME_DENSE_END)
 
         val renamed = original.withName("PatchPilot")
@@ -288,7 +287,7 @@ class Pro800DecodingTest {
     /** And the reverse: a format-111 record has fields *after* the name, which must survive. */
     @Test
     fun `renaming a newer-format record preserves what follows the name`() {
-        val original = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_A00)))
+        val original = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_B00)))
         val renamed = original.withName("Hi")
         assertEquals("Hi", renamed.name)
         assertEquals(original.dense.size, renamed.dense.size)
@@ -333,10 +332,10 @@ class Pro800DecodingTest {
     /** Anything that is not a status reply has no status code - a dump must not look like one. */
     @Test
     fun `a dump is not mistaken for a status reply`() {
-        assertNull(Pro800SysEx.statusCodeOf(bytes(Pro800Fixtures.DUMP_A00)))
-        assertNull(Pro800SysEx.statusCodeOf(bytes(Pro800Fixtures.DUMP_B00_EMPTY)))
-        assertFalse(Pro800SysEx.isStatusOk(bytes(Pro800Fixtures.DUMP_A00)))
-        assertFalse(Pro800SysEx.isStatusFailure(bytes(Pro800Fixtures.DUMP_A00)))
+        assertNull(Pro800SysEx.statusCodeOf(bytes(Pro800Fixtures.DUMP_B00)))
+        assertNull(Pro800SysEx.statusCodeOf(bytes(Pro800Fixtures.DUMP_EMPTY_REPLY)))
+        assertFalse(Pro800SysEx.isStatusOk(bytes(Pro800Fixtures.DUMP_B00)))
+        assertFalse(Pro800SysEx.isStatusFailure(bytes(Pro800Fixtures.DUMP_B00)))
     }
 
     // ---- Preset format version vs record length ----
@@ -351,7 +350,7 @@ class Pro800DecodingTest {
      */
     @Test
     fun `renaming a format 109 record never reaches a field only newer formats declare`() {
-        val original = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_A48)))
+        val original = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_109_SHORT_NAME)))
         assertEquals(109, original.version)
 
         val renamed = original.withName("ABCDEFGHIJKLMNOP") // the full 16-character field
@@ -382,9 +381,9 @@ class Pro800DecodingTest {
      */
     @Test
     fun `a reply spliced from two real dumps passes the address check and fails on length`() {
-        val a48 = bytes(Pro800Fixtures.DUMP_A48) // format 109
-        val a00 = bytes(Pro800Fixtures.DUMP_A00) // format 111
-        // A48 with its terminator lost, running straight into A00's payload - the shape a splice
+        val a48 = bytes(Pro800Fixtures.DUMP_109_SHORT_NAME) // format 109
+        val a00 = bytes(Pro800Fixtures.DUMP_B00) // format 111
+        // The short 109 record with its terminator lost, running straight into B00's payload - the shape a splice
         // actually takes.
         val spliced = a48.copyOfRange(0, a48.size - 1) +
             a00.copyOfRange(Pro800SysEx.DATA_START_INDEX, a00.size)
@@ -418,7 +417,7 @@ class Pro800DecodingTest {
      */
     @Test
     fun `a truncated record is flagged for confirmation rather than rejected`() {
-        val a48 = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_A48)))
+        val a48 = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_109_SHORT_NAME)))
         val truncated = Pro800Program(a48.dense.copyOfRange(0, 7))
         assertEquals("the version byte survives a short splice", 109, truncated.version)
         assertFalse("nothing about its length outruns 109", truncated.outrunsDeclaredVersion)
@@ -469,9 +468,9 @@ class Pro800DecodingTest {
     @Test
     fun `every record is within the length its version declares`() {
         listOf(
-            "A00" to Pro800Fixtures.DUMP_A00,
-            "A01" to Pro800Fixtures.DUMP_A01,
-            "A48" to Pro800Fixtures.DUMP_A48,
+            "B00" to Pro800Fixtures.DUMP_B00,
+            "109 long" to Pro800Fixtures.DUMP_109_LONG_NAME,
+            "109 short" to Pro800Fixtures.DUMP_109_SHORT_NAME,
             "B01" to Pro800Fixtures.DUMP_B01,
             "C11" to Pro800Fixtures.DUMP_C11_UNNAMED,
         ).forEach { (label, hex) ->
@@ -492,12 +491,12 @@ class Pro800DecodingTest {
     /** The declared boundaries match what the instrument actually returns. */
     @Test
     fun `the per-version record lengths match real records`() {
-        val v109 = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_A01)))
-        val v111 = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_A00)))
+        val v109 = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_109_LONG_NAME)))
+        val v111 = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_B00)))
         assertEquals(109, v109.version)
         assertEquals(111, v111.version)
 
-        // A01 carries a 15-character name, so it is a full-length 109 record.
+        // The long-name record carries a 15-character name, so it is a full-length 109 record.
         assertEquals(Pro800ProgramFields.maxDenseSizeFor(109), v109.dense.size)
         assertEquals(Pro800ProgramFields.maxDenseSizeFor(111), v111.dense.size)
         assertTrue(
@@ -509,7 +508,7 @@ class Pro800DecodingTest {
     /** A rename of a newer-format record must not shorten it either - its appended fields stay. */
     @Test
     fun `renaming a format 111 record keeps it at its own full length`() {
-        val original = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_A00)))
+        val original = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_B00)))
         val renamed = original.withName("Hi")
         assertEquals(111, renamed.version)
         assertEquals(Pro800ProgramFields.maxDenseSizeFor(111), renamed.dense.size)
