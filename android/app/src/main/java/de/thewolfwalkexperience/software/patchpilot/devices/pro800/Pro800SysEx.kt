@@ -13,7 +13,7 @@ object Pro800SysEx {
         0xF0.toByte(),
         0x00, 0x20, 0x32, // Behringer
         0x00, 0x01, 0x24, // Pro-800
-        0x00, // CPU id
+        0x00, // device number: 00 by default, settable with type 0x00 (never sent); replies carry the instrument's
     )
 
     const val SYSEX_END = 0xF7.toByte()
