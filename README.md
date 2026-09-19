@@ -82,7 +82,7 @@ This software changes your instrument's internal storage, including operations t
 
 ## License
 
-Patch Pilot is licensed under the GNU General Public License v3.0 (SPDX: `GPL-3.0-only`); see [LICENSE](LICENSE). Third-party license notices for bundled dependencies and fonts are listed in [android/NOTICE.md](android/NOTICE.md).
+Copyright (C) 2026 Achim Stein. Patch Pilot is licensed under the GNU General Public License v3.0 (SPDX: `GPL-3.0-only`); see [LICENSE](LICENSE). Third-party license notices for bundled dependencies and fonts are listed in [android/NOTICE.md](android/NOTICE.md).
 
 ## Thank you
 
