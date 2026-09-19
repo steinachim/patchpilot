@@ -70,7 +70,6 @@ The build reads the device catalog from `../devices` relative to `android/` (the
 - [docs/PROTOCOLS.md](docs/PROTOCOLS.md): the wire protocol each device implementation uses.
 - [docs/RELEASING.md](docs/RELEASING.md): how a version is built and published.
 - [devices/README.md](devices/README.md): the device catalog and how to add an instrument.
-- [TODO.md](TODO.md): what remains before the app is listed on F-Droid and Google Play.
 - [CHANGELOG.md](CHANGELOG.md).
 
 ## Legal

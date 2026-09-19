@@ -12,3 +12,6 @@ android/app/src/main/assets/
 
 .DS_Store
 .vscode
+
+# Private planning notes, kept out of the repository.
+TODO.md

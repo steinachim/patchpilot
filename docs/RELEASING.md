@@ -2,7 +2,7 @@
 
 How a version of Patch Pilot gets from `main` to GitHub Releases, and, once the app is listed there, to F-Droid and Google Play. Store metadata lives in `fastlane/metadata/android/en-US/`; F-Droid reads it from the repository directly, and the same files are uploaded to Play.
 
-Status: as of 2026-09-19 the app is distributed only as a signed APK attached to a GitHub Release. The F-Droid and Play steps below describe the intended procedure and have not been exercised; see [TODO.md](../TODO.md) for what has to happen before they can be.
+Status: as of 2026-09-19 the app is distributed only as a signed APK attached to a GitHub Release. The F-Droid and Play steps below describe the intended procedure and have not been exercised.
 
 ## 1. Prepare the release commit
 
@@ -45,7 +45,7 @@ Upload `app-release.aab` to the production track in the Play Console (or to a te
 
 ## Signing
 
-The release key in `android/keystore/patchpilot-release.jks` signs the GitHub APKs. Both the keystore directory and `local.properties` are gitignored and have never been committed. Losing the key means GitHub users can no longer update in place, so keep a backup of the keystore and of `local.properties` outside this machine. The plan is to use the same key as the Play upload key; see TODO.md, "Signatures across channels".
+The release key in `android/keystore/patchpilot-release.jks` signs the GitHub APKs. Both the keystore directory and `local.properties` are gitignored and have never been committed. Losing the key means GitHub users can no longer update in place, so keep a backup of the keystore and of `local.properties` outside this machine. The plan is to use the same key as the Play upload key, so that Play-distributed APKs carry the same signature as the GitHub ones; the app-signing key choice on Play is permanent.
 
 CI (`.github/workflows/android.yml`) signs `main` builds with the same key, read from four repository secrets that mirror the `local.properties` keys: `RELEASE_KEYSTORE_BASE64` (the `.jks` file, base64-encoded), `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD`. To set them from a machine that has the keystore and `local.properties`:
 
