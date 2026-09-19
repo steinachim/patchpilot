@@ -258,7 +258,9 @@ class NordDeviceProtocolTest {
     // ---- Protocol version rules ----
     //
     // The file-transfer protocol version decides two wire formats: how many flag bytes the
-    // root-category trailer carries, and whether an item record ends with a content id. Both rules are asserted at every version in the accepted range - including the tiers no instrument in this repository sits in.
+    // root-category trailer carries, and whether an item record ends with a content id. Both rules
+    // are asserted at every version in the accepted range - including the tiers no instrument in
+    // this repository sits in.
 
     /**
      * A file-transfer version outside 3-10 is refused, not warned about.
@@ -325,9 +327,7 @@ class NordDeviceProtocolTest {
         assertTrue("nothing went on the wire", transport.sentRequests.isEmpty())
     }
 
-    /**
-     * Protocol 6 at version 1 and protocol 7 at version 0, on both known instruments.
-     */
+    /** Protocol 6 at version 1 and protocol 7 at version 0, on both known instruments. */
     @Test
     fun `both instruments report the UI and Ctrl versions this app expects`() {
         for (response in listOf(NordFixtures.GRAND_DEVICE_INFO_RESPONSE, NordFixtures.STAGE2EX_DEVICE_INFO_RESPONSE)) {
@@ -485,8 +485,8 @@ class NordDeviceProtocolTest {
     @Test
     fun `fetchCategoryItems walks the cursor even when the item count reads zero`() = runTest {
         // The Nord Stage 2 EX reports an item count of 0 for its Live and Settings
-        // categories while both hold items, and the vendor's editor walks them anyway.
-        // Using the count as the loop condition returned nothing.
+        // categories while both hold items. Using the count as the loop condition would
+        // return nothing.
         val itemPayload = parseMessage(NordFixtures.NGP_RECORD_RESPONSE).payload
         val responses = listOf(
             3 to childListPayload(List(2) { "Bank" to 25 }), // two banks

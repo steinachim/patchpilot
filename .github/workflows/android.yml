@@ -31,9 +31,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Launcher JVM only. gradle/gradle-daemon-jvm.properties pins the daemon to JetBrains
-      # Runtime 21 and carries the download URL for it, so Gradle provisions that itself - the
-      # same way it does on a developer machine. Gradle 9 needs at least 17 to start.
+      # The JDK the build runs on. Nothing else is provisioned: AGP 9 needs 17 or newer, and the
+      # bytecode target is 17 whatever the build JDK is.
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -44,11 +43,6 @@ jobs:
           # The action only writes its cache from the repository's default branch, which is dev -
           # a branch this workflow never runs on. Without this every run would start cold.
           cache-read-only: false
-          # `jdks` holds the auto-provisioned daemon JVM; it is not cached by default.
-          gradle-home-cache-includes: |
-            caches
-            notifications
-            jdks
 
       - name: Install release signing key
         if: github.event_name == 'push'

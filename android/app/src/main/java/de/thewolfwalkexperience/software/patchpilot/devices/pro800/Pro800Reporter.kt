@@ -24,17 +24,13 @@ private val REPORT_JSON = Json { prettyPrint = true; encodeDefaults = true }
  *
  * **Read-only, and deliberately narrow about it.** Every request below is a documented query:
  * the identity and firmware probes, the two undocumented-but-answering types `0x02` and `0x04`
- * (recorded in `docs/Pro800SysExMessages.md` as pure responders, worth recording since nobody
- * has decoded them), the settings block, and program dumps. Nothing in the ranges whose effects
- * are unknown is sent, and `0x7D`/`0x32` are never sent by anything.
+ * (pure responders nobody has decoded, worth recording), the settings block, and program dumps.
+ * Nothing in the ranges whose effects are unknown is sent, and `0x7D`/`0x32` are never sent by
+ * anything.
  *
- * **What it is really for.** A report from a Nord describes an instrument nobody has profiled. A
- * report from a Pro-800 does that too, but its more immediate job is supplying fixtures that
- * exercise the record shapes the decoder actually has to handle correctly. A fixture whose bytes
- * are built by hand can easily encode the same assumption as the code it is meant to test, letting
- * a decoding bug slip past a whole test suite; independently-sourced byte sequences cannot share
- * that blind spot. [sampleDumps] deliberately selects for the record shapes worth testing against:
- * a full-length one, a truncated one, an unnamed one, and an empty address.
+ * **Preset content stays on the instrument.** The dumps are read to count them, but the report
+ * carries only aggregates - how many slots are occupied, how many are unnamed, how many presets
+ * of each format version, and which message lengths occur - never a preset's bytes or its name.
  */
 class Pro800Reporter(
     private val exchange: SysExExchange,
@@ -45,9 +41,9 @@ class Pro800Reporter(
     override fun suggestedFilename() = "behringer_pro800"
 
     override val description =
-        "Reads the instrument's identity, firmware version, global settings and every one of its " +
-            "preset slots, and shares it as JSON. Nothing is written to the instrument. The " +
-            "bytes read here are what this app's Pro-800 support is tested against."
+        "Reads the instrument's identity, firmware version and global settings, counts its " +
+            "presets by format version, and shares that as JSON. Nothing is written to the " +
+            "instrument, and no preset's data or name is included."
 
     override suspend fun buildReport(progress: ((String) -> Unit)?): String {
         val probes = Probes()
@@ -79,7 +75,6 @@ class Pro800Reporter(
 
         progress?.invoke("Scanning presets...")
         val slots = mutableListOf<Pro800SlotReport>()
-        val rawByAddress = LinkedHashMap<String, String>()
         val total = layout.slotCount
         var done = 0
 
@@ -103,19 +98,12 @@ class Pro800Reporter(
             val payload = if (empty) ByteArray(0) else Pro800SysEx.dumpPayload(message)
             val program = Pro800Program.fromEncoded(payload)
             slots += Pro800SlotReport(
-                id = displayId,
-                programNumber = programNumber,
                 empty = empty,
                 messageBytes = message.size,
-                denseBytes = program.dense.size,
                 presetVersion = program.version,
-                name = program.name,
+                unnamed = !empty && program.name == null,
             )
-            rawByAddress[displayId] = message.toHex()
         }
-
-        // The record shapes that broke the decoder, kept verbatim so a test can replay them.
-        val samples = sampleDumps(slots, rawByAddress)
 
         val report = Pro800Report(
             note = "Read-only report generated from the connected instrument. No data was written.",
@@ -129,44 +117,14 @@ class Pro800Reporter(
             midiRxDescription = settings?.midiRxDescription,
             slotCount = slots.size,
             occupiedCount = slots.count { !it.empty },
-            unnamedCount = slots.count { !it.empty && it.name == null },
+            unnamedCount = slots.count { it.unnamed },
             presetVersionHistogram = slots.filterNot { it.empty }
                 .groupingBy { it.presetVersion?.toString() ?: "unknown" }
                 .eachCount(),
             messageLengths = slots.filterNot { it.empty }.map { it.messageBytes }.distinct().sorted(),
-            sampleDumpsHex = samples,
             failures = probes.failures,
         )
         return REPORT_JSON.encodeToString(report)
-    }
-
-    /**
-     * A handful of raw messages chosen to cover the shapes that have actually caused bugs, rather
-     * than the first few addresses.
-     */
-    private fun sampleDumps(
-        slots: List<Pro800SlotReport>,
-        rawByAddress: Map<String, String>,
-    ): Map<String, String> {
-        val occupied = slots.filterNot { it.empty }
-        val picks = linkedMapOf<String, Pro800SlotReport?>(
-            // A full-length record, and a truncated one: length varies, and treating short as
-            // empty is what hid 98 real presets.
-            "longest" to occupied.maxByOrNull { it.messageBytes },
-            "shortest" to occupied.minByOrNull { it.messageBytes },
-            // A preset with no name, which must not be mistaken for an empty slot.
-            "unnamed" to occupied.firstOrNull { it.name == null },
-            // The newest and oldest preset format seen on this instrument.
-            "newestPresetVersion" to occupied.maxByOrNull { it.presetVersion ?: -1 },
-            "oldestPresetVersion" to occupied.minByOrNull { it.presetVersion ?: Int.MAX_VALUE },
-            // A named one, for the decode-the-name check.
-            "named" to occupied.firstOrNull { it.name != null },
-            // And an address holding nothing at all.
-            "empty" to slots.firstOrNull { it.empty },
-        )
-        return picks.mapNotNull { (label, slot) ->
-            slot?.let { rawByAddress[it.id]?.let { hex -> "$label@${it.id}" to hex } }
-        }.toMap()
     }
 
     private suspend fun rawReply(type: Int, expectType: Int = type + 1): ByteArray =
@@ -190,18 +148,13 @@ data class Pro800ReportIdentity(
     val descriptorId: String,
 )
 
-/** One address, as the instrument answered for it. */
-@Serializable
-data class Pro800SlotReport(
-    val id: String,
-    val programNumber: Int,
+/** One address, reduced to what the aggregates need; nothing here identifies the preset. */
+private data class Pro800SlotReport(
     val empty: Boolean,
     /** Whole SysEx message length, `F0` and `F7` included. 2 for an empty address. */
     val messageBytes: Int,
-    /** Decoded 8-bit length - what the field offsets are expressed against. */
-    val denseBytes: Int,
     val presetVersion: Int?,
-    val name: String?,
+    val unnamed: Boolean,
 )
 
 @Serializable
@@ -223,6 +176,5 @@ data class Pro800Report(
     /** Every distinct message length seen. A single value here would have meant fixed-size
      * records; several is what proves they are not. */
     val messageLengths: List<Int>,
-    val sampleDumpsHex: Map<String, String>,
     val failures: Map<String, String>,
 )

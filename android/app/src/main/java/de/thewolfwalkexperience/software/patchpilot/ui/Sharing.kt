@@ -49,9 +49,9 @@ fun shareTextReport(
     // A dedicated directory rather than cacheDir's root, cleared before each share.
     //
     // Two reasons. Files written to the cache root would sit there until Android chose to evict
-    // the cache, and a device report is not nothing: it can carry the user's preset names, the
-    // firmware version, the USB ids and raw protocol hex. Keeping exactly the file being shared
-    // right now is the smaller footprint. Second, it narrows what the FileProvider path in
+    // the cache, and a report is not nothing: a regression report names the user's presets, and a
+    // device report carries the firmware version, the USB ids and raw protocol hex. Keeping
+    // exactly the file being shared right now is the smaller footprint. Second, it narrows what the FileProvider path in
     // file_paths.xml exposes: the grant is per-Uri either way, but there is no reason for the
     // declared path to span the whole cache when one subdirectory will do.
     val dir = File(context.cacheDir, SHARE_DIR).apply {

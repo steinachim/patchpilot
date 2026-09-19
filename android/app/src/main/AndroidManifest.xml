@@ -22,8 +22,8 @@
     <!-- allowBackup is off deliberately. Nothing here is worth restoring onto another phone, and
          some of it is worth not copying off this one: the app stores no credentials and keeps the
          preset listing in memory only, so a backup would carry little more than the theme
-         preference and the cache directory - which is where shared device reports, which can
-         contain the user's preset names, are staged. -->
+         preference and the cache directory - which is where shared reports, one of which names
+         the user's presets, are staged. -->
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"

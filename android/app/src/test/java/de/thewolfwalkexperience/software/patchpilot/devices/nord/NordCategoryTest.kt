@@ -100,8 +100,8 @@ class NordCategoryTest {
     }
 
     /**
-     * Alphabetical with `None` last, which is the order the vendor editor's own rename dropdown
-     * uses - so the app and Clavia's tool show the same list the same way round.
+     * Alphabetical with `None` last, which is the order the vendor's own editor lists categories
+     * in - so the app and the vendor's tool show the same list the same way round.
      */
     @Test
     fun `categories are ordered alphabetically with None last`() {

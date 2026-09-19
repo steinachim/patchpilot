@@ -79,10 +79,8 @@ private object CursorReply {
 /**
  * The instrument speaks a file-transfer protocol version this app does not.
  *
- * Its own type because it must not be confused with *failing to read* the version:
- * `resolveProtocolVersionFileTransfer()` answers that by falling back to the profile's documented
- * value, which would be exactly the wrong move here - the instrument answered clearly, and the
- * answer was "a protocol revision this app has not decoded".
+ * Its own type because it must not be confused with *failing to read* the version: the
+ * instrument answered clearly, and the answer was a protocol revision this app has not decoded.
  */
 class UnsupportedProtocolVersionException(message: String) : IllegalStateException(message)
 
@@ -114,14 +112,14 @@ class UnsupportedProtocolVersionException(message: String) : IllegalStateExcepti
  *    exactly on its end (29 on the Grand, 28 on the Stage 2 EX) - see
  *    [detectRootCategoryTrailerLen].
  *
- * the vendor's editor runs a fixed handshake at the start of every session
- * (device-info query, capability query, ENTER_STATUS_MODE, content-database
- * RESET), but none of them is actually a prerequisite for anything below.
- * [connect] therefore sends exactly one of them - the device-info query,
- * whose reply is the protocol version table above - and none of the other
- * three. Each operation sends exactly the requests it needs, and cleans up
- * whatever it locks (see [selectPreset]/[moveProgram]/[fetchCategoryItems]
- * and the status-mode sub-opcodes).
+ * The vendor's editor opens every session with a fixed handshake (device-info
+ * query, capability query, ENTER_STATUS_MODE, content-database RESET), but
+ * none of them is a prerequisite for anything below. [connect] therefore
+ * sends exactly one of them - the device-info query, whose reply is the
+ * protocol version table above - and none of the other three. Each operation
+ * sends exactly the requests it needs, and cleans up whatever it locks (see
+ * [selectPreset]/[moveProgram]/[fetchCategoryItems] and the status-mode
+ * sub-opcodes).
  */
 class NordDevice(private val transport: UsbBulkTransport, initialProfile: DeviceProfile) {
 
@@ -183,9 +181,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     var firmwareVersion: Int = 0
         private set
 
-    /** the vendor's editor sends this once at the start of every session. It isn't a prerequisite
-     * for anything else here, but its reply is where [protocolVersionFileTransfer] comes from
-     * (see [parseProtocolVersions]), so [connect] does send it. */
+    /** The first message of every session. It isn't a prerequisite for anything else here, but
+     * its reply is where [protocolVersionFileTransfer] comes from (see [parseProtocolVersions]),
+     * so [connect] does send it. */
     enum class CtrlSubOp(val code: Int) {
         DEVICE_INFO_QUERY(2), // bare request -> protocol version table (2/3)
     }
@@ -219,11 +217,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         FETCH_ITEM(30), // fetch the item record for (bank, item) (30/31)
         CURSOR_NEXT_ITEM(32), // nearest occupied item past (bank, item); stateless, third field is a direction (32/33)
         GET_DEPENDENCY(40), // an item's dependency list: the piano and sample library it needs (40/41)
-        ENABLE_INVALIDATION(45), // `enable invalidation` (45/46); the reply is an unexamined ack
+        ENABLE_INVALIDATION(45), // enable invalidation (45/46); the reply is an unexamined ack
         SELECT_PRESET(47), // select/load a preset by (bank, item) (47/48)
         SET_CATEGORY(51), // set a preset's category tag by (bank, item) (51/52)
-        RESET(57), // `reset` (57/58); reply is always 4 zero bytes, nothing needs it
-        QUERY_CONTENT_VERSION(61), // `query content version` (61/62); reply is 4 zero bytes
+        RESET(57), // reset (57/58); reply is always 4 zero bytes, nothing needs it
+        QUERY_CONTENT_VERSION(61), // query content version (61/62); reply is 4 zero bytes
     }
 
     data class BankItem(val bank: Int, val item: Int)
@@ -307,12 +305,12 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      *
      * Warns rather than refuses, and the three protocols differ in why:
      *
-     *  - **UI (6)** - every instrument measured reports 1. This app's use of the UI protocol is cosmetic (status text, progress, and the
-     *    display lock around them), so a mismatch is worth saying but is no reason to refuse to
-     *    browse presets.
-     *  - **Ctrl (7)** - the protocol
-     *    that carries the version table: if it ever changed incompatibly there would be no way to
-     *    find out. Checked here anyway, so a change is noticed rather than silently absorbed.
+     *  - **UI (6)** - every instrument measured reports 1. This app's use of the UI protocol is
+     *    cosmetic (status text, progress, and the display lock around them), so a mismatch is
+     *    worth saying but is no reason to refuse to browse presets.
+     *  - **Ctrl (7)** - the protocol that carries the version table, so a change in it could not
+     *    be announced through the table itself. Checked here so a change is noticed rather than
+     *    silently absorbed.
      *  - **12** - has its own rules for out-of-range versions; flagged here when it falls outside
      *    the range every reply layout was decoded in, which is exactly when those rules stop
      *    applying.
@@ -327,8 +325,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 Log.w(
                     TAG,
                     "$name reports $label protocol (id $protocolId) at version $actual; this app " +
-                        "was written against version $expected . \" +
-                        \"Anything using it may be wrong.",
+                        "was written against version $expected. Anything using it may be wrong.",
                 )
                 // Stop speaking it rather than guess at a layout that may have moved.
                 // Cosmetic only - see [ui].
@@ -420,9 +417,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * A request on [PROTOCOL_UI] - the instrument's status display.
      *
      * **Sends nothing and returns null** when the instrument reports a UI protocol version this
-     * app was not written against. Only *this protocol* is refused, because everything
-     * it does here - status text, the progress push, and the display lock around them - is
-     * cosmetic, and none of browsing, moving, renaming or transferring presets depends on it.
+     * app was not written against. Only *this protocol* is refused, because everything it does
+     * here - status text, the progress push, and the display lock around them - is cosmetic, and
+     * none of browsing, moving, renaming or transferring presets depends on it.
      *
      * Skipping rather than guessing is the safe direction: sub-op 0/1 locks the instrument's
      * display and inhibits playing until sub-op 2/3 releases it, and a version whose message
@@ -951,10 +948,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * category, then sub-opcode 47/48. The response echoes back (flag,
      * bank, item); flag is expected to be 0.
      *
-     * the vendor's editor sends UiSubOp.ENTER_STATUS_MODE first, but the
-     * instrument doesn't need it for this to work - only SELECT_CATEGORY
-     * locks the instrument, so only [unlockCategorySelection] is needed
-     * afterward (always, even on a failed select - see [fetchCategoryItems]).
+     * The vendor's editor sends ENTER_STATUS_MODE first, but the instrument
+     * doesn't need it for this to work - only SELECT_CATEGORY locks the
+     * instrument, so only [unlockCategorySelection] is needed afterward
+     * (always, even on a failed select - see [fetchCategoryItems]).
      */
     suspend fun selectPreset(bank: Int, item: Int) {
         withProgramCategory {
@@ -1014,9 +1011,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * sub-opcode 26/27. See [selectPreset] for why there's no
      * ENTER_STATUS_MODE call and why [unlockCategorySelection] always
      * runs, even on failure. Also skips the per-category item-count
-     * refresh the vendor editor's own UI issues right after a move
-     * (presumably to refresh its own listing) - the swap itself doesn't
-     * depend on it, and this app has no listing open mid-move to refresh.
+     * refresh the vendor's editor issues right after a move (presumably
+     * to refresh its own listing) - the swap itself doesn't depend on it,
+     * and this app has no listing open mid-move to refresh.
      *
      * This single request performs a full two-way swap, not a one-way
      * move. The destination must hold a program: the instrument answers
@@ -1169,8 +1166,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
     /**
      * The capability query's reply (protocol 6, sub-opcode 4/5) - a protocol/capability
-     * version block that nothing here decodes. Read-only, needs no prerequisites, and sent by
-     * the vendor's editor at the start of every session.
+     * version block that nothing here decodes. Read-only, needs no prerequisites, and part of
+     * the vendor editor's own session handshake.
      */
     suspend fun capabilityQueryPayload(): ByteArray =
         ui(UiSubOp.CAPABILITY_QUERY)?.payload ?: throw IllegalStateException(
@@ -1606,15 +1603,15 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         private const val MAX_ROOT_CATEGORY_NAME_LEN = 64
 
         /**
-         * The file-transfer protocol versions every reply layout here was decoded in. Above this is a protocol revision this app has not seen.
+         * The file-transfer protocol versions every reply layout here was decoded in. Above this
+         * is a protocol revision this app has not seen.
          */
         const val MIN_FILE_TRANSFER_VERSION = 3
         const val MAX_KNOWN_FILE_TRANSFER_VERSION = 10
 
         /**
-         * The versions the other two protocols this app speaks are expected to report. Neither
-         * has a range. Every instrument measured reports
-         * exactly these.
+         * The versions the other two protocols this app speaks are expected to report. Every
+         * instrument measured reports exactly these.
          */
         const val EXPECTED_PROTOCOL_VERSION_UI = 1
         const val EXPECTED_PROTOCOL_VERSION_CTRL = 0

@@ -63,14 +63,14 @@ internal class NordCategories private constructor(
          * list of categories would be worse than none, which is the same rule the Motif XS applies
          * to a catalog with no encoding.
          *
-         * Note ids 47-52 have no master name at all . So an
-         * override standing in for a missing master entry is expected, not a workaround.
+         * Note ids 47-52 have no master name at all, so an override standing in for a missing
+         * master entry is expected, not a workaround.
          *
-         * **Ordered alphabetically with [NONE] last**, which is the order the vendor editor's own
-         * rename dropdown uses. The catalog stores the ids in the instrument's registration order
-         * instead, so this is a display-time sort: the app and Clavia's own tool then show the
-         * same list in the same order, and a user comparing the two is not left wondering whether
-         * they are looking at the same thing.
+         * **Ordered alphabetically with [NONE] last**, which is the order the vendor's own editor
+         * lists categories in. The catalog stores the ids in the instrument's own order instead,
+         * so this is a display-time sort: the app and the vendor's tool then show the same list
+         * in the same order, and a user comparing the two is not left wondering whether they are
+         * looking at the same thing.
          */
         fun resolve(profile: DeviceProfile, master: Map<String, String>): NordCategories? {
             val declared = profile.programCategoryIds?.takeIf { it.isNotEmpty() } ?: return null

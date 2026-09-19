@@ -22,7 +22,7 @@ Preset names and other instrument data are held in memory only while the app is 
 
 The app can produce two kinds of report, from the debug menu (five taps on the instrument name on the preset screen); the device report is also offered on the connect screen when the instrument or its firmware is one the app does not recognize. A report is written outside the app only when you tap **Share** or **Save to device**:
 
-- **Device report**: the instrument's model, firmware version, USB vendor and product ids, the raw replies to the app's read-only queries, storage figures, and, depending on the instrument, the names of the presets on it. For the Behringer Pro-800 the report also contains the full data of a handful of presets, chosen as decoding samples.
+- **Device report**: the instrument's model, firmware version, USB vendor and product ids, the raw replies to the app's read-only configuration queries, storage figures, and counts of presets (how many slots are occupied, how many presets of each format version). It contains no preset names and no preset data.
 - **Regression report**: which operations the app tested against the instrument and whether they worked. It names the presets the test used.
 
 **Share** hands the report to an app you pick through the Android share sheet; **Save to device** writes it to a location you choose. Where it goes from there is up to you and that app. Nothing about you or your phone is included, and the instrument's serial number is not read.

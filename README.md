@@ -44,7 +44,7 @@ Without an instrument, the connect screen offers a demo mode with a simulated in
 
 ## Building
 
-Requirements: JDK 17 or newer to launch Gradle, and the Android SDK with platform 37 installed (`compileSdk` is 37). Gradle provisions its own daemon JDK as configured in [android/gradle/gradle-daemon-jvm.properties](android/gradle/gradle-daemon-jvm.properties).
+Requirements: JDK 17 or newer, and the Android SDK with platform 37 installed (`compileSdk` is 37). The build runs on whatever JDK launches Gradle (`JAVA_HOME`, or the Gradle JDK configured in Android Studio); nothing is downloaded beyond the Maven dependencies.
 
 ```
 cd android

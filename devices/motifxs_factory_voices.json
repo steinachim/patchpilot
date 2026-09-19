@@ -1,11 +1,12 @@
 {
   "family": "motifxs",
   "schemaVersion": 2,
-  "description": "Factory (read-only) voice names and category assignments, by bank and 1-based slot - PRE1-PRE8, GM, PREDR and GMDR, the banks not stored in a .X0E backup's DVCE chunk (see docs/docs/PROTOCOLS.md). Generated from the Yamaha Motif XS Data List spreadsheets, not reverse-engineered. Each voice carries one or two categories, each a main/sub pair; a voice's favorite marker selects which of them it is filed under in the panel's browser - 1 both, 2 the first, 3 the second (docs/docs/PROTOCOLS.md 8.3). The drum banks (PREDR, GMDR) have no categories here because Yamaha's drum_voice_list.xls publishes none - the instrument does hold them (session 7 found PREDR:062 filed under S.EFX), they are simply not in any released table.",
+  "description": "Factory (read-only) voice names and category assignments, by bank and 1-based slot - PRE1-PRE8, GM, PREDR and GMDR. Transcribed from Yamaha's published Motif XS Data List (see 'source'), not read from an instrument. Each voice carries one or two categories, each a main/sub pair; a voice's favorite marker selects which of them it is filed under in the panel's browser - 1 both, 2 the first, 3 the second (docs/PROTOCOLS.md). The drum banks' categories (PREDR, GMDR) are not in any released table and were read off a Motif XS6 over the 0C extension.",
   "source": [
-    "Yamaha's Motif XS Data List, normal_voice_list.xls (PRE1-PRE8, GM: names and categories)",
-    "Yamaha's Motif XS Data List, drum_voice_list.xls (PREDR, GMDR: names only, that list has no category columns)",
-    "PRE1:049 is named 'DX Legend' here, not the 'DX-7' the revision-B0 spreadsheet prints: the revision-C0 PDF and the instrument itself both say 'DX Legend' (session 7, read off a Motif XS 6 the documented way). Every other one of the 1152 names matches all three sources."
+    "Yamaha Motif XS Data List, spreadsheet edition, revision B0 (June 2007): normal_voice_list.xls (PRE1-PRE8, GM: names and categories) and drum_voice_list.xls (PREDR, GMDR: names only; it has no category columns). Download: https://usa.yamaha.com/files/download/other_assets/7/1198647/motifxs_en_dl_b0.zip and https://usa.yamaha.com/files/download/other_assets/4/1198324/motifxs_en_dl2_b0.zip",
+    "Yamaha Motif XS Data List, PDF edition, revision C0 (December 2007): https://usa.yamaha.com/files/download/other_assets/4/335014/motifxs_en_dl_c0.pdf",
+    "Index of Yamaha's Motif XS downloads: https://usa.yamaha.com/products/contents/music_production/downloads/manuals/index.html?l=en&c=music_production&k=Motif+XS",
+    "PRE1:049 is named 'DX Legend' here, not the 'DX-7' the revision-B0 spreadsheet prints: the revision-C0 PDF and the instrument itself both say 'DX Legend'. Every other one of the 1152 names matches both revisions."
   ],
   "banks": [
     {

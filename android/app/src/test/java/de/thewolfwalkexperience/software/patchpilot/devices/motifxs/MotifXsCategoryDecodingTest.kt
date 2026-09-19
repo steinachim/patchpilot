@@ -11,16 +11,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The category decoder against recorded dumps, checked against the shipped factory catalog.
+ * The category decoder against recorded dumps.
  *
  * **These are recordings, and the expectations are not the decoder's own arithmetic.** Every
- * assertion here is anchored either to a value the *instrument* produced, or to what Yamaha's own
- * voice list says about a factory voice of the same name - never to a figure this test computed
- * with the same formula the code uses, which would only prove the formula agrees with itself.
- *
- * The evidence that the `0C` figure pair really is the category pair: 205 of the user voices in
- * this project's full-sync capture share a name with a factory voice, and all 205 decode to
- * exactly the categories the catalog lists for it. Two of those voices are fixtures here.
+ * figure pair asserted below is anchored to a second channel: the instrument's own `.X0E` backup
+ * of the same voices lists the identical `<cat1>:<cat2>:` pair for each of them, and its `0x18`-
+ * `0x1B` Common-block bytes read by the documented path agree with the `main * 16 + sub` reading
+ * on every voice measured. The label names come from the shipped encoding table, which was
+ * measured on the instrument's own panel.
  */
 class MotifXsCategoryDecodingTest {
 
@@ -30,13 +28,6 @@ class MotifXsCategoryDecodingTest {
         File(
             System.getProperty("deviceCatalogDir")
                 ?: error("deviceCatalogDir is not set; see the Test task config in app/build.gradle.kts")
-        )
-    }
-
-    private val catalog: MotifXsFactoryVoices by lazy {
-        JSON.decodeFromString(
-            MotifXsFactoryVoices.serializer(),
-            catalogDir.resolve("motifxs_factory_voices.json").readText(),
         )
     }
 
@@ -54,85 +45,56 @@ class MotifXsCategoryDecodingTest {
 
     private val taxonomy get() = encoding.taxonomy
 
-    /**
-     * The categories the shipped table gives the factory voice of this name.
-     *
-     * **By name, not by slot.** A user voice is a copy of a factory one and keeps its categories,
-     * but it does not keep its slot number - which is the mistake this helper exists to prevent.
-     */
-    private fun factoryLabelsOf(name: String): List<String> {
-        val bank = catalog.banks.firstOrNull { bank ->
-            bank.voices.any { it.name == name && it.categories != null }
-        } ?: error("no factory voice named $name carries categories")
-        val slot0 = bank.voices.first { it.name == name }.slot - 1
-        return MotifXsCategories.refsOf(catalog.categories(bank.label, slot0), encoding)
-            .mapNotNull { taxonomy.label(it) }
-    }
-
     private fun labelsOf(dump: ByteArray): List<String> =
         MotifXsVoice.categoriesOf(MotifXsSysEx.dumpPayload(dump)).orEmpty()
             .mapNotNull { figure -> figure?.let { MotifXsCategories.refOf(it, taxonomy) } }
             .mapNotNull { taxonomy.label(it) }
 
     /**
-     * `New Stab` is a copy of PRE7's, and a copy keeps its categories.
+     * Two assignments, each with a sub-category: `TWE2 Actor On Ledge` reads `145:226:`, and the
+     * instrument's `.X0E` export lists the same pair.
      *
-     * The strongest single case available offline: it is the one fixture with **two** assignments,
-     * so it pins the second figure as a whole second pair rather than as a sub-category of the
-     * first - which is what the file-format notes had it recorded as.
+     * The strongest single case available offline: two assignments pin the second figure as a
+     * whole second pair rather than as a sub-category of the first.
      */
     @Test
-    fun `a copied factory voice decodes to the factory voice's own categories`() {
-        assertEquals(listOf("M.EFX / Hit", "Pads / Brite"), factoryLabelsOf("New Stab"))
+    fun `two assignments decode as two main and sub pairs`() {
         assertEquals(
-            factoryLabelsOf("New Stab"),
-            labelsOf(MotifXsFixtures.genuineTrailingBVoice),
+            listOf("Pads / Warm", "M.EFX / Sweep"),
+            labelsOf(MotifXsFixtures.twoAssignmentVoice),
         )
     }
 
-    /** Two more copies, both with a second assignment, at three different figure widths. */
+    /** Two more two-assignment voices, at two-digit figure widths: `83:144:` and `83:146:`. */
     @Test
-    fun `more copied factory voices agree with the shipped table`() {
-        assertEquals(listOf("Ethnic / Bowed", "SaxWW / Flute"), factoryLabelsOf("Kawala"))
-        assertEquals(factoryLabelsOf("Kawala"), labelsOf(MotifXsFixtures.kawalaVoice))
-
+    fun `two-digit figures decode like three-digit ones`() {
         assertEquals(
-            listOf("CPerc / Bell", "CPerc / PDrum"),
-            factoryLabelsOf("Timpani/Bell/Glocken"),
-        )
-        assertEquals(
-            factoryLabelsOf("Timpani/Bell/Glocken"),
+            listOf("String / Synth", "Pads / Analg"),
             labelsOf(MotifXsFixtures.fullWidthNameVoice),
         )
+        assertEquals(
+            listOf("S.EFX / SciFi"),
+            labelsOf(MotifXsFixtures.longNameVoice),
+        )
     }
 
-    /** `Dyno Straight MW+AS2`, a copy of a PRE1 voice with a single assignment. */
+    /** `TWE2 Ashes` reads `81:256:` - one assignment, the second slot unassigned. */
     @Test
     fun `a single-assignment voice decodes to one category`() {
-        assertEquals(listOf("Keys / EP"), factoryLabelsOf("Dyno Straight MW+AS2"))
-        assertEquals(
-            factoryLabelsOf("Dyno Straight MW+AS2"),
-            labelsOf(MotifXsFixtures.shortPrefixVoice),
-        )
+        assertEquals(listOf("String / Ensem"), labelsOf(MotifXsFixtures.shortPrefixVoice))
+        val figures = MotifXsVoice.categoriesOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.shortPrefixVoice))
+        assertEquals(listOf(81, null), figures)
     }
 
     /**
-     * A drum kit's categories decode from its own bytes, and the shipped table agrees.
+     * An initialized drum kit reads `192:192:`, and 192 is `Dr/Pc` with sub 0.
      *
-     * `Power Standard Kit 1` reads `192:256:`, and 192 is `Dr/Pc` with sub 0. Yamaha publishes no
-     * drum categories, so the table's entry for that slot was read off the instrument itself
-     * (`the reference tooling --categories PREDR`) rather than transcribed from a voice list. The two
-     * sides of this test are therefore independent measurements of the same fact - a recorded
-     * dump decoded here, and a separate pass over the instrument - not one restating the other.
+     * This is the blank the app writes over a deleted drum slot, so what it decodes to is also
+     * what a deleted slot's row would show if empty slots ever carried badges.
      */
     @Test
-    fun `a drum kit decodes to what the shipped table lists`() {
-        assertEquals(listOf("Dr/Pc / Drums"), labelsOf(MotifXsFixtures.drumVoice))
-        assertEquals(
-            "the voice's own bytes and the shipped table must describe the same slot",
-            factoryLabelsOf("Power Standard Kit 1"),
-            labelsOf(MotifXsFixtures.drumVoice),
-        )
+    fun `an initialized drum kit decodes to Dr-Pc Drums twice`() {
+        assertEquals(listOf("Dr/Pc / Drums", "Dr/Pc / Drums"), labelsOf(MotifXsFixtures.drumVoice))
     }
 
     /** `256:256:` is `NoAsg` twice - a voice filed under nothing, which cannot be favorited. */
