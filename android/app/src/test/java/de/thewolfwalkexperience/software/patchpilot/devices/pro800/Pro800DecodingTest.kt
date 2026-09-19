@@ -140,8 +140,8 @@ class Pro800DecodingTest {
     /** A preset may carry no name; that must not read as "no preset". */
     @Test
     fun `a preset with no name is still a preset`() {
-        val program = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_B01)))
-        assertFalse("B01 holds a preset", program.isEmpty)
+        val program = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_111_UNNAMED)))
+        assertFalse("an unnamed record holds a preset", program.isEmpty)
         assertNull("...and it has no name", program.name)
         assertEquals(111, program.version)
     }
@@ -162,7 +162,7 @@ class Pro800DecodingTest {
             Pro800Fixtures.DUMP_B00,
             Pro800Fixtures.DUMP_109_LONG_NAME,
             Pro800Fixtures.DUMP_109_SHORT_NAME,
-            Pro800Fixtures.DUMP_B01,
+            Pro800Fixtures.DUMP_111_UNNAMED,
             Pro800Fixtures.SETTINGS_DUMP,
         ).forEach { hex ->
             val payload = Pro800SysEx.dumpPayload(bytes(hex))
@@ -185,7 +185,7 @@ class Pro800DecodingTest {
             0 to Pro800Fixtures.DUMP_B00,
             1 to Pro800Fixtures.DUMP_109_LONG_NAME,
             2 to Pro800Fixtures.DUMP_109_SHORT_NAME,
-            3 to Pro800Fixtures.DUMP_B01,
+            3 to Pro800Fixtures.DUMP_111_UNNAMED,
         )
         // The settings block is kept, not re-served from the fixture, because selection writes it
         // and then reads it back: a transport that always answers with the capture would report the
@@ -425,25 +425,26 @@ class Pro800DecodingTest {
     }
 
     /**
-     * A preset with **no name entered**: format 111, full length.
+     * An unnamed format-111 record is full length, so it needs no confirming read.
      *
      * Not a safety proof - format 109 can arrive from a SysEx file or an older firmware, and an
      * unnamed 109 record *would* be short. What it shows is that the confirmation path stays cheap
      * in practice: records the instrument itself writes are format 111, which appends fields after
-     * the name and so runs to full length whether or not a name was typed.
+     * the name and so runs to full length whether or not a name was typed (measured on presets
+     * stored from the panel without a name).
      */
     @Test
     fun `a preset saved unnamed is still full length and needs no confirming read`() {
-        val c11 = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_C11_UNNAMED)))
-        assertEquals(111, c11.version)
-        assertNull("the name field is all zeros - this preset genuinely has no name", c11.name)
+        val unnamed = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(Pro800Fixtures.DUMP_111_UNNAMED)))
+        assertEquals(111, unnamed.version)
+        assertNull("the name field is all zeros - this preset has no name", unnamed.name)
         assertEquals(
             "an unnamed 111 record is full length, not truncated",
             Pro800ProgramFields.maxDenseSizeFor(111),
-            c11.dense.size,
+            unnamed.dense.size,
         )
-        assertFalse(c11.isSuspiciouslyShort)
-        assertFalse(c11.outrunsDeclaredVersion)
+        assertFalse(unnamed.isSuspiciouslyShort)
+        assertFalse(unnamed.outrunsDeclaredVersion)
     }
 
     /** Where the confirming read starts being asked for. */
@@ -471,8 +472,7 @@ class Pro800DecodingTest {
             "B00" to Pro800Fixtures.DUMP_B00,
             "109 long" to Pro800Fixtures.DUMP_109_LONG_NAME,
             "109 short" to Pro800Fixtures.DUMP_109_SHORT_NAME,
-            "B01" to Pro800Fixtures.DUMP_B01,
-            "C11" to Pro800Fixtures.DUMP_C11_UNNAMED,
+            "111 unnamed" to Pro800Fixtures.DUMP_111_UNNAMED,
         ).forEach { (label, hex) ->
             val program = Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(bytes(hex)))
             assertFalse(

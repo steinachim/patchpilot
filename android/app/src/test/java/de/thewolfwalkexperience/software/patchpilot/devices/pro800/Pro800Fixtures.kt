@@ -12,14 +12,16 @@ package de.thewolfwalkexperience.software.patchpilot.devices.pro800
  * cannot catch that the constant is wrong. Independently-sourced byte sequences do not share the
  * code's assumptions, so they can actually fail when the code is wrong.
  *
- * The program records are the project's own presets. [DUMP_B00] is a preset saved on the
- * instrument and dumped with the Pro800 Manager Plugin; [DUMP_B01] and [DUMP_C11_UNNAMED] were
- * stored from the front panel without a name. The instrument writes only preset format 111, so the
- * two format-109 records, [DUMP_109_SHORT_NAME] and [DUMP_109_LONG_NAME], are **derived** from
- * [DUMP_B00] outside this codebase: the fields format 110 and 111 append after the name removed,
- * the version byte set to 109, the name replaced, and the record ended one byte after its last
- * non-zero byte, which is where the instrument ends a record. They are the one place here where
- * the bytes encode this project's own reading of the format rather than the instrument's.
+ * The program records are the project's own. [DUMP_B00] is a preset saved on the instrument and
+ * dumped with the Pro800 Manager Plugin. The other three are **derived** from it outside this
+ * codebase, because the instrument writes only preset format 111 and every unnamed record on it
+ * may be a copy of a factory one: [DUMP_111_UNNAMED] has the 16-byte name field zeroed;
+ * [DUMP_109_SHORT_NAME] and [DUMP_109_LONG_NAME] have the fields format 110 and 111 append after
+ * the name removed, the version byte set to 109, the name replaced, and the record ended one byte
+ * after its last non-zero byte, which is where the instrument ends a record (measured: a
+ * 4-character 109 name gives a 155-byte dense record, a 15-character one 166). The derived three
+ * are the one place here where the bytes encode this project's own reading of the format rather
+ * than the instrument's.
  *
  * The record shapes were chosen for what they disprove:
  *
@@ -28,8 +30,8 @@ package de.thewolfwalkexperience.software.patchpilot.devices.pro800
  *    length.** In format 109 the name is the last field and the record ends right after it, so the
  *    record length tracks the name: a 4-character name gives 190 bytes where a 15-character one
  *    gives 202.
- *  - [DUMP_B01] - a preset carrying **no name at all**, which must not read as an empty slot.
- *    Still full length, because format 111 adds fields *after* the name.
+ *  - [DUMP_111_UNNAMED] - a preset carrying **no name at all**, which must not read as an empty
+ *    slot. Still full length, because format 111 adds fields *after* the name.
  *  - [DUMP_EMPTY_REPLY] - an address holding nothing: a bare `F0 F7`, and the only thing that
  *    actually means "empty".
  */
@@ -71,8 +73,11 @@ object Pro800Fixtures {
             "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000066" +
             "0000000000010052616e640000f7"
 
-    /** B01, format 111, full length, and **no name**. */
-    const val DUMP_B01 =
+    /**
+     * Format 111 with **no name at all** - the 16-byte name field zeroed - and still full length,
+     * because format 111 appends fields after the name. Derived from [DUMP_B00]; see the class note.
+     */
+    const val DUMP_111_UNNAMED =
             "f00020320001240078690001251661006f00774b003433130031006923114900437f7f000056226a00000034" +
             "0000330025005a1500790066007300300000000017005f020021000000000100010001000000000000000101" +
             "00000100000001010202000400000000000000780100007f7f7f7f077f7f7f00000000000000000000000000" +
@@ -87,22 +92,6 @@ object Pro800Fixtures {
             "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000066" +
             "0000000000010052616e64006f6d5465737420003130394c00f7"
 
-    /**
-     * C11, format 111, 210 bytes - **saved from the front panel with no name entered**.
-     *
-     * The record that settles whether an unnamed preset can be shorter than the name field: it
-     * cannot. The firmware writes format 111, which appends fields *after* the name, so the record
-     * runs to full length with the name field simply left as zeros. Only factory presets are
-     * format 109, and all of those are named. This is what makes
-     * [Pro800Program.isSuspiciouslyShort]'s floor at the name field a safe threshold rather than
-     * an arbitrary one.
-     */
-    const val DUMP_C11_UNNAMED =
-            "f00020320001240078690001251661006f00774b003433130031006923114900437f7f000056226a00000034" +
-            "0000330025005a1500790066007300300000000017005f020021000000000100010001000000000000000101" +
-            "00000100000001010202000400000000000000780100007f7f7f7f077f7f7f00000000000000000000000000" +
-            "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000066" +
-            "000000000001000000000000000000000000000000000000000000000003000060f7"
 
     /** The status a `0x78` write answers with - code 0, success. Measured for a store and an erase. */
     const val STATUS_OK = "f0002032000124000100" + "00f7"
