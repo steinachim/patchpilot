@@ -1,0 +1,98 @@
+# Builds and tests the app on every pull request and on every push to main. Plain pushes to dev
+# or a feature branch do not run this - open a PR to get a build.
+#
+# Signing only happens on main: the keystore and its passwords come from repository secrets (see
+# docs/RELEASING.md, "Signing"), written into the same android/local.properties the local build
+# reads, so app/build.gradle.kts needs no CI-specific branch. A PR build has no key and produces
+# the unsigned assembleRelease output the build script already allows for.
+name: Android
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to a PR cancels the run for the previous head; main pushes are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Launcher JVM only. gradle/gradle-daemon-jvm.properties pins the daemon to JetBrains
+      # Runtime 21 and carries the download URL for it, so Gradle provisions that itself - the
+      # same way it does on a developer machine. Gradle 9 needs at least 17 to start.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # The action only writes its cache from the repository's default branch, which is dev -
+          # a branch this workflow never runs on. Without this every run would start cold.
+          cache-read-only: false
+          # `jdks` holds the auto-provisioned daemon JVM; it is not cached by default.
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            jdks
+
+      - name: Install release signing key
+        if: github.event_name == 'push'
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "::error::RELEASE_KEYSTORE_BASE64 secret is not set - main builds must be signed"
+            exit 1
+          fi
+          mkdir -p keystore
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 -d > keystore/patchpilot-release.jks
+          {
+            echo "RELEASE_STORE_FILE=keystore/patchpilot-release.jks"
+            echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
+            echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
+            echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+          } > local.properties
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest
+
+      # Release rather than debug on PRs too: R8 only runs for release builds, and a ProGuard
+      # rule that is missing should fail the PR, not the release.
+      - name: Build release APK and bundle
+        run: ./gradlew assembleRelease bundleRelease
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: android/app/build/reports/tests/
+          if-no-files-found: ignore
+
+      - name: Upload signed release
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v7
+        with:
+          name: patchpilot-release
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
