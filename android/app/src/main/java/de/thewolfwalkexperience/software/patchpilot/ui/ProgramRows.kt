@@ -94,8 +94,13 @@ internal fun buildProgramListing(
     //
     // Picking a copy destination needs every bank on the rail, whether or not "show empty slots"
     // happens to be checked - an empty bank may be exactly where the target is.
+    //
+    // Otherwise only banks with something in them, **not every bank the instrument mentioned**:
+    // a Pro-800 reports its empty addresses too, and a Nord's listing gains an empty entry for a
+    // slot once a delete has re-read it. Either way the rail would offer a bank the list no
+    // longer has a header for, and the jump would land nowhere.
     val bankLabels =
-        (if (showEmptySlots || picking) allSlots else reported)
+        (if (showEmptySlots || picking) allSlots else reported.filterNot { it.isEmpty })
             .map { it.bankLabel }.distinct()
 
     // "Show empty slots" has to work in both directions, because the two families report

@@ -22,7 +22,10 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
  *   would otherwise share one cached listing: unplug one Nord Grand, plug in another, and the
  *   delete dialog would name the first unit's preset while erasing the second's slot. The path
  *   is assigned when the device enumerates, so it is stable across the resume rebuild this cache
- *   exists to survive and changes on a physical replug, which is exactly the boundary wanted.
+ *   exists to survive. It is **not** a reliable replug detector on its own: on real hardware
+ *   Android hands the same port the same path again, so the ViewModel drops the listing on the
+ *   USB detach broadcast, which is the one sure sign the instrument left the bus, and this field
+ *   is there to keep two units apart when a detach is missed or the bus is MIDI.
  *
  * There is deliberately **no decoder-version field**, which a persistent cache would need. This
  * cache lives and dies with the process, so the code that decoded its contents cannot change

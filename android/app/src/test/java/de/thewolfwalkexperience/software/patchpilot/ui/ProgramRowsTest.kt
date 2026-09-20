@@ -61,6 +61,20 @@ class ProgramRowsTest {
     }
 
     /** A Nord lists only what it holds, so showing empties means *adding* placeholder rows. */
+    /**
+     * Deleting the last preset in a bank re-reads that address as an empty slot, so the listing
+     * still mentions the bank; the rail must not offer a bank the list has no header for.
+     */
+    @Test
+    fun `an unchecked box drops a bank whose every reported slot is empty from the rail`() {
+        val afterDelete = listOf(slot(0, 0, "Grand"), slot(0, 2, "Rhodes"), slot(1, 1, null))
+        val hidden = buildProgramListing(afterDelete, allSlots(), false, false, "")
+        assertEquals(listOf("A"), hidden.bankLabels)
+        assertEquals(listOf("A"), hidden.bankHeaderIndex.keys.toList())
+        val shown = buildProgramListing(afterDelete, allSlots(), true, false, "")
+        assertEquals(listOf("A", "B"), shown.bankLabels)
+    }
+
     @Test
     fun `checking the box fills in the gaps a sparse listing leaves`() {
         val listing = buildProgramListing(nordReported, allSlots(), true, false, "")

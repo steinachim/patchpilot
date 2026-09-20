@@ -272,7 +272,9 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     /**
      * The handle of the device this session runs over - a USB device path, or a MIDI device id -
      * which is what tells one unit of a model from another for the listing cache; see
-     * [CacheKey.physicalDevice]. Null while nothing is connected, and in demo mode.
+     * [CacheKey.physicalDevice]. Null while nothing is connected, and in demo mode. The handle
+     * alone does not tell a replug apart from a resume (see [handleUsbDetach]), which is why a
+     * physical detach drops the cached listing itself.
      */
     private var connectedDeviceHandle: String? = null
 
@@ -384,6 +386,15 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             connectJob?.cancel()
             lastConfirmedUnknownDevice = null
             viewModelScope.launch {
+                // **The cached listing goes with the device.** Once the instrument has left the
+                // bus, anything can happen to its contents before it is next seen - a preset
+                // saved from its own panel, or a different unit of the same model plugged into
+                // the same port - and nothing in the key tells the next session about it: on
+                // real hardware Android hands a replug the same USB device path, so
+                // [CacheKey.physicalDevice] does not change. This broadcast is the one reliable
+                // sign that the boundary the cache is keyed on has been crossed. Before the
+                // teardown, which is what clears the handle the key is built from.
+                invalidateUserCache()
                 teardownCurrentInstrument()
                 _state.value = ConnectionState.DeviceLost(name, detachedKey)
             }
