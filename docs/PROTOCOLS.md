@@ -104,7 +104,7 @@ Class-compliant USB-MIDI through Android's `MidiManager`; no USB host permission
 
 ### Identification
 
-The instrument enumerates with USB vendor id `0x1397`, product id `0x125F`, but the app does not match on them: every MIDI port Android's MIDI service publishes is probed, and a port is identified by sending the device-name request (type `0x06`) and checking that the reply starts with the Pro-800 header and type `0x07`. Port names are never used. The catalog format allows a `usbHint` that would restrict the probe to ports backed by a given USB device; the Pro-800 entry sets none, so a Pro-800 reached through a separate USB-MIDI interface is found as well.
+The instrument enumerates with USB vendor id `0x1397`, product id `0x125F`, but the app does not match on them: every MIDI port Android's MIDI service publishes is probed, and a port is identified by sending the device-name request (type `0x06`) and checking that the reply starts with the Pro-800 header and type `0x07`. Port names are never used. The catalog format allows a `usbHint` that would restrict the probe to ports backed by a given USB device; the Pro-800 entry sets none, so a Pro-800 reached through a separate USB-MIDI interface is found as well. The same ids are listed as `launchOnUsbAttach`, which only puts them into the app's USB attach filter so Android offers the app when the instrument is plugged in; that grants a USB permission the class-compliant path never uses.
 
 ### Framing
 

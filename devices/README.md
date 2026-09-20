@@ -16,14 +16,14 @@ The per-instrument catalogs the app is built from. One file per instrument famil
 
 The `syncDeviceCatalog` Gradle task copies every `*.json` file except the schemas, plus `blanks/*.bin`, into `android/app/src/main/assets/` before every build; that directory is generated and gitignored, so never edit it by hand. Each family loads its own asset (`NordFamily.kt`, `Pro800Family.kt`, `MotifXsFamily.kt`), and the unit tests decode the real files from this directory (`CatalogParsesTest` for the Pro-800 and Motif XS catalogs, `NordCatalogTaggerTest` and `MotifXsFactoryVoicesTest` for the other two), so a malformed catalog fails the unit tests rather than only the connect screen on a phone.
 
-The `generateUsbDeviceFilter` task generates `android/app/src/main/res/xml/device_filter.xml` from the USB vendor/product ids in these files. Android reads that file to launch the app when a matching USB device is attached, before any app code runs, so it cannot be loaded from an asset. Unlike the assets, the generated file is committed, so a fresh checkout resolves the manifest's reference to it before the first build; the task overwrites it on every build, and a catalog change shows up as a diff in it. A device found through `MidiManager` (the Pro-800) contributes no entry; a USB-matched one (every Nord, the Motif XS) does.
+The `generateUsbDeviceFilter` task generates `android/app/src/main/res/xml/device_filter.xml` from the USB vendor/product ids in these files. Android reads that file to launch the app when a matching USB device is attached, before any app code runs, so it cannot be loaded from an asset. Unlike the assets, the generated file is committed, so a fresh checkout resolves the manifest's reference to it before the first build; the task overwrites it on every build, and a catalog change shows up as a diff in it. A USB-matched device (every Nord, the Motif XS) contributes an entry by itself; one found through `MidiManager` (the Pro-800) contributes one only through its `launchOnUsbAttach` ids, since Android would otherwise never offer the app when it is plugged in.
 
 ## Match types
 
 A device entry's `match` decides which bus finds it and how:
 
 - `usb`: a USB vendor/product id pair, opened on the USB host bus. `endpointOut`/`endpointIn` default to the Nord vendor interface's `0x03`/`0x82`; the Motif XS uses `0x01`/`0x82`. `midiCable`, when present, says the bulk endpoints carry USB-MIDI event packets on that cable rather than a vendor protocol, and the family wraps the transport in a `UsbMidiBulkTransport`.
-- `midiIdentity`: a MIDI port whose device answers `probeHex` with a reply starting `replyPrefixHex`. `usbHint` narrows which ports are probed and never decides on its own. The probe must be read-only and idempotent.
+- `midiIdentity`: a MIDI port whose device answers `probeHex` with a reply starting `replyPrefixHex`. `usbHint` narrows which ports are probed and never decides on its own. `launchOnUsbAttach` is a vendor/product id pair for the generated attach filter alone, so Android offers the app when the instrument is plugged in; it does not narrow probing. The probe must be read-only and idempotent.
 
 The Nord file is in its own shape and every entry is a `usb` match on Clavia's vendor id `0x0FFC`.
 

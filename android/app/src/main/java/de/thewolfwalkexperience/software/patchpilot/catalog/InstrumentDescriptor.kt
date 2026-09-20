@@ -73,6 +73,19 @@ sealed interface DeviceMatch {
         val replyPrefixHex: String,
         val usbHint: Usb? = null,
         /**
+         * The USB ids Android should launch the app for when this device is plugged in.
+         *
+         * Read only by the `generateUsbDeviceFilter` Gradle task, which puts the pair into
+         * `res/xml/device_filter.xml`; nothing at runtime matches on it. A class-compliant
+         * instrument needs no USB permission and is opened through `MidiManager`, but without
+         * an entry in that filter Android never offers the app on attach, and a plugged-in
+         * instrument sits unnoticed until the user taps Retry - a step every USB-matched family
+         * is spared. Kept apart from [usbHint] on purpose: that one narrows which ports are
+         * probed, and an instrument reached through some other USB-MIDI interface must still
+         * be found.
+         */
+        val launchOnUsbAttach: UsbIds? = null,
+        /**
          * Which of the device's MIDI ports to probe and then talk on.
          *
          * Zero for anything with one cable, which is every instrument matched this way. Kept
@@ -84,6 +97,10 @@ sealed interface DeviceMatch {
         val replyPrefix: ByteArray get() = replyPrefixHex.hexToBytes()
     }
 }
+
+/** A USB vendor/product id pair on its own, where no endpoint is involved. */
+@Serializable
+data class UsbIds(val vendorId: Int, val productId: Int)
 
 internal fun String.hexToBytes(): ByteArray {
     val cleaned = filterNot { it.isWhitespace() }

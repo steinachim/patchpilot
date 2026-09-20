@@ -55,7 +55,11 @@ class CatalogParsesTest {
         val catalog = catalog("behringer_pro800.json")
         assertEquals("pro800", catalog.family)
         val descriptor = catalog.devices.single()
-        assertTrue(descriptor.match is DeviceMatch.MidiIdentity)
+        val match = descriptor.match as DeviceMatch.MidiIdentity
+        // Probing stays open to any port (no usbHint), while the attach filter still lists the
+        // instrument's own ids so Android offers the app when it is plugged in.
+        assertEquals(null, match.usbHint)
+        assertEquals(UsbIds(vendorId = 0x1397, productId = 0x125F), match.launchOnUsbAttach)
         val config = json.decodeFromJsonElement(Pro800Config.serializer(), catalog.familyConfig)
         assertEquals(4, config.bankCount)
         assertEquals(100, config.slotsPerBank)

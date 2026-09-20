@@ -4,6 +4,7 @@
     Do not edit by hand - add the device to its family's catalog instead.
 -->
 <resources>
+    <usb-device vendor-id="5015" product-id="4703" />
     <usb-device vendor-id="4092" product-id="43" />
     <usb-device vendor-id="4092" product-id="33" />
     <usb-device vendor-id="4092" product-id="59" />

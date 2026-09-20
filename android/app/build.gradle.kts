@@ -201,8 +201,9 @@ val syncLicenses = tasks.register<Copy>("syncLicenses") {
  * loaded from an asset, because Android's PackageManager reads it to match USB_DEVICE_ATTACHED
  * before any app code runs, so generating it is the only way to have one source of truth.
  *
- * Only USB matches produce an entry. A MIDI-attached instrument is found through MidiManager and
- * has no USB_DEVICE_ATTACHED filter to appear in.
+ * A USB match produces an entry by itself. A MIDI-matched instrument is found through MidiManager
+ * and needs no USB permission, so it contributes one only where its entry sets
+ * `launchOnUsbAttach` - which is what makes Android offer the app when it is plugged in.
  */
 val generateUsbDeviceFilter = tasks.register("generateUsbDeviceFilter") {
     val outputFile = file("src/main/res/xml/device_filter.xml")
@@ -211,9 +212,9 @@ val generateUsbDeviceFilter = tasks.register("generateUsbDeviceFilter") {
     doLast {
         val entries = linkedSetOf<Pair<Int, Int>>()
 
-        // One lazy pattern covers both catalog shapes: the Nord file carries vendorId/productId
-        // directly on each device, the generic one inside a "usb" match or a usbHint. A file with
-        // neither - a MIDI-only instrument - contributes nothing, which is correct.
+        // One lazy pattern covers every catalog shape: the Nord file carries vendorId/productId
+        // directly on each device, the generic one inside a "usb" match, a usbHint or a
+        // launchOnUsbAttach. A file with none of them contributes nothing, which is correct.
         val usbIds = Regex("\"vendorId\"\\s*:\\s*(\\d+)[\\s\\S]*?\"productId\"\\s*:\\s*(\\d+)")
         deviceCatalogDir.listFiles()
             ?.filter { it.name.endsWith(".json") && !it.name.endsWith(".schema.json") }
