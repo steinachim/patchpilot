@@ -100,7 +100,7 @@ Every reply is CRC-checked before it is parsed, and every fixed-offset field rea
 
 ### Transport
 
-Class-compliant USB-MIDI through Android's `MidiManager`; no USB host permission is involved.
+Class-compliant USB-MIDI through Android's `MidiManager`. The USB host permission Android grants when the user accepts the attach dialog (see "Identification") is never used: `MidiManager` opens the port without one, and a Pro-800 the app was not offered for connects the same way from a Retry.
 
 ### Identification
 
