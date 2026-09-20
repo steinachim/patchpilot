@@ -93,7 +93,11 @@ class MainActivity : ComponentActivity() {
         // below), so there is nothing to gain by letting it keep running against an instrument
         // nobody is watching - and, on a Motif XS, its own display would sit on "dump in progress"
         // for as long as the scan takes with no way to tell from the backgrounded/locked phone.
-        viewModel.cancelScanOnBackground()
+        //
+        // Not on a rotation. That pauses this instance only to recreate it, the ViewModel and its
+        // scan survive, and the new instance's first resume does not rebuild (hasResumedBefore is
+        // per instance) - so a cancel here would throw away a scan nobody was going to discard.
+        if (!isChangingConfigurations) viewModel.cancelScanOnBackground()
     }
 
     override fun onResume() {

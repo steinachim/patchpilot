@@ -938,7 +938,8 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     }
 
     /**
-     * Stops a running scan the moment the app backgrounds, called from `MainActivity.onPause`.
+     * Stops a running scan the moment the app backgrounds, called from `MainActivity.onPause` -
+     * and not from the pause of a rotation, which the activity filters out before calling.
      *
      * A no-op where [shouldRebuildOnResume] is false: nothing will be torn down on the way back,
      * so a running scan there is not wasted work and is left alone.
