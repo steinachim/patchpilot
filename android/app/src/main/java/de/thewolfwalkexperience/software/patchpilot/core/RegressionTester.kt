@@ -22,14 +22,7 @@ data class RegressionResult(val name: String, val status: Status, val detail: St
 
 data class RegressionReport(val results: List<RegressionResult>, val summary: String) {
 
-    /**
-     * The report as shareable text.
-     *
-     * Plain text rather than the JSON a [DeviceReporter] produces, because the two have different
-     * readers: a device report is pasted into `devices/nord_devices.json` by whoever adds a
-     * catalog entry, while this is read by the person who just ran it - on the phone, and then in
-     * whatever they send it to.
-     */
+    /** The report as shareable plain text: unlike a device report, this is read by a person. */
     fun asText(): String = buildString {
         appendLine(summary)
         appendLine()
@@ -44,25 +37,19 @@ data class RegressionReport(val results: List<RegressionResult>, val summary: St
  * Exercises every feature the app enables for the connected instrument, without destroying
  * anything, and says what worked.
  *
- * **In `core/` because it tests the facets rather than a family.** Nothing here knows what is
- * plugged in: an operation the instrument does not declare is skipped and said to be skipped,
- * which is the same rule the screens follow, and is what makes one engine cover all
- * three families.
+ * In `core/` because it tests the facets rather than a family: an operation the instrument does
+ * not declare is skipped and said to be skipped, so one engine covers every family.
  *
- * **Non-destructive by construction, not by care.** Every mutating test runs against a copy the
- * test made ([EditOp.COPY] into a free slot) and deletes again, so no slot holding real data is
- * ever written - the swap included, which swaps the copy with a second copy rather than with the
- * preset it came from, so that a process killed between the swap and the swap-back displaces
- * nothing but scratch data. Where that sandbox cannot exist - no free slot, or a family without
- * copy - or where the swap alone has no second free slot to copy into, the tests concerned are
- * only offered against real data after [onConfirmRealSlotMutation] says the user has been told
- * and agreed, and each one reverts itself immediately. Delete is never run against real data at
- * all, whatever the answer.
+ * Non-destructive by construction. Every mutating test runs against a copy the test made
+ * ([EditOp.COPY] into a free slot) and deletes again - the swap included, which swaps the copy
+ * with a second copy rather than with the preset it came from, so a process killed between the
+ * swap and the swap-back displaces only scratch data. Where no sandbox can exist (no free slot,
+ * or a family without copy), or the swap has no second free slot, the tests concerned run
+ * against real data only after [onConfirmRealSlotMutation] says the user agreed, and each
+ * reverts itself immediately. Delete is never run against real data.
  *
- * The two `suspend (...) -> Boolean` callbacks are how this asks the user a question mid-run
- * without knowing that a UI exists, let alone that it is Compose.
- *
- * One run per instance.
+ * The two `suspend (...) -> Boolean` callbacks ask the user a question mid-run without this
+ * class knowing a UI exists. One run per instance.
  */
 class RegressionTester(
     private val instrument: Instrument,
@@ -87,10 +74,7 @@ class RegressionTester(
 
     // ---- Capability inventory ----
 
-    /**
-     * What this instrument declares before anything is tried, so the report describes the
-     * instrument as well as the run - and so a later `SKIPPED` has something to point back at.
-     */
+    /** What this instrument declares before anything is tried, so a later `SKIPPED` has something to point back at. */
     private fun facetInventory(): List<RegressionResult> = listOf(
         "Loads presets" to instrument.selector,
         "Edits presets" to instrument.editor,
@@ -117,12 +101,9 @@ class RegressionTester(
         val decoy = occupied.lastOrNull { it != target }
         return listOf(
             step(SELECT, progress) {
-                // The protocol layer verifies whatever it can - a Nord checks the address the
-                // instrument echoes back - but no family reports what is actually on its display,
-                // so the only witness to a preset having really loaded is the person holding it.
-                // That is exactly as true of the decoy as of the target: a decoy select nobody
-                // confirms is not a baseline, it is an assumption - if it silently failed, the
-                // display could still be showing whatever it was showing before, target included.
+                // No family reports what is on its display, so the only witness to a preset
+                // having loaded is the person holding it - for the decoy as much as for the
+                // target: an unconfirmed decoy select is not a baseline.
                 if (decoy != null) {
                     val decoySlot = instrument.browser.refresh(decoy)
                     selector.select(decoy)
@@ -196,11 +177,10 @@ class RegressionTester(
     /**
      * The safe path: make a copy, put the copy through every edit, delete the copy.
      *
-     * Only the copies and the free slots they are moved through are ever written. The swap needs
-     * two occupied slots, so it makes a second copy to swap the first with, and swaps back so the
-     * cleanup finds each copy where it left it. The one moment a slot holding real data can be
-     * touched is that swap when there is no room for the second copy - and then only after the
-     * user has said so.
+     * Only the copies and the free slots they are moved through are written. The swap needs two
+     * occupied slots, so it makes a second copy to swap the first with, and swaps back so the
+     * cleanup finds each copy where it left it. Real data is touched only by that swap when there
+     * is no room for the second copy, and only after the user has said so.
      */
     private suspend fun sandboxChecks(
         editor: PresetEditor,
@@ -332,15 +312,12 @@ class RegressionTester(
     }
 
     /**
-     * Deletes the run's copies, which is both the last test and the thing that makes the run
-     * leave nothing behind.
+     * Deletes the run's copies: the last test, and what makes the run leave nothing behind.
      *
-     * **Checks what is in each slot before erasing it.** If an earlier step failed part-way - a
-     * swap that did not swap back, say - the address held here may no longer be a copy's, and
-     * deleting it would destroy exactly the real preset this whole path exists to protect. So a
-     * slot is erased only if it reads back as *one of* the run's copies - either name, since a
-     * swap interrupted between its two halves leaves the two copies exchanged - and anything
-     * else is left alone and said so.
+     * Checks what is in each slot before erasing it. After a step that failed part-way (a swap
+     * that did not swap back) the address held here may hold a real preset, so a slot is erased
+     * only if it reads back as one of the run's copies - either name, since an interrupted swap
+     * leaves the two copies exchanged - and anything else is left alone and said so.
      */
     private suspend fun cleanUp(
         editor: PresetEditor,
@@ -383,10 +360,8 @@ class RegressionTester(
     /**
      * The path with no sandbox to work in - either nothing is free or this family cannot copy.
      *
-     * Each test runs against a real preset and undoes itself immediately, so it needs the user to
-     * have agreed first: **one question covering all three**, not three prompts, since the risk is
-     * the same one and answering it three times is how a warning stops being read. Delete is not
-     * offered at all here - there is no revert for it.
+     * Each test runs against a real preset and undoes itself immediately, after one question
+     * covering all three (the risk is the same one). Delete is not offered here; it has no revert.
      */
     private suspend fun occupiedSlotChecks(
         editor: PresetEditor,
@@ -484,16 +459,12 @@ class RegressionTester(
     // ---- Plumbing ----
 
     /**
-     * Runs one test, recording whatever went wrong rather than ending the run.
+     * Runs one test, recording whatever went wrong rather than ending the run: a failing test is
+     * a finding, and the tests after it still say something. Not `runCatching`, which would
+     * swallow [CancellationException].
      *
-     * A failing test is a *finding*, and the tests after it usually still say something worth
-     * knowing - which is the same rule `NordInstrument.buildReport`'s probes follow, for the same
-     * reason. Not `runCatching`, which swallows [CancellationException] and would leave a run the
-     * user backed out of still writing to the instrument.
-     *
-     * **Pauses after every step**, success or failure. Back to back, these steps make the
-     * instrument's own display flip presets and names in a fast, uncommented burst - the pause is
-     * for whoever is standing at the instrument, not for the protocol.
+     * Pauses after every step, so the instrument's display does not flip presets and names in a
+     * burst too fast for whoever is standing at it.
      */
     private suspend fun step(
         name: String,
@@ -506,15 +477,10 @@ class RegressionTester(
         } catch (e: CancellationException) {
             throw e
         } catch (e: InstrumentException.BlockedByDeviceState) {
-            // **Take the offered fix, here and only here.** Everywhere else in the app a remedy
-            // is put to the user first, because changing the instrument's mode changes what a
-            // player is hearing. This is a debug run they launched deliberately, which already
-            // has permission to write presets and revert them - refusing it over a mode switch
-            // would be straining at a gnat, and a whole suite reported as FAIL because the
-            // instrument was in Performance mode tells nobody anything.
-            //
-            // It still **says** what it did, in the step's own detail, so the report never
-            // implies the instrument came back the way it was found.
+            // The one place a remedy is applied without asking: this is a debug run the user
+            // launched, which already writes presets, and a suite reported as FAIL because the
+            // instrument was in Performance mode tells nobody anything. The step's detail says
+            // what was changed.
             applyRemedyAndRetry(name, e, block)
         } catch (e: Exception) {
             RegressionResult(name, Status.FAIL, e.message ?: e.toString())
@@ -524,11 +490,8 @@ class RegressionTester(
     }
 
     /**
-     * Applies a [InstrumentException.BlockedByDeviceState]'s remedy and runs the step again.
-     *
-     * One attempt only. If the operation is still blocked after its own stated fix, that is a
-     * finding rather than something to keep hammering at - and the second failure is reported
-     * with the remedy named, so the report says "we tried this and it did not help".
+     * Applies a [InstrumentException.BlockedByDeviceState]'s remedy and runs the step again, once.
+     * A second failure is reported with the remedy named.
      */
     private suspend fun applyRemedyAndRetry(
         name: String,
@@ -572,8 +535,7 @@ class RegressionTester(
         val failed = results.count { it.status == Status.FAIL }
         val skipped = results.count { it.status == Status.SKIPPED }
         val summary = "${instrument.identity.name}: $passed passed, $failed failed, $skipped skipped"
-        // Disclosed in the headline, not buried in a step: the run left the instrument in a state
-        // the user did not put it in, and they may be about to walk back to it and wonder.
+        // In the headline: the run left the instrument in a state the user did not put it in.
         return if (remediesApplied.isEmpty()) summary
         else "$summary. Changed on the instrument to run: ${remediesApplied.joinToString(", ")}"
     }

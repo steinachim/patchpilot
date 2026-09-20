@@ -123,6 +123,34 @@ class ProgramsControllerTest {
         assertNotNull("the failure has to reach the screen", controller.operationError)
     }
 
+    /**
+     * The busy entry is registered before the edit's coroutine runs: a gate that only closed once
+     * the coroutine had started would let two taps in the same frame both through.
+     */
+    @Test
+    fun `an edit is busy from the moment it is asked for, not from when it starts running`() = runTest {
+        val (controller, _) = controller()
+        controller.onDeleteConfirmed(slot(0, 1))
+
+        assertNotNull("the edit has been asked for and nothing has run yet", controller.busy)
+        testScheduler.advanceUntilIdle()
+        assertNull(controller.busy)
+    }
+
+    /** Selection is not gated on an edit, so the two overlap - and the edit's line has to win. */
+    @Test
+    fun `a selection finishing during an edit does not clear the edit's busy line`() = runTest {
+        val (controller, _) = controller()
+        controller.onProgramTapped(slot(0, 2))
+        controller.onDeleteConfirmed(slot(0, 1))
+
+        val shown = controller.busy
+        assertNotNull(shown)
+        assertTrue("the line shows the edit, not the selection", shown!!.showProgress)
+        testScheduler.advanceUntilIdle()
+        assertNull(controller.busy)
+    }
+
     // ---- Dialog dismissal, which the screen's comments call out as deliberate ----
 
     @Test
@@ -231,6 +259,22 @@ class ProgramsControllerTest {
             PresetScope.USER,
             ops.scope.value,
         )
+    }
+
+    /**
+     * The picker stays open across the copy it started, and the row's `enabled` flag lags a
+     * recomposition behind two quick taps - so the guard has to be the controller's own.
+     */
+    @Test
+    fun `a second destination tapped while a copy is running is ignored`() = runTest {
+        val (controller, ops) = controller()
+        controller.beginPicking(slot(0, 1))
+
+        controller.onPickConfirmed(slot(0, 1), slot(1, 7), destinationIsEmpty = true)
+        controller.onPickConfirmed(slot(0, 1), slot(1, 8), destinationIsEmpty = true)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(listOf("copy(A1->A7)"), ops.calls)
     }
 
     @Test

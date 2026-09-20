@@ -6,26 +6,16 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 import kotlinx.serialization.Serializable
 
 /**
- * Everything this app can read off a connected instrument without changing anything on it -
- * the payload behind ProgramsScreen's "Share device details" button.
+ * Everything this app can read off a connected Nord without changing anything on it.
  *
- * Two parts, because they serve different readers:
+ *  - [catalogEntry] is a [DeviceProfile] in the schema's `$defs/device` shape, meant to be lifted
+ *    straight into `devices/nord_devices.json`, filled in with what the wire can settle: USB ids,
+ *    firmware version, and the bank count and capacity the `Program` category reports. It cannot
+ *    fill the grouping of a bank's slots (nothing announces it) or `programCategoryIds` (the wire
+ *    carries only numeric ids).
+ *  - [probe] is the evidence behind it, plus the replies nothing here decodes, as raw hex.
  *
- *  - [catalogEntry] is a [DeviceProfile], field-for-field devices/nord_devices.schema.json's
- *    `$defs/device` shape, meant to be lifted straight into that file's `devices` array. It is
- *    filled in with everything the wire can settle: the USB ids, the firmware version, and the
- *    bank count and capacity the `Program` category reports. What it cannot fill is the grouping
- *    of a bank's slots (nothing announces it) and `programCategoryIds`, since the wire only ever
- *    carries a category's numeric id - which ids an instrument offers, and what it calls them,
- *    has to be established from the names the instrument displays.
- *  - [probe] is the evidence behind it, plus the replies nothing in this repo decodes yet, kept
- *    as raw hex rather than a guessed parse. That is the half worth having when the question is
- *    "what does this instrument actually do", as opposed to "how do I add it to the catalog".
- *
- * **Read-only by construction.** Every field here comes from a query; nothing in the collection
- * path creates, writes, deletes, renames, moves or reclaims. It does briefly hold the
- * SELECT_CATEGORY lock per category, which the instrument shows as status-message mode,
- * and it is slow on a large instrument - the calibration walks every item.
+ * Every field comes from a query; the only side effect is the per-category SELECT_CATEGORY lock.
  */
 @Serializable
 data class DeviceReport(
@@ -37,15 +27,8 @@ data class DeviceReport(
 @Serializable
 data class DeviceProbe(
     /**
-     * Probes that failed, keyed by what was being read (`"storage"`,
-     * `"categoryChild[Piano]"`, ...) with the error as the value. Empty on a clean run.
-     *
-     * A report is generated *against an instrument nobody has profiled*, which is exactly where
-     * an advanced probe is most likely to be unsupported, time out, or answer something this app
-     * can't parse. So no probe below is allowed to be fatal: whatever fails is recorded here and
-     * the rest of the report is collected and sent regardless. A partial report with this map
-     * filled in is far more useful to whoever receives it than no report at all - the failures
-     * are themselves a finding about the instrument.
+     * Probes that failed, keyed by what was being read (`"storage"`, `"categoryChild[Piano]"`,
+     * ...) with the error as the value. Empty on a clean run; see `core.Probes`.
      */
     val failures: Map<String, String> = emptyMap(),
     /** e.g. "1.68" - the scaled code lives in [DeviceProfile.supportedFirmwareVersions]. */
@@ -59,9 +42,10 @@ data class DeviceProbe(
      */
     val profileName: String,
     /**
-     * The device-info reply's protocol version table, keyed by command. Where
-     * [DeviceProfile.protocolVersion] comes from, and the rest of it has never been used for anything -
-     * commands 10 and 13 appear here and are not otherwise known.
+     * The device-info reply's protocol version table, `protocol id -> version`. Where
+     * `NordDevice.protocolVersionFileTransfer` is read from; protocols 10 and 13 appear here and
+     * are not otherwise used. The JSON key stays `commandTargets`: renaming it would change the
+     * report format.
      */
     val commandTargets: Map<String, Int>,
     /** Raw capability-query reply (cmd 6, sub-op 4/5), undecoded here. */
@@ -73,14 +57,9 @@ data class DeviceProbe(
      */
     val rootCategoryListHex: String,
     /**
-     * Recovered from the response above, not configured - see [NordDevice.detectRootCategoryTrailerLen].
-     *
-     * **Deliberately the derived value, not [NordDevice.rootCategoryTrailerLenForVersion]'s.** The
-     * parse paths prefer the version rule, but a report exists to describe an instrument
-     * nobody has profiled - very possibly one whose version this build has never seen. Reporting
-     * the rule's answer would echo our own assumption back at whoever reads the report; reporting
-     * what the response itself implies is the evidence needed to extend the known version table.
-     * The raw payload is in [rootCategoryListHex] for the same reason.
+     * Derived from the response ([NordDevice.detectRootCategoryTrailerLen]), not from the version
+     * rule: a report describes an instrument whose version this build may never have seen, and
+     * what the response implies is the evidence for extending the version table.
      */
     val rootCategoryTrailerLen: Int?,
     /**
@@ -89,18 +68,9 @@ data class DeviceProbe(
      * [NordDevice.parseCategoryChildren] for the layout and how firmly it is established.
      */
     val categoryChildren: Map<String, List<CategoryChildReport>>,
-    /**
-     * The same replies as raw hex. Kept beside the parse rather than replaced by it: the layout
-     * was recovered from one instrument, so a report from a different one is worth having in a
-     * form that survives the parse being wrong.
-     */
+    /** The same replies as raw hex, in case the parse is wrong for this instrument. */
     val categoryChildHex: Map<String, String>,
-    /**
-     * What the `Program` category's child list says about addressing: how many banks, and how
-     * many slots each holds. Null if it couldn't be read. This is the derivable part of
-     * [DeviceProfile]'s bank bounds - the grouping of a bank's slots is not derivable at all,
-     * see [NordDevice.applyDerivedBankLayout].
-     */
+    /** What the `Program` category's child list says about addressing: bank count and slots per bank. Null if unreadable. */
     val derivedBankCount: Int? = null,
     val derivedSlotsPerBank: Int? = null,
     val storageAreas: List<StorageAreaReport>,
@@ -117,11 +87,7 @@ data class CategoryChildReport(val name: String, val capacity: Int)
 @Serializable
 data class StorageAreaReport(
     val names: List<String>,
-    /**
-     * Each category's own item count, keyed by name. Per category rather than per area because
-     * the counts differ where the storage figures don't: the Nord Grand's shared
-     * `Program`/`Live`/`Settings` area reports 202, 5 and 1 against one identical triple.
-     */
+    /** Each category's own item count, keyed by name; these differ within an area where the storage figures do not. */
     val itemCounts: Map<String, Int>,
     val free: Int,
     val used: Int,
@@ -132,26 +98,17 @@ data class StorageAreaReport(
     /** Distinct item records the calibration actually pooled for this area. */
     val recordCount: Int,
     val totalBytes: Long,
-    /**
-     * The allocation unit **the instrument reports** for this area, from its root-list trailer.
-     * This is the figure everything actually uses; it is not derived from
-     * the sixth field and not configured anywhere.
-     */
+    /** The allocation unit the instrument reports for this area, from its root-list trailer. */
     val reportedUnitBytes: Int? = null,
     /**
-     * The unit this area's own records fit, as a cross-check on [reportedUnitBytes] - or null
-     * when they don't determine one. A fit only narrows the unit to [candidateRange] and then
-     * names the roundest value in it, so these two agreeing exactly is not expected; the
-     * reported figure falling inside the range is what matters.
+     * The unit this area's own records fit, as a cross-check on [reportedUnitBytes]: the
+     * roundest value in [candidateRange]. What matters is the reported figure falling inside the
+     * range, not the two agreeing.
      */
     val fittedUnitBytes: Int? = null,
-    /** `used` minus the sum the solved unit produces - per-item overhead the records don't show. */
+    /** `used` minus the sum the fitted unit produces - per-item overhead the records do not show. */
     val residual: Int? = null,
-    /**
-     * The same overhead at [reportedUnitBytes] instead of [fittedUnitBytes] - the figure that
-     * matters, since the reported unit is the one in use. The two differ whenever the fit's
-     * roundest candidate is not the reported value, which is the usual case.
-     */
+    /** The same overhead at [reportedUnitBytes] instead of [fittedUnitBytes]. */
     val reportedResidual: Int? = null,
     /** Unit sizes that fit as well as the reported one, as "lo-hi" bytes. */
     val candidateRange: String? = null,

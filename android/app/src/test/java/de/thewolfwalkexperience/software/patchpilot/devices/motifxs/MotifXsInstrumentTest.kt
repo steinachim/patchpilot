@@ -1315,7 +1315,7 @@ class MotifXsInstrumentTest {
     /**
      * A full index skips the factory banks.
      *
-     * Walking all 15 banks costs about 7.5 minutes against 93 s for the user banks, and the
+     * Walking all 15 banks would take several minutes against 93 s for the user banks, and the
      * factory ones are read-only and never change. The saving is the point of the flag, so the
      * test asserts the *requests*, not just the rows: a bank that is skipped must cost nothing.
      */

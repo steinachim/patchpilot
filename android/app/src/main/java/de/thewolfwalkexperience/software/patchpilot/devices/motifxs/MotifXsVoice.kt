@@ -161,12 +161,6 @@ object MotifXsVoice {
         return if (match.range.first == 0) match.range.last + 1 else null
     }
 
-    /** How many sub-category values one main category's byte packs. */
-    const val SUBS_PER_MAIN = 16
-
-    /** The main-category value that means "no assignment", and the figure it produces. */
-    const val NO_ASSIGNMENT_MAIN = 16
-
     /**
      * The voice's two category assignments, as `main * 16 + sub` figures, null where unassigned.
      *
@@ -202,7 +196,7 @@ object MotifXsVoice {
         // range check is about the *values*, since an unrecognised figure must read as unassigned
         // rather than as an index into something.
         return match.value.trimEnd(':').split(':').map { figure ->
-            figure.toIntOrNull()?.takeIf { it in 0 until NO_ASSIGNMENT_MAIN * SUBS_PER_MAIN }
+            figure.toIntOrNull()?.takeIf { it in 0 until MotifXsCategories.NO_ASSIGNMENT_FIGURE }
         }
     }
 }

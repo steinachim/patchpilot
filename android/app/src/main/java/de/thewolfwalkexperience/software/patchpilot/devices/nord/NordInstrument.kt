@@ -37,62 +37,35 @@ import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 
 private const val TAG = "NordInstrument"
 
-/**
- * The report writer's Json, built once.
- *
- * encodeDefaults: kotlinx.serialization's default config omits a property entirely when its value
- * equals the declared default, which would drop nullable fields from the catalog entry. The schema
- * allows them to be absent, but a report is more useful spelling out every field the recipient has
- * to fill in than silently leaving holes.
- */
+/** The report writer's Json. encodeDefaults, so a catalog entry spells out every field the recipient has to fill in. */
 private val REPORT_JSON = Json { prettyPrint = true; encodeDefaults = true }
 
 /**
- * Presents a [NordDevice] as an [Instrument].
- *
- * **This is an adapter and nothing else.** There is no protocol logic here - every method below
- * either delegates to [device] or converts between [SlotAddress] and the (bank, item) pair
- * `NordDevice` speaks.
+ * Presents a [NordDevice] as an [Instrument]: an adapter with no protocol logic, converting
+ * between [SlotAddress] and the (bank, item) pair `NordDevice` speaks.
  */
 class NordInstrument(
     private val device: NordDevice,
     /**
-     * The catalog's family-level category master list, `id -> name`.
-     *
-     * Passed in rather than read off [DeviceProfile], because it belongs to the whole Nord line
-     * rather than to one instrument - see [DeviceCatalog.programCategories]. Defaulted to empty so
-     * a caller that has no catalog to hand (the unknown-device path, and the tests) still gets a
-     * working instrument, just without categories.
+     * The catalog's family-level category master list, `id -> name` (see
+     * [DeviceCatalog.programCategories]). Empty on the unknown-device path and in tests, which
+     * gives an instrument without categories.
      */
     programCategories: Map<String, String> = emptyMap(),
     private val bus: Bus = Bus.USB,
 ) : Instrument, PresetBrowser, PresetSelector, PresetEditor, DeviceReporter {
 
-    /**
-     * This model's categories, resolved once.
-     *
-     * Held rather than re-derived per row: [toPresetSlot] needs it for every one of them, and
-     * resolving involves a sort.
-     */
+    /** This model's categories, resolved once; [toPresetSlot] needs them for every row. */
     private val categories: NordCategories? = NordCategories.resolve(device.profile, programCategories)
 
     /**
-     * Serialises every operation against [device].
-     *
-     * The protocol allows one outstanding request, and every operation is a sequence of them
-     * inside a category lock; [NordDevice] itself keeps no lock. The listing and the edits are
-     * launched independently by the ViewModel, so this is where two of them are kept from
-     * interleaving on the same endpoint. Shared with [NordTagger], which talks to the same
-     * device.
+     * Serialises every operation against [device]: the protocol allows one outstanding request,
+     * every operation is a sequence of them inside a category lock, and the ViewModel launches
+     * listings and edits independently. Shared with [NordTagger].
      */
     private val deviceLock = Mutex()
 
-    /**
-     * Rebuilt from [NordDevice.profile] on every read rather than captured once, because
-     * `applyDerivedBankLayout()` replaces an unknown device's guessed bounds with the
-     * instrument's own during [connect] - a layout captured in the constructor would be the guess
-     * forever.
-     */
+    /** Rebuilt from [NordDevice.profile] on every read: `applyDerivedBankLayout()` replaces an unknown device's guessed bounds after construction. */
     override val layout: SlotLayout
         get() = SlotLayout.uniform(
             bankCount = device.maxBankLetter - 'A' + 1,
@@ -119,22 +92,12 @@ class NordInstrument(
     override val browser: PresetBrowser get() = this
     override val selector: PresetSelector get() = this
     override val editor: PresetEditor get() = this
-    /**
-     * Categories, where the catalog says which ones this model offers.
-     *
-     * Null when [NordCategories.resolve] declines - an unrecognised device, or a family catalog
-     * with no master name list - rather than a facet offering an empty list of categories and
-     * refusing every write. Same rule the Motif XS applies to a catalog with no encoding.
-     */
+    /** Categories, where the catalog says which ones this model offers; null where [NordCategories.resolve] declines. */
     override val tagger: PresetTagger? = categories?.let { NordTagger(device, it, deviceLock) }
 
     override val report: DeviceReporter get() = this
 
-    /**
-     * Null: the item-data read/write sub-opcodes are not implemented (see
-     * `NordDevice.READ_BUFSIZE`'s KDoc for what a reader has to handle). The Pro-800 implements
-     * this facet; the asymmetry is exactly what nullable facets are for.
-     */
+    /** Null: the item-data read/write sub-opcodes are not implemented (see `NordDevice.READ_BUFSIZE`). */
     override val transfer: PresetTransfer? = null
 
     override val rebuildOnResume: Boolean get() = device.rebuildOnResume
@@ -145,13 +108,7 @@ class NordInstrument(
 
     override fun close() = device.close()
 
-    /**
-     * Replaces an unrecognized device's guessed bank bounds with the ones it reports for its own
-     * `Program` category, which is what makes [layout] correct for a device with no catalog entry.
-     * A catalog device keeps its configured bounds untouched - see
-     * [NordDevice.applyDerivedBankLayout] for why the grouping cannot be derived and what it does
-     * instead.
-     */
+    /** Replaces an unrecognized device's guessed bank bounds with the ones it reports - see [NordDevice.applyDerivedBankLayout]. */
     suspend fun deriveBankLayout() {
         deviceLock.withLock { device.applyDerivedBankLayout() }
     }
@@ -159,14 +116,9 @@ class NordInstrument(
     // ---- PresetBrowser ----
 
     /**
-     * One batch and done. The Nord lists its programs device-side in a single walk, so there is
-     * no meaningful progress to report and nothing to gain by chunking - the streaming shape
-     * exists for the Pro-800, which needs 400 round trips to answer the same question.
-     *
-     * [scope] is ignored: this family declares only [PresetScope.USER], so it is the only value
-     * that can arrive here. The instrument does have factory content, but reading it is not
-     * implemented, and declaring a scope the browser cannot fill would put a tab on the screen
-     * that leads nowhere.
+     * One batch and done: the Nord lists its programs in a single walk. [scope] is ignored; this
+     * family declares only [PresetScope.USER], since reading the factory content is not
+     * implemented.
      */
     override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
         val items = exclusive("listing presets") {
@@ -177,9 +129,8 @@ class NordInstrument(
     }
 
     /**
-     * Re-reads one slot by walking the program list and picking it out, because the protocol's
-     * per-item fetch needs a category selection this adapter does not hold open. Cheap enough on
-     * a Nord (one walk), and only called after an edit.
+     * Re-reads one slot by walking the program list, because the per-item fetch needs a category
+     * selection this adapter does not hold open. One walk, only after an edit.
      */
     override suspend fun refresh(address: SlotAddress): PresetSlot {
         val items = exclusive("re-reading a preset") {
@@ -195,12 +146,9 @@ class NordInstrument(
         return PresetSlot(
             address = SlotAddress(parsed.bank, parsed.item),
             displayId = presetId,
-            // Asked of the formatter, not recovered from the id with `substringBefore(':')` -
-            // see [de.thewolfwalkexperience.software.patchpilot.core.AddressFormat].
             bankLabel = addressFormat().bankLabel(parsed.bank),
             name = name,
-            // Free: the tag is in the item record this row was already built from. Empty for an
-            // id this model does not name, which its own display shows as `No Cat`.
+            // Empty for an id this model does not name, which its own display shows as `No Cat`.
             badges = listOfNotNull(categoryId?.let { categories?.nameOf(it) }),
         )
     }
@@ -217,8 +165,6 @@ class NordInstrument(
     override suspend fun select(address: SlotAddress) =
         exclusive("load a preset") { device.selectPreset(address.bank, address.slot) }
 
-    // `confirmationFor` keeps its default: sub-opcode 47/48 echoes the address back and
-    // `selectPreset` checks it, so "Selected" is a fact.
 
     // ---- PresetEditor ----
 
@@ -228,17 +174,9 @@ class NordInstrument(
     override fun isEmulated(op: EditOp) = false
 
     /**
-     * What the instrument will actually keep of a new name.
-     *
-     * **Measured, not assumed**: an oversized `SET_NAME` is accepted with
-     * status 0 and the instrument stores exactly its display width, silently discarding the rest.
-     * So the failure this prevents is not a refusal or a corruption - it is a rename that appears
-     * to work and quietly is not what was typed. Capping the input is what makes the limit visible
-     * before the user commits to it.
-     *
-     * Read from `devices/nord_devices.json` per device, and from its **own** field rather
-     * than borrowing the display width - they are separate limits that happen to coincide on
-     * every instrument measured so far.
+     * What the instrument keeps of a new name (measured: an oversized `SET_NAME` is accepted
+     * with status 0 and silently truncated). From the catalog's own field rather than the
+     * display width; the two coincide on every instrument measured.
      */
     override val maxNameLength: Int get() = device.profile.maxProgramNameLen
 
@@ -251,21 +189,11 @@ class NordInstrument(
     override suspend fun swap(a: SlotAddress, b: SlotAddress) =
         exclusive("swap two presets") { device.swapPrograms(a.bank, a.slot, b.bank, b.slot) }
 
-    /**
-     * Sub-opcode 20/21 - the instrument empties the slot itself.
-     *
-     * Unlike the Pro-800's and the Motif XS's, this is not a composed erase: nothing is read
-     * first and no blank payload is written, so there is no half-completed state to recover from.
-     *
-     * Note it **frees no space** until the instrument's own reclaim runs, which is
-     * also what keeps it undoable until then - so a user who deletes to make room for a write may
-     * still be told there is none.
-     */
+    /** Sub-opcode 20/21: the instrument empties the slot itself. Frees no space until its own reclaim runs. */
     override suspend fun delete(address: SlotAddress) =
         exclusive("delete a preset") { device.deleteProgram(address.bank, address.slot) }
 
-    /** Sub-opcode 22/23 - the instrument duplicates the
-     * record and names the copy itself, which is why the name it chose comes back. */
+    /** Sub-opcode 22/23: the instrument duplicates the record and names the copy itself. */
     override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String =
         exclusive("copy a preset") { device.copyProgram(src.bank, src.slot, dst.bank, dst.slot) }
 
@@ -279,22 +207,11 @@ class NordInstrument(
             "the instrument, but measuring reads every item, so it takes a while."
 
     /**
-     * Everything the app can read off the connected instrument without changing anything on it,
-     * as JSON. The report's *shape* is Nord-specific (protocol version table, root categories,
-     * storage areas), so it belongs to the Nord adapter and not to a shared screen.
-     *
-     * **Reads only.** Every call below is a query. The one side effect is that per-category
-     * SELECT_CATEGORY briefly locks the instrument into status-message mode,
-     * which each call releases again; nothing is created, written, deleted, renamed, moved or
-     * reclaimed. It is *slow*, though: the storage calibration walks every item of every category
-     * at two round trips each, so [progress] reports what it is doing.
-     *
-     * **No probe here is allowed to be fatal.** A report describes an instrument nobody has
-     * profiled, which is precisely where an advanced query may be unsupported, time out, or answer
-     * something this app can't parse - so every one of them runs through [Probes.probe], which
-     * records the failure and carries on with a fallback. A report missing its storage figures but
-     * carrying the categories, the child lists and the firmware version is worth far more to
-     * whoever receives it than no report at all, and the failures are themselves a finding.
+     * Everything the app can read off the instrument without changing anything on it, as JSON.
+     * Every call is a query; the only side effect is the per-category SELECT_CATEGORY lock, which
+     * each call releases. Slow: the storage calibration walks every item of every category at
+     * two round trips each, so [progress] reports what it is doing. No probe is fatal - see
+     * [Probes].
      */
     override suspend fun buildReport(progress: ((String) -> Unit)?): DeviceReportResult = deviceLock.withLock {
         val d = device
@@ -336,9 +253,7 @@ class NordInstrument(
         }
 
         progress?.invoke("Building report...")
-        // Each area's allocation unit as the instrument itself reports it - the first word of
-        // that category's root-list trailer. The fitted value beside it in the report is a
-        // cross-check on it.
+        // Each area's allocation unit as the instrument reports it in its root-list trailer.
         val reportedUnits = probes.probe("storageUnits", emptyMap<Int, Int>()) {
             d.parseRootCategories(rootPayload)
                 .mapIndexedNotNull { i, c -> c.unitBytes?.let { unit -> i to unit } }
@@ -348,18 +263,11 @@ class NordInstrument(
         val entry = d.profile.copy(
             id = slugifyDeviceId(d.profile.name),
             supportedFirmwareVersions = setOf(d.firmwareVersion),
-            // Derived from the Program category's own child list rather than copied from the
-            // profile, since a report exists to describe an instrument nobody has a profile for
-            // yet. maxGroup is 1 and slotsPerGroup the whole bank because the grouping of a
-            // bank's slots is the one part of this the instrument does not announce - see
-            // NordDevice.applyDerivedBankLayout.
+            // From the Program category's own child list; the grouping of a bank's slots is not
+            // announced, so maxGroup is 1 - see NordDevice.applyDerivedBankLayout.
             maxBankLetter = bankLayout?.maxBankLetter ?: d.profile.maxBankLetter,
             maxGroup = if (bankLayout != null) 1 else d.profile.maxGroup,
             slotsPerGroup = bankLayout?.slotsPerBank ?: d.profile.slotsPerGroup,
-            // Storage units are deliberately absent: the instrument states each area's own in
-            // its root category list, so there is nothing for a catalog
-            // entry to carry. The reported figure is in the storageAreas section below,
-            // alongside what this instrument's records make of it.
         )
 
         val report = DeviceReport(
@@ -414,18 +322,11 @@ class NordInstrument(
 }
 
 /**
- * Plain-language meaning for the status codes this protocol's replies are known to use.
- *
- * Null for anything else, which leaves the generic "refused (status N)" - honest about the fact
- * that the app has the instrument's answer and cannot interpret it, rather than inventing a
- * reason. Only one code has a documented meaning; see [NordDevice.STATUS_FILE_EXISTS].
- *
- * **The wording names a contradiction, because that is the only way this can be seen.** Neither
- * copy nor move offers an occupied destination: the picker accepts empty rows only, and a drag
- * resolves move-vs-swap from the listing. So reaching status 4 means the listing and the
- * instrument disagree - a preset stored from the front panel since the last read - and the user
- * is looking at a row the app is showing them as empty. Saying only "that slot already holds a
- * preset" would read as the app contradicting itself; saying what to do about it does not.
+ * Plain-language meaning for the one status code the protocol names,
+ * [NordDevice.STATUS_FILE_EXISTS]; null for the rest, which keep the generic "refused (status
+ * N)". The app never offers an occupied destination, so status 4 means the listing and the
+ * instrument disagree - a preset stored from the front panel since the last read - and the
+ * wording says what to do about it.
  */
 private fun nordStatusExplanation(what: String, status: Int): String? = when (status) {
     NordDevice.STATUS_FILE_EXISTS ->
@@ -440,11 +341,14 @@ private fun nordStatusExplanation(what: String, status: Int): String? = when (st
  * The classification is by type, not by message:
  *
  *  - [NordStatusException] - the instrument answered and said no. Its code travels verbatim.
- *  - `IllegalArgumentException` - a reply this app cannot parse: a CRC
- *    mismatch, a short payload, a cursor that ran off the end.
  *  - [UnsupportedProtocolVersionException] - answered clearly, in a protocol nobody has profiled.
- *  - anything else, including the transport's own `IllegalStateException`s ("USB bulk write
- *    failed") - the link is gone, which is the one case a retry can actually fix.
+ *  - [NordProtocolException] - answered with something this app cannot make sense of: a reply
+ *    out of step with the request, a walk that does not add up, a read-back that contradicts
+ *    the write.
+ *  - `IllegalArgumentException` - a reply this app cannot parse: a CRC mismatch, a short
+ *    payload, an implausible field.
+ *  - any other `IllegalStateException` - the transport's own ("USB bulk write failed", a dead
+ *    endpoint): the link is gone, which is the one case a retry can actually fix.
  *
  * [what] is the operation in the user's terms, so [InstrumentException.NotSupported]'s and
  * [InstrumentException.DeviceRejected]'s sentences read correctly: "rename presets", not
@@ -459,6 +363,8 @@ internal suspend fun <T> mapNordFailure(what: String, block: suspend () -> T): T
     throw InstrumentException.DeviceRejected(what, e.status, nordStatusExplanation(what, e.status))
 } catch (e: UnsupportedProtocolVersionException) {
     throw InstrumentException.ProtocolDesync(e.message ?: "Unsupported protocol version", e)
+} catch (e: NordProtocolException) {
+    throw InstrumentException.ProtocolDesync(e.message ?: "Unexpected reply while $what", e)
 } catch (e: IllegalArgumentException) {
     throw InstrumentException.ProtocolDesync(e.message ?: "Unreadable reply while $what", e)
 } catch (e: IllegalStateException) {

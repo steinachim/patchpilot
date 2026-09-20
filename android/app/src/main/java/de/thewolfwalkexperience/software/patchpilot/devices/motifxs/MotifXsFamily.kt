@@ -82,10 +82,11 @@ data class MotifXsBank(
     /**
      * Whether a full index walks this bank.
      *
-     * False for the factory banks. Indexing every one costs about **7.5 minutes** - 1,633 voices
-     * at ~220 ms each, and ~1.05 s for every drum kit - against 93 s for the user banks alone.
-     * They are read-only and never change, so paying that on every connect buys nothing; their
-     * names ship with the app instead (see [MotifXsFactoryVoices]).
+     * False for the factory banks. Walking them would take several minutes - an extrapolation
+     * from the measured ~160 ms per normal voice and ~1 s per drum kit, against the measured 93 s
+     * for the 416 user voices; the eleven banks have never been walked end to end. They are
+     * read-only and never change, so paying that on every connect buys nothing; their names ship
+     * with the app instead (see [MotifXsFactoryVoices]).
      */
     val indexByDefault: Boolean = true,
     /**

@@ -8,13 +8,8 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 
 /**
- * Reads one family's catalog asset, once per process.
- *
- * The one asset-open-and-decode every family shares, so a new family inherits it rather than
- * copying it.
- *
- * The lock is not ceremony: `descriptors()` is called from a coroutine, and while decoding twice
- * would be harmless here, a half-published `var` is not something to leave to luck.
+ * Reads one family's catalog asset, once per process. `descriptors()` is called from coroutines,
+ * hence the lock.
  */
 class CatalogLoader<T : Any>(
     private val assetName: String,

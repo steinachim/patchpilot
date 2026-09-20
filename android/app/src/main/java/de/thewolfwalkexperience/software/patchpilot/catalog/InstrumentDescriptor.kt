@@ -9,12 +9,8 @@ import kotlinx.serialization.json.JsonObject
 
 /**
  * One instrument model, as the catalog describes it: a family-agnostic core plus an opaque block
- * only that family understands.
- *
- * **Why the split.** A single flat schema across families degenerates into a record that is mostly
- * null. Keeping the core small means a new family adds a factory and a JSON block and changes no
- * shared type, and a family's own fields can change without touching anything above
- * [familyConfig].
+ * only that family understands, so a new family adds a factory and a JSON block and changes no
+ * shared type.
  */
 @Serializable
 data class InstrumentDescriptor(
@@ -27,22 +23,17 @@ data class InstrumentDescriptor(
     val familyConfig: JsonObject = JsonObject(emptyMap()),
 )
 
-/**
- * How to recognize an instrument. A sealed type rather than a VID/PID pair, because the second
- * family is not found the same way as the first.
- */
+/** How to recognize an instrument: by USB ids, or by probing a MIDI port. */
 @Serializable
 sealed interface DeviceMatch {
 
     /**
      * A USB device with these ids, on the USB host bus.
      *
-     * [endpointOut]/[endpointIn] default to the Nord vendor interface's pair. They are here rather
-     * than hard-coded in the transport because they vary by device - a Motif XS uses 0x01 OUT -
-     * and because a wrong one should be a catalog edit. [midiCable] is set only for a device whose
-     * bulk endpoints carry USB-MIDI event packets rather than a vendor protocol; it selects which
-     * cable to speak on, and its presence is what says "wrap this in a
-     * [de.thewolfwalkexperience.software.patchpilot.transport.UsbMidiBulkTransport]".
+     * [endpointOut]/[endpointIn] default to the Nord vendor interface's pair; a Motif XS uses
+     * 0x01 OUT. [midiCable] is set only for a device whose bulk endpoints carry USB-MIDI event
+     * packets rather than a vendor protocol, and its presence is what wraps the transport in a
+     * [de.thewolfwalkexperience.software.patchpilot.transport.UsbMidiBulkTransport].
      */
     @Serializable
     @SerialName("usb")
@@ -56,15 +47,11 @@ sealed interface DeviceMatch {
 
     /**
      * A MIDI port whose device answers [probeHex] with a message starting [replyPrefixHex].
+     * Never matched on port name. [usbHint] narrows which ports get probed but never decides.
      *
-     * **Never matched on port name.** Those vary by OS, by hub, and by whether another app renamed
-     * the port; a device that identifies itself in its own words is authoritative where a name is
-     * a guess. [usbHint] narrows *which* ports get probed (Android exposes the backing USB device
-     * on `MidiDeviceInfo`) but is never the deciding test on its own.
-     *
-     * **The probe must be read-only and idempotent.** For a Pro-800 that means SysEx `0x06`,
-     * "request device name". Nothing in its undocumented ranges may ever be used here: those have
-     * unknown side effects, and one of its neighbours is a factory reset with no confirmation.
+     * The probe must be read-only and idempotent: for a Pro-800 that is SysEx `0x06`, "request
+     * device name". Nothing from an undocumented range may be used here - one of that
+     * instrument's undocumented types is a factory reset with no confirmation.
      */
     @Serializable
     @SerialName("midiIdentity")
@@ -73,24 +60,13 @@ sealed interface DeviceMatch {
         val replyPrefixHex: String,
         val usbHint: Usb? = null,
         /**
-         * The USB ids Android should launch the app for when this device is plugged in.
-         *
-         * Read only by the `generateUsbDeviceFilter` Gradle task, which puts the pair into
-         * `res/xml/device_filter.xml`; nothing at runtime matches on it. A class-compliant
-         * instrument needs no USB permission and is opened through `MidiManager`, but without
-         * an entry in that filter Android never offers the app on attach, and a plugged-in
-         * instrument sits unnoticed until the user taps Retry - a step every USB-matched family
-         * is spared. Kept apart from [usbHint] on purpose: that one narrows which ports are
-         * probed, and an instrument reached through some other USB-MIDI interface must still
-         * be found.
+         * The USB ids Android should launch the app for when this device is plugged in. Read only
+         * by the `generateUsbDeviceFilter` Gradle task; nothing at runtime matches on it. Kept
+         * apart from [usbHint], which narrows probing: an instrument reached through some other
+         * USB-MIDI interface must still be found.
          */
         val launchOnUsbAttach: UsbIds? = null,
-        /**
-         * Which of the device's MIDI ports to probe and then talk on.
-         *
-         * Zero for anything with one cable, which is every instrument matched this way. Kept
-         * because a class-compliant multi-port device is addressed by port, not just opened by it.
-         */
+        /** Which of the device's MIDI ports to probe and then talk on. Zero for every instrument matched this way. */
         val portIndex: Int = 0,
     ) : DeviceMatch {
         val probe: ByteArray get() = probeHex.hexToBytes()
@@ -111,14 +87,9 @@ internal fun String.hexToBytes(): ByteArray {
 }
 
 /**
- * One family's catalog file: its shared configuration, then its devices.
- *
- * **[familyConfig] at this level is not a duplicate of the per-device one.** A Nord catalog
- * carries a 54-entry `programCategories` master list that belongs to no single device - and the
- * master list is deliberately not injective (ids 2 and 37 are both `Wind`), which is exactly why
- * it cannot be folded into per-device maps. The Motif XS catalog keeps its bank table and
- * category encoding here for the same reason: they are properties of the model family rather
- * than of an individual unit.
+ * One family's catalog file: its shared configuration, then its devices. [familyConfig] at this
+ * level holds what belongs to the family rather than to one device - the Motif XS bank table and
+ * category encoding.
  */
 @Serializable
 data class FamilyCatalog(

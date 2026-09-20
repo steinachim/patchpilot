@@ -7,16 +7,10 @@ import kotlinx.serialization.Serializable
 
 /**
  * The per-instrument constants [NordDevice] needs, one instance per entry in
- * devices/nord_devices.json (repo root) - the source of truth this is parsed from (see
- * [InstrumentRegistry]). One JSON entry per instrument, data rather than a subclass.
- * Field-for-field, this is exactly devices/nord_devices.schema.json's
- * `$defs/device` shape - deliberately so a [DeviceProfile] can be serialized straight back into a
- * paste-able catalog entry (see NordInstrument.buildReport(), which is what a user shares) with
- * no field mapping.
- *
- * [programCategoryIds] indexes the catalog's family-level `programCategories` master list, which
- * is *not* on this class - see [DeviceCatalog] and [NordCategories] for why the two halves are
- * carried separately.
+ * devices/nord_devices.json. Field-for-field the schema's `$defs/device` shape, so a profile
+ * serializes straight back into a paste-able catalog entry (see `NordInstrument.buildReport`).
+ * [programCategoryIds] indexes the catalog's family-level `programCategories` master list - see
+ * [DeviceCatalog] and [NordCategories].
  */
 @Serializable
 data class DeviceProfile(
@@ -27,26 +21,13 @@ data class DeviceProfile(
     val maxBankLetter: Char,
     val maxGroup: Int,
     val slotsPerGroup: Int,
-    /**
-     * How many characters the instrument's display holds.
-     *
-     * **Nothing in this app reads it.** It stays because this class mirrors
-     * `devices/nord_devices.json`, whose schema declares the field.
-     */
+    /** How many characters the instrument's display holds. Nothing in this app reads it; the schema declares it. */
     val maxDisplayTextLen: Int,
     /**
-     * The longest program name the instrument actually stores.
-     *
-     * **Measured, not guessed.** An oversized `SET_NAME` is accepted with status 0 and the
-     * instrument silently keeps this many characters - so the failure it prevents is a rename
-     * that reports success and leaves the preset called something else.
-     *
-     * Its own field rather than a reuse of [maxDisplayTextLen], even though both are 16 on every
-     * instrument measured so far. They are different limits that happen to coincide, and a Nord
-     * with a wider display than name field would have made that reuse wrong in a way nothing
-     * would have reported. Optional in the catalog, defaulting to [maxDisplayTextLen] so an
-     * entry written before the field existed still loads - a fallback that is a guess where the
-     * field is a measurement.
+     * The longest program name the instrument stores (measured: an oversized `SET_NAME` is
+     * accepted with status 0 and silently truncated). Its own field rather than
+     * [maxDisplayTextLen], which is a different limit that coincides on every instrument
+     * measured; defaults to it where a catalog entry omits this.
      */
     val maxProgramNameLen: Int = maxDisplayTextLen,
     /** Firmware version codes this profile has been verified against. Empty means "skip the
@@ -63,22 +44,12 @@ data class DeviceProfile(
     val programCategoryNameOverrides: Map<String, String>? = null,
 ) {
     companion object {
-        /**
-         * The [id] [unknown] stamps on a device the catalog does not recognise.
-         *
-         * Named because callers in another package compare against it to decide whether to
-         * derive a bank layout and whether to offer the device report - see
-         * `InstrumentViewModel.isUnknownDevice`.
-         */
+        /** The [id] [unknown] stamps on a device the catalog does not recognise; `InstrumentViewModel.isUnknownDevice` compares against it. */
         const val UNKNOWN_ID = "unknown"
 
         /**
-         * Synthesizes a profile for a USB device the user picked despite it not being in
-         * devices/nord_devices.json - see InstrumentViewModel.confirmUnknownDevice() and
-         * ConnectScreen's "unsupported, at your own risk" flow. The
-         * bank-layout bounds are guesses generous enough not to reject a real Nord instrument
-         * this app simply doesn't have a profile for yet, not the measured values of a real
-         * catalog entry.
+         * Synthesizes a profile for a Clavia USB device the catalog does not list - the "at your
+         * own risk" path. The bank bounds are guesses generous enough not to reject a real Nord.
          */
         fun unknown(name: String, vendorId: Int, productId: Int) = DeviceProfile(
             id = UNKNOWN_ID,
@@ -100,14 +71,10 @@ data class DeviceCatalog(
     val schemaVersion: Int,
     val devices: List<DeviceProfile>,
     /**
-     * The master category table, `id -> name`, all 54 entries.
-     *
-     * **Family-level, not per-device**, which is why it is here rather than on [DeviceProfile]:
-     * it is one list Clavia shares across the whole Nord line, and each instrument names only a
-     * subset of it via [DeviceProfile.programCategoryIds]. It also **cannot** be stored the other
-     * way round, because it is not injective - ids 2 and 37 are both `Wind`, 14 and 43 both
-     * `User` - so `name -> id` is well defined only within one instrument's subset. [NordCategories]
-     * is what builds that direction, per device.
+     * The master category table, `id -> name`, all 54 entries: one list shared across the Nord
+     * line, of which each instrument names a subset via [DeviceProfile.programCategoryIds]. Not
+     * injective (ids 2 and 37 are both `Wind`), so `name -> id` is defined only within one
+     * instrument's subset - [NordCategories] builds that direction.
      */
     val programCategories: Map<String, String> = emptyMap(),
 )

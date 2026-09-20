@@ -54,16 +54,6 @@ object Pro800ProgramFields {
     val NAME_DENSE_OFFSET = Pro800ProgramCodec.denseIndexOf(172)
     const val NAME_LENGTH = 16
 
-    /**
-     * The newest preset version whose layout this app has been taught.
-     *
-     * Older records are read without complaint: the two fields read here (version, name) sit at
-     * fixed offsets every version carries, and versions 110 and 111 only *append* fields. Format
-     * 109 presets remain in normal use, so flagging those would be crying wolf. A version *newer*
-     * than this may have moved something, and that is worth showing.
-     */
-    const val MAX_KNOWN_VERSION = 111
-
     /** Where the name field would end in a record long enough to carry all of it. Records are
      * routinely shorter than this - the instrument truncates trailing padding - so this is a
      * bound for reading, never a test for whether a preset exists. */
@@ -152,9 +142,6 @@ class Pro800Program(val dense: ByteArray) {
         } else {
             null
         }
-
-    /** False only for a version *newer* than this app knows - see [Pro800ProgramFields.MAX_KNOWN_VERSION]. */
-    val isKnownVersion: Boolean get() = (version ?: 0) <= Pro800ProgramFields.MAX_KNOWN_VERSION
 
     /**
      * Is this record longer than its own version byte says it may be?

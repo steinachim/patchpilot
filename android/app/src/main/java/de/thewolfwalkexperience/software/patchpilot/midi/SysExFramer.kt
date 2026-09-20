@@ -5,14 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.midi
 
 /**
  * Reassembles complete SysEx messages out of a MIDI byte stream that respects no message
- * boundaries whatsoever.
- *
- * **A read is not a message.** Android's MIDI callback hands over whatever bytes have arrived, so
- * one `F0 ... F7` message may span any number of callbacks and split at any byte - including
- * between `F0` and the manufacturer id. Every rule below is a real MIDI hazard rather than
- * defensive padding, and the same four rules hold on the *other* bus: `NordDevice.readReply()`
- * reassembles across bulk reads, delimits by the reply's own length field, bounds that length,
- * and discards stale bytes before a new request.
+ * boundaries: one `F0 ... F7` message may span any number of reads and split at any byte.
  *
  * Not thread-safe: [SysExExchange] owns one of these and feeds it from a single collector.
  */
@@ -36,10 +29,8 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
         for (byte in chunk) {
             val value = byte.toInt() and 0xFF
             when {
-                // System realtime (F8-FF) may be interleaved *inside* a SysEx message and is not
-                // part of it. Clock (F8) in particular arrives constantly if anything on the bus
-                // is sending it, so treating one as a terminator would corrupt every dump taken
-                // while a DAW was running.
+                // System realtime (F8-FF) may be interleaved inside a SysEx message and is not
+                // part of it; clock (F8) arrives constantly while a DAW is running.
                 value >= 0xF8 -> Unit
 
                 value == SYSEX_START -> {
@@ -50,7 +41,7 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
                     buffer.add(byte)
                 }
 
-                !inMessage -> Unit // channel-voice traffic between messages; see nonSysExBytes
+                !inMessage -> Unit // channel-voice traffic between messages is not ours
 
                 value == SYSEX_END -> {
                     buffer.add(byte)
@@ -59,9 +50,8 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
                     inMessage = false
                 }
 
-                // Any other status byte aborts the message: this is what a device that never
-                // sends F7 leaves behind, and delivering the fragment would hand a parser a
-                // message that only looks whole.
+                // Any other status byte aborts the message: a device that never sends F7 must
+                // not have its fragment delivered as a whole message.
                 value >= 0x80 -> {
                     buffer.clear()
                     inMessage = false
@@ -69,8 +59,7 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
 
                 else -> {
                     buffer.add(byte)
-                    // Without this, a device that never terminates grows an unbounded buffer -
-                    // one malfunctioning peripheral away from an OOM. Resync at the next F0.
+                    // Bounds a device that never terminates; resync at the next F0.
                     if (buffer.size > maxMessageBytes) {
                         droppedMessages++
                         buffer.clear()
@@ -93,10 +82,7 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
         const val SYSEX_START = 0xF0
         const val SYSEX_END = 0xF7
 
-        /**
-         * Generous for every message this app expects (a Pro-800 program dump is 210 bytes) while
-         * still bounding a device that never terminates one. Not a protocol limit.
-         */
+        /** Generous for a Pro-800 program dump (210 bytes); a Motif XS passes its own. Not a protocol limit. */
         const val DEFAULT_MAX_MESSAGE_BYTES = 4096
     }
 }

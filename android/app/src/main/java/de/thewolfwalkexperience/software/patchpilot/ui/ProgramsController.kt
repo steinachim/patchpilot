@@ -6,6 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,14 +62,24 @@ internal class ProgramsController(
     var operationError by mutableStateOf<String?>(null)
 
     /**
+     * The operation in flight, or null - where more than one is, the one with a progress line.
+     *
      * **These are seconds, not milliseconds, and the instrument gives nothing away.** A copy is a
      * whole-voice read, a write, a commit and a read-back; on a drum kit that is ~12.6 kB each way
-     * and takes several seconds, during which the app looked exactly as it did before the tap. The
-     * user could not tell that the destination had registered, let alone that anything was
-     * happening - so the natural response is to tap again.
+     * and takes several seconds. The screen gates every other edit, the scope selector and the
+     * back arrow on this, and [onPickConfirmed] refuses a second destination while it is set.
+     * Selection alone stays open: it stores nothing, and auditioning a preset while an edit
+     * finishes is reasonable - which is why this is derived from every operation in flight
+     * rather than being one slot the last one to start overwrites: a selection that finishes
+     * while a delete is still running must not take the delete's line, and its gates, with it.
+     *
+     * **Registered synchronously by [runEdit], before the edit is launched.** A gate that only
+     * took effect once the coroutine had started would let two taps in the same frame through.
      */
-    var busy by mutableStateOf<BusyOperation?>(null)
-        private set
+    val busy: BusyOperation?
+        get() = inFlight.firstOrNull { it.showProgress } ?: inFlight.firstOrNull()
+
+    private val inFlight = mutableStateListOf<BusyOperation>()
 
     /**
      * An operation the instrument's *current state* blocked, together with the fix the family
@@ -118,11 +129,10 @@ internal class ProgramsController(
      * @param retry re-runs the whole operation, and is what makes a [BlockedOperation] answerable.
      *   Null where there is nothing sensible to retry.
      * @param showProgress whether to put a progress line above the list while this runs. False for
-     *   selection, which is the one operation fast enough that the line was pure cost: it appears
+     *   selection, which is the one operation fast enough that the line is pure cost: it appears
      *   and disappears within a couple of hundred milliseconds, and because it sits above the list
      *   it pushes every row down and lets them spring back on every single tap. The operation is
-     *   still tracked - a second tap is still refused - it just does not move the thing the user is
-     *   aiming at.
+     *   still tracked in [busy]; it just does not move the thing the user is aiming at.
      * @param block returns the line the snackbar shows, or null where there is nothing to report -
      *   an operation whose whole result is a dialog that just opened, say.
      */
@@ -135,6 +145,9 @@ internal class ProgramsController(
     ) {
         val what = busyLabel.trimEnd('…', ' ')
         val failed = strings.get(R.string.programs_operation_failed, what)
+        // Before the launch, not inside it - see [busy].
+        val mine = BusyOperation(busyLabel, showProgress)
+        inFlight += mine
         // **Not the screen's `rememberCoroutineScope()`.** An edit outlives the screen
         // deliberately - see [InstrumentViewModel.launchEdit] for why cancelling one mid-write is
         // the one thing that can leave an instrument stuck. Writing the result back into this
@@ -143,7 +156,6 @@ internal class ProgramsController(
             operationError = null
             statusMessage = null
             try {
-                busy = BusyOperation(busyLabel, showProgress)
                 statusMessage = block()
                 if (reloadAfter) viewModel.reloadIndex()
             } catch (e: CancellationException) {
@@ -170,7 +182,7 @@ internal class ProgramsController(
             } finally {
                 // In a finally, always: a failure that left the bar running would claim the app
                 // was still working on something it had given up on.
-                busy = null
+                inFlight.remove(mine)
             }
         }
     }
@@ -304,6 +316,10 @@ internal class ProgramsController(
      *   slot. Ignored for a copy, which only ever offers empty destinations.
      */
     fun onPickConfirmed(source: PresetSlot, destination: PresetSlot, destinationIsEmpty: Boolean) {
+        // The picker stays open across the operation it started (see below), so a second row
+        // tapped before the first copy has landed would queue a second copy behind it. The row's
+        // own `enabled` flag lags a recomposition behind; this does not.
+        if (busy != null) return
         val label = when (pickIntent) {
             PickIntent.COPY -> strings.get(
                 R.string.programs_busy_copying, source.displayId, destination.displayId,

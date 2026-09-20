@@ -169,7 +169,7 @@ class MotifXsScopesTest {
         assertEquals(4, slots.size)
         assertEquals(listOf("Full Concert Grand", "Rock Grand Piano", "Suitcase Rhodes", "Glasgow"),
             slots.map { it.name })
-        // The whole point: it costs nothing. A real one is 1,217 voices and 7.5 minutes.
+        // The whole point: it costs nothing. A real one is 1,217 voices and several minutes.
         assertTrue("the factory listing must not touch the wire", transport.sent.isEmpty())
         assertTrue(updates.last() is IndexUpdate.Complete)
     }

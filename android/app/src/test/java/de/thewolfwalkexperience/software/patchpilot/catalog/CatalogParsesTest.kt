@@ -177,9 +177,8 @@ class CatalogParsesTest {
      * Exactly the writable banks are walked on connect; the read-only ones never are.
      *
      * The two flags have to agree, and the cost of them not agreeing is asymmetric. A read-only
-     * bank left indexing by default adds about seven and a half minutes to every connect, reading
-     * 1,217 voices whose names ship with the app. A writable bank left out of the index simply
-     * does not appear.
+     * bank left indexing by default adds minutes to every connect, reading voices whose names
+     * ship with the app. A writable bank left out of the index simply does not appear.
      */
     @Test
     fun `only the writable banks are indexed by default`() {

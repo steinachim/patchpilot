@@ -4,14 +4,10 @@
 package de.thewolfwalkexperience.software.patchpilot.core
 
 /**
- * Where a preset lives on an instrument, in the instrument's own terms: a bank and a slot within
- * it, both 0-based. This is the only thing the operations in [Instrument]'s facets take, and it is
- * deliberately *not* a display string.
- *
- * `NordDevice`'s canonical pair is (bank, item), and "group" appears nowhere except in
- * `formatPresetId`/`parsePresetId`, where `item = (group - 1) * slotsPerGroup + (slot - 1)`. So a
- * Nord's `A:1:1` and a Pro-800's `A00` are two renderings of the same idea, and the difference
- * belongs in a formatter ([AddressFormat]) rather than in every caller.
+ * Where a preset lives on an instrument: a bank and a slot within it, both 0-based. The only
+ * thing the operations in [Instrument]'s facets take, and never a display string: a Nord's
+ * `A:1:1` and a Pro-800's `A00` are two renderings of the same pair, and the rendering belongs
+ * to an [AddressFormat].
  */
 data class SlotAddress(val bank: Int, val slot: Int) {
     init {
@@ -22,11 +18,8 @@ data class SlotAddress(val bank: Int, val slot: Int) {
 
 /**
  * Renders and parses the ids an instrument's own UI and manual use, so that nothing above this
- * has to know what they look like.
- *
- * The UI must never take an id apart itself: recovering a bank letter with
- * `presetId.substringBefore(':')` is correct for `A:1:1` and silently wrong for `A00` - hence
- * [PresetSlot.bankLabel], which travels on the row rather than being re-derived.
+ * has to know what they look like. The UI never takes an id apart itself; [PresetSlot.bankLabel]
+ * travels on the row instead.
  */
 interface AddressFormat {
     /** e.g. `"A:1:1"` on a Nord Grand, `"A00"` on a Pro-800. */
@@ -42,10 +35,8 @@ interface AddressFormat {
 /**
  * The Nord rendering: `bank:group:slot`, all 1-based in display form except the bank, which is a
  * letter. A bank's slots are presented as [groupsPerBank] groups of [slotsPerGroup], matching the
- * instrument's own front-panel group/slot buttons.
- *
- * The same rendering as `NordDevice.formatPresetId`/`parsePresetId`; this exists so the *domain*
- * can format an address without going through a connected device.
+ * instrument's own front-panel group/slot buttons. The same rendering as
+ * `NordDevice.formatPresetId`/`parsePresetId`, without needing a connected device.
  */
 class GroupedBankAddressFormat(
     private val groupsPerBank: Int,
@@ -113,25 +104,16 @@ data class BankSpec(
     val label: String,
     val slotCount: Int,
     /**
-     * What the bank index rail draws, where [label] is too wide for it.
-     *
-     * The rail is 20.dp - room for one or two characters - because for a Nord a bank *is* a
-     * single letter. A Motif XS bank is `USER DR`, which wraps to three stacked lines and is
-     * unreadable. Defaults to [label], so an instrument whose labels already fit says nothing.
+     * What the bank index rail draws where [label] is too wide for it: the rail has room for one
+     * or two characters, and a Motif XS bank is called `USER DR`. Defaults to [label].
      */
     val shortLabel: String = label,
     /**
      * Whether the instrument refuses writes here - true for a factory bank.
      *
-     * **On the bank rather than on [PresetSlot], deliberately.** A row-level flag would have to be
-     * set at every construction site in every family, and the one that forgot would default to
-     * "writable" - failing in the direction that offers a Delete the instrument will reject.
-     * Read-only-ness is a property of the *bank* in every family that has one, so stating it once
-     * on the layout means nothing downstream can forget it: which addresses a copy may target and
-     * which rows offer an edit both derive from here.
-     *
-     * It is also what separates [PresetScope.USER] from [PresetScope.FACTORY] - a read-only bank
-     * is a factory bank - so there is no second field to keep inverted against this one.
+     * On the bank rather than on [PresetSlot]: read-only-ness is a property of the bank in every
+     * family that has one, so which addresses a copy may target and which rows offer an edit both
+     * derive from this one field. A read-only bank is also what [PresetScope.FACTORY] lists.
      */
     val readOnly: Boolean = false,
 )
@@ -139,10 +121,9 @@ data class BankSpec(
 /**
  * An instrument's whole addressable preset space, plus how to render an address in it.
  *
- * Note that bank count is a property of the *program* area specifically, not of the instrument as
- * a whole: a Nord Stage 2 EX addresses programs in four banks (A-D) while giving its `Piano`
- * category six children. `NordDevice.categoryBankCount()` is what bounds a walk of some other
- * category; this type describes the program space the browser screen shows.
+ * The bank count is the program area's, not the instrument's: a Nord Stage 2 EX addresses
+ * programs in four banks (A-D) while giving its `Piano` category six children.
+ * `NordDevice.categoryBankCount()` bounds a walk of another category.
  */
 data class SlotLayout(
     val banks: List<BankSpec>,

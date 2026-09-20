@@ -799,8 +799,8 @@ fun ProgramsScreen(
                                 Spacer(Modifier.height(8.dp))
                                 TextButton(onClick = { searchText = "" }) { Text(stringResource(R.string.action_clear_filter)) }
                             } else if (browseScope == PresetScope.FAVORITES) {
-                                // The app cannot set these, so an empty list is a dead end unless
-                                // it says where they are actually set.
+                                // Says where a mark is set - in a row menu, or on the instrument
+                                // - so an empty list is not a dead end.
                                 Spacer(Modifier.height(8.dp))
                                 Text(
                                     stringResource(R.string.programs_no_favorites_hint),
@@ -1305,8 +1305,8 @@ private fun HideKeyboardOnDismiss(keyboardController: SoftwareKeyboardController
  *
  * The caption is not decoration. Two of these listings would otherwise misrepresent themselves:
  * the factory names are transcribed from Yamaha's Data List rather than read off the instrument,
- * and the favorite marks can be read but not written, so somebody will look for a way to star a
- * voice and needs to be told where that lives instead of hunting for it.
+ * and the favorite marks are the instrument's own, changed from a row menu rather than from the
+ * listing, so somebody looking for a way to star a voice is told where that lives.
  */
 @Composable
 private fun ScopeSelector(

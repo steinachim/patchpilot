@@ -20,6 +20,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
+import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -107,7 +108,9 @@ class Pro800Instrument(
      * something true to show.
      */
     override suspend fun connect() {
-        deviceName = queryDeviceName() ?: catalogName
+        // Device-supplied text that lands in the app bar, so cleaned the way every other
+        // device string is (see sanitizeDeviceText).
+        deviceName = sanitizeDeviceText(queryDeviceName()) ?: catalogName
         firmware = queryFirmware() ?: UNKNOWN_FIRMWARE
         validateFirmware()
     }

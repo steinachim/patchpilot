@@ -13,14 +13,9 @@ private const val TAG = "AndroidUsbBulkTransport"
 /**
  * Real [UsbBulkTransport], wrapping an already-permitted, already-opened `UsbDeviceConnection`.
  *
- * Endpoint addresses default to 0x03 OUT / 0x82 IN (the Nord devices' endpoints), but are
- * parameters rather than constants: a Yamaha Motif XS puts its bulk OUT on **0x01**, and which
- * endpoints an interface exposes is a property of the device, not of this class. They come from
- * the catalog entry (`DeviceMatch.Usb`) for the same reason the bank table does - a wrong one
- * should be a data edit.
- *
- * Nothing protocol-specific lives here: the Nord firmware read's `bmRequestType`/`bRequest` are
- * in `NordDevice`, because they describe that vendor protocol rather than this bus.
+ * Endpoint addresses default to 0x03 OUT / 0x82 IN (the Nord endpoints) and come from the catalog
+ * entry (`DeviceMatch.Usb`): a Motif XS puts its bulk OUT on 0x01. Nothing protocol-specific lives
+ * here; the Nord firmware read's control request is in `NordDevice`.
  */
 class AndroidUsbBulkTransport(
     private val connection: UsbDeviceConnection,
@@ -33,17 +28,12 @@ class AndroidUsbBulkTransport(
     private val epOut: UsbEndpoint
     private val epIn: UsbEndpoint
 
-    /** USB host mode has no add/remove callback this app can rely on mid-session, and unrelated
-     * bus activity while backgrounded (e.g. a USB keyboard being unplugged and replugged) can
-     * leave these endpoints permanently erroring - so a resume rebuilds rather than hopes. */
+    /** See [Transport.rebuildOnResume]: USB host needs the rebuild. */
     override val rebuildOnResume = true
 
     init {
-        // The connection was already opened by the caller (UsbConnectionManager.openTransport)
-        // before this constructor runs, so on any failure below it's this class's job to close
-        // it again - otherwise a claim failure (e.g. the interface is already held by another
-        // app), or this interface not exposing an expected endpoint, would leak an open
-        // UsbDeviceConnection.
+        // The caller opened the connection, so a claim failure or a missing endpoint here has to
+        // close it again rather than leak it.
         try {
             check(connection.claimInterface(usbInterface, true)) {
                 "Failed to claim USB interface ${usbInterface.id}"
@@ -69,13 +59,10 @@ class AndroidUsbBulkTransport(
     }
 
     /**
-     * A timeout here returns -1 and is not an error - see [UsbBulkTransport.bulkReadOrEmpty].
-     *
      * `bulkTransfer` answers a timeout and a failure with the same -1, so the two are told apart
      * by the clock: a timeout has waited out [timeoutMs], while a detached device or a closed
-     * connection fails at once. A negative result that arrives in under half the timeout is
-     * therefore a failure and is thrown, which is what lets a reader loop count failures and
-     * give up rather than spin on an endpoint that answers instantly with nothing.
+     * connection fails at once. A negative result in under half the timeout is thrown, which
+     * lets a reader loop count failures rather than spin on a dead endpoint.
      */
     override fun bulkReadOrEmpty(bufferSize: Int, timeoutMs: Int): ByteArray {
         val buffer = ByteArray(bufferSize)
@@ -93,9 +80,8 @@ class AndroidUsbBulkTransport(
 
     /**
      * Reads with a short timeout until the device has nothing more to give. A negative result is
-     * either that timeout or a dead endpoint, and both mean stop: the handshake that follows is
-     * the place to find out which. Bounded, so a device that never stops talking cannot hold the
-     * connect here.
+     * either that timeout or a dead endpoint, and both mean stop; the handshake that follows
+     * finds out which. Bounded, so a device that never stops talking cannot hold the connect here.
      */
     override fun drainInput() {
         val buffer = ByteArray(DRAIN_BUFSIZE)

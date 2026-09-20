@@ -9,10 +9,11 @@ import kotlinx.serialization.Serializable
  * The names and category assignments of the instrument's 1,217 read-only voices, by bank and slot.
  *
  * **Transcribed from Yamaha's own Data List, not read off the wire.** That is the whole point of
- * shipping it: the eleven factory banks never change, and reading them over MIDI costs about seven
- * and a half minutes - 1,217 dumps at ~160 ms, and a full second for each of the 65 drum kits -
- * which is a price worth paying exactly never for data that is identical on every Motif XS ever
- * built. The user banks are the opposite case and are still read from the instrument every time.
+ * shipping it: the eleven factory banks never change, and reading them over MIDI would take
+ * several minutes (1,217 dumps at the measured ~160 ms each, plus about a second for each of the
+ * 65 drum kits; the walk has never been timed end to end) - a price worth paying exactly never
+ * for data that is identical on every Motif XS ever built. The user banks are the opposite case
+ * and are still read from the instrument every time.
  *
  * The rule in `devices/blanks/README.md` - never fabricate bytes for a wire - does not apply here:
  * these are display strings the app never transmits. A wrong entry is a row with the wrong label

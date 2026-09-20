@@ -1,6 +1,6 @@
 # Privacy policy
 
-*Applies to Patch Pilot (package `de.thewolfwalkexperience.software.patchpilot`), all versions. Last updated 2026-09-19.*
+*Applies to Patch Pilot (package `de.thewolfwalkexperience.software.patchpilot`), all versions. Last updated 2026-09-20.*
 
 ## In short
 
@@ -13,10 +13,10 @@ Patch Pilot collects no personal data, has no network access, and never sends an
 
 ## What the app stores on your device
 
-- Your theme choice, a single preference.
+- Two preferences: the theme, and whether the app connects to the first instrument it finds or shows the device list.
 - While a report you asked to share is being handed to another app, a temporary copy of it in the app's private cache directory. It is replaced by the next share and removed when the app's cache is cleared.
 
-Preset names and other instrument data are held in memory only while the app is running. A finished regression report is kept, in the app's saved state, until you dismiss it or close the app. The app opts out of Android backups, so none of this is copied to a cloud backup or to another device.
+Preset names and other instrument data are held in memory only while the app is running. A finished device report or regression report is kept in the app's saved state until you share, save or dismiss it, or close the app. The app opts out of Android backups and of device-to-device transfer, so none of this is copied to a cloud backup or to another device.
 
 ## Exports you start yourself
 

@@ -13,14 +13,10 @@ private const val TAG = "InstrumentRegistry"
 
 /**
  * Everything the app needs to know about one instrument family: which devices it covers, and how
- * to build an [Instrument] once one of them is open.
- *
- * **This is the whole extension point.** A third family adds an implementation of this and a JSON
- * block; it changes no shared type. Deliberately not a service loader, a reflection-based plugin
- * system or a device-definition DSL - [InstrumentRegistry] is a compile-time map, and that ceiling
- * is a decision rather than an oversight (see docs/ARCHITECTURE.md, "Catalog and adding a new
- * device family"). The extension
- * point is already small enough that making it smaller has no payoff.
+ * to build an [Instrument] once one of them is open. The whole extension point: a new family adds
+ * an implementation of this and a catalog file, and an entry in [InstrumentRegistry], which is a
+ * compile-time map rather than a plugin system (see docs/ARCHITECTURE.md, "Catalog and adding a
+ * device family").
  */
 interface InstrumentFamily {
     val id: String
@@ -29,21 +25,16 @@ interface InstrumentFamily {
     fun descriptors(context: Context): List<InstrumentDescriptor>
 
     /**
-     * Builds an instrument on an already-open transport.
-     *
-     * [transport] is the family-agnostic marker type, so a family that needs a
-     * [de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport] and is handed a
-     * [de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport] should fail loudly
-     * here. That mismatch is a wiring bug in discovery, not a device problem.
+     * Builds an instrument on an already-open transport. A family handed the wrong transport type
+     * fails loudly here; that is a wiring bug in discovery.
      */
     fun create(context: Context, descriptor: InstrumentDescriptor, transport: Transport): Instrument
 }
 
 /**
- * Family id -> family, resolved at compile time.
- *
- * Order matters where more than one instrument is connected at once: the first family with a
- * match wins, as the Nord catalog's own list order decides between two connected Nords.
+ * Family id -> family, resolved at compile time. Order matters where more than one instrument is
+ * connected: the first family with a match wins, as the Nord catalog's list order decides
+ * between two connected Nords.
  */
 object InstrumentRegistry {
     private val families: List<InstrumentFamily> by lazy {
@@ -60,10 +51,8 @@ object InstrumentRegistry {
     /** Every model every family covers, in family order. */
     fun allDescriptors(context: Context): List<InstrumentDescriptor> =
         families.flatMap { family ->
-            // One family's catalog failing to load must not take the others down with it: a
-            // malformed or missing asset for a family the user does not own would otherwise leave
-            // the app unable to find the instrument they do. Logged, because the only other
-            // symptom is that family's instruments silently missing from the connect screen.
+            // One family's catalog failing to load must not take the others down with it. Logged,
+            // since the only other symptom is that family's instruments missing from the picker.
             try {
                 family.descriptors(context)
             } catch (e: Exception) {

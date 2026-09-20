@@ -10,15 +10,13 @@ import kotlinx.coroutines.flow.flow
 /**
  * What the UI talks to, whatever is plugged in.
  *
- * **Facets are nullable, and null means "this instrument cannot do this at all".** The UI
- * writes `instrument.transfer?.let { ... }` and there is no second list of capability flags that
- * can drift out of sync with what is actually implemented - which is the whole reason this is not
- * a fat interface whose unsupported methods throw, and not a `Set<Capability>` beside one.
+ * Facets are nullable, and null means "this instrument cannot do this at all": the UI checks
+ * for a facet's presence, and there is no separate list of capability flags that could drift
+ * from what is implemented.
  *
- * The abstraction deliberately sits at the *operation* level, not the wire level. A Nord's
- * CRC-framed synchronous bulk protocol and a Pro-800's SysEx stream share nothing worth naming
- * below "banks of named presets", so there is no shared message type, no shared framing, and no
- * plugin ABI anywhere under here.
+ * The abstraction sits at the operation level, not the wire level. A Nord's CRC-framed bulk
+ * protocol and a Pro-800's SysEx stream share nothing below "banks of named presets", so there
+ * is no shared message type or framing under here.
  */
 interface Instrument {
     val identity: InstrumentIdentity
@@ -37,40 +35,29 @@ interface Instrument {
     /**
      * Categories and favorites - see [PresetTagger]. Null where the family does neither.
      *
-     * Abstract like the four above it rather than defaulted to null, for the reason this file
-     * gives everywhere else: a facet nobody is made to look at is a facet a new family forgets it
-     * could have offered.
+     * Abstract rather than defaulted to null, so every family has to decide.
      */
     val tagger: PresetTagger?
 
     /**
      * Something the user must be told before using this instrument, or null where all is well.
      *
-     * **Usable but not vouched for.** Set during [connect] by a family that got far enough to talk
-     * to the device and then found something it cannot stand behind - today, a firmware version
-     * nobody has tested this app against. A warning rather than a refusal, because refusing would
-     * lock out the one person able to report what an untested firmware actually does.
+     * Set during [connect] by a family that can talk to the device but cannot vouch for it -
+     * a firmware version this app has not been tested against. A warning rather than a refusal,
+     * because refusing would lock out the one person able to report what that firmware does.
      *
-     * Not an error channel: a facet that cannot work must still be null, and a failure that makes
-     * the session useless must still throw. This is for "it will probably work, and you should
-     * know why it might not" - the screens gate on it once, then keep it visible.
+     * Not an error channel: a facet that cannot work is null, and a failure that makes the
+     * session useless throws. The screens gate on this once, then keep it visible.
      */
     val advisory: String? get() = null
 
     /**
-     * Whether returning to the foreground should proactively rebuild this session.
+     * Whether returning to the foreground should rebuild this session - see
+     * `Transport.rebuildOnResume`, which each family delegates to.
      *
-     * Delegates to the transport underneath, which is the layer that knows: USB host has no
-     * add/remove callback this app can rely on mid-session, and unrelated bus activity while
-     * backgrounded can leave its endpoints erroring on every subsequent transfer. MIDI has
-     * explicit callbacks and no such failure mode.
-     *
-     * **Declared here because `Transport` is not reachable from where the decision is taken.**
-     * `MainActivity.onResume` is the caller, and the transport lives two layers down inside each
-     * family's instrument.
-     *
-     * Defaults to true: rebuilding an already-working session costs a reconnect, while failing to
-     * rebuild a dead one leaves the app unusable until the user backs out by hand.
+     * Declared here because `MainActivity.onResume` takes the decision and cannot reach the
+     * transport. Defaults to true: rebuilding a working session costs a reconnect, while failing
+     * to rebuild a dead one leaves the app unusable until the user backs out by hand.
      */
     val rebuildOnResume: Boolean get() = true
 
@@ -104,49 +91,34 @@ data class InstrumentIdentity(
  * Which part of an instrument's stored content a listing covers.
  *
  * [USER] is what every instrument has and what the browser opens on. The other two are separate
- * *listings*, not filters over the first: a factory listing may be free where a user one costs
- * minutes, and a favorites listing is a sparse set spanning both, in an order the instrument
- * chooses rather than device order.
+ * listings, not filters over the first: a factory listing may be free where a user one costs
+ * minutes, and a favorites listing is a sparse set spanning both.
  *
- * **A closed enum, so a family cannot add a fourth scope without editing this file.** That is the
- * same ceiling `InstrumentRegistry` already documents as a decision rather than an oversight: the
- * three screens that render these have to name them anyway, so an open set would only move the
- * exhaustiveness check from the compiler to a runtime `when` branch nobody would remember to add.
+ * A closed enum: the screens that render these name them, so an open set would only move the
+ * exhaustiveness check from the compiler to a runtime `when`.
  */
 enum class PresetScope { USER, FACTORY, FAVORITES }
 
 /**
  * Lists what is stored on the instrument.
  *
- * **A [Flow] of incremental updates rather than a suspending call returning a list.** On a
- * Nord this emits one batch and completes, costing nothing. On a Pro-800 the only way to learn a
- * preset's name is to dump the whole preset, so listing is 400 sequential round trips - and a
- * `suspend fun list(): List<PresetSlot>` would mean a spinner for the better part of a minute
- * with nothing to show for it.
+ * A [Flow] of incremental updates rather than a suspending call returning a list: a Nord emits
+ * one batch and completes, but a Pro-800 can only learn a preset's name by dumping the whole
+ * preset, so its listing is 400 sequential round trips that have to show rows as they arrive.
  */
 interface PresetBrowser {
     /**
-     * The listings this instrument can produce, in the order a selector should offer them.
-     *
-     * A [List] rather than a [Set] because the UI renders it positionally - a segmented control
-     * needs to know which item is first and which is last to shape it - and because "USER first"
-     * is a contract this type can state and a set cannot.
-     *
-     * Defaulted, so a family with only its user presets says nothing and gets no selector.
+     * The listings this instrument can produce, in the order a selector should offer them -
+     * [PresetScope.USER] first. Defaulted, so a family with only user presets gets no selector.
      */
     val scopes: List<PresetScope> get() = listOf(PresetScope.USER)
 
     /**
      * Lists [scope], which is always one of [scopes].
      *
-     * **One abstract method taking a scope, not a second overload with a default body.** An
-     * `index(scope)` whose default body forwarded to a no-arg `index()` would let a decorator
-     * override only the latter and then silently serve the user listing for every other scope.
-     * Abstract means the compiler makes all five implementors look at it.
-     *
-     * The *parameter* still defaults, which is a different thing: it saves the many callers that
-     * only ever mean the user listing from saying so, without giving any implementor somewhere to
-     * hide. Production callers that track a selected scope pass it explicitly.
+     * One abstract method taking a scope: a no-arg overload with a default body would let a
+     * decorator override only that one and serve the user listing for every scope. The
+     * parameter's default only saves callers that mean the user listing from saying so.
      */
     fun index(scope: PresetScope = PresetScope.USER): Flow<IndexUpdate>
 
@@ -162,9 +134,8 @@ sealed interface IndexUpdate {
     data class Slots(val slots: List<PresetSlot>) : IndexUpdate
 
     /**
-     * One address could not be read. Deliberately not fatal: a single unreadable slot out of 400
-     * must not lose the other 399, the same rule `InstrumentViewModel.buildDeviceReport()` already
-     * applies to its probes.
+     * One address could not be read. Not fatal: a single unreadable slot out of 400 must not lose
+     * the other 399 - the same rule [Probes] applies to a device report.
      */
     data class Failed(val address: SlotAddress, val reason: String) : IndexUpdate
 
@@ -172,19 +143,14 @@ sealed interface IndexUpdate {
 }
 
 /**
- * The sequential read-every-slot walk, for the families that have no directory to read instead.
+ * The sequential read-every-slot walk, for the families that have no directory to read instead
+ * (Pro-800, Motif XS). Rows are emitted as they arrive, one unreadable slot costs only itself,
+ * and the final partial batch is always flushed.
  *
- * A Motif XS and a Pro-800 arrive at the same shape from opposite directions - one has 1,217
- * factory voices at 12,468 B/s, the other has 400 addresses and no way to learn a name except by
- * reading the whole preset - and both need the same three things: rows in front of the user as
- * they arrive, one unreadable slot costing only itself, and progress that means something. That
- * is this loop, and having it once keeps the two families agreeing on the details that matter
- * (whether a failure aborts the walk; whether the final partial batch is emitted at all).
- *
- * What genuinely differs stays a parameter: [batchSize] is tuned per family (a Pro-800's 25 slots
- * against a Motif XS's 8, whose reads are an order of magnitude larger), and [onFailure] lets a
- * family log the cause where the emitted [IndexUpdate.Failed] only carries a count to the user.
- *
+ * @param batchSize per family: 25 slots on a Pro-800, 8 on a Motif XS, whose reads are an order
+ *   of magnitude larger.
+ * @param onFailure lets a family log the cause; the emitted [IndexUpdate.Failed] carries only a
+ *   reason string.
  * @param addresses walked in order; [total] is stated separately so a [Sequence] need not be
  *   counted twice.
  * @param readSlot may throw - anything but [kotlinx.coroutines.CancellationException] becomes an
@@ -212,8 +178,7 @@ fun indexWalk(
             emit(IndexUpdate.Failed(address, e.message ?: "unreadable"))
         }
         done++
-        // `done == total` is what flushes the tail: without it a walk whose last batch is short
-        // ends having emitted rows the UI never received.
+        // `done == total` flushes a short final batch.
         if (batch.size >= batchSize || done == total) {
             emit(IndexUpdate.Progress(done, total, "Reading $displayId"))
             emit(IndexUpdate.Slots(batch.toList()))
@@ -226,8 +191,7 @@ fun indexWalk(
 /**
  * One row in the browser.
  *
- * [displayId] and [bankLabel] are both carried rather than derived, because deriving them means
- * parsing [displayId], and the UI has no business knowing an id's shape.
+ * [displayId] and [bankLabel] are both carried rather than derived, so the UI never parses an id.
  */
 data class PresetSlot(
     val address: SlotAddress,
@@ -248,12 +212,9 @@ interface PresetSelector {
     /**
      * What to tell the user after [select] returns.
      *
-     * Every family currently verifies its own selection before returning - a Nord echoes the
-     * address back, a Pro-800 reads its pointer back until it matches - so every family can state
-     * it as a fact, and the default says so. It stays overridable rather than becoming a constant
-     * in the screen because what a family can *honestly* claim is the family's to know: one that
-     * could only fire a message off and hope would have to word this differently, and that is a
-     * property of the wire protocol, not of the UI.
+     * Every family verifies its own selection before returning (a Nord checks the echoed
+     * address, a Pro-800 reads its pointer back), so the default states it as a fact. Overridable
+     * because what a family can honestly claim is a property of its wire protocol.
      */
     fun confirmationFor(displayId: String): String = "Selected $displayId."
 }
@@ -263,21 +224,17 @@ enum class EditOp { RENAME, MOVE, SWAP, DELETE, COPY }
 /**
  * Rearranges and renames what is stored.
  *
- * [supported] and [isEmulated] exist because the same four operations are device primitives on one
- * family and host-composed multi-step sequences on another, and the difference is not hideable:
- * a Nord rename either happens or does not, while a Pro-800 move is read-destination-write then
- * erase-source, which can fail halfway and lose a preset. The UI has to be able to say so before
- * it runs.
+ * [supported] and [isEmulated] exist because the same operations are device primitives on one
+ * family and host-composed sequences on another: a Nord rename either happens or does not, while
+ * a Pro-800 move is write-destination then erase-source, which can fail halfway. The UI says so
+ * before it runs one.
  */
 interface PresetEditor {
     val supported: Set<EditOp>
 
     /**
-     * The longest name this instrument will store, or null where no limit is known.
-     *
-     * Declared so the rename dialog can cap the input rather than letting the user type a name
-     * the instrument will silently truncate: a Pro-800 asked to store a longer name keeps the
-     * first sixteen characters, and the only sign is the read-back verification failing.
+     * The longest name this instrument will store, or null where no limit is known. The rename
+     * dialog caps its input at this, since a Pro-800 or a Nord silently truncates a longer name.
      */
     val maxNameLength: Int? get() = null
 
@@ -291,16 +248,11 @@ interface PresetEditor {
 
     /**
      * Duplicates [src] into the empty slot [dst], leaving [src] where it is, and returns the name
-     * the *instrument* gave the copy.
+     * the instrument gave the copy - a Nord appends a disambiguating number ("Synth Strings" ->
+     * "Synth Strings 2"), so only a read-back knows what was stored.
      *
-     * The only edit with a default implementation: a family that offers it declares [EditOp.COPY]
-     * and overrides this; one that does not declares neither and inherits the refusal, which is
-     * what `EditOp.COPY !in supported` reads as everywhere.
-     *
-     * The name comes back rather than being chosen by the caller because the instrument picks it:
-     * a Nord appends a disambiguating number to the source's ("Synth Strings" -> "Synth Strings 2")
-     * and nothing in the request carries a name at all, so the only way to know what was stored is
-     * to read the destination back.
+     * The only edit with a default implementation: a family that offers it declares
+     * [EditOp.COPY] and overrides this; one that does not inherits the refusal.
      */
     suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String =
         throw UnsupportedOperationException("This instrument cannot copy a preset.")
@@ -309,9 +261,8 @@ interface PresetEditor {
 /**
  * Reads and writes a preset's own data blob - backup and restore.
  *
- * Only the Pro-800 implements it: there this *is* the listing operation, so its browser is built
- * on [read] and a "save everything" action after a completed scan costs no extra round trips.
- * The other families return null for the facet until an item-data read/write path is implemented.
+ * Only the Pro-800 implements it: there a dump is the listing operation, so its browser is built
+ * on [read]. The other families return null until an item-data read/write path is implemented.
  */
 interface PresetTransfer {
     suspend fun read(address: SlotAddress): ByteArray
@@ -322,10 +273,8 @@ interface PresetTransfer {
 /**
  * A built device report: the JSON to share, and what could not be read while building it.
  *
- * [failures] repeats the report's own failure map ([Probes.failures]) so a screen can say "this
- * report is incomplete" without parsing family-specific JSON. A report whose cable was pulled
- * halfway reaches the same "ready" state as a complete one otherwise, and whoever receives it
- * has no signal to go looking for a per-area note.
+ * [failures] repeats the report's own failure map ([Probes.failures]) so a screen can say the
+ * report is incomplete without parsing family-specific JSON.
  */
 data class DeviceReportResult(val json: String, val failures: Map<String, String>) {
     val isComplete: Boolean get() = failures.isEmpty()
@@ -339,11 +288,8 @@ interface DeviceReporter {
     fun suggestedFilename(): String
 
     /**
-     * What the confirmation dialog tells the user this will do.
-     *
-     * Supplied by the reporter because the two families read completely different things: one
-     * walks categories and measures storage areas, the other dumps 400 preset addresses, and a
-     * single wording in the screen would describe one of them wrongly.
+     * What the confirmation dialog tells the user this will do - supplied by the reporter, since
+     * the families read different things.
      */
     val description: String
 }

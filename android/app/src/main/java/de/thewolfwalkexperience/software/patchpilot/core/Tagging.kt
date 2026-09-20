@@ -6,26 +6,13 @@ package de.thewolfwalkexperience.software.patchpilot.core
 /*
  * The categories a preset can be filed under, and whether it is one of the user's favorites.
  *
- * **A facet in its own right rather than more surface on [PresetEditor].** Everything on that
- * interface rearranges *where a preset lives*; nothing here moves a preset at all. The split also
- * lets the two capabilities be declared independently of each other, which they have to be: a
- * Motif XS lets a host favorite a factory voice but not re-categorise one, and those are different
- * answers about the same slot.
- *
- * **Shaped for more than one family from the start.** A Motif XS voice carries two assignments,
- * each a main category and a sub-category; a Nord program carries one, with no sub-categories at
- * all. Both are [CategoryTaxonomy] with [PresetTagger.assignmentCount] set differently and, for the
- * Nord, [MainCategory.subs] empty everywhere - so a single dialog renders both without knowing
- * which instrument is plugged in.
+ * A facet of its own rather than part of [PresetEditor], which rearranges where a preset lives;
+ * nothing here moves one. A Motif XS voice carries two assignments, each a main category and a
+ * sub-category; a Nord program carries one, with no sub-categories. Both are a [CategoryTaxonomy]
+ * with [PresetTagger.assignmentCount] set differently, so one dialog renders both.
  */
 
-/**
- * One main category and the sub-categories under it.
- *
- * [subs] is empty for a family with no second level. It is deliberately *not* nullable: "this main
- * has no subs" and "this family has no subs" are the same thing to every caller, and an empty list
- * makes `subs.indices` and `subs.isEmpty()` the only two questions anyone needs to ask.
- */
+/** One main category and the sub-categories under it; [subs] is empty for a family with no second level. */
 data class MainCategory(val name: String, val subs: List<String>)
 
 /** Every category a family's presets can be filed under, in the order the instrument lists them. */
@@ -76,11 +63,8 @@ data class PresetTags(
 }
 
 /**
- * What "favorite" means to a family.
- *
- * The distinction is not cosmetic - it decides what the dialog can offer. A [FLAG] family can only
- * be asked yes or no; a [PER_ASSIGNMENT] family is asked *where*, and the answer is constrained to
- * the preset's own assignments, because that is all the instrument can store.
+ * What "favorite" means to a family, and so what the dialog can offer: a [FLAG] family is asked
+ * yes or no, a [PER_ASSIGNMENT] family is asked under which of the preset's own assignments.
  */
 enum class FavoriteModel {
     /** On or off. A single-assignment family, where "favorited" and "filed under it" coincide. */
@@ -105,52 +89,39 @@ interface PresetTagger {
     val favorites: FavoriteModel?
 
     /**
-     * Whether an assignment can be left empty.
+     * Whether an assignment can be left empty. True on a Motif XS, which has a `NoAsg` state;
+     * false on a Nord, where every program carries a category id and `None` is a category rather
+     * than the absence of one.
      *
-     * True on a Motif XS, which has a real `NoAsg` state its own panel offers. **False on a
-     * Nord**, where every program always carries a category id and `None` is one of the
-     * categories rather than the absence of one - so an editor must not offer a "clear it"
-     * option the instrument has nowhere to store.
-     *
-     * **Constrains writing, not reading.** [PresetTags.categories] can still hold a null here: a
-     * Nord program tagged with an id outside the ids its own model names displays as `No Cat` on
-     * the instrument, and null is the honest way to show something this app cannot name.
+     * Constrains writing, not reading: [PresetTags.categories] can still hold a null for an id
+     * this app cannot name (a Nord shows such a program as `No Cat`).
      */
     val allowsUnassigned: Boolean get() = true
 
     /**
-     * Whether [address]'s categories can be changed.
-     *
-     * **Per-slot, and separate from [canSetFavorite], because on a Motif XS they disagree.** A
-     * voice's categories live inside the voice, so setting one in a factory bank means rewriting a
-     * factory voice and is refused; its favorite mark lives in a separate per-bank table the
-     * instrument lets a host rewrite for any bank. Asking the driver keeps that rule in the one
-     * place that knows it, rather than having the UI re-derive it from the bank layout.
+     * Whether [address]'s categories can be changed. Separate from [canSetFavorite] because on a
+     * Motif XS they disagree: a voice's categories live inside the voice, so a factory bank
+     * refuses them, while its favorite mark lives in a per-bank table any bank accepts.
      */
     fun canSetCategories(address: SlotAddress): Boolean
 
-    /** Whether [address]'s favorite mark can be changed. See [canSetCategories] on why it differs. */
+    /** Whether [address]'s favorite mark can be changed. */
     fun canSetFavorite(address: SlotAddress): Boolean
 
     /** What is stored at [address] today. */
     suspend fun read(address: SlotAddress): PresetTags
 
     /**
-     * Replaces every assignment at once, nulls included.
-     *
-     * Whole-list rather than "set assignment n", because the underlying write is a whole-record
-     * one on every family that has it, and an API that implied otherwise would invite a
-     * read-modify-write per assignment where one suffices.
+     * Replaces every assignment at once, nulls included - the underlying write is a whole-record
+     * one on every family that has it.
      */
     suspend fun setCategories(address: SlotAddress, categories: List<CategoryRef?>)
 
     /**
      * Files [address] under the assignments named by [under], or removes the favorite if it is
-     * empty.
-     *
-     * An index in [under] may name a slot that currently has no category: on a Motif XS that is a
-     * legal state its own panel produces, and the voice then appears in its Favorite bank under
-     * no category. Whether such a mark is offered is the dialog's decision, not this facet's.
+     * empty. An index in [under] may name a slot with no category: on a Motif XS that is a legal
+     * state its own panel produces, and the voice then appears in its Favorite bank under no
+     * category.
      */
     suspend fun setFavorite(address: SlotAddress, under: Set<Int>)
 }

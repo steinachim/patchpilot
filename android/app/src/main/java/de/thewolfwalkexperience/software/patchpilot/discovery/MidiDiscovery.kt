@@ -33,17 +33,10 @@ import android.hardware.usb.UsbDevice
 private const val TAG = "MidiDiscovery"
 
 /**
- * Finds instruments on the MIDI bus, and identifies them by **asking them what they are**.
- *
- * Port names are not used as identity: they vary by OS, by hub, and by whether another app renamed
- * the port. A device that answers a documented query in its own words is authoritative where a
- * name is a guess. A descriptor's `usbHint` narrows which ports are worth probing, but never
- * decides on its own.
- *
- * **Every probe here is read-only and idempotent.** For a Pro-800 that is SysEx `0x06`,
- * "request device name". Nothing from an undocumented range may ever be used for identification -
- * those have unknown side effects, and on this instrument one neighbour is an unconfirmed factory
- * reset.
+ * Finds instruments on the MIDI bus by asking each port what it is. Port names are never used as
+ * identity (they vary by OS, hub and other apps); a descriptor's `usbHint` narrows which ports are
+ * probed but never decides. Every probe is read-only and idempotent - see
+ * [DeviceMatch.MidiIdentity].
  */
 class MidiDiscovery(private val context: Context) : DeviceDiscovery {
 
@@ -81,12 +74,8 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
         }.filter { it.descriptor != null }
     }
 
-    /** Asks each plausible descriptor's probe and returns the first that answers as expected.
-     * Closes every port it opens - this is discovery, not a session.
-     *
-     * Descriptors are grouped by the port they name, because that is part of the question being
-     * asked: an instrument that speaks on cable 3 is silent on port 0, so probing it there would
-     * not identify it as itself - it would fail to identify it at all. */
+    /** Asks each plausible descriptor's probe on the port it names and returns the first that
+     * answers as expected. Closes every port it opens. */
     private suspend fun identify(
         manager: MidiManager,
         info: MidiDeviceInfo,
@@ -119,9 +108,7 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
         val prefix = match.replyPrefix
         return withTimeoutOrNull(PROBE_TIMEOUT_MS) {
             coroutineScope {
-                // Same ordering rule as SysExExchange: subscribe before sending, and UNDISPATCHED
-                // to make that a guarantee rather than a likelihood. A device that answers
-                // promptly would otherwise beat the collector to the punch and look silent.
+                // Subscribed before the send, as SysExExchange does: the flow has no replay.
                 val answered = async(start = CoroutineStart.UNDISPATCHED) {
                     transport.incoming
                         .mapNotNull { chunk -> framer.feed(chunk).firstOrNull { it.startsWith(prefix) } }
@@ -138,8 +125,7 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
         val manager = midiManager ?: error("This phone has no MIDI support.")
         val info = candidate.handle as? MidiDeviceInfo
             ?: error("Not a MIDI candidate: ${candidate.displayName}")
-        // The session opens the same port the descriptor was identified on. Anything else would
-        // identify an instrument through one cable and then talk to it down another.
+        // The same port the descriptor was identified on.
         val portIndex = (candidate.descriptor?.match as? DeviceMatch.MidiIdentity)?.portIndex ?: 0
         return openTransport(manager, info, portIndex)
     }
@@ -150,11 +136,8 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
         portIndex: Int,
     ): MidiTransport {
         val device = openDevice(manager, info)
-        // A catalog port index is a best-effort claim about the instrument. Where the device
-        // turns out to have fewer ports than the catalog expects, fall back to the first rather
-        // than failing the connect outright: the wrong port is a device that answers nothing,
-        // which is recoverable and visible, while refusing to open at all leaves the user with no
-        // session and no way to try.
+        // Where the device has fewer ports than the catalog expects, fall back to the first: the
+        // wrong port answers nothing, which is visible, while refusing to open leaves no session.
         val inPorts = info.inputPortCount
         val outPorts = info.outputPortCount
         val port = if (portIndex < minOf(inPorts, outPorts)) {
@@ -171,10 +154,8 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
     }
 
     /**
-     * A device the framework refuses to open is a failure of this port, reported as an exception
-     * so the caller can skip the port; it is not a cancellation of the caller. A device that
-     * arrives after the caller has already been cancelled is closed here, since nothing else
-     * will ever hold it.
+     * A device the framework refuses to open is reported as an exception so the caller can skip
+     * the port. A device that arrives after the caller was cancelled is closed here.
      */
     private suspend fun openDevice(manager: MidiManager, info: MidiDeviceInfo): MidiDevice =
         suspendCancellableCoroutine { continuation ->
@@ -206,24 +187,14 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
 private fun ByteArray.startsWith(prefix: ByteArray): Boolean =
     size >= prefix.size && prefix.indices.all { this[it] == prefix[it] }
 
-/**
- * The `UsbDevice` behind a MIDI port, where the platform exposes one.
- *
- * One accessor, which confines the deprecation to a single site: `Bundle.get(String)` is
- * deprecated in favour of the typed `getParcelable(String, Class)` from API 33, and this app's
- * minSdk is 26.
- */
+/** The `UsbDevice` behind a MIDI port, where the platform exposes one. `Bundle.get` is
+ * deprecated from API 33; minSdk is 26. */
 @Suppress("DEPRECATION")
 private fun MidiDeviceInfo.usbDevice(): UsbDevice? =
     properties?.get(MidiDeviceInfo.PROPERTY_USB_DEVICE) as? UsbDevice
 
-/**
- * A stable-ish identifier for the physical device behind a MIDI port, for cross-bus dedupe.
- *
- * Delegates to [physicalKey] rather than formatting `"usb:$vendorId:$productId"` a second time:
- * the two spellings have to agree exactly, or a Nord appears twice in the picker - once usable,
- * once not.
- */
+/** The physical device behind a MIDI port, spelled exactly as [UsbDevice.physicalKey] spells it
+ * so the two buses deduplicate. */
 private fun MidiDeviceInfo.physicalKey(): String = usbDevice()?.physicalKey() ?: "midi:$id"
 
 private fun MidiDeviceInfo.matchesUsb(hint: DeviceMatch.Usb): Boolean {
@@ -234,7 +205,6 @@ private fun MidiDeviceInfo.matchesUsb(hint: DeviceMatch.Usb): Boolean {
 private fun MidiDeviceInfo.label(): String {
     val name = properties?.getString(MidiDeviceInfo.PROPERTY_NAME)
         ?: properties?.getString(MidiDeviceInfo.PROPERTY_PRODUCT)
-    // Sanitized exactly as a USB string descriptor is, and by the same function.
     return sanitizeDeviceText(name) ?: "MIDI device $id"
 }
 

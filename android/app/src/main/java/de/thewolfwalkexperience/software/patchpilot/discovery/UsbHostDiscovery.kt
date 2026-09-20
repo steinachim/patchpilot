@@ -12,11 +12,9 @@ import de.thewolfwalkexperience.software.patchpilot.usb.displayLabel
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 
 /**
- * Finds instruments on the USB host bus by vendor/product id.
- *
- * No probing is needed or wanted here: a vendor id and product id *are* the identity, and unlike a
- * MIDI port there is nothing to ask. The runtime permission prompt happens in [open], not in
- * [scan], so a scan never interrupts the user with a dialog for a device they did not ask for.
+ * Finds instruments on the USB host bus by vendor/product id. The runtime permission prompt
+ * happens in [open], not in [scan], so a scan never raises a dialog for a device the user did
+ * not ask for.
  */
 class UsbHostDiscovery(private val connectionManager: UsbConnectionManager) : DeviceDiscovery {
 
@@ -46,9 +44,8 @@ class UsbHostDiscovery(private val connectionManager: UsbConnectionManager) : De
         if (!connectionManager.requestPermission(device)) {
             throw SecurityException("USB permission was denied for ${device.displayLabel()}.")
         }
-        // Null for the "unrecognized, continue at your own risk" path, and a non-USB match is not
-        // reachable from [scan] - either way the defaults are the only endpoints we could guess,
-        // and guessing is what that path is for.
+        // Null on the "unrecognized, continue at your own risk" path, where the default endpoints
+        // are the only guess available.
         val match = candidate.descriptor?.match as? DeviceMatch.Usb
         return if (match == null) {
             connectionManager.openTransport(device)
@@ -58,8 +55,5 @@ class UsbHostDiscovery(private val connectionManager: UsbConnectionManager) : De
     }
 }
 
-/**
- * Matches the key [MidiDiscovery] derives from a port's backing `UsbDevice`, so the same
- * instrument found on both buses collapses to one candidate.
- */
+/** The key [MidiDiscovery] derives from a port's backing `UsbDevice` too, so both buses agree. */
 internal fun UsbDevice.physicalKey(): String = "usb:$vendorId:$productId"

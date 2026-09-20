@@ -47,6 +47,8 @@ import de.thewolfwalkexperience.software.patchpilot.usb.UsbConnectionManager
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.usb.displayLabel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -900,12 +902,32 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         }
     }
 
+    /**
+     * Releases the connection when the ViewModel goes away with the app.
+     *
+     * **Never under an edit still in flight.** `viewModelScope` is cancelled before this runs,
+     * but a write's `NonCancellable` section (a Motif XS block sequence, its write-plus-commit)
+     * keeps going, holding [instrumentMutex] until it is done; closing the transport under it
+     * would fail the write part way - the one thing those sections exist to prevent. So the
+     * close is taken through the same mutex: at once when it is free, otherwise from a
+     * coroutine of its own that waits for the edit to let go. Nothing here sends protocol
+     * messages; every operation cleans up whatever lock it caused before returning.
+     */
     override fun onCleared() {
-        // best-effort - viewModelScope is already cancelled by the time onCleared runs, so this
-        // can't reuse it. Nothing here sends protocol messages: every operation below already
-        // cleans up whatever lock it caused before returning, so by the time onCleared runs
-        // there's nothing left to undo except releasing the raw connection.
-        closeQuietly(instrument)
+        val target = instrument ?: return
+        instrument = null
+        if (instrumentMutex.tryLock()) {
+            try {
+                closeQuietly(target)
+            } finally {
+                instrumentMutex.unlock()
+            }
+            return
+        }
+        Log.i(TAG, "An edit is still in flight; the connection is released once it completes")
+        CoroutineScope(Dispatchers.Main.immediate).launch {
+            instrumentMutex.withLock { closeQuietly(target) }
+        }
     }
 
     private suspend fun teardownCurrentInstrument() {

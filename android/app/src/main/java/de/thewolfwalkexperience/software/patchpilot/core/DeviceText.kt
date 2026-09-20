@@ -16,15 +16,11 @@ private const val MAX_DEVICE_TEXT_LEN = 64
 /**
  * Cleans a name a device reported about itself, or null if nothing legible is left.
  *
- * **This text is device-supplied and lands next to a trust decision**: both the USB picker and the
- * "unrecognized, continue at your own risk" gate show it, and that gate's whole point is an honest
- * choice. A name free to contain bidi overrides and zero-width characters could visually disguise
- * one device as another.
- *
- * Shared by the USB and MIDI discovery paths rather than duplicated: two copies of a
- * security-adjacent rule are two rules that can drift.
- *
- * Returns null rather than a placeholder so each caller can name its own fallback.
+ * The text is device-supplied and lands next to a trust decision (the USB picker and the
+ * "unrecognized, continue at your own risk" gate), and a name carrying bidi overrides or
+ * zero-width characters could visually disguise one device as another. Shared by every path that
+ * shows device text. Returns null rather than a placeholder so each caller names its own
+ * fallback.
  */
 fun sanitizeDeviceText(raw: String?): String? {
     val cleaned = raw?.replace(UNSAFE_DEVICE_TEXT, "")?.trim() ?: return null

@@ -901,15 +901,13 @@ class MotifXsInstrument(
         // staring at a dialog.
         var last: MotifXsMode? = null
         val reachedVoice = withTimeoutOrNull(MODE_SETTLE_BUDGET) {
-            while (true) {
+            var now: MotifXsMode?
+            do {
                 delay(MODE_SETTLE_INTERVAL)
-                val now = readMode()
-                if (now != null) {
-                    last = now
-                    if (!now.blocksVoiceSelection) return@withTimeoutOrNull true
-                }
-            }
-            @Suppress("UNREACHABLE_CODE") false
+                now = readMode()
+                if (now != null) last = now
+            } while (now?.blocksVoiceSelection != false)
+            true
         }
         if (reachedVoice == true) return
 
@@ -1010,9 +1008,9 @@ class MotifXsInstrument(
      * four writable ones.
      *
      * The eleven factory banks are excluded here rather than absent from the catalog. Walking them
-     * would cost about seven and a half minutes - 1,217 voices at ~160 ms, and a full second for
-     * each of the 65 drum kits - to re-read data that is identical on every Motif XS and cannot
-     * have changed since the last time. [indexFactory] names them from a shipped table instead.
+     * would take several minutes (1,217 voices at ~160 ms, and about a second for each of the 65
+     * drum kits) to re-read data that is identical on every Motif XS and cannot have changed
+     * since the last time. [indexFactory] names them from a shipped table instead.
      */
     private fun defaultAddresses(): Sequence<SlotAddress> = sequence {
         config.banks.forEachIndexed { bank, spec ->
@@ -1422,7 +1420,7 @@ class MotifXsAddressFormat(
             require(number in 1..GROUP_SIZE) {
                 "Invalid voice id '$id': group positions run 1..$GROUP_SIZE"
             }
-            return SlotAddress(bank, (group[0] - 'A') * GROUP_SIZE + number - 1)
+            return SlotAddress(bank, (group[0].uppercaseChar() - 'A') * GROUP_SIZE + number - 1)
         }
         val (label, slot) = text.split(':', limit = 2).let {
             require(it.size == 2) {
