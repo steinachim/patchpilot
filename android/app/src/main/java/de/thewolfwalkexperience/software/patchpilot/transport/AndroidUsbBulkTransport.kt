@@ -6,6 +6,9 @@ package de.thewolfwalkexperience.software.patchpilot.transport
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
+import android.util.Log
+
+private const val TAG = "AndroidUsbBulkTransport"
 
 /**
  * Real [UsbBulkTransport], wrapping an already-permitted, already-opened `UsbDeviceConnection`.
@@ -88,6 +91,27 @@ class AndroidUsbBulkTransport(
         return ByteArray(0)
     }
 
+    /**
+     * Reads with a short timeout until the device has nothing more to give. A negative result is
+     * either that timeout or a dead endpoint, and both mean stop: the handshake that follows is
+     * the place to find out which. Bounded, so a device that never stops talking cannot hold the
+     * connect here.
+     */
+    override fun drainInput() {
+        val buffer = ByteArray(DRAIN_BUFSIZE)
+        var dropped = 0
+        var reads = 0
+        while (reads < MAX_DRAIN_READS) {
+            val read = connection.bulkTransfer(epIn, buffer, buffer.size, DRAIN_TIMEOUT_MS)
+            if (read <= 0) break
+            dropped += read
+            reads++
+        }
+        if (dropped > 0) {
+            Log.w(TAG, "Discarded $dropped bytes the device had queued from an earlier session")
+        }
+    }
+
     override fun controlTransfer(
         requestType: Int,
         request: Int,
@@ -117,5 +141,10 @@ class AndroidUsbBulkTransport(
     companion object {
         const val EP_OUT_ADDRESS = 0x03
         const val EP_IN_ADDRESS = 0x82
+
+        /** Per read while draining: short, because an idle device answers every one with silence. */
+        private const val DRAIN_TIMEOUT_MS = 100
+        private const val DRAIN_BUFSIZE = 8192
+        private const val MAX_DRAIN_READS = 32
     }
 }

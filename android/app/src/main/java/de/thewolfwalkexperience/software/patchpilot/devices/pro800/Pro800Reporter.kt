@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
+import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
@@ -49,7 +50,7 @@ class Pro800Reporter(
             "presets by format version, and shares that as JSON. Nothing is written to the " +
             "instrument, and no preset's data or name is included."
 
-    override suspend fun buildReport(progress: ((String) -> Unit)?): String {
+    override suspend fun buildReport(progress: ((String) -> Unit)?): DeviceReportResult {
         val probes = Probes()
 
         progress?.invoke("Reading device identity...")
@@ -128,7 +129,7 @@ class Pro800Reporter(
             messageLengths = slots.filterNot { it.empty }.map { it.messageBytes }.distinct().sorted(),
             failures = probes.failures,
         )
-        return REPORT_JSON.encodeToString(report)
+        return DeviceReportResult(REPORT_JSON.encodeToString(report), probes.failures)
     }
 
     private suspend fun rawReply(type: Int, expectType: Int = type + 1): ByteArray =

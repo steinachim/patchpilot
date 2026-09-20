@@ -166,37 +166,6 @@ internal fun reportFailure(what: String, error: Throwable, fallback: String): St
     return error.message ?: fallback
 }
 
-/**
- * Whether this screen has anything to show for [this] state, or should hand off to ConnectScreen.
- *
- * **Exhaustive on purpose, with no `else`.** [ConnectionState] is a sealed class specifically so
- * that adding a case here is a compile error until this function says which side it falls on;
- * with an `else`, a new state would fall through to whichever behaviour it happened to pick, and
- * this screen could render a disconnected session under its own stale title and gear icons.
- *
- * `Connected` obviously stays. `Disconnected`/`Searching`/`Opening` also stay: `forceReconnect()`
- * passes through them on a normal, successful resume, and leaving *during* that dip would bounce
- * to ConnectScreen and straight back for a reconnect that was working the whole time. Everything
- * else - an error, nothing found, a device picker, an unknown-device or advisory warning - is a
- * choice or a message only ConnectScreen's `when` renders; this screen has no UI for any of
- * them, and must not sit on one silently.
- */
-private fun ConnectionState.rendersOnProgramsScreen(): Boolean = when (this) {
-    is ConnectionState.Connected,
-    ConnectionState.Disconnected,
-    ConnectionState.Searching,
-    is ConnectionState.Opening,
-    -> true
-    is ConnectionState.Error,
-    is ConnectionState.NeedsManualSetting,
-    is ConnectionState.NothingFound,
-    is ConnectionState.DeviceSelection,
-    is ConnectionState.UnknownDeviceWarning,
-    is ConnectionState.AdvisoryWarning,
-    is ConnectionState.DeviceLost,
-    -> false
-}
-
 // PullToRefreshBox is marked experimental in Material3 1.4; opted in once for the whole screen.
 /**
  * The preset browser. Tapping a preset loads it. Long-pressing a preset's drag handle and dropping
@@ -240,7 +209,6 @@ private fun ConnectionState.rendersOnProgramsScreen(): Boolean = when (this) {
 fun ProgramsScreen(
     viewModel: InstrumentViewModel,
     onBack: () -> Unit,
-    onSessionLost: () -> Unit,
     onOpenDebugMenu: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
@@ -277,7 +245,14 @@ fun ProgramsScreen(
         pendingReportStem = null
         reportRunner.dismiss()
         val shared = shareTextReport(context, "$stem$jsonSuffix", done.json, JSON_MIME_TYPE, shareReportTitle)
-        ops.statusMessage = resources.getString(R.string.programs_shared_as, shared)
+        if (done.isComplete) {
+            ops.statusMessage = resources.getString(R.string.programs_shared_as, shared)
+        } else {
+            // Through the failure channel, which does not time out: a report with reads missing
+            // is shared all the same (its own failure map says what is missing), but whoever
+            // just sent it needs to know, and a confirmation that fades would not tell them.
+            ops.operationError = resources.getString(R.string.report_shared_incomplete, done.failures.size)
+        }
     }
     val debugTaps = remember { DebugTapCounter() }
     val scope = rememberCoroutineScope()
@@ -307,14 +282,9 @@ fun ProgramsScreen(
     // that; a hand-bumped trigger would depend on every mutation remembering to bump it. `state`
     // is a StateFlow Compose already observes, and the accessors behind these are null-safe (see
     // `connected()`), so recomposing while disconnected is safe.
+    // The hand-off to ConnectScreen when the session settles somewhere this screen cannot render
+    // is not this screen's: PatchPilotNavHost watches the same state for every session route.
     val session by viewModel.state.collectAsState()
-    // Hands off to ConnectScreen the moment a reconnect settles somewhere this screen cannot
-    // render - see [rendersOnProgramsScreen]. Keyed on the session itself, not on `Unit`: a
-    // `forceReconnect()` that dips through Disconnected/Searching and back to Connected must not
-    // trigger this, only one that settles on something else.
-    LaunchedEffect(session) {
-        if (!session.rendersOnProgramsScreen()) onSessionLost()
-    }
     val supportedEdits = remember(session) { viewModel.supportedEdits }
     val canRename = EditOp.RENAME in supportedEdits
     val canDelete = EditOp.DELETE in supportedEdits
@@ -741,10 +711,12 @@ fun ProgramsScreen(
         when {
             // A resume rebuilds the USB session (MainActivity.onResume -> forceReconnect), and
             // this screen stays up through the Disconnected/Searching/Opening dip on purpose -
-            // see [rendersOnProgramsScreen]. The rows it was showing are still in memory, so
-            // without this they sat under a "Not Connected" title for the second or two the
-            // rebuild takes, looking like a listing of an instrument the app had just said it
-            // was not talking to. The reconnect is a wait like any other: show the wait.
+            // see PatchPilotNavHost's session-lost effect, which is also what leaves for
+            // ConnectScreen once the session settles anywhere else. The rows it was showing are
+            // still in memory, so without this they sat under a "Not Connected" title for the
+            // second or two the rebuild takes, looking like a listing of an instrument the app
+            // had just said it was not talking to. The reconnect is a wait like any other: show
+            // the wait.
             session !is ConnectionState.Connected -> ConnectingWait()
             scanError != null ->
                 Text(stringResource(R.string.programs_error, scanError), color = MaterialTheme.colorScheme.error)

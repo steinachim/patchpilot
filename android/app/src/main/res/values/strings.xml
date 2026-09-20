@@ -183,8 +183,8 @@
     <!-- Connection failures the app itself raises, as opposed to ones an instrument reports. -->
     <string name="connect_failed">Failed to connect</string>
     <string name="connect_failed_demo">Failed to start demo mode</string>
-    <string name="connect_permission_denied">Permission was denied for %1$s.</string>
     <string name="connect_usb_permission_denied">USB permission was denied for %1$s.</string>
+    <string name="connect_permission_denied_hint">Tap Retry to be asked again.</string>
     <string name="connect_opening_device_unplugged">%1$s was unplugged before the connection finished.</string>
     <string name="listing_unknown_error">Unknown error</string>
     <string name="listing_reading_presets">Reading the preset list\u2026</string>
@@ -218,7 +218,13 @@
     <string name="debug_report_action">Generate device report</string>
     <string name="debug_report_running">Generating the device report\u2026</string>
     <string name="debug_report_ready">Device report ready</string>
+    <string name="debug_report_ready_incomplete">Device report ready — incomplete</string>
     <string name="debug_report_ready_body">Read from the instrument: %1$d KB of JSON. Share it, or save it to this device. Going back discards it.</string>
+    <!-- Above the failure lines, which the report's own "failures" map also carries. -->
+    <string name="debug_report_incomplete_body">%1$d of its reads failed; the report records which:</string>
+    <!-- Programs and connect screens share the report as soon as it is read, so this is the one
+         place they can say it is not whole. -->
+    <string name="report_shared_incomplete">The device report is incomplete: %1$d of its reads failed.</string>
     <string name="debug_regression_body">Runs every operation this instrument supports and reports what worked. Edits are made against a copy the test creates and deletes again; where no free slot exists, it asks first.</string>
     <string name="debug_regression_action">Run regression test</string>
     <!-- Checking the shipped factory voice names against the instrument itself. Read-only. -->
@@ -239,6 +245,9 @@
     <string name="debug_confirm_occupied_body">%1$s, so rename, move and swap can only be tested on a preset you actually have. Each one is undone immediately afterwards and checked, but if the instrument fails halfway a preset may be left renamed or in the wrong slot. Nothing will be deleted either way.\n\nDecline to skip these three tests.</string>
     <string name="debug_confirm_occupied_reason_no_slot">There is no free slot to make a scratch copy in</string>
     <string name="debug_confirm_occupied_reason_no_copy">This instrument has no way to copy a preset</string>
+    <!-- The swap alone, when the sandbox copy exists but there is no second free slot for a
+         second copy to swap it with. Same title and buttons as the three-test question. -->
+    <string name="debug_confirm_swap_body">Only one slot is free, so the swap can only be tested between the scratch copy and a preset you actually have. It is swapped back immediately afterwards and checked, but if the instrument fails halfway that preset may be left in the scratch slot. Nothing will be deleted.\n\nDecline to skip the swap test.</string>
     <string name="debug_confirm_occupied_yes">Test on a stored preset</string>
 
     <!--

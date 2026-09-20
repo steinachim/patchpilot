@@ -74,6 +74,15 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val reportRunner = viewModel.deviceReportRunner
     val reportState by reportRunner.state.collectAsState()
     val reportError by reportRunner.error.collectAsState()
+    // What the connected instrument offers, keyed on the session the same way ProgramsScreen
+    // keys its facet reads: the accessors behind these are plain getters, and nothing about a
+    // plain getter tells Compose when the answer changes. Read once as properties, the report
+    // button stayed greyed out after a cable pull and never came back when the session did. The
+    // hand-off to ConnectScreen when the session is lost is PatchPilotNavHost's, not this
+    // screen's; this only keeps the buttons honest through a reconnect's dip.
+    val session by viewModel.state.collectAsState()
+    val hasReport = remember(session) { viewModel.hasReport }
+    val canVerifyFactoryNames = remember(session) { viewModel.canVerifyFactoryNames }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -124,7 +133,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     var verifyBank by remember { mutableStateOf<String?>(null) }
     var verifyProgress by remember { mutableStateOf<String?>(null) }
     var verifyResult by remember { mutableStateOf<List<String>?>(null) }
-    val factoryBanks = remember(viewModel.canVerifyFactoryNames) { viewModel.factoryBanks() }
+    val factoryBanks = remember(session) { viewModel.factoryBanks() }
 
     fun onVerifyFactoryNames(bank: Int) {
         scope.launch {
@@ -203,6 +212,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                 // (does it generate? must one generate first?).
                 report is DeviceReportState.Done -> DeviceReportReadyView(
                     sizeBytes = report.json.toByteArray().size,
+                    failures = report.failures,
                     onShare = {
                         pendingShare = PendingShare(
                             title = reportShareTitle,
@@ -258,7 +268,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     // this menu: a report read replaces the menu, and would hide them mid-read.
                     Button(
                         onClick = { reportRunner.start(readingLabel) },
-                        enabled = viewModel.hasReport && verifyProgress == null,
+                        enabled = hasReport && verifyProgress == null,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.debug_report_action))
@@ -276,7 +286,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     // Only where there is a shipped name table to check, which today means a
                     // Motif XS. Read-only throughout: it issues dump requests and writes nothing,
                     // which is why it needs none of the regression test's confirmations.
-                    if (viewModel.canVerifyFactoryNames) {
+                    if (canVerifyFactoryNames) {
                         Spacer(Modifier.height(24.dp))
                         Text(
                             stringResource(R.string.debug_verify_body),
@@ -339,15 +349,21 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     when (val question = confirmation.question) {
                         is PendingQuestion.ConfirmSelect ->
                             stringResource(R.string.debug_confirm_select_body, question.shownOnDevice)
-                        is PendingQuestion.ConfirmRealSlotMutation -> stringResource(
-                            R.string.debug_confirm_occupied_body,
-                            stringResource(
-                                when (question.reason) {
-                                    OccupiedSlotReason.NO_FREE_SLOT -> R.string.debug_confirm_occupied_reason_no_slot
-                                    OccupiedSlotReason.CANNOT_COPY -> R.string.debug_confirm_occupied_reason_no_copy
-                                },
-                            ),
-                        )
+                        is PendingQuestion.ConfirmRealSlotMutation -> when (question.reason) {
+                            OccupiedSlotReason.NO_FREE_SLOT -> stringResource(
+                                R.string.debug_confirm_occupied_body,
+                                stringResource(R.string.debug_confirm_occupied_reason_no_slot),
+                            )
+                            OccupiedSlotReason.CANNOT_COPY -> stringResource(
+                                R.string.debug_confirm_occupied_body,
+                                stringResource(R.string.debug_confirm_occupied_reason_no_copy),
+                            )
+                            // The sandbox copy exists; only the swap has nowhere else to go. Its
+                            // own wording, since the three-test body names two tests that are
+                            // not in question here.
+                            OccupiedSlotReason.NO_SECOND_FREE_SLOT ->
+                                stringResource(R.string.debug_confirm_swap_body)
+                        }
                     },
                 )
             },
@@ -384,22 +400,47 @@ private fun RunningView(title: String, step: String) {
  *
  * The JSON itself is not shown: for a Nord it is tens of kilobytes, most of it hex payloads, and
  * the useful thing to do with it is to send it on rather than read it on a phone. What is shown
- * is enough to know the read happened and roughly what it produced.
+ * is enough to know the read happened and roughly what it produced - and, when reads failed,
+ * which: a report whose cable was pulled halfway reaches this view exactly like a whole one
+ * otherwise, and it is shared to have a catalog entry written from it. Share and Save stay,
+ * since a partial report still says more than none; the title and the list say it is partial.
  */
 @Composable
 private fun DeviceReportReadyView(
     sizeBytes: Int,
+    failures: List<String>,
     onShare: () -> Unit,
     onSave: () -> Unit,
     onBackToMenu: () -> Unit,
 ) {
-    Text(stringResource(R.string.debug_report_ready), style = MaterialTheme.typography.titleMedium)
+    Text(
+        stringResource(
+            if (failures.isEmpty()) R.string.debug_report_ready else R.string.debug_report_ready_incomplete,
+        ),
+        style = MaterialTheme.typography.titleMedium,
+    )
     Spacer(Modifier.height(12.dp))
     Text(
         // Rounded up, so a demo-sized report says "1 KB" rather than "0 KB".
         stringResource(R.string.debug_report_ready_body, (sizeBytes + 1023) / 1024),
         style = MaterialTheme.typography.bodyMedium,
     )
+    if (failures.isNotEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        Text(
+            stringResource(R.string.debug_report_incomplete_body, failures.size),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+        failures.forEach {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
+    }
     Spacer(Modifier.height(12.dp))
     ReportActions(onShare, onSave, onBackToMenu)
 }

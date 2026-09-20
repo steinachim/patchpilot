@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.demo
 
+import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressFormat
@@ -172,14 +173,16 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
         "Demo mode has no instrument to read. This produces a placeholder file so the sharing " +
             "flow can be exercised without hardware."
 
-    override suspend fun buildReport(progress: ((String) -> Unit)?): String {
+    override suspend fun buildReport(progress: ((String) -> Unit)?): DeviceReportResult {
         progress?.invoke("Building report...")
-        return """
+        val json = """
             {
               "note": "This is demo mode. No instrument was read; nothing here describes real hardware.",
               "instrument": "${identity.name}"
             }
         """.trimIndent()
+        // Nothing was read, so nothing can have failed to read.
+        return DeviceReportResult(json, emptyMap())
     }
 
     companion object {

@@ -90,6 +90,95 @@ class NordDeviceProtocolTest {
         assertEquals(10, device.protocolVersionFileTransfer)
     }
 
+    /**
+     * A transport whose IN endpoint holds leftovers: [queued] whole messages are served before
+     * anything the request under test is answered with, the way a device answers after a
+     * session that died mid-reply. Every request is answered with [reply], protocol id and
+     * sub-opcode taken from the request unless [answerSubOp] says otherwise. Records whether
+     * [drainInput] was called, and how many requests went out.
+     */
+    private class LeftoverTransport(
+        private val queued: List<ByteArray>,
+        private val reply: ByteArray,
+        private val answerSubOp: ((Int) -> Int) = { it + 1 },
+        private val firmwareVersion: Int = 168,
+    ) : UsbBulkTransport {
+        private val pending = ArrayDeque(queued)
+        private var last: NordMessage? = null
+        var drained = false
+        var requests = 0
+
+        override fun drainInput() {
+            drained = true
+        }
+
+        override fun bulkWrite(data: ByteArray) {
+            last = parseMessage(data)
+            requests++
+        }
+
+        override fun bulkRead(bufferSize: Int): ByteArray {
+            pending.removeFirstOrNull()?.let { return it }
+            val msg = checkNotNull(last) { "read with nothing pending" }
+            return buildMessage(msg.protocolId, msg.protocolVersion, answerSubOp(msg.subOp), reply)
+        }
+
+        override fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int) =
+            byteArrayOf((firmwareVersion and 0xFF).toByte(), ((firmwareVersion shr 8) and 0xFF).toByte())
+
+        override val rebuildOnResume = true
+        override fun close() {}
+    }
+
+    /** The tail of a content-database reply a killed session never read - what X9 left queued. */
+    private fun staleFileTransferReply(): ByteArray =
+        buildMessage(NordDevice.PROTOCOL_FILE_TRANSFER, 10, 31, ByteArray(390))
+
+    @Test
+    fun `connect drains the endpoint before its first request`() = runTest {
+        val transport = LeftoverTransport(emptyList(), deviceInfoPayload(10))
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.connect()
+        assertTrue("drainInput() was never called", transport.drained)
+        assertEquals(1, transport.requests)
+    }
+
+    /**
+     * What a process killed mid-read leaves behind: the rest of a reply the device was still
+     * sending, which the next session's first read receives as the answer to the device-info
+     * query. It wears the wrong protocol id, so it is discarded and the real reply read next;
+     * connect() succeeds, with no request repeated.
+     */
+    @Test
+    fun `connect discards a stale reply left over from an earlier session`() = runTest {
+        val transport = LeftoverTransport(
+            listOf(staleFileTransferReply(), staleFileTransferReply()),
+            deviceInfoPayload(10),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.connect()
+        assertEquals(10, device.protocolVersionFileTransfer)
+        assertEquals(1, transport.requests)
+    }
+
+    /**
+     * Stale replies are bounded: an instrument whose every reply answers some other request is
+     * out of step, not merely behind, and is refused with both sides named rather than read
+     * from until a reply happens to fit.
+     */
+    @Test
+    fun `a reply that never matches its request fails after a bounded number of reads`() = runTest {
+        val transport = LeftoverTransport(emptyList(), deviceInfoPayload(10), answerSubOp = { it + 2 })
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        val exc = assertThrows(IllegalStateException::class.java) { runBlocking { device.connect() } }
+        val cause = generateSequence<Throwable>(exc) { it.cause }.first { "out of step" in it.message.orEmpty() }
+        assertTrue(cause.message, cause.message!!.contains("sub-op=2 with a reply for protocol=7 sub-op=4"))
+        // MAX_STALE_REPLIES are discarded; the one after that is the refusal.
+        assertTrue(cause.message, cause.message!!.contains("${NordDevice.MAX_STALE_REPLIES + 1} times"))
+        // The reseat hint is on the wrapping message: this is the first message of the session.
+        assertTrue(exc.message, exc.message!!.contains("unplug the USB cable"))
+    }
+
     @Test
     fun `connect takes the protocol version from the instrument, whatever the profile is`() = runTest {
         // No profile declares a version any more: a Grand profile against a table saying 8

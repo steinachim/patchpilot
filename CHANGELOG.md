@@ -28,6 +28,11 @@
 - Reading a device report no longer starts over when the phone is rotated; the read continues in the background and the result is kept until it is shared or dismissed.
 - Closing a Motif XS session no longer releases its USB connection while a read is still in flight.
 - The cached preset listing is tied to the physical device, so plugging in another unit of the same model without restarting the app no longer shows the first unit's presets.
+- Denying the USB permission dialog no longer brings the same dialog straight back; the connect screen says the permission was denied and asks again only on Retry.
+- Plugging an instrument in while the app shows "No supported instrument was found" now connects to it, instead of leaving that screen standing until Retry is tapped.
+- The preset screen no longer stays on "Connecting…" after the instrument is unplugged while a system dialog is up or the app is in the background; it returns to the connect screen, and plugging the same instrument back in reconnects on its own.
+- A device report whose read was interrupted is marked incomplete, with the reads that failed listed on the debug screen and in the report's own failure map, instead of reaching "ready" like a complete one.
+- A Nord session started after the app was killed mid-transfer discards what the instrument still had queued from the earlier session, instead of reading it as the answer to its first request; where the connection cannot be recovered, the error says to unplug and replug the cable.
 - A refused Nord category change now reports the instrument's reason like every other refused operation.
 - A Yamaha Motif XS edit can no longer be interrupted part way through. Leaving the screen mid-write left the instrument waiting on "receiving midi bulk data" until it was power-cycled, or left a change accepted but not applied, which a later, unrelated edit would then apply on its own. Edits now always run to completion, and the back arrow is unavailable while one is in progress.
 - Motif XS writes no longer block the UI thread; a failed connect releases the port; the regression test survives rotation; Nord listing and edits can no longer interleave.

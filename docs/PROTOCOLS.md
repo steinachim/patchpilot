@@ -31,7 +31,7 @@ Every message is a 16-byte header, a payload and a 2-byte CRC-16 trailer, all bi
 
 CRC: CRC-16/CCITT-FALSE (polynomial `0x1021`, initial value `0xFFFF`, no reflection, no final XOR) over every byte before the CRC field, appended big-endian.
 
-A reply is correlated to its request only by arriving next. The protocol carries no sequence number and exactly one request is outstanding at a time, so the next message read is the answer to the last message sent. Anything still buffered when a request goes out is stale by construction and is discarded. A reply may span more than one USB read and is reassembled using its total-length field; a declared length outside 18..65,536 bytes is treated as a framing fault and the buffer is dropped.
+A reply is correlated to its request by arriving next and by its header: every reply carries its request's protocol id and the request's sub-opcode plus one (2/3, 30/31, 47/48 and so on, in every table below). The protocol carries no sequence number and exactly one request is outstanding at a time, so the next message read is normally the answer to the last message sent - but a session that dies mid-reply (the app killed while a read was in flight) leaves the rest of that reply queued on the instrument, where the next session's first read receives it. The app therefore drains the IN endpoint once at connect, before the device-info query, and checks every reply's protocol id and sub-opcode against the request; a reply answering some other request is discarded and the next one read, up to four times, after which the session is refused as out of step. Anything still buffered in the app when a request goes out is stale by construction and is discarded. A reply may span more than one USB read and is reassembled using its total-length field; a declared length outside 18..65,536 bytes is treated as a framing fault and the buffer is dropped.
 
 ### Handshake
 
@@ -94,7 +94,7 @@ A delete frees no space until the instrument's own reclaim runs: the units move 
 
 ### Reliability
 
-Every reply is CRC-checked before it is parsed, and every fixed-offset field read is bounds-checked, so a short or malformed reply is reported as a protocol error rather than an exception. A run of 64 consecutive zero-length reads is treated as a dead endpoint.
+Every reply is CRC-checked before it is parsed, and every fixed-offset field read is bounds-checked, so a short or malformed reply is reported as a protocol error rather than an exception. A run of 64 consecutive zero-length reads is treated as a dead endpoint. A reply whose header answers a different request than the one just sent is discarded rather than parsed (see "Framing" above): observed on a Nord Grand after the app was force-stopped mid-read, whose next session read the tail of the interrupted reply as its device-info answer. A bulk endpoint that answers every transfer with an error after such a kill is not recoverable from the app; the connect failure says to unplug and replug the cable.
 
 ## Behringer Pro-800
 

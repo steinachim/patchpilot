@@ -83,6 +83,21 @@ Long-running work is placed by lifetime:
 
 All blocking I/O runs on `Dispatchers.IO`: `NordDevice` wraps every request, the SysEx transports read on a dedicated `Dispatchers.IO` scope (`transportScope`), and `MidiTransport.send` is a suspending call that moves the write there too.
 
+### USB session lifecycle
+
+How a session is found, opened, lost and found again, and which screen shows each state. Every box on the right is a `ConnectionState`; the triggers on the left are the only things that start a connect attempt.
+
+<!-- Source: usb_session.drawio. Re-export after editing with
+     /Applications/draw.io.app/Contents/MacOS/draw.io -x -f svg -e -o docs/usb_session.svg docs/usb_session.drawio
+     (-e embeds the diagram, so the SVG itself reopens in draw.io). -->
+![USB session lifecycle](usb_session.svg)
+
+Three rules keep this honest:
+
+- **A connect attempt is single-flight.** `connect()`, `forceReconnect()` and the attach-intent path all go through the same guard, so the triggers can overlap - a USB attach that also resumes the activity, say - without two scans racing for the same interface.
+- **A resume never re-asks a question the user just answered.** `shouldRebuildOnResume` is false while `Opening` (the permission dialog may still be up) and on `PermissionDenied` (its dismissal is itself a resume); either would otherwise put the dialog straight back up.
+- **The hand-off from a session screen to `ConnectScreen` waits for the destination to be RESUMED.** `PatchPilotNavHost` watches the connection state for the preset and debug routes and navigates once the state settles somewhere those screens cannot render. A navigate fired while the entry is not resumed - under a system dialog, in the background, or in the first frame of a pop transition - is dropped by the transition guard, and nothing would re-run it, so the effect suspends on `withResumed` instead of trying once.
+
 ## Theming
 
 `AppTheme` is a two-value enum: `Default` (Material 3, following the system light/dark setting, with dynamic colour on API 31 and later) and `Steampunk` (a fixed dark look that does not follow the system setting). The choice is persisted by `ThemePreferences` (Preferences DataStore), stored by enum name so an unrecognized value falls back to `Default`.

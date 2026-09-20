@@ -241,6 +241,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * device this app doesn't recognize at all.
      */
     suspend fun connect() {
+        // Before the first request: whatever a session that died mid-reply left queued on the
+        // device would otherwise be read as the answer to the device-info query below. See
+        // [UsbBulkTransport.drainInput], and [request] for the tail the drain can miss.
+        withContext(Dispatchers.IO) { transport.drainInput() }
         firmwareVersion = getFirmwareVersion()
         validateFirmwareVersion()
         detectedProtocolVersionFileTransfer = resolveProtocolVersionFileTransfer()
@@ -273,7 +277,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                     "That query is the first bulk message of every session and needs no " +
                     "prerequisite, so failing it means something more basic is wrong than this " +
                     "app can work around - refusing to continue rather than guessing at a " +
-                    "version.",
+                    "version. If the app was closed or killed while it was talking to the " +
+                    "instrument, unplug the USB cable, plug it back in and try again.",
                 exc,
             )
         }
@@ -394,7 +399,27 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             readBuffer = ByteArray(0)
         }
         transport.bulkWrite(buildMessage(protocolId, protocolVersion, subOp, payload))
-        readReply()
+        // A reply is correlated to its request only by arriving next - but "next" is only right
+        // while nothing else is queued. A session killed mid-reply leaves the rest of that reply
+        // on the device, and [connect]'s drain takes most of it; what the drain's short timeout
+        // missed arrives here, wearing a different protocol id or sub-opcode than the one just
+        // sent. Every reply answers its request's sub-opcode with the next number up, so a
+        // mismatch is stale by construction and the real answer is still to come. Bounded, so a
+        // device answering everything with the wrong sub-opcode fails rather than loops.
+        var reply = readReply()
+        var stale = 0
+        while (reply.protocolId != protocolId || reply.subOp != subOp + 1) {
+            check(++stale <= MAX_STALE_REPLIES) {
+                "the instrument answered protocol=$protocolId sub-op=$subOp with a reply for " +
+                    "protocol=${reply.protocolId} sub-op=${reply.subOp} $stale times in a row; " +
+                    "its replies are out of step with this session's requests"
+            }
+            Log.w(TAG, "discarding a stale reply (protocol=${reply.protocolId} " +
+                "sub-op=${reply.subOp}, ${reply.payload.size} bytes) while waiting for the answer " +
+                "to protocol=$protocolId sub-op=$subOp")
+            reply = readReply()
+        }
+        reply
     }
 
     /**
@@ -1442,6 +1467,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 // taking the first that states one at all tolerates a short trailer.
                 indexes.firstNotNullOfOrNull { reportedUnits.getOrNull(it) },
                 progress,
+                onFailure,
             )
         }
     }
@@ -1453,6 +1479,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         itemCounts: List<Int>,
         reportedUnitBytes: Int?,
         progress: ((String, Int) -> Unit)?,
+        onFailure: ((String, Exception) -> Unit)?,
     ): StorageArea {
         if (space.countedInBytes) {
             return StorageArea(
@@ -1470,6 +1497,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // Reported twice on purpose: the note explains the zeroed figures in place, and
+                // the callback puts the failure in the report's top-level map, which is what a
+                // reader checks first. A note alone let a report with a cable pulled halfway
+                // through read as complete.
+                onFailure?.invoke(name, e)
                 return StorageArea(
                     names, indexes, space, itemCounts, 0, 0L, null, null, null,
                     "couldn't walk '$name', so the records are incomplete (${e.message})",
@@ -1545,6 +1577,15 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
          * nothing, small enough that a device sending only ZLPs is caught in well under a second.
          */
         private const val MAX_EMPTY_READS = 64
+
+        /**
+         * Replies answering some other request that [request] discards before giving up.
+         *
+         * More than one only when a killed session left more than one whole reply queued, or a
+         * reply split by the drain's timeout; a device that is genuinely out of step answers
+         * every read wrongly, and four is enough to tell that from a leftover.
+         */
+        internal const val MAX_STALE_REPLIES = 4
 
         /**
          * Runaway guard for a bank walk whose category could not be asked how many

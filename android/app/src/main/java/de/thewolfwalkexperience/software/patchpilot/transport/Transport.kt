@@ -46,6 +46,19 @@ interface UsbBulkTransport : Transport {
      */
     fun bulkReadOrEmpty(bufferSize: Int, timeoutMs: Int): ByteArray = bulkRead(bufferSize)
     fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int): ByteArray
+
+    /**
+     * Discards whatever the device has already queued on the IN endpoint.
+     *
+     * A session that died mid-reply - the process killed while a read was in flight - leaves the
+     * rest of that reply queued on the device, and the next session's first read would receive
+     * it as the answer to a request it never made. Called once at the start of a session, before
+     * the first request, by a protocol that answers exactly one reply per request; a transport
+     * polled continuously (USB-MIDI) has nothing to drain and does not call this.
+     *
+     * The default does nothing, which is right for a fake serving a scripted exchange.
+     */
+    fun drainInput() {}
 }
 
 /**

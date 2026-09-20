@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import androidx.lifecycle.SavedStateHandle
+import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,8 +25,19 @@ internal sealed interface DeviceReportState {
      * it was connected: sharing opens the system chooser, which is an Activity of its own, and a
      * resume from it rebuilds a USB session from scratch. Between the teardown and the reconnect
      * there is no instrument, so nothing about a held report may be resolved at share time.
+     *
+     * [failures] is what the read could not complete, one "what: why" line each - empty for a
+     * complete report. Carried beside the JSON so a screen can say the report is incomplete
+     * without reading family-specific JSON; the JSON's own `failures` map says the same.
      */
-    data class Done(val json: String, val stem: String, val description: String) : DeviceReportState
+    data class Done(
+        val json: String,
+        val stem: String,
+        val description: String,
+        val failures: List<String> = emptyList(),
+    ) : DeviceReportState {
+        val isComplete: Boolean get() = failures.isEmpty()
+    }
 }
 
 /**
@@ -48,7 +60,7 @@ internal sealed interface DeviceReportState {
 internal class DeviceReportRunner(
     private val scope: CoroutineScope,
     private val savedState: SavedStateHandle,
-    private val build: suspend (progress: (String) -> Unit) -> String,
+    private val build: suspend (progress: (String) -> Unit) -> DeviceReportResult,
     private val identity: () -> Pair<String, String>,
 ) {
     private val _state = MutableStateFlow(restore(savedState.get<Array<String>>(SAVED_KEY)))
@@ -72,8 +84,13 @@ internal class DeviceReportRunner(
                 // Resolved inside the try, so a teardown in the meantime fails the report the
                 // way a failed read does instead of throwing out of the caller's click.
                 val (stem, description) = identity()
-                val json = build { step -> set(DeviceReportState.Running(step)) }
-                set(DeviceReportState.Done(json, stem, description))
+                val built = build { step -> set(DeviceReportState.Running(step)) }
+                set(
+                    DeviceReportState.Done(
+                        built.json, stem, description,
+                        built.failures.map { (what, why) -> "$what: $why" },
+                    ),
+                )
             } catch (e: CancellationException) {
                 set(DeviceReportState.Idle)
                 throw e
@@ -101,14 +118,18 @@ internal class DeviceReportRunner(
     private companion object {
         const val SAVED_KEY = "deviceReport"
 
-        /** Only a held report is saved; Idle and Running both restore to Idle. */
+        /** How many entries precede the failure lines in the saved array. */
+        private const val FIXED_FIELDS = 3
+
+        /** Only a held report is saved; Idle and Running both restore to Idle. The three fixed
+         * fields come first, and every entry after them is one failure line. */
         fun flatten(state: DeviceReportState): List<String> {
             val done = state as? DeviceReportState.Done ?: return emptyList()
-            return listOf(done.json, done.stem, done.description)
+            return listOf(done.json, done.stem, done.description) + done.failures
         }
 
         fun restore(saved: Array<String>?): DeviceReportState =
-            if (saved == null || saved.size != 3) DeviceReportState.Idle
-            else DeviceReportState.Done(saved[0], saved[1], saved[2])
+            if (saved == null || saved.size < FIXED_FIELDS) DeviceReportState.Idle
+            else DeviceReportState.Done(saved[0], saved[1], saved[2], saved.drop(FIXED_FIELDS))
     }
 }

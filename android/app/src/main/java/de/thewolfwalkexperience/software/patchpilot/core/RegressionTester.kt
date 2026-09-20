@@ -8,8 +8,14 @@ import kotlinx.coroutines.delay
 
 enum class Status { PASS, FAIL, SKIPPED }
 
-/** Why [RegressionTester] fell back to testing rename/move/swap against a real preset. */
-enum class OccupiedSlotReason { NO_FREE_SLOT, CANNOT_COPY }
+/**
+ * Why [RegressionTester] asks before testing against a real preset.
+ *
+ * The first two put rename, move and swap on real data, because there is no sandbox copy at all.
+ * [NO_SECOND_FREE_SLOT] is narrower: the copy exists, but swapping it needs a second occupied
+ * slot, and with only one free slot the only candidate is the real preset it was copied from.
+ */
+enum class OccupiedSlotReason { NO_FREE_SLOT, CANNOT_COPY, NO_SECOND_FREE_SLOT }
 
 /** One test's outcome. [detail] says what actually happened, in the report's own words. */
 data class RegressionResult(val name: String, val status: Status, val detail: String)
@@ -45,10 +51,13 @@ data class RegressionReport(val results: List<RegressionResult>, val summary: St
  *
  * **Non-destructive by construction, not by care.** Every mutating test runs against a copy the
  * test made ([EditOp.COPY] into a free slot) and deletes again, so no slot holding real data is
- * ever written. Where that sandbox cannot exist - no free slot, or a family without copy - the
- * mutating tests are only offered against real data after [onConfirmRealSlotMutation] says the
- * user has been told and agreed, and each one reverts itself immediately. Delete is never run
- * against real data at all, whatever the answer.
+ * ever written - the swap included, which swaps the copy with a second copy rather than with the
+ * preset it came from, so that a process killed between the swap and the swap-back displaces
+ * nothing but scratch data. Where that sandbox cannot exist - no free slot, or a family without
+ * copy - or where the swap alone has no second free slot to copy into, the tests concerned are
+ * only offered against real data after [onConfirmRealSlotMutation] says the user has been told
+ * and agreed, and each one reverts itself immediately. Delete is never run against real data at
+ * all, whatever the answer.
  *
  * The two `suspend (...) -> Boolean` callbacks are how this asks the user a question mid-run
  * without knowing that a UI exists, let alone that it is Compose.
@@ -154,9 +163,16 @@ class RegressionTester(
         val report = instrument.report ?: return emptyList()
         return listOf(
             step(BUILD_REPORT, progress) {
-                val json = report.buildReport { step -> progress("$BUILD_REPORT: $step") }
-                check(json.isNotBlank()) { "The device report came back empty." }
-                "Built ${json.length} characters of JSON."
+                val built = report.buildReport { step -> progress("$BUILD_REPORT: $step") }
+                check(built.json.isNotBlank()) { "The device report came back empty." }
+                // A read that could not complete is a finding, not a failure of this step: the
+                // report is built to survive exactly that, and says what it could not read.
+                if (built.isComplete) {
+                    "Built ${built.json.length} characters of JSON."
+                } else {
+                    "Built ${built.json.length} characters of JSON; ${built.failures.size} of its " +
+                        "reads failed (${built.failures.keys.joinToString()})."
+                }
             },
         )
     }
@@ -180,9 +196,11 @@ class RegressionTester(
     /**
      * The safe path: make a copy, put the copy through every edit, delete the copy.
      *
-     * Only the copy and the free slots it is moved through are ever written. The one moment a slot
-     * holding real data is touched is the swap, which is why the swap is immediately swapped back
-     * and verified in the same test.
+     * Only the copies and the free slots they are moved through are ever written. The swap needs
+     * two occupied slots, so it makes a second copy to swap the first with, and swaps back so the
+     * cleanup finds each copy where it left it. The one moment a slot holding real data can be
+     * touched is that swap when there is no room for the second copy - and then only after the
+     * user has said so.
      */
     private suspend fun sandboxChecks(
         editor: PresetEditor,
@@ -244,68 +262,121 @@ class RegressionTester(
             }
         }
 
+        // Every free slot but the one the copy sits in is still empty: free[0] again after a
+        // move, free[1] when there was no move. Null when only one slot was free to begin with.
+        val partnerSlot = free.firstOrNull { it != sandbox }
+        // The second copy, once made - a slot the cleanup has to know about as much as the first.
+        var partnerName: String? = null
         results += when {
             EditOp.SWAP !in editor.supported -> skip(SWAP, UNSUPPORTED)
+            partnerSlot != null -> step(SWAP, progress) {
+                val name = sandboxName
+                val copyName = editor.copyProgram(source, partnerSlot)
+                refreshEdited(listOf(partnerSlot))
+                check(instrument.browser.refresh(partnerSlot).name == copyName) {
+                    "${display(partnerSlot)} does not hold \"$copyName\" after the second copy."
+                }
+                partnerName = copyName
+                swapAndBack(editor, sandbox, name, partnerSlot, copyName)
+                "Copied ${display(source)} to ${display(partnerSlot)} as \"$copyName\", swapped " +
+                    "it with the copy in ${display(sandbox)} and back."
+            }
+            // No room for a second copy, so the only slot to swap with holds real data: the same
+            // question the no-sandbox path asks, narrowed to this one test.
+            !onConfirmRealSlotMutation(OccupiedSlotReason.NO_SECOND_FREE_SLOT) -> skip(SWAP, DECLINED)
             else -> step(SWAP, progress) {
                 val name = sandboxName
-                val partnerName = instrument.browser.refresh(source).name
-                editor.swap(sandbox, source)
-                refreshEdited(listOf(sandbox, source))
-                check(instrument.browser.refresh(source).name == name) {
-                    "${display(source)} does not hold \"$name\" after the swap."
-                }
-                check(instrument.browser.refresh(sandbox).name == partnerName) {
-                    "${display(sandbox)} does not hold \"$partnerName\" after the swap."
-                }
-                delay(STEP_PAUSE_MS)
-                editor.swap(sandbox, source)
-                refreshEdited(listOf(sandbox, source))
-                check(instrument.browser.refresh(sandbox).name == name) {
-                    "${display(sandbox)} does not hold \"$name\" again after swapping back."
-                }
-                check(instrument.browser.refresh(source).name == partnerName) {
-                    "${display(source)} does not hold \"$partnerName\" again after swapping back."
-                }
-                "Swapped the copy in ${display(sandbox)} with ${display(source)} and back."
+                val sourceName = instrument.browser.refresh(source).name
+                swapAndBack(editor, sandbox, name, source, sourceName)
+                "Swapped the copy in ${display(sandbox)} with ${display(source)} - real data " +
+                    "(only one free slot) - and back."
             }
         }
 
-        results += cleanUp(editor, sandbox, sandboxName, progress)
+        val copies = listOfNotNull(
+            sandbox to sandboxName,
+            partnerSlot?.let { slot -> partnerName?.let { slot to it } },
+        )
+        results += cleanUp(editor, copies, progress)
         return results
     }
 
     /**
-     * Deletes the sandbox copy, which is both the last test and the thing that makes the run
+     * Swaps [a] and [b], verifies both, waits, swaps them back and verifies both again - so a
+     * swap is tested in both directions and leaves each preset where it started.
+     */
+    private suspend fun swapAndBack(
+        editor: PresetEditor,
+        a: SlotAddress,
+        aName: String?,
+        b: SlotAddress,
+        bName: String?,
+    ) {
+        editor.swap(a, b)
+        refreshEdited(listOf(a, b))
+        check(instrument.browser.refresh(b).name == aName) {
+            "${display(b)} does not hold \"$aName\" after the swap."
+        }
+        check(instrument.browser.refresh(a).name == bName) {
+            "${display(a)} does not hold \"$bName\" after the swap."
+        }
+        delay(STEP_PAUSE_MS)
+        editor.swap(a, b)
+        refreshEdited(listOf(a, b))
+        check(instrument.browser.refresh(a).name == aName) {
+            "${display(a)} does not hold \"$aName\" again after swapping back."
+        }
+        check(instrument.browser.refresh(b).name == bName) {
+            "${display(b)} does not hold \"$bName\" again after swapping back."
+        }
+    }
+
+    /**
+     * Deletes the run's copies, which is both the last test and the thing that makes the run
      * leave nothing behind.
      *
-     * **Checks what is in the slot before erasing it.** If an earlier step failed part-way - a
-     * swap that did not swap back, say - the address held here is no longer the copy's, and
+     * **Checks what is in each slot before erasing it.** If an earlier step failed part-way - a
+     * swap that did not swap back, say - the address held here may no longer be a copy's, and
      * deleting it would destroy exactly the real preset this whole path exists to protect. So a
-     * slot that does not read back as the copy is left alone and said so.
+     * slot is erased only if it reads back as *one of* the run's copies - either name, since a
+     * swap interrupted between its two halves leaves the two copies exchanged - and anything
+     * else is left alone and said so.
      */
     private suspend fun cleanUp(
         editor: PresetEditor,
-        sandbox: SlotAddress,
-        sandboxName: String?,
+        copies: List<Pair<SlotAddress, String?>>,
         progress: (String) -> Unit,
     ): RegressionResult {
+        val slots = copies.map { it.first }
         if (EditOp.DELETE !in editor.supported) {
-            return skip(DELETE, "$UNSUPPORTED - the copy is left in ${display(sandbox)}")
+            return skip(DELETE, "$UNSUPPORTED - the copies are left in ${slots.joinToString { display(it) }}")
         }
-        if (instrument.browser.refresh(sandbox).name != sandboxName) {
+        val copyNames = copies.mapNotNull { it.second }.toSet()
+        val (ours, theirs) = slots.partition { instrument.browser.refresh(it).name in copyNames }
+        val leftAlone = theirs.joinToString { display(it) }
+        if (ours.isEmpty()) {
             return skip(
                 DELETE,
-                "${display(sandbox)} no longer holds the copy, so nothing was deleted - " +
+                "$leftAlone no longer holds a copy, so nothing was deleted - " +
                     "check the instrument by hand before running this again",
             )
         }
         return step(DELETE, progress) {
-            editor.delete(sandbox)
-            refreshEdited(listOf(sandbox))
-            check(instrument.browser.refresh(sandbox).name == null) {
-                "${display(sandbox)} is still occupied after deleting the copy."
+            ours.forEach { slot ->
+                editor.delete(slot)
+                refreshEdited(listOf(slot))
+                check(instrument.browser.refresh(slot).name == null) {
+                    "${display(slot)} is still occupied after deleting the copy."
+                }
             }
-            "Deleted the copy from ${display(sandbox)}; the instrument is as it was."
+            val deleted = (if (ours.size == 1) "the copy from " else "the copies from ") +
+                ours.joinToString { display(it) }
+            if (theirs.isEmpty()) {
+                "Deleted $deleted; the instrument is as it was."
+            } else {
+                "Deleted $deleted. $leftAlone no longer holds a copy and was left alone - " +
+                    "check the instrument by hand before running this again."
+            }
         }
     }
 
@@ -323,14 +394,10 @@ class RegressionTester(
         free: List<SlotAddress>,
         progress: (String) -> Unit,
     ): List<RegressionResult> {
-        val reason = if (EditOp.COPY in editor.supported) {
-            OccupiedSlotReason.NO_FREE_SLOT
+        val (reason, why) = if (EditOp.COPY in editor.supported) {
+            OccupiedSlotReason.NO_FREE_SLOT to "no free slot to copy into"
         } else {
-            OccupiedSlotReason.CANNOT_COPY
-        }
-        val why = when (reason) {
-            OccupiedSlotReason.NO_FREE_SLOT -> "no free slot to copy into"
-            OccupiedSlotReason.CANNOT_COPY -> "this instrument cannot copy a preset"
+            OccupiedSlotReason.CANNOT_COPY to "this instrument cannot copy a preset"
         }
         val copyResult = skip(COPY, why)
         val deleteResult = skip(DELETE, "$NO_SANDBOX - delete is never run against a stored preset")

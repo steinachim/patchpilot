@@ -4,13 +4,18 @@
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.withResumed
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.ThemePreferences
 
@@ -21,6 +26,42 @@ private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_LICENSES = "licenses"
 private const val ROUTE_LICENSE_TEXT = "licenses/{asset}"
 private const val ARG_LICENSE_ASSET = "asset"
+
+/** The routes that show a connected session and have no UI for anything else. */
+private val SESSION_ROUTES = setOf(ROUTE_PROGRAMS, ROUTE_DEBUG)
+
+/**
+ * Whether a session screen has anything to show for [this] state, or should hand off to
+ * ConnectScreen.
+ *
+ * **Exhaustive on purpose, with no `else`.** [ConnectionState] is a sealed class specifically so
+ * that adding a case here is a compile error until this function says which side it falls on;
+ * with an `else`, a new state would fall through to whichever behaviour it happened to pick, and
+ * a session screen could render a disconnected session under its own stale title and gear icons.
+ *
+ * `Connected` obviously stays. `Disconnected`/`Searching`/`Opening` also stay: `forceReconnect()`
+ * passes through them on a normal, successful resume, and leaving *during* that dip would bounce
+ * to ConnectScreen and straight back for a reconnect that was working the whole time. Everything
+ * else - an error, a denied permission, nothing found, a device picker, an unknown-device or
+ * advisory warning, a lost device - is a choice or a message only ConnectScreen's `when` renders;
+ * a session screen has no UI for any of them, and must not sit on one silently.
+ */
+private fun ConnectionState.rendersOnSessionScreens(): Boolean = when (this) {
+    is ConnectionState.Connected,
+    ConnectionState.Disconnected,
+    ConnectionState.Searching,
+    is ConnectionState.Opening,
+    -> true
+    is ConnectionState.Error,
+    is ConnectionState.PermissionDenied,
+    is ConnectionState.NeedsManualSetting,
+    is ConnectionState.NothingFound,
+    is ConnectionState.DeviceSelection,
+    is ConnectionState.UnknownDeviceWarning,
+    is ConnectionState.AdvisoryWarning,
+    is ConnectionState.DeviceLost,
+    -> false
+}
 
 /**
  * Two screens: find an instrument, then browse it. Plus settings, the licence screens, and a
@@ -69,20 +110,45 @@ private fun PatchPilotNavHost(
         if (!currentEntryIsResumed()) return
         navController.popBackStack()
     }
-    // Returns to ROUTE_CONNECT from ROUTE_PROGRAMS, a no-op if that has already happened.
+    // Returns to ROUTE_CONNECT from a session route, a no-op if that has already happened.
     //
-    // Both callers ([onBack][ProgramsScreen] and `onSessionLost`) assume the current destination
-    // is still `programs` when they fire, which a reactive effect cannot guarantee:
-    // `onSessionLost` is driven by `LaunchedEffect(session)`, and a session that cycles through
-    // more than one unrenderable state in quick succession - a failed reconnect retried, for
-    // instance - re-runs that effect for each one. Once the first call has already left
-    // `programs`, `popUpTo(ROUTE_PROGRAMS)` matches nothing and `navigate` would push a second
-    // `connect` on top of the first. Checking the current destination first is what makes
-    // repeated calls harmless instead of cumulative; `guardedNavigate`'s lifecycle check on top
-    // of that stops a single burst of taps from re-entering `navigate()` mid-transition.
+    // Both callers ([onBack][ProgramsScreen] and the session-lost effect below) assume the
+    // current destination is still a session screen when they fire, which a reactive effect
+    // cannot guarantee: a session that cycles through more than one unrenderable state in quick
+    // succession - a failed reconnect retried, for instance - re-runs that effect for each one.
+    // Once the first call has already left `programs`, `popUpTo(ROUTE_PROGRAMS)` matches nothing
+    // and `navigate` would push a second `connect` on top of the first. Checking the current
+    // destination first is what makes repeated calls harmless instead of cumulative;
+    // `guardedNavigate`'s lifecycle check on top of that stops a single burst of taps from
+    // re-entering `navigate()` mid-transition. From `debug`, the pop takes `programs` with it.
     fun returnToConnect() {
         if (navController.currentDestination?.route == ROUTE_CONNECT) return
         guardedNavigate(ROUTE_CONNECT) { popUpTo(ROUTE_PROGRAMS) { inclusive = true } }
+    }
+
+    // Hands a session screen off to ConnectScreen the moment the session settles somewhere it
+    // cannot render - see [rendersOnSessionScreens]. Owned here rather than by each screen, so
+    // the debug screen is covered as well as the preset list, and so there is one answer to the
+    // question of *when* the hand-off may happen.
+    //
+    // **Waits for the entry to be RESUMED rather than trying once.** `guardedNavigate` drops a
+    // navigate whose current entry is not RESUMED, and a session is lost at exactly such moments:
+    // under the system's USB attach or permission dialog, while the app is backgrounded, or in
+    // the first frame of a pop back from the debug or settings screen (this effect runs on the
+    // entry's first composition, before its transition has settled). A dropped hand-off was a
+    // preset screen sitting on "Connecting…" for a device that was already gone, with nothing
+    // left to re-run the effect. `withResumed` suspends until the entry is settled and in the
+    // foreground and then navigates; a route change restarts the effect for the new entry, and
+    // an entry destroyed while waiting cancels it (LifecycleDestroyedException is a
+    // CancellationException). Keyed on the session itself so the Disconnected/Searching/Opening
+    // dip of a `forceReconnect()` back to Connected never fires this, only a settle elsewhere.
+    val session by viewModel.state.collectAsState()
+    val currentEntry by navController.currentBackStackEntryAsState()
+    LaunchedEffect(session, currentEntry) {
+        val entry = currentEntry ?: return@LaunchedEffect
+        if (entry.destination.route !in SESSION_ROUTES) return@LaunchedEffect
+        if (session.rendersOnSessionScreens()) return@LaunchedEffect
+        entry.lifecycle.withResumed { returnToConnect() }
     }
 
     NavHost(navController = navController, startDestination = ROUTE_CONNECT, modifier = modifier) {
@@ -113,12 +179,6 @@ private fun PatchPilotNavHost(
                     viewModel.disconnect(showPicker = true)
                     returnToConnect()
                 },
-                // A reconnect that lands on a state only ConnectScreen knows how to show
-                // (NothingFound, an error, a picker, an advisory) - not the user backing out, so
-                // no disconnect() first: the session is already however forceReconnect() left it,
-                // and ConnectScreen's own `when` renders it correctly on arrival. Same popUpTo
-                // shape as [onBack] above, for the same reason.
-                onSessionLost = { returnToConnect() },
                 onOpenDebugMenu = { guardedNavigate(ROUTE_DEBUG) },
                 onOpenSettings = { guardedNavigate(ROUTE_SETTINGS) },
             )

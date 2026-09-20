@@ -319,9 +319,21 @@ interface PresetTransfer {
     val fileExtension: String
 }
 
+/**
+ * A built device report: the JSON to share, and what could not be read while building it.
+ *
+ * [failures] repeats the report's own failure map ([Probes.failures]) so a screen can say "this
+ * report is incomplete" without parsing family-specific JSON. A report whose cable was pulled
+ * halfway reaches the same "ready" state as a complete one otherwise, and whoever receives it
+ * has no signal to go looking for a per-area note.
+ */
+data class DeviceReportResult(val json: String, val failures: Map<String, String>) {
+    val isComplete: Boolean get() = failures.isEmpty()
+}
+
 /** Everything the app can read off this instrument without changing anything on it, as JSON. */
 interface DeviceReporter {
-    suspend fun buildReport(progress: ((String) -> Unit)? = null): String
+    suspend fun buildReport(progress: ((String) -> Unit)? = null): DeviceReportResult
 
     /** A filename stem for the shared file, e.g. "nord_grand". */
     fun suggestedFilename(): String

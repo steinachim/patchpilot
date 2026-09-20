@@ -64,6 +64,9 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
     val reportState by reportRunner.state.collectAsState()
     val reportError by reportRunner.error.collectAsState()
     var pendingReportStem by rememberSaveable { mutableStateOf<String?>(null) }
+    // Said here rather than swallowed: the report is shared the moment it is read, and a read
+    // the cable interrupted lands in the same Done as a whole one. Kept until the next read.
+    var incompleteReads by rememberSaveable { mutableStateOf(0) }
     val context = LocalContext.current
     val reportShareTitle = stringResource(R.string.programs_share_report)
     val jsonSuffix = stringResource(R.string.programs_json_suffix)
@@ -72,6 +75,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
         val stem = pendingReportStem ?: return@LaunchedEffect
         val done = reportState as? DeviceReportState.Done ?: return@LaunchedEffect
         pendingReportStem = null
+        incompleteReads = done.failures.size
         reportRunner.dismiss()
         shareTextReport(context, "$stem$jsonSuffix", done.json, JSON_MIME_TYPE, reportShareTitle)
     }
@@ -144,6 +148,18 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
             }
             is ConnectionState.Error -> {
                 Text(stringResource(R.string.programs_error, s.message), color = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
+            }
+            // Retry re-asks: the permission is still not held, so the next open puts the system
+            // dialog up again. Nothing else does - see ConnectionState.PermissionDenied.
+            is ConnectionState.PermissionDenied -> {
+                Text(
+                    stringResource(R.string.connect_usb_permission_denied, s.displayName),
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(stringResource(R.string.connect_permission_denied_hint))
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
@@ -278,6 +294,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                                 initialStem = viewModel.suggestedReportFilename(),
                                 onConfirm = { stem ->
                                     pendingReportStem = stem
+                                    incompleteReads = 0
                                     reportRunner.start(readingLabel)
                                 },
                             )
@@ -289,6 +306,12 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                 }
                 reportError?.let {
                     Text(it, color = MaterialTheme.colorScheme.error)
+                }
+                if (incompleteReads > 0) {
+                    Text(
+                        stringResource(R.string.report_shared_incomplete, incompleteReads),
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
             is ConnectionState.DeviceLost -> {

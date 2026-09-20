@@ -12,6 +12,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.update
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
+import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.cache.CacheKey
 import de.thewolfwalkexperience.software.patchpilot.cache.CachingBrowser
 import de.thewolfwalkexperience.software.patchpilot.cache.PresetIndexCache
@@ -125,6 +126,17 @@ sealed class ConnectionState {
     data class Error(val message: String) : ConnectionState()
 
     /**
+     * The user answered the system's USB permission dialog with "Deny".
+     *
+     * Not an [Error], because of what happens right after that dialog closes: closing it resumes
+     * `MainActivity`, and a resume with nothing connected is a rescan
+     * ([InstrumentViewModel.shouldRebuildOnResume]). Landing on `Error` there meant the rescan
+     * immediately asked again, and denying was answered with the same dialog, without end. This
+     * state is the one a resume leaves alone; only the Retry button asks again.
+     */
+    data class PermissionDenied(val displayName: String) : ConnectionState()
+
+    /**
      * The instrument is attached but not listening, and the fix is at its own front panel.
      *
      * Distinct from [Error] because the user is expected to *go and change something* before
@@ -182,9 +194,11 @@ sealed class ConnectionState {
      * from [Disconnected] on its own, which would silently latch onto a different instrument that
      * happens to still be attached - the opposite of what someone who watched their own instrument
      * go dark wants. Landing here instead means nothing reconnects until they explicitly ask for a
-     * new search.
+     * new search - with one exception, which is the one they do want: the instrument that went
+     * dark being plugged back in. [physicalKey] is what [InstrumentViewModel.onUsbDeviceAttached]
+     * matches a later attach against; null for a session with no backing USB device.
      */
-    data class DeviceLost(val instrumentName: String) : ConnectionState()
+    data class DeviceLost(val instrumentName: String, val physicalKey: String?) : ConnectionState()
 }
 
 /**
@@ -371,7 +385,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             lastConfirmedUnknownDevice = null
             viewModelScope.launch {
                 teardownCurrentInstrument()
-                _state.value = ConnectionState.DeviceLost(name)
+                _state.value = ConnectionState.DeviceLost(name, detachedKey)
             }
             return
         }
@@ -385,6 +399,47 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         val remaining = picker.entries.filterNot { it.physicalKey() == detachedKey }
         if (remaining.size != picker.entries.size) {
             _state.value = picker.copy(entries = remaining)
+        }
+    }
+
+    /**
+     * Reacts to a USB device being plugged in, delivered by `MainActivity.onNewIntent` from the
+     * manifest's `USB_DEVICE_ATTACHED` filter.
+     *
+     * **Only where the session is waiting for a device.** Every state that ConnectScreen shows as
+     * "nothing usable yet" rescans, since the thing just plugged in is exactly what it was waiting
+     * for; the picker rescans without auto-picking, so a list the user is looking at gains a row
+     * rather than vanishing into a connect; and [ConnectionState.DeviceLost] reconnects only when
+     * the device that comes back is the one that went away - any other instrument still waits for
+     * the user's own "Retry search", as that state's doc comment promises. A session already in
+     * flight or established is left alone: [handleUsbDetach] is what ends one.
+     *
+     * Permission is never asked on this path. Android grants it to the app it launches for the
+     * attach before the intent arrives, so a rescan here opens the device without a dialog.
+     */
+    fun onUsbDeviceAttached(device: UsbDevice) {
+        val attachedKey = device.physicalKey()
+        val s = state.value
+        Log.i(TAG, "USB attach of ${device.displayLabel()} while $s; attached devices: " +
+            connectionManager.findAllDevices().joinToString { it.displayLabel() })
+        when (s) {
+            is ConnectionState.NothingFound,
+            is ConnectionState.Error,
+            is ConnectionState.PermissionDenied,
+            is ConnectionState.NeedsManualSetting,
+            ConnectionState.Disconnected,
+            -> connect()
+            is ConnectionState.DeviceSelection -> {
+                forcePickerOnNextConnect = true
+                connect()
+            }
+            is ConnectionState.DeviceLost -> if (attachedKey == s.physicalKey) connect()
+            is ConnectionState.Connected,
+            ConnectionState.Searching,
+            is ConnectionState.Opening,
+            is ConnectionState.UnknownDeviceWarning,
+            is ConnectionState.AdvisoryWarning,
+            -> Unit
         }
     }
 
@@ -491,8 +546,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             discoveryFor(candidate).open(candidate)
         } catch (e: SecurityException) {
             openingPhysicalKey = null
-            _state.value =
-                ConnectionState.Error(str(R.string.connect_permission_denied, candidate.displayName))
+            _state.value = ConnectionState.PermissionDenied(candidate.displayName)
             return
         }
         openingPhysicalKey = null
@@ -674,7 +728,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         _state.value = ConnectionState.Opening(displayName, Bus.USB)
         if (!connectionManager.requestPermission(usbDevice)) {
             openingPhysicalKey = null
-            _state.value = ConnectionState.Error(str(R.string.connect_usb_permission_denied, displayName))
+            _state.value = ConnectionState.PermissionDenied(displayName)
             return
         }
         openingPhysicalKey = null
@@ -752,12 +806,17 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      * dialog is itself a resume. Rebuilding then would tear down the session the dialog's own
      * permission grant is about to finish and orphan the original attempt's coroutine; the
      * attempt already in flight is left to finish or fail on its own instead.
+     *
+     * False on [ConnectionState.PermissionDenied], for the other order of the same two events:
+     * when the denial's broadcast is handled *before* the resume, the attempt has already landed
+     * here by the time this is asked, and a rescan now would put the dialog straight back up.
      */
     val shouldRebuildOnResume: Boolean
         get() = when (val s = state.value) {
             is ConnectionState.Connected -> s.instrument.rebuildOnResume
             is ConnectionState.DeviceLost -> false
             is ConnectionState.Opening -> false
+            is ConnectionState.PermissionDenied -> false
             else -> true
         }
 
@@ -1332,9 +1391,10 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     val reportDescription: String
         get() = requireFacet(current().report, "describe itself").description
 
-    suspend fun buildDeviceReport(progress: ((String) -> Unit)? = null): String = instrumentMutex.withLock {
-        requireFacet(current().report, "describe itself").buildReport(progress)
-    }
+    suspend fun buildDeviceReport(progress: ((String) -> Unit)? = null): DeviceReportResult =
+        instrumentMutex.withLock {
+            requireFacet(current().report, "describe itself").buildReport(progress)
+        }
 
     /**
      * Runs [RegressionTester] against the connected instrument - the debug menu's second entry.

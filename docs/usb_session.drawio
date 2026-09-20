@@ -1,0 +1,263 @@
+<mxfile host="Electron">
+  <diagram name="USB session lifecycle" id="usb-session">
+    <mxGraphModel dx="1968" dy="1099" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="trig_group" parent="1" style="swimlane;fontStyle=1;horizontal=1;startSize=26;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;rounded=1;" value="Triggers" vertex="1">
+          <mxGeometry height="640" width="280" x="20" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="T1" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" value="ConnectScreen first shown&#xa;while Disconnected" vertex="1">
+          <mxGeometry height="50" width="240" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="T2" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" value="Retry / Retry search tap" vertex="1">
+          <mxGeometry height="50" width="240" x="20" y="112" as="geometry" />
+        </mxCell>
+        <mxCell id="T4" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" value="USB attach intent&lt;br&gt;MainActivity.onNewIntent → onUsbDeviceAttached&lt;br&gt;rescans from NothingFound, Error, PermissionDenied, NeedsManualSetting, Disconnected, the picker (kept),&lt;br&gt;and DeviceLost for the same physical key" vertex="1">
+          <mxGeometry height="100" width="240" x="20" y="184" as="geometry" />
+        </mxCell>
+        <mxCell id="T3" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" value="MainActivity.onResume&lt;br&gt;when shouldRebuildOnResume:&amp;nbsp;&lt;div&gt;connected over USB, or nothing connected - never from Opening, DeviceLost or PermissionDenied&lt;/div&gt;" vertex="1">
+          <mxGeometry height="80" width="240" x="20" y="306" as="geometry" />
+        </mxCell>
+        <mxCell id="T6" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" value="Back arrow on the preset screen&#xa;disconnect(showPicker = true)" vertex="1">
+          <mxGeometry height="50" width="240" x="20" y="408" as="geometry" />
+        </mxCell>
+        <mxCell id="T5" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" value="USB detach broadcast&#xa;handleUsbDetach, for this session&#39;s device" vertex="1">
+          <mxGeometry height="50" width="240" x="20" y="480" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="trig_group" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=10;fontColor=#555555;" value="Every teardown waits on instrumentMutex, so an edit, report or regression run in flight finishes before DeviceLost or a rebuild lands." vertex="1">
+          <mxGeometry height="50" width="240" x="20" y="541" as="geometry" />
+        </mxCell>
+        <mxCell id="C" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="connect()" vertex="1">
+          <mxGeometry height="40" width="140" x="380" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="FR" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="forceReconnect()&#xa;teardown, then connect" vertex="1">
+          <mxGeometry height="50" width="140" x="380" y="341" as="geometry" />
+        </mxCell>
+        <mxCell id="D" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" value="Disconnected" vertex="1">
+          <mxGeometry height="40" width="140" x="380" y="433" as="geometry" />
+        </mxCell>
+        <mxCell id="S" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Searching&#xa;USB scan; MIDI scan only if needed" vertex="1">
+          <mxGeometry height="50" width="200" x="600" y="57" as="geometry" />
+        </mxCell>
+        <mxCell id="DS" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="DeviceSelection&#xa;(picker)" vertex="1">
+          <mxGeometry height="50" width="200" x="600" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="UW" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="UnknownDeviceWarning" vertex="1">
+          <mxGeometry height="40" width="200" x="600" y="346" as="geometry" />
+        </mxCell>
+        <mxCell id="O" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Opening&#xa;permission dialog if needed,&#xa;open, drain, handshake" vertex="1">
+          <mxGeometry height="60" width="200" x="880" y="66" as="geometry" />
+        </mxCell>
+        <mxCell id="AW" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="AdvisoryWarning" vertex="1">
+          <mxGeometry height="40" width="200" x="940" y="346" as="geometry" />
+        </mxCell>
+        <mxCell id="CN" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="Connected&#xa;index scan starts" vertex="1">
+          <mxGeometry height="50" width="200" x="890" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="NF" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="NothingFound" vertex="1">
+          <mxGeometry height="40" width="160" x="1180" as="geometry" />
+        </mxCell>
+        <mxCell id="PD" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="PermissionDenied" vertex="1">
+          <mxGeometry height="40" width="160" x="1180" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="E" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="Error /&#xa;NeedsManualSetting" vertex="1">
+          <mxGeometry height="50" width="160" x="1180" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="DL" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="DeviceLost&#xa;(remembers the physical key)" vertex="1">
+          <mxGeometry height="50" width="160" x="1175" y="486" as="geometry" />
+        </mxCell>
+        <mxCell id="CS" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="ConnectScreen&#xa;renders every state&#xa;on this side" vertex="1">
+          <mxGeometry height="70" width="150" x="1400" y="95" as="geometry" />
+        </mxCell>
+        <mxCell id="PS" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Preset / Debug screen&#xa;stays through the&#xa;Disconnected → Searching&#xa;→ Opening dip" vertex="1">
+          <mxGeometry height="70" width="150" x="1400" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="e_T1_C" edge="1" parent="1" source="T1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.25;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;" target="C">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="320" y="85" />
+              <mxPoint x="320" y="60.03" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_T2_C" edge="1" parent="1" source="T2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;fontSize=10;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="C">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+            <mxPoint x="380" y="130" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_T4_C" edge="1" parent="1" source="T4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.75;fontSize=10;labelBackgroundColor=#ffffff;" target="C">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="340" y="254" />
+              <mxPoint x="340" y="80" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_T3_FR" edge="1" parent="1" source="T3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;" target="FR">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_T6_D" edge="1" parent="1" source="T6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;" target="D">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_FR_D" edge="1" parent="1" source="FR" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=10;labelBackgroundColor=#ffffff;" target="D">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_D_S" edge="1" parent="1" source="D" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.75;fontSize=10;labelBackgroundColor=#ffffff;" target="S" value="connect() - ConnectScreen&#xa;connects from here">
+          <mxGeometry relative="1" x="-0.6492" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="560.04" y="453" />
+              <mxPoint x="560.04" y="94.5" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_C_S" edge="1" parent="1" source="C" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.25;fontSize=10;labelBackgroundColor=#ffffff;" target="S">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_S_O" edge="1" parent="1" source="S" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.25;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;" target="O" value="recognised,&amp;nbsp;&lt;div&gt;auto-connect on&lt;/div&gt;">
+          <mxGeometry relative="1" x="0.0123" y="16" as="geometry">
+            <mxPoint x="-1" as="offset" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_S_NF" edge="1" parent="1" source="S" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=0;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;" target="NF" value="nothing attached">
+          <mxGeometry relative="1" x="-0.0197" y="10" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="700" y="20" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_S_DS" edge="1" parent="1" source="S" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=10;labelBackgroundColor=#ffffff;" target="DS" value="auto-connect off, picker forced,&#xa;or nothing recognised">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_DS_O" edge="1" parent="1" source="DS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;" target="O" value="known row">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="40" as="offset" />
+            <Array as="points">
+              <mxPoint x="820.05" y="245" />
+              <mxPoint x="820.05" y="96" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_DS_UW" edge="1" parent="1" source="DS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=10;labelBackgroundColor=#ffffff;" target="UW" value="unknown Nord row">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_UW_O" edge="1" parent="1" source="UW" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.75;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;" target="O" value="continue">
+          <mxGeometry relative="1" x="-0.3538" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="855.05" y="366" />
+              <mxPoint x="855.05" y="111" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_O_PD" edge="1" parent="1" source="O" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.3;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;" target="PD" value="denied">
+          <mxGeometry relative="1" x="0.0795" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="1140.05" y="84" />
+              <mxPoint x="1140.05" y="130" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_O_E" edge="1" parent="1" source="O" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.8;entryX=0;entryY=0.6;fontSize=10;labelBackgroundColor=#ffffff;" target="E" value="handshake fails, or&lt;br&gt;unplugged mid-open">
+          <mxGeometry relative="1" x="-0.0744" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="1110" y="114" />
+              <mxPoint x="1110" y="250" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_O_AW" edge="1" parent="1" source="O" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.75;exitY=1;entryX=0.5;entryY=0;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="AW" value="advisory raised">
+          <mxGeometry relative="1" x="0.3636" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_O_CN" edge="1" parent="1" source="O" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.25;exitY=1;entryX=0.2;entryY=0;fontSize=10;labelBackgroundColor=#ffffff;exitDx=0;exitDy=0;" target="CN" value="granted, handshake ok">
+          <mxGeometry relative="1" x="-0.0667" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_AW_CN" edge="1" parent="1" source="AW" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.75;entryY=0;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="CN" value="continue">
+          <mxGeometry relative="1" x="-0.1765" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points" />
+            <mxPoint x="1090" y="400" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_CN_DL" edge="1" parent="1" source="CN" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0;entryY=0.25;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="DL" value="this session&#39;s device unplugged">
+          <mxGeometry relative="1" x="0.1531" y="13" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="990.01" y="498.5" />
+            </Array>
+            <mxPoint x="990" y="464" as="sourcePoint" />
+            <mxPoint x="1169.9999999999995" y="509" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_T5_DL" edge="1" parent="1" source="T5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;fontSize=10;labelBackgroundColor=#ffffff;entryX=0;entryY=0.77;entryDx=0;entryDy=0;entryPerimeter=0;" target="DL">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1175" y="525.01" />
+            </Array>
+            <mxPoint x="1150" y="540" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_CN_PS" edge="1" parent="1" source="CN" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;" target="PS">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_NF_CS" edge="1" parent="1" source="NF" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.25;fontSize=10;labelBackgroundColor=#ffffff;strokeColor=#9673a6;" target="CS">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1370" y="20" />
+              <mxPoint x="1370" y="112.55" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_PD_CS" edge="1" parent="1" source="PD" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;strokeColor=#9673a6;" target="CS">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_E_CS" edge="1" parent="1" source="E" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.75;fontSize=10;labelBackgroundColor=#ffffff;strokeColor=#9673a6;" target="CS">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_DL_CS" edge="1" parent="1" source="DL" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=1;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;strokeColor=#9673a6;entryDx=0;entryDy=0;" target="CS" value="Retry search → connect()">
+          <mxGeometry relative="1" x="-0.7074" y="10" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="1580" y="515" />
+              <mxPoint x="1580" y="130" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_PS_CS" edge="1" parent="1" source="PS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;fontSize=10;labelBackgroundColor=#ffffff;strokeColor=#9673a6;dashed=1;" target="CS" value="session settles on a state this&#xa;screen cannot show: NavHost&#xa;redirect, waits until RESUMED">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-40" as="offset" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

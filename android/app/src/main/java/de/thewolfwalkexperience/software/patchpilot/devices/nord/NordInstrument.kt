@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.AddressFormat
+import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressFormat
@@ -295,7 +296,7 @@ class NordInstrument(
      * carrying the categories, the child lists and the firmware version is worth far more to
      * whoever receives it than no report at all, and the failures are themselves a finding.
      */
-    override suspend fun buildReport(progress: ((String) -> Unit)?): String = deviceLock.withLock {
+    override suspend fun buildReport(progress: ((String) -> Unit)?): DeviceReportResult = deviceLock.withLock {
         val d = device
         val probes = Probes()
 
@@ -400,7 +401,7 @@ class NordInstrument(
             ),
         )
 
-        REPORT_JSON.encodeToString(report)
+        DeviceReportResult(REPORT_JSON.encodeToString(report), probes.failures)
     }
 
     /** [block] under [deviceLock], with its failures translated by [mapNordFailure]. */
