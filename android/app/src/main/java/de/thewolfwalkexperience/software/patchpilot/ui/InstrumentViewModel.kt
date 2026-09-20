@@ -844,8 +844,23 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         startIndex()
     }
 
-    /** User declined the advisory - closes the session rather than leaving it half-entered. */
-    fun declineAdvisory() = disconnect(showPicker = false)
+    /**
+     * User declined the advisory - closes the session and offers the device picker in its place.
+     *
+     * Not a plain [disconnect]: ConnectScreen starts a scan of its own only on its first
+     * composition, and it is already on screen here, so leaving the state at `Disconnected` would
+     * show a bare "Not connected" with nothing to tap. The rescan forces the picker because
+     * auto-connect would otherwise open the same instrument again and put the same advisory
+     * straight back up; from the picker the user can pick it deliberately, or rescan.
+     */
+    fun declineAdvisory() {
+        lastConfirmedUnknownDevice = null
+        launchConnect {
+            teardownCurrentInstrument()
+            _state.value = ConnectionState.Disconnected
+            performConnect(forcePicker = true)
+        }
+    }
 
     /**
      * The connected instrument's advisory, or null. Drives the banner that keeps the warning

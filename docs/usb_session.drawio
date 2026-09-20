@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram name="USB session lifecycle" id="usb-session">
-    <mxGraphModel dx="1968" dy="1099" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="700" math="0" shadow="0">
+    <mxGraphModel dx="924" dy="616" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="700" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -143,16 +143,18 @@
             <Array as="points" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e_DS_O" edge="1" parent="1" source="DS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;" target="O" value="known row">
+        <mxCell id="e_DS_O" edge="1" parent="1" source="DS" target="O" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.25;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" value="known row">
           <mxGeometry relative="1" as="geometry">
             <mxPoint y="40" as="offset" />
             <Array as="points">
-              <mxPoint x="820.05" y="245" />
-              <mxPoint x="820.05" y="96" />
+              <mxPoint x="810" y="231.48" />
+              <mxPoint x="810" y="95" />
             </Array>
+            <mxPoint x="800" y="231.5000000000001" as="sourcePoint" />
+            <mxPoint x="880" y="95" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e_DS_UW" edge="1" parent="1" source="DS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=10;labelBackgroundColor=#ffffff;" target="UW" value="unknown Nord row">
+        <mxCell id="e_DS_UW" edge="1" parent="1" source="DS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.75;exitY=1;entryX=0.75;entryY=0;fontSize=10;labelBackgroundColor=#ffffff;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="UW" value="unknown Nord row">
           <mxGeometry relative="1" as="geometry">
             <Array as="points" />
           </mxGeometry>
@@ -161,8 +163,8 @@
           <mxGeometry relative="1" x="-0.3538" as="geometry">
             <mxPoint as="offset" />
             <Array as="points">
-              <mxPoint x="855.05" y="366" />
-              <mxPoint x="855.05" y="111" />
+              <mxPoint x="840" y="366.03" />
+              <mxPoint x="840" y="111" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -194,6 +196,21 @@
           <mxGeometry relative="1" x="-0.0667" as="geometry">
             <mxPoint as="offset" />
             <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_UW_DS" edge="1" parent="1" source="UW" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.25;exitY=0;entryX=0.25;entryY=1;fontSize=10;labelBackgroundColor=#ffffff;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="DS" value="cancel">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_AW_DS" edge="1" parent="1" source="AW" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0;exitY=0.5;entryX=0.998;entryY=0.679;fontSize=10;labelBackgroundColor=#ffffff;exitDx=0;exitDy=0;entryDx=0;entryDy=0;entryPerimeter=0;" target="DS" value="disconnect">
+          <mxGeometry relative="1" x="-0.6946" y="-10" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="870" y="366.03" />
+              <mxPoint x="870" y="254.03" />
+            </Array>
           </mxGeometry>
         </mxCell>
         <mxCell id="e_AW_CN" edge="1" parent="1" source="AW" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.75;entryY=0;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="CN" value="continue">

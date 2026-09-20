@@ -35,6 +35,7 @@
 - A Nord session started after the app was killed mid-transfer discards what the instrument still had queued from the earlier session, instead of reading it as the answer to its first request; where the connection cannot be recovered, the error says to unplug and replug the cable.
 - Unplugging the instrument now drops the cached preset list, so changes made from its own panel while disconnected (or a different unit of the same model on the same port) show on reconnect without a manual refresh.
 - Deleting the last preset in a bank removes that bank from the index rail when empty slots are hidden.
+- Choosing Disconnect on the firmware advisory now returns to the device list instead of a "Not connected" screen with nothing to tap.
 - A refused Nord category change now reports the instrument's reason like every other refused operation.
 - A Yamaha Motif XS edit can no longer be interrupted part way through. Leaving the screen mid-write left the instrument waiting on "receiving midi bulk data" until it was power-cycled, or left a change accepted but not applied, which a later, unrelated edit would then apply on its own. Edits now always run to completion, and the back arrow is unavailable while one is in progress.
 - Motif XS writes no longer block the UI thread; a failed connect releases the port; the regression test survives rotation; Nord listing and edits can no longer interleave.
