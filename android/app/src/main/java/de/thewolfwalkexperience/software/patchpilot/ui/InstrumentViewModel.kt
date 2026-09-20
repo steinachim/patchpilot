@@ -937,6 +937,24 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         // describe.
     }
 
+    /**
+     * Stops a running scan the moment the app backgrounds, called from `MainActivity.onPause`.
+     *
+     * A no-op where [shouldRebuildOnResume] is false: nothing will be torn down on the way back,
+     * so a running scan there is not wasted work and is left alone.
+     *
+     * Where it *is* true, `forceReconnect()` discards whatever the scan has read so far anyway the
+     * moment the app resumes (see `MainActivity.onResume`) - so letting it keep running while
+     * backgrounded only buys the instrument talking to nobody. On a Motif XS this means its own
+     * display sits on "dump in progress" for as long as the scan would have taken - up to the full
+     * 93 s - with nothing on the phone showing why, since the phone itself is backgrounded or
+     * locked. Cancelling here instead means the instrument is only ever busy while someone is
+     * actually watching the scan progress.
+     */
+    fun cancelScanOnBackground() {
+        if (shouldRebuildOnResume) cancelIndex()
+    }
+
     private fun closeQuietly(target: Instrument?) {
         try {
             target?.close()

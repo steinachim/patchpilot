@@ -87,6 +87,15 @@ class MainActivity : ComponentActivity() {
         viewModel.onUsbDeviceAttached(device)
     }
 
+    override fun onPause() {
+        super.onPause()
+        // A running scan is discarded by forceReconnect() the moment this app resumes anyway (see
+        // below), so there is nothing to gain by letting it keep running against an instrument
+        // nobody is watching - and, on a Motif XS, its own display would sit on "dump in progress"
+        // for as long as the scan takes with no way to tell from the backgrounded/locked phone.
+        viewModel.cancelScanOnBackground()
+    }
+
     override fun onResume() {
         super.onResume()
         // Whether a rebuild is wanted is the session's own answer, not this screen's: it comes
