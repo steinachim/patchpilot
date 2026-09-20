@@ -11,6 +11,7 @@
 - A preset can be moved from a row's menu ("Move to…") as well as by dragging it; an empty destination moves, an occupied one swaps.
 - A Yamaha Motif XS that is connected but not answering is identified as such on the connect screen, with the steps to set its MIDI In/Out setting to USB. Previously every operation timed out separately without saying why.
 - Store metadata with phone and tablet screenshots, a privacy policy and a release guide, in preparation for F-Droid and Google Play.
+- Settings has a new "Auto-Connect to First Found Instrument" toggle, on by default; turning it off always scans both buses and shows the device list, instead of connecting straight to the first instrument found over USB.
 
 ### Changed
 - The app targets Android 16 and is versioned 1.0.
@@ -20,6 +21,7 @@
 - The Steampunk theme's progress indicator is a rendered brass compass whose needle hunts about north, in the style of the app icon, centred on the preset screen while the first rows load.
 
 ### Fixed
+- Connecting to a recognised instrument over USB no longer waits for the slower MIDI bus scan to finish first, which is what made launch take longer since the Pro-800 and Motif XS were added.
 - The device report is offered on the connect screen's firmware warning, as documented; previously the button never appeared there.
 - On a Nord, a preset copied or moved into an empty slot no longer shows at the bottom of the list under a second header for its bank until the listing is re-read.
 - Connecting to an instrument that has not been granted USB permission before — an unrecognised Nord, or the app opened before plugging in — no longer waits forever for a permission result the app had made itself unable to receive.

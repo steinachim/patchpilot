@@ -42,6 +42,8 @@ The app has two themes, System Default and Steampunk.
 
 Without an instrument, the connect screen offers a demo mode with a simulated instrument.
 
+By default the app connects straight to the first instrument it finds over USB, without waiting for the slower MIDI bus scan a Pro-800 or Motif XS would need. Settings has an "Auto-Connect to First Found Instrument" toggle to turn that off, so the connect screen always scans both buses and shows the device list instead.
+
 ## Building
 
 Requirements: JDK 17 or newer, and the Android SDK with platform 37 installed (`compileSdk` is 37). The build runs on whatever JDK launches Gradle (`JAVA_HOME`, or the Gradle JDK configured in Android Studio); beyond the Gradle distribution the wrapper fetches and the Maven dependencies, nothing is downloaded.

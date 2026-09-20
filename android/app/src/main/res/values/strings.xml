@@ -50,13 +50,16 @@
     <string name="cd_move_destination">Move into %1$s</string>
     <string name="cd_settings">Settings</string>
 
-    <!-- Settings screen: currently just the theme picker. -->
+    <!-- Settings screen: appearance, connection behaviour and legal info. -->
     <string name="settings_title">Settings</string>
     <string name="settings_theme_heading">Appearance</string>
     <string name="settings_theme_default">System Default</string>
     <string name="settings_theme_default_description">Follows your device\'s light/dark setting and wallpaper colours.</string>
     <string name="settings_theme_steampunk">Steampunk</string>
     <string name="settings_theme_steampunk_description">Brass, copper and mechanical dials — a fixed dark look.</string>
+    <string name="settings_connection_heading">Connection</string>
+    <string name="settings_auto_connect">Auto-Connect to First Found Instrument</string>
+    <string name="settings_auto_connect_description">Connects automatically to the first instrument a scan finds. Turn this off to always see the device list and pick one yourself.</string>
     <string name="settings_legal_heading">Legal</string>
     <string name="settings_open_source_licenses">Open Source Licenses</string>
     <string name="licenses_title">Open Source Licenses</string>

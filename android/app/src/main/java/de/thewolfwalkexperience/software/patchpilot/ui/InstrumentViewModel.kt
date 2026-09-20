@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -201,6 +202,10 @@ sealed class ConnectionState {
 class InstrumentViewModel(application: Application, savedStateHandle: SavedStateHandle) :
     AndroidViewModel(application), ProgramsOperations {
     private val connectionManager = UsbConnectionManager(application)
+
+    /** Settings screen reads and writes this directly; [performConnect] reads it fresh on every
+     * scan, so a change takes effect on the next connect attempt without restarting the app. */
+    val connectionPreferences = ConnectionPreferences(application)
 
     /**
      * The device report, read and held here so a minutes-long read survives the screen that
@@ -432,24 +437,47 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     private fun consumeForcePicker(): Boolean =
         forcePickerOnNextConnect.also { forcePickerOnNextConnect = false }
 
-    /** The scan-then-connect body [connect] and [forceReconnect] share - factored out so
+    /**
+     * The scan-then-connect body [connect] and [forceReconnect] share - factored out so
      * [forceReconnect] can run it inside its own [launchConnect] job (see that function's doc
-     * comment) instead of through a second, untracked one. */
+     * comment) instead of through a second, untracked one.
+     *
+     * **The MIDI scan is skipped where auto-connect already has its answer from USB alone.**
+     * `MidiDiscovery.scan` is the slow one - it opens every port and waits up to 600ms per port
+     * for a probe reply, which is what made a Nord's launch feel slower once MIDI-only families
+     * arrived - and [mergeCandidates] always prefers a USB candidate over a MIDI one for the same
+     * physical device in any case, so a MIDI scan could never change what gets connected here.
+     * Skipping it needs a picker of everything on both buses (`forcePicker`), or auto-connect
+     * itself turned off, or USB not finding anything recognised on its own - a MIDI-only family
+     * (the Pro-800) is only ever found by actually running that scan.
+     */
     private suspend fun performConnect(forcePicker: Boolean) {
         _state.value = ConnectionState.Searching
         val catalog = InstrumentRegistry.allDescriptors(getApplication())
-        val candidates = mergeCandidates(discoveries.map { it.scan(catalog) })
+        val autoConnect = connectionPreferences.autoConnectToFirstFound.first()
+
+        val usbDiscovery = discoveries.first { it.bus == Bus.USB }
+        val usbCandidates = usbDiscovery.scan(catalog)
+        val usbKnown = usbCandidates.filter { it.descriptor != null }
+        if (autoConnect && !forcePicker && usbKnown.isNotEmpty()) {
+            connectCandidate(usbKnown.first())
+            return
+        }
+
+        val otherScans = discoveries.filterNot { it.bus == Bus.USB }.map { it.scan(catalog) }
+        val candidates = mergeCandidates(listOf(usbCandidates) + otherScans)
         val known = candidates.filter { it.descriptor != null }
         when {
             // Nothing recognised: reconnect a device already accepted through the "at your own
             // risk" gate this session if it is still attached, otherwise offer whatever else is
             // attached.
             known.isEmpty() -> reconnectRememberedUnknownDeviceOrOffer()
-            // Exactly one, and nobody asked to be shown the picker anyway: connect it.
-            // No question worth asking has an obvious answer.
-            known.size == 1 && !forcePicker -> connectCandidate(known.single())
-            // More than one: let the user choose rather than taking whichever the scan
-            // happened to return first.
+            // Auto-connect is on and nobody asked to be shown the picker anyway: take the first
+            // one the scan found. Reached only when USB alone did not already resolve it above -
+            // so everything here is a MIDI-only family, or the picker was forced.
+            autoConnect && !forcePicker -> connectCandidate(known.first())
+            // Auto-connect is off, or the user backed out and asked to choose again: let them
+            // pick rather than taking whichever the scan happened to return first.
             else -> _state.value = ConnectionState.DeviceSelection(pickerEntries(known))
         }
     }

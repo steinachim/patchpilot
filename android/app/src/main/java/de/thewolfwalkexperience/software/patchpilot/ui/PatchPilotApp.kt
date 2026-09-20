@@ -129,6 +129,7 @@ private fun PatchPilotNavHost(
         composable(ROUTE_SETTINGS) {
             SettingsScreen(
                 themePreferences,
+                viewModel.connectionPreferences,
                 onOpenLicenses = { guardedNavigate(ROUTE_LICENSES) },
                 onBack = { guardedPopBackStack() },
             )

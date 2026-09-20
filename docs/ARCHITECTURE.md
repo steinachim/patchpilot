@@ -1,6 +1,6 @@
 # Architecture
 
-Patch Pilot is a native Android app for browsing, organizing and editing presets on supported hardware synthesizers over USB. It is a thin client: there is no server and no account system. The only state persisted across launches is the theme choice; everything else lives on the connected instrument or in memory for the life of the process.
+Patch Pilot is a native Android app for browsing, organizing and editing presets on supported hardware synthesizers over USB. It is a thin client: there is no server and no account system. The only state persisted across launches is the theme choice and the auto-connect preference; everything else lives on the connected instrument or in memory for the life of the process.
 
 ## Package layout
 
@@ -39,6 +39,8 @@ Related types:
 `transport.Transport` is the shared marker interface with two specializations: `UsbBulkTransport` (paired bulk endpoints plus the control pipe, implemented by `AndroidUsbBulkTransport`) and `MidiTransport` (a MIDI byte stream in and out, implemented by `AndroidMidiTransport` over `android.media.midi` and by `UsbMidiBulkTransport`, which packs USB-MIDI event packets by hand over a raw bulk endpoint for a device with no class-compliant MIDI interface). Device code depends only on these interfaces, so protocol logic is unit-tested against scripted fakes with no hardware or emulator.
 
 `discovery.DeviceDiscovery` has one implementation per bus. `UsbHostDiscovery` matches USB vendor and product ids against the catalog. `MidiDiscovery` never matches on port name; it identifies a port by sending the read-only, idempotent probe the catalog declares and checking the reply. `mergeCandidates` keeps one entry per physical device, USB host first, because a Nord also exposes a class-compliant MIDI interface that cannot manage presets.
+
+`InstrumentViewModel.performConnect` reads `ConnectionPreferences.autoConnectToFirstFound` (Preferences DataStore, default true) on every scan. On, it scans the USB bus first and, if that alone already found a recognised instrument, connects to it without running the MIDI scan at all — `mergeCandidates` would always prefer that USB candidate over a MIDI one for the same physical device anyway, so the MIDI scan could not change the outcome, and skipping it is what keeps a Nord's launch fast now that MIDI-only families exist. Off, or where USB alone found nothing recognised, it falls through to the full two-bus scan and either connects to the first result or, with auto-connect off, always stops at `ConnectionState.DeviceSelection` so the user picks explicitly.
 
 ## Catalog and adding a device family
 
