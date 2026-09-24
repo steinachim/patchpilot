@@ -48,25 +48,25 @@ object SteampunkThemeStyle : ThemeStyle {
         base.steampunkRowPanel(dragged, dropTarget)
 
     /**
-     * Clear of the cap rivets [steampunkVerticalRivets] draws.
+     * Clear of the cap screws [steampunkVerticalScrews] draws.
      *
-     * The rivet sits at the centre of each semicircular end cap - `railWidth / 2`, so 24.dp in -
-     * with a 3.dp radius, hence 27.dp plus a little air. Stated rather than derived because the
+     * The screw sits at the centre of each semicircular end cap - `railWidth / 2`, so 24.dp in -
+     * and is 10.dp across, hence 29.dp. Stated rather than derived because the
      * rail's width is the screen's to choose, and a theme that guessed it would be wrong quietly.
      */
     override val railEndInset = 30.dp
 
     override fun railDecoration(base: Modifier): Modifier {
-        // A riveted brass rail rather than a plain M3 pill - border plus a rivet at each end, the
-        // same two-rivet language as a bank header rotated vertical. Recomputing the pill shape
+        // A fastened brass rail rather than a plain M3 pill - border plus a screw at each end,
+        // the same language as a bank header rotated vertical. Recomputing the pill shape
         // here (rather than sharing BankIndex's own) is cheap - it's just a shape descriptor, not
         // a layout - and keeps this function self-contained.
         val pillShape = RoundedCornerShape(percent = 50)
-        return base.border(1.dp, SteampunkAccents.brassDark, pillShape).steampunkVerticalRivets()
+        return base.border(1.dp, SteampunkAccents.brassDark, pillShape).steampunkVerticalScrews()
     }
 
     /**
-     * A pair of riveted brass plates, an up arrow over a down arrow, in place of a glyph - the
+     * A pair of brass plates, an up arrow over a down arrow, in place of a glyph - the
      * same rendered-bitmap language as [SteampunkCompass]. It carries its own colour, so an inert
      * handle is dimmed rather than recoloured.
      */
@@ -94,7 +94,7 @@ object SteampunkThemeStyle : ThemeStyle {
 
     @Composable
     override fun BankHeader(text: String, modifier: Modifier) {
-        // A riveted brass plate, like the preset rows below it, rather than a plain divided band
+        // A screwed-down brass plate, like the preset rows below it, rather than a divided band
         // - the theme's own rounding needs a real edge to sit inside, which a full-bleed
         // background doesn't give it (see steampunkFrame's doc comment for the general rule).
         Box(
@@ -104,7 +104,7 @@ object SteampunkThemeStyle : ThemeStyle {
                 .clip(MaterialTheme.shapes.small)
                 .background(MaterialTheme.colorScheme.primaryContainer)
                 .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small)
-                .steampunkBarRivets(),
+                .steampunkBarScrews(),
             contentAlignment = Alignment.Center,
         ) {
             Text(

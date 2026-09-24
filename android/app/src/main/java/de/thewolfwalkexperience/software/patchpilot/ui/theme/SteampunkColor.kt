@@ -85,7 +85,7 @@ val SteampunkColorScheme: ColorScheme = darkColorScheme(
     scrim = Ink,
 )
 
-/** Exposed for the bespoke Steampunk composables (gauge ticks, rivets) that draw outside the
+/** Exposed for the bespoke Steampunk composables (gauge ticks, borders) that draw outside the
  *  `ColorScheme` roles above. */
 object SteampunkAccents {
     val brassLight = BrassLight

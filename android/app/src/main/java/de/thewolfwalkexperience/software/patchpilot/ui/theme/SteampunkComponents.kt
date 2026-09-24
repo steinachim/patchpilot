@@ -48,12 +48,19 @@ import de.thewolfwalkexperience.software.patchpilot.R
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** A brass rivet dot, radial-shaded, drawn at one point. */
-private fun DrawScope.rivet(center: Offset, radius: Float, light: Color, dark: Color) {
-    drawCircle(
-        brush = Brush.radialGradient(colors = listOf(light, dark), center = center, radius = radius),
-        radius = radius,
-        center = center,
+/**
+ * A brass screw head (`steampunk_screw`) drawn centred on one point, [diameter] tall and at the
+ * art's own aspect ratio - the one fastener every plate in this theme is held together with.
+ */
+private fun DrawScope.screwHead(image: ImageBitmap, center: Offset, diameter: Float) {
+    val width = diameter * image.width / image.height
+    drawImage(
+        image = image,
+        dstOffset = IntOffset(
+            (center.x - width / 2f).roundToInt(),
+            (center.y - diameter / 2f).roundToInt(),
+        ),
+        dstSize = IntSize(width.roundToInt(), diameter.roundToInt()),
     )
 }
 
@@ -71,18 +78,14 @@ private fun rememberReduceMotion(): Boolean {
 }
 
 /**
- * The riveted-plate frame: a rounded brass border inset from the box's own true
- * edges, with a rivet sitting on each of its four rounded corners. Drawn **after** content
- * (`drawWithContent`, not `drawBehind`), so it always reads as sitting on top.
+ * The screen frame: a rounded brass border inset from the box's own true edges, echoing
+ * [SteampunkShapes]'s generous rounding. Drawn **after** content (`drawWithContent`, not
+ * `drawBehind`), so it always reads as sitting on top.
  *
  * One frame, one placement rule, used identically everywhere a screen wants it -
- * `ConnectScreen`'s root and (via `PatchPilotScaffold`) every `Scaffold`-based screen. Rivets
- * only read as rivets when there is a rounded border for them to fasten; floating near a sharp
- * rectangular corner they read as nothing. That is also why they depend on [SteampunkShapes]'s
- * generous rounding: the corner they sit on has to actually be a corner.
+ * `ConnectScreen`'s root and (via `PatchPilotScaffold`) every `Scaffold`-based screen.
  */
 fun Modifier.steampunkFrame(): Modifier = composed {
-    val brassLight = SteampunkAccents.brassLight
     val brassDark = SteampunkAccents.brassDark
     val cornerRadius = 24.dp
     drawWithContent {
@@ -97,58 +100,43 @@ fun Modifier.steampunkFrame(): Modifier = composed {
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(radiusPx, radiusPx),
             style = Stroke(strokeWidth),
         )
-        // Each rivet sits just inside the border's own arc - a bit past the corner's 45-degree
-        // point (`radiusPx * (1 - cos 45°)` in from the inset edge on both axes), pushed further
-        // in by `inward` so it reads as fastening the plate from inside the line rather than
-        // sitting on top of the stroke itself.
-        val rivetRadius = 4.dp.toPx()
-        val inward = 3.dp.toPx()
-        val onArc = radiusPx * 0.2929f + inward
-        listOf(
-            Offset(inset + onArc, inset + onArc),
-            Offset(size.width - inset - onArc, inset + onArc),
-            Offset(inset + onArc, size.height - inset - onArc),
-            Offset(size.width - inset - onArc, size.height - inset - onArc),
-        ).forEach { rivet(it, rivetRadius, brassLight, brassDark) }
     }
 }
 
 /**
- * Two rivets flanking a short horizontal brass bar - left and right, vertically centred - for
+ * Two screws flanking a short horizontal brass bar - left and right, vertically centred - for
  * a bank header row (see `ProgramsScreen`). Meant for something that is already clipped to a
- * rounded [SteampunkShapes] shape and coloured as a brass plate; the rivets alone don't read as
+ * rounded [SteampunkShapes] shape and coloured as a brass plate; the screws alone don't read as
  * fastened to anything without that rounding.
  */
-fun Modifier.steampunkBarRivets(): Modifier = composed {
-    val brassLight = SteampunkAccents.brassLight
-    val brassDark = SteampunkAccents.brassDark
+fun Modifier.steampunkBarScrews(): Modifier = composed {
+    val screw = ImageBitmap.imageResource(R.drawable.steampunk_screw)
     drawWithContent {
         drawContent()
         val inset = 12.dp.toPx()
-        val radius = 3.dp.toPx()
+        val screwSize = 10.dp.toPx()
         val y = size.height / 2f
-        rivet(Offset(inset, y), radius, brassLight, brassDark)
-        rivet(Offset(size.width - inset, y), radius, brassLight, brassDark)
+        screwHead(screw, Offset(inset, y), screwSize)
+        screwHead(screw, Offset(size.width - inset, y), screwSize)
     }
 }
 
 /**
- * Two rivets top and bottom - the same idea as [steampunkBarRivets] rotated 90 degrees, for a
+ * Two screws top and bottom - the same idea as [steampunkBarScrews] rotated 90 degrees, for a
  * tall narrow pill-shaped element like the bank fast-scroll rail (`BankIndex`). The rail is fully
  * rounded (`RoundedCornerShape(percent = 50)`), so each end is a true semicircle of radius
- * `size.width / 2` - the rivet sits at that semicircle's own centre, not at a fixed distance from
+ * `size.width / 2` - the screw sits at that semicircle's own centre, not at a fixed distance from
  * the edge, so it lands in the middle of the curve regardless of the rail's actual width.
  */
-fun Modifier.steampunkVerticalRivets(): Modifier = composed {
-    val brassLight = SteampunkAccents.brassLight
-    val brassDark = SteampunkAccents.brassDark
+fun Modifier.steampunkVerticalScrews(): Modifier = composed {
+    val screw = ImageBitmap.imageResource(R.drawable.steampunk_screw)
     drawWithContent {
         drawContent()
         val capRadius = size.width / 2f
-        val radius = 3.dp.toPx()
+        val screwSize = 10.dp.toPx()
         val x = size.width / 2f
-        rivet(Offset(x, capRadius), radius, brassLight, brassDark)
-        rivet(Offset(x, size.height - capRadius), radius, brassLight, brassDark)
+        screwHead(screw, Offset(x, capRadius), screwSize)
+        screwHead(screw, Offset(x, size.height - capRadius), screwSize)
     }
 }
 
@@ -196,7 +184,7 @@ fun Modifier.steampunkTexture(): Modifier = composed {
 }
 
 /**
- * The riveted-plate treatment for one preset row: a small vertical gap (added *inside* the row's
+ * The brass-plate treatment for one preset row: a small vertical gap (added *inside* the row's
  * own modifier chain, so it counts as part of the row's own measured height rather than a true
  * inter-row gap - `ProgramListDragState.hitRowInfo` resolves a touch to whichever item's
  * `[offset, offset + size)` range contains it, straight off `LazyListItemInfo`, and a real gap
@@ -295,7 +283,7 @@ fun SteampunkCompass(modifier: Modifier = Modifier) {
 private val NEEDLE_PIVOT = Offset(0.5f, 339f / 688f)
 
 /**
- * A riveted-panel-styled stand-in for the `OutlinedButton` the connect screen's device picker
+ * A brass-panel stand-in for the `OutlinedButton` the connect screen's device picker
  * uses per candidate. Same tap target and content as the default theme's button - a `Surface`
  * with its own `onClick` slot, which is what gives it the same semantics/ripple as a real button
  * rather than a `Row` wearing a `clickable` modifier.

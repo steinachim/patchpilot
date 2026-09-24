@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
  * Not where `ColorScheme`, `Typography` and `Shapes` live: those are `MaterialTheme` tokens,
  * centralised in [PatchPilotTheme]'s one `when (appTheme)`, and every stock Material component
  * picks them up. This interface is for the things a token swap cannot produce - a compass standing
- * in for a spinner, a riveted frame, a brass drag handle.
+ * in for a spinner, a brass frame, a brass drag handle.
  *
  * A third theme is one implementation of this (see [SteampunkThemeStyle]) plus a mapping in
  * [AppTheme.style]; no screen file changes, since they read [LocalThemeStyle.current].
