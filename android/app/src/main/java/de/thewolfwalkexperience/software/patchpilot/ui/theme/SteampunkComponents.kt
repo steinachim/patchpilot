@@ -36,11 +36,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -100,6 +102,95 @@ fun Modifier.steampunkFrame(): Modifier = composed {
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(radiusPx, radiusPx),
             style = Stroke(strokeWidth),
         )
+    }
+}
+
+/**
+ * One scratch on a brass plate: where it starts as a fraction of the plate's width and height,
+ * how long it is, and how steeply it runs. Length is a real distance rather than a fraction, so a
+ * wide plate gets more marks of the same size instead of longer ones.
+ */
+private class BrassWear(val x: Float, val y: Float, val length: Dp, val slope: Float)
+
+/**
+ * The wear on a brass plate, fixed rather than generated: a plate has to look the same every time
+ * it is drawn, and a random set would reshuffle on every recomposition. Alternating entries are
+ * lit and shaded, which is what makes a scratch read as a groove rather than a line, and the
+ * slopes vary so they read as knocks rather than as something combed.
+ */
+private val BRASS_WEAR = listOf(
+    BrassWear(0.04f, 0.30f, 13.dp, 0.5f),
+    BrassWear(0.10f, 0.74f, 8.dp, -0.3f),
+    BrassWear(0.22f, 0.20f, 11.dp, 0.2f),
+    BrassWear(0.31f, 0.55f, 6.dp, 1.1f),
+    BrassWear(0.38f, 0.68f, 15.dp, -0.15f),
+    BrassWear(0.51f, 0.34f, 9.dp, 0.7f),
+    BrassWear(0.63f, 0.78f, 12.dp, -0.5f),
+    BrassWear(0.72f, 0.42f, 7.dp, 0.9f),
+    BrassWear(0.80f, 0.24f, 14.dp, 0.25f),
+    BrassWear(0.92f, 0.64f, 9.dp, -0.8f),
+)
+
+/**
+ * Patina: faint dark clouds, so the metal between the scratches is not uniformly lit. Held to the
+ * shaded tone rather than the lit one, which keeps the plate's text contrast on the safe side.
+ */
+private val BRASS_PATINA = listOf(
+    Triple(0.16f, 0.78f, 26.dp),
+    Triple(0.44f, 0.18f, 34.dp),
+    Triple(0.61f, 0.82f, 20.dp),
+    Triple(0.88f, 0.34f, 28.dp),
+)
+
+/**
+ * A worn brass fill for a plate: `primaryContainer` through the middle, a lit bevel along the top
+ * edge, a shaded foot along the bottom, and [BRASS_WEAR]'s scratches over it. Meant for something
+ * already clipped to a rounded shape, like a bank header (see `SteampunkThemeStyle.BankHeader`).
+ *
+ * The middle band keeps the container colour exactly, so the contrast its `onPrimaryContainer`
+ * text was chosen against does not move: the wear lives in the top and bottom eighths and in
+ * marks too faint to shift a luminance ratio.
+ *
+ * Drawn rather than a bitmap because the plate is as wide as its label needs, and one texture
+ * would smear stretched across a tablet's header and tile visibly on a phone's.
+ */
+fun Modifier.steampunkWornBrass(): Modifier = composed {
+    val plate = MaterialTheme.colorScheme.primaryContainer
+    val lit = lerp(plate, SteampunkAccents.brassLight, 0.8f)
+    val shaded = lerp(plate, MaterialTheme.colorScheme.surface, 0.7f)
+    drawBehind {
+        drawRect(
+            Brush.verticalGradient(
+                0f to lit,
+                0.12f to plate,
+                0.88f to plate,
+                1f to shaded,
+            ),
+        )
+        BRASS_PATINA.forEach { (x, y, spread) ->
+            val center = Offset(x * size.width, y * size.height)
+            val radius = spread.toPx()
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(shaded.copy(alpha = 0.35f), Color.Transparent),
+                    center = center,
+                    radius = radius,
+                ),
+                radius = radius,
+                center = center,
+            )
+        }
+        val hairline = 1.dp.toPx()
+        BRASS_WEAR.forEachIndexed { i, wear ->
+            val start = Offset(wear.x * size.width, wear.y * size.height)
+            val run = wear.length.toPx()
+            drawLine(
+                color = if (i % 2 == 0) lit.copy(alpha = 0.24f) else shaded.copy(alpha = 0.30f),
+                start = start,
+                end = Offset(start.x + run, start.y + run * wear.slope),
+                strokeWidth = hairline,
+            )
+        }
     }
 }
 

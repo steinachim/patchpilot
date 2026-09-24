@@ -4,7 +4,6 @@
 package de.thewolfwalkexperience.software.patchpilot.ui.theme
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
@@ -130,7 +129,7 @@ object SteampunkThemeStyle : ThemeStyle {
 
     @Composable
     override fun BankHeader(text: String, modifier: Modifier) {
-        // A screwed-down brass plate, like the preset rows below it, rather than a divided band
+        // A worn, screwed-down brass plate, like the preset rows below it, rather than a band
         // - the theme's own rounding needs a real edge to sit inside, which a full-bleed
         // background doesn't give it (see steampunkFrame's doc comment for the general rule).
         Box(
@@ -138,7 +137,7 @@ object SteampunkThemeStyle : ThemeStyle {
                 .fillMaxWidth()
                 .padding(vertical = 4.dp)
                 .clip(MaterialTheme.shapes.small)
-                .background(MaterialTheme.colorScheme.primaryContainer)
+                .steampunkWornBrass()
                 .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small)
                 .steampunkBarScrews(),
             contentAlignment = Alignment.Center,

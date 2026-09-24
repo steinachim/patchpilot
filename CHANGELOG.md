@@ -14,6 +14,7 @@
 - Settings has a new "Auto-Connect to First Found Instrument" toggle, on by default; turning it off always scans both buses and shows the device list, instead of connecting straight to the first instrument found over USB.
 
 ### Changed
+- The Steampunk theme's drag handle, top bar icons, plate fasteners and bank headers are rendered brass rather than glyphs and flat colour.
 - The app targets Android 16 and is versioned 1.0.
 - The app opts out of Android backups and of Android 12's device-to-device transfer, so its preferences and a staged report never leave the phone that way.
 - The Behringer Pro-800 loads presets by writing its settings block over SysEx instead of sending bank select and program change, so it no longer needs to know the instrument's MIDI channel; this also works when the channel comes from the rear DIP switches or MIDI receive is off.
