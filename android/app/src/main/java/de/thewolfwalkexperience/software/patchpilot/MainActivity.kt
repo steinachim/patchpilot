@@ -21,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import de.thewolfwalkexperience.software.patchpilot.ui.PatchPilotApp
 import de.thewolfwalkexperience.software.patchpilot.ui.InstrumentViewModel
-import de.thewolfwalkexperience.software.patchpilot.ui.theme.AppTheme
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.PatchPilotTheme
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.ThemePreferences
@@ -51,15 +50,20 @@ class MainActivity : ComponentActivity() {
             // PatchPilotTheme), so anchoring it at the outermost position keeps the same back
             // stack across a theme switch.
             val navController = rememberNavController()
-            val appTheme by themePreferences.theme.collectAsState(initial = AppTheme.Default)
-            PatchPilotTheme(appTheme = appTheme) {
-                val theme = LocalThemeStyle.current
-                Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .let { theme.screenTexture(it) },
-                ) {
-                    PatchPilotApp(viewModel, themePreferences, navController)
+            // Nothing until the stored theme arrives, which is a frame or more after onCreate:
+            // painting the default theme in the meantime was a visible flash of the wrong one on
+            // a Steampunk install. The launch background covers the gap instead (themes.xml).
+            val appTheme by themePreferences.theme.collectAsState(initial = null)
+            appTheme?.let { chosen ->
+                PatchPilotTheme(appTheme = chosen) {
+                    val theme = LocalThemeStyle.current
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .let { theme.screenTexture(it) },
+                    ) {
+                        PatchPilotApp(viewModel, themePreferences, navController)
+                    }
                 }
             }
         }

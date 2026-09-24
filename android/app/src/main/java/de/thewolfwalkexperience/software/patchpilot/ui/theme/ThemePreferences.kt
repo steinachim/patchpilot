@@ -5,9 +5,11 @@ package de.thewolfwalkexperience.software.patchpilot.ui.theme
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
 private val Context.themeDataStore by preferencesDataStore(name = "theme_preferences")
@@ -19,11 +21,17 @@ private val THEME_KEY = stringPreferencesKey("app_theme")
  * name falls back to [AppTheme.Default].
  */
 class ThemePreferences(private val context: Context) {
-    val theme: Flow<AppTheme> = context.themeDataStore.data.map { prefs ->
-        prefs[THEME_KEY]?.let { stored ->
-            AppTheme.entries.firstOrNull { it.name == stored }
-        } ?: AppTheme.Default
-    }
+    /**
+     * Always emits: a store that cannot be read reads as "nothing chosen" rather than failing the
+     * flow, because [MainActivity] holds the first frame until this has a value.
+     */
+    val theme: Flow<AppTheme> = context.themeDataStore.data
+        .catch { emit(emptyPreferences()) }
+        .map { prefs ->
+            prefs[THEME_KEY]?.let { stored ->
+                AppTheme.entries.firstOrNull { it.name == stored }
+            } ?: AppTheme.Default
+        }
 
     suspend fun setTheme(theme: AppTheme) {
         context.themeDataStore.edit { prefs -> prefs[THEME_KEY] = theme.name }

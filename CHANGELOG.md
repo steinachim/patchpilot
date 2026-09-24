@@ -22,6 +22,7 @@
 - The Steampunk theme's progress indicator is a rendered brass compass whose needle hunts about north, in the style of the app icon, centred on the preset screen while the first rows load.
 
 ### Fixed
+- The app no longer shows the default theme for a moment at launch before the chosen one appears.
 - Connecting to a recognised instrument over USB no longer waits for the slower MIDI bus scan to finish first, which is what made launch take longer since the Pro-800 and Motif XS were added.
 - The device report is offered on the connect screen's firmware warning, as documented; previously the button never appeared there.
 - On a Nord, a preset copied or moved into an empty slot no longer shows at the bottom of the list under a second header for its bank until the listing is re-read.

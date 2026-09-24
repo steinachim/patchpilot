@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.PatchPilot" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- The window background is what shows from the moment the window opens until the first
+         themed frame, which waits for the stored theme (see MainActivity). The icon's own
+         background colour, so the system splash on API 31+ reads as one piece: the launcher icon
+         on the field it already sits on. Both day and night, because neither app theme's surface
+         is a colour the other could also start from. -->
+    <style name="Theme.PatchPilot" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/ic_launcher_background</item>
+    </style>
 </resources>
