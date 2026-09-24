@@ -14,8 +14,6 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import android.util.Log
@@ -90,6 +88,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
+import de.thewolfwalkexperience.software.patchpilot.ui.theme.BarAction
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
@@ -417,14 +416,14 @@ fun ProgramsScreen(
                     animationSpec = infiniteRepeatable(animation = tween(900, easing = LinearEasing)),
                     label = "angle",
                 )
-                Icon(
-                    Icons.Filled.Refresh,
+                theme.ActionIcon(
+                    BarAction.Refresh,
                     contentDescription = stringResource(R.string.cd_refresh),
                     modifier = Modifier.graphicsLayer { rotationZ = if (isRefreshing) rotation else 0f },
                 )
             }
             IconButton(onClick = onOpenSettings) {
-                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.cd_settings))
+                theme.ActionIcon(BarAction.Settings, stringResource(R.string.cd_settings))
             }
         },
     ) { innerPadding ->

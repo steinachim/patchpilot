@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,8 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.thewolfwalkexperience.software.patchpilot.R
@@ -40,6 +45,37 @@ object SteampunkThemeStyle : ThemeStyle {
 
     /** `steampunk_drag_arrow`'s own width/height, so the plates are never stretched. */
     private const val DRAG_ARROW_ASPECT = 107f / 192f
+
+    /**
+     * A little over Material's 24.dp icon, which this art needs to hold its own beside the
+     * title's weight, and still well inside the 48.dp button it sits in.
+     */
+    private val actionIconSize = 28.dp
+
+    /**
+     * Brass plates for the bar's actions. `Image`, not `Icon`, because a tint would flatten the
+     * metal; the disabled state therefore arrives as M3's reduced content-colour alpha and the
+     * bitmap takes that alpha itself. The back arrow is flipped in a right-to-left locale, which
+     * is what `Icons.AutoMirrored` does for the default theme's own.
+     */
+    @Composable
+    override fun ActionIcon(action: BarAction, contentDescription: String?, modifier: Modifier) {
+        val art = when (action) {
+            BarAction.Back -> R.drawable.steampunk_back_arrow
+            BarAction.Refresh -> R.drawable.steampunk_refresh_arrow
+            BarAction.Settings -> R.drawable.steampunk_settings_gear
+        }
+        val mirror = action == BarAction.Back &&
+            LocalLayoutDirection.current == LayoutDirection.Rtl
+        Image(
+            painter = painterResource(art),
+            contentDescription = contentDescription,
+            alpha = LocalContentColor.current.alpha,
+            modifier = modifier
+                .size(actionIconSize)
+                .then(if (mirror) Modifier.scale(scaleX = -1f, scaleY = 1f) else Modifier),
+        )
+    }
 
     override fun screenFrame(base: Modifier): Modifier = base.steampunkFrame()
     override fun screenTexture(base: Modifier): Modifier = base.steampunkTexture()

@@ -22,10 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -42,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.usb.displayLabel
+import de.thewolfwalkexperience.software.patchpilot.ui.theme.BarAction
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -99,8 +97,19 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
         // the full screen, not against this.
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-    IconButton(onClick = onOpenSettings, modifier = Modifier.align(Alignment.TopEnd)) {
-        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.cd_settings))
+    // Placed where `PatchPilotScaffold` puts its own actions, so the gear does not jump when the
+    // preset screen replaces this one: centred in a bar-height strip, an icon button's own 4.dp
+    // from the end. Material's `TopAppBar` metrics are not public, hence the two constants.
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .height(TOP_BAR_HEIGHT)
+            .padding(end = TOP_BAR_ACTION_INSET),
+        contentAlignment = Alignment.Center,
+    ) {
+        IconButton(onClick = onOpenSettings) {
+            theme.ActionIcon(BarAction.Settings, stringResource(R.string.cd_settings))
+        }
     }
     Column(
         // Scrollable, not only centred: NothingFound's supported-instrument list overflows a

@@ -7,8 +7,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -34,6 +39,16 @@ import androidx.compose.ui.unit.dp
  * [AppTheme.style]; no screen file changes, since they read [LocalThemeStyle.current].
  */
 interface ThemeStyle {
+    /**
+     * One of the top bar's action icons, drawn by the theme rather than named by the screen:
+     * Material's own vector, or a brass bitmap that no tint can be applied to.
+     *
+     * @param contentDescription what a screen reader announces. The caller owns it, since the
+     *   same icon is described differently depending on what it will do.
+     */
+    @Composable
+    fun ActionIcon(action: BarAction, contentDescription: String?, modifier: Modifier = Modifier)
+
     /**
      * The preset row's drag handle - decorative, since the row itself carries the a11y label.
      *
@@ -78,11 +93,25 @@ interface ThemeStyle {
     val railEndInset: Dp get() = 0.dp
 }
 
+/** The actions a top bar can carry, whichever screen puts them there. */
+enum class BarAction { Back, Refresh, Settings }
+
 /** Material's disabled alpha, for the pieces a theme dims for itself rather than by token. */
 internal const val DISABLED_HANDLE_ALPHA = 0.38f
 
 /** Plain Material: every function hands back [base] untouched or renders the stock component. */
 object DefaultThemeStyle : ThemeStyle {
+    @Composable
+    override fun ActionIcon(action: BarAction, contentDescription: String?, modifier: Modifier) {
+        val icon = when (action) {
+            // Mirrored in a right-to-left locale, where a `<-` glyph is not.
+            BarAction.Back -> Icons.AutoMirrored.Filled.ArrowBack
+            BarAction.Refresh -> Icons.Filled.Refresh
+            BarAction.Settings -> Icons.Filled.Settings
+        }
+        Icon(icon, contentDescription = contentDescription, modifier = modifier)
+    }
+
     override fun screenFrame(base: Modifier) = base
     override fun screenTexture(base: Modifier) = base
     override fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean) = base

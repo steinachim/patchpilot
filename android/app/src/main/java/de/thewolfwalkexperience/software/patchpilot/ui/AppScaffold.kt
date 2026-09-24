@@ -8,10 +8,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -26,6 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import de.thewolfwalkexperience.software.patchpilot.ui.theme.BarAction
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 
 /**
@@ -71,10 +70,7 @@ fun PatchPilotScaffold(
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack, enabled = backEnabled) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.cd_back),
-                            )
+                            theme.ActionIcon(BarAction.Back, stringResource(R.string.cd_back))
                         }
                     }
                 },
@@ -101,6 +97,14 @@ fun PatchPilotScaffold(
         content = content,
     )
 }
+
+/**
+ * The bar's height and the inset its actions sit at. Material keeps both private, and
+ * `ConnectScreen` - a centred hero with no bar of its own - needs them to place its settings gear
+ * where every other screen's lands.
+ */
+internal val TOP_BAR_HEIGHT = 64.dp
+internal val TOP_BAR_ACTION_INSET = 4.dp
 
 /**
  * A centred one-line state - loading, empty, or "nothing matched". One composable for every
