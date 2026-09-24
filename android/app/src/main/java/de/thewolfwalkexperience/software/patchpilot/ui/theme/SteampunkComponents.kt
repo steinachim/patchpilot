@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -194,21 +193,6 @@ fun Modifier.steampunkTexture(): Modifier = composed {
             x += spacing
         }
     }
-}
-
-/**
- * The circular brass bezel drawn behind a preset row's handle glyph (see [dragHandleGlyph]) -
- * the "mechanical slot" identity, sized to fit the existing
- * `ProgramListMetrics.handleSize` column so it changes nothing about the row's layout or the
- * drag gesture's hit-testing, which is keyed on that column's pixel width alone.
- */
-fun Modifier.steampunkSlotBezel(occupied: Boolean): Modifier = composed {
-    val ring = if (occupied) SteampunkAccents.brassLight else SteampunkAccents.parchmentDim
-    val fill = if (occupied) SteampunkAccents.brassDark else MaterialTheme.colorScheme.surface
-    this
-        .padding(2.dp)
-        .background(fill, CircleShape)
-        .border(1.5.dp, ring, CircleShape)
 }
 
 /**

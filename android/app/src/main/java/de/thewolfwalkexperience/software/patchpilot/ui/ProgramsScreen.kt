@@ -14,7 +14,6 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -802,17 +801,13 @@ fun ProgramsScreen(
                                     leadingContent = {
                                         Box(
                                             contentAlignment = Alignment.Center,
-                                            modifier = Modifier
-                                                .size(ProgramListMetrics.handleSize)
-                                                .let { theme.slotBezel(it, occupied = !isEmpty) },
+                                            modifier = Modifier.size(ProgramListMetrics.handleSize),
                                         ) {
                                             if (!isEmpty && canRelocate && !ops.picking && browseScope == PresetScope.USER) {
-                                                // The glyph is decorative and the row is what a
+                                                // The handle is decorative and the row is what a
                                                 // screen reader describes, so the handle carries
-                                                // the instruction. Dimmed while the listing is
-                                                // still arriving, since dragging is inert then.
-                                                // Resolved out here because `semantics {}` is not
-                                                // a composable scope.
+                                                // the instruction. Resolved out here because
+                                                // `semantics {}` is not a composable scope.
                                                 val handleDescription = if (editsEnabled) {
                                                     stringResource(
                                                         R.string.cd_reorder,
@@ -821,15 +816,8 @@ fun ProgramsScreen(
                                                 } else {
                                                     stringResource(R.string.cd_reorder_unavailable)
                                                 }
-                                                Text(
-                                                    theme.dragHandleGlyph,
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    color = if (editsEnabled) {
-                                                        LocalContentColor.current
-                                                    } else {
-                                                        MaterialTheme.colorScheme.onSurface
-                                                            .copy(alpha = ProgramListMetrics.DISABLED_ALPHA)
-                                                    },
+                                                theme.DragHandle(
+                                                    enabled = editsEnabled,
                                                     modifier = Modifier.semantics {
                                                         contentDescription = handleDescription
                                                     },
@@ -898,9 +886,8 @@ fun ProgramsScreen(
                                 ) {
                                     // Purely visual, and hidden from accessibility so it does not
                                     // read as a second control.
-                                    Text(
-                                        theme.dragHandleGlyph,
-                                        style = MaterialTheme.typography.titleMedium,
+                                    theme.DragHandle(
+                                        enabled = true,
                                         modifier = Modifier.clearAndSetSemantics {},
                                     )
                                 }

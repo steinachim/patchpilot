@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -27,23 +28,28 @@ import androidx.compose.ui.unit.dp
  * Not where `ColorScheme`, `Typography` and `Shapes` live: those are `MaterialTheme` tokens,
  * centralised in [PatchPilotTheme]'s one `when (appTheme)`, and every stock Material component
  * picks them up. This interface is for the things a token swap cannot produce - a compass standing
- * in for a spinner, a riveted frame, a slot bezel.
+ * in for a spinner, a riveted frame, a brass drag handle.
  *
  * A third theme is one implementation of this (see [SteampunkThemeStyle]) plus a mapping in
  * [AppTheme.style]; no screen file changes, since they read [LocalThemeStyle.current].
  */
 interface ThemeStyle {
-    /** The preset row's drag handle glyph - decorative, the row itself carries the a11y label. */
-    val dragHandleGlyph: String
+    /**
+     * The preset row's drag handle - decorative, since the row itself carries the a11y label.
+     *
+     * Drawn by the theme rather than described to it: a text glyph dims by taking a colour, a
+     * bitmap that carries its own colour dims by alpha.
+     *
+     * @param enabled false while the listing is still arriving, when dragging does nothing.
+     */
+    @Composable
+    fun DragHandle(enabled: Boolean, modifier: Modifier = Modifier)
 
     /** The screen-level frame/border decoration, if this theme draws one. */
     fun screenFrame(base: Modifier): Modifier
 
     /** The app-wide background texture, applied once at the root ([MainActivity]'s `Surface`). */
     fun screenTexture(base: Modifier): Modifier
-
-    /** The bezel behind a preset row's handle glyph, sized to fit the existing handle column. */
-    fun slotBezel(base: Modifier, occupied: Boolean): Modifier
 
     /** The panel treatment for one preset row, including drag/drop-target highlighting. */
     fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean): Modifier
@@ -72,15 +78,29 @@ interface ThemeStyle {
     val railEndInset: Dp get() = 0.dp
 }
 
+/** Material's disabled alpha, for the pieces a theme dims for itself rather than by token. */
+internal const val DISABLED_HANDLE_ALPHA = 0.38f
+
 /** Plain Material: every function hands back [base] untouched or renders the stock component. */
 object DefaultThemeStyle : ThemeStyle {
-    override val dragHandleGlyph = "⠿"
-
     override fun screenFrame(base: Modifier) = base
     override fun screenTexture(base: Modifier) = base
-    override fun slotBezel(base: Modifier, occupied: Boolean) = base
     override fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean) = base
     override fun railDecoration(base: Modifier) = base
+
+    @Composable
+    override fun DragHandle(enabled: Boolean, modifier: Modifier) {
+        Text(
+            "⠿",
+            style = MaterialTheme.typography.titleMedium,
+            color = if (enabled) {
+                LocalContentColor.current
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_HANDLE_ALPHA)
+            },
+            modifier = modifier,
+        )
+    }
 
     @Composable
     override fun ProgressIndicator(modifier: Modifier) {

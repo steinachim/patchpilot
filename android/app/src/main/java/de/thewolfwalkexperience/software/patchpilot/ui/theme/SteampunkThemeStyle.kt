@@ -3,10 +3,13 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui.theme
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -14,10 +17,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import de.thewolfwalkexperience.software.patchpilot.R
 
 /**
  * The "Brass & Aether" [ThemeStyle] - every bespoke piece a `MaterialTheme` token swap alone
@@ -25,11 +31,18 @@ import androidx.compose.ui.unit.sp
  * (`steampunkFrame`, `SteampunkCompass`, etc.) into the shape screens actually call.
  */
 object SteampunkThemeStyle : ThemeStyle {
-    override val dragHandleGlyph = "⚙"
+    /**
+     * The full handle column (`ProgramListMetrics.handleSize`), since the plates read better
+     * large. The aspect ratio keeps them well inside the column's width, so the text beside it
+     * does not move.
+     */
+    private val dragHandleHeight = 32.dp
+
+    /** `steampunk_drag_arrow`'s own width/height, so the plates are never stretched. */
+    private const val DRAG_ARROW_ASPECT = 107f / 192f
 
     override fun screenFrame(base: Modifier): Modifier = base.steampunkFrame()
     override fun screenTexture(base: Modifier): Modifier = base.steampunkTexture()
-    override fun slotBezel(base: Modifier, occupied: Boolean): Modifier = base.steampunkSlotBezel(occupied)
 
     override fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean): Modifier =
         base.steampunkRowPanel(dragged, dropTarget)
@@ -50,6 +63,23 @@ object SteampunkThemeStyle : ThemeStyle {
         // a layout - and keeps this function self-contained.
         val pillShape = RoundedCornerShape(percent = 50)
         return base.border(1.dp, SteampunkAccents.brassDark, pillShape).steampunkVerticalRivets()
+    }
+
+    /**
+     * A pair of riveted brass plates, an up arrow over a down arrow, in place of a glyph - the
+     * same rendered-bitmap language as [SteampunkCompass]. It carries its own colour, so an inert
+     * handle is dimmed rather than recoloured.
+     */
+    @Composable
+    override fun DragHandle(enabled: Boolean, modifier: Modifier) {
+        Image(
+            painter = painterResource(R.drawable.steampunk_drag_arrow),
+            contentDescription = null,
+            modifier = modifier
+                .height(dragHandleHeight)
+                .aspectRatio(DRAG_ARROW_ASPECT)
+                .alpha(if (enabled) 1f else DISABLED_HANDLE_ALPHA),
+        )
     }
 
     @Composable
