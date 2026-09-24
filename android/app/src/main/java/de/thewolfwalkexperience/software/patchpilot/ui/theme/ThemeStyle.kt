@@ -21,20 +21,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * Everything a screen needs to draw itself differently per [AppTheme], gathered behind one
- * interface instead of an `if (theme == AppTheme.Steampunk)` at each call site.
+ * Everything a screen needs to draw itself differently per [AppTheme], behind one interface rather
+ * than an `if (theme == AppTheme.Steampunk)` at each call site.
  *
- * This is deliberately *not* where `ColorScheme`/`Typography`/`Shapes` live - those are
- * `MaterialTheme`-level tokens, already centralised in the one `when (appTheme)` in
- * [PatchPilotTheme], and every stock Material component (buttons, dialogs, menus, the destructive
- * Delete styling) already gets them for free. This interface exists only for the handful of
- * things a token swap alone cannot produce: bespoke composables (a compass standing in for
- * a spinner) and bespoke decoration (a riveted frame, a mechanical slot bezel), so no screen
- * branches on the raw `AppTheme` value itself.
+ * Not where `ColorScheme`, `Typography` and `Shapes` live: those are `MaterialTheme` tokens,
+ * centralised in [PatchPilotTheme]'s one `when (appTheme)`, and every stock Material component
+ * picks them up. This interface is for the things a token swap cannot produce - a compass standing
+ * in for a spinner, a riveted frame, a slot bezel.
  *
- * **Adding a third theme** means implementing this interface once (see [SteampunkThemeStyle] for
- * the shape of it) and mapping it in [AppTheme.style] below - no screen file changes, since they
- * only ever read [LocalThemeStyle.current] and never the raw [AppTheme] value.
+ * A third theme is one implementation of this (see [SteampunkThemeStyle]) plus a mapping in
+ * [AppTheme.style]; no screen file changes, since they read [LocalThemeStyle.current].
  */
 interface ThemeStyle {
     /** The preset row's drag handle glyph - decorative, the row itself carries the a11y label. */
@@ -68,21 +64,15 @@ interface ThemeStyle {
     fun BankHeader(text: String, modifier: Modifier = Modifier)
 
     /**
-     * Space to keep clear at each end of the bank rail, for decoration drawn over it.
-     *
-     * Zero unless a theme paints something into the rail's own ends. A theme that does has no
-     * other way to say so: [railDecoration] draws *over* the rail after its content is laid out,
-     * so the labels know nothing about it and will sit underneath. With four banks the cells are
-     * tall enough that every label clears the ends anyway; with the Motif XS's eleven factory
-     * banks the first and last labels land on the decoration.
+     * Space to keep clear at each end of the bank rail, for decoration drawn over it: zero unless
+     * a theme paints into the rail's ends, which [railDecoration] does after the content is laid
+     * out, so the labels would otherwise sit underneath. With the Motif XS's eleven factory banks
+     * the first and last labels land on the decoration.
      */
     val railEndInset: Dp get() = 0.dp
 }
 
-/**
- * Plain Material: every function here either hands back [base] untouched or renders the stock
- * component.
- */
+/** Plain Material: every function hands back [base] untouched or renders the stock component. */
 object DefaultThemeStyle : ThemeStyle {
     override val dragHandleGlyph = "⠿"
 
@@ -113,10 +103,8 @@ object DefaultThemeStyle : ThemeStyle {
 
     @Composable
     override fun BankHeader(text: String, modifier: Modifier) {
-        // A plain background color isn't enough to set the header apart from its neighbors -
-        // alternating row shading means those rows are surfaceVariant half the time, the same
-        // color the header itself uses. The dividers give a seam that's visible regardless of
-        // which shade landed on either side.
+        // The dividers, not the background: alternating row shading makes the neighbouring rows
+        // surfaceVariant half the time, the same colour the header uses.
         Column(modifier.fillMaxWidth()) {
             HorizontalDivider()
             Text(
@@ -141,8 +129,7 @@ val AppTheme.style: ThemeStyle
     }
 
 /**
- * The active [ThemeStyle], provided by [PatchPilotTheme]. Defaults to [DefaultThemeStyle] so a
- * composable previewed or tested outside it degrades to the plain look rather than crashing on a
- * missing provider.
+ * The active [ThemeStyle], provided by [PatchPilotTheme]. Defaults to [DefaultThemeStyle], so a
+ * composable previewed outside it degrades to the plain look rather than crashing.
  */
 val LocalThemeStyle = compositionLocalOf<ThemeStyle> { DefaultThemeStyle }

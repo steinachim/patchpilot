@@ -138,10 +138,9 @@ class Pro800ProgramCodecTest {
      * Pins the preset name's position against a **literally constructed** record, rather than
      * against the constant the production code uses.
      *
-     * This is the test that was missing. `Pro800InstrumentTest` builds its fixtures with
-     * `Pro800ProgramFields.NAME_DENSE_OFFSET`, so it agreed with whatever that constant said and
-     * would have passed just as happily with the wrong value - which it did, while a real Pro-800
-     * returned "lassical Brass" for "Classical Brass".
+     * `Pro800InstrumentTest` builds its fixtures with `Pro800ProgramFields.NAME_DENSE_OFFSET`, so
+     * it agrees with whatever that constant says and would pass with a wrong value - where a real
+     * Pro-800 returns "lassical Brass" for "Classical Brass".
      *
      * The layout here comes from `Pro800ProgramConstants.h`:
      * `{172, 1, "Preset Name (first char)"}` .. `{189, 1, "Preset Name (last char)"}`, with

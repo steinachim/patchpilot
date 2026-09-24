@@ -9,15 +9,10 @@ import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
 
 /**
  * The demo instrument's made-up category list, and which category each of its presets starts in.
- *
- * **Shaped like a Nord's, because that is what [DemoInstrument] mirrors**: one category per preset,
- * no sub-categories, and `None` is a real category rather than the absence of one - so demo mode
- * exercises the same `allowsUnassigned = false` editor path a Nord does, rather than a third shape
- * no instrument has.
- *
- * Invented, like every other name in demo mode. Nothing here describes real hardware, and the
- * ordering matches what a Nord shows - alphabetical, with `None` last - so the demo and the real
- * thing do not look gratuitously different side by side.
+ * Shaped like a Nord's, which [DemoInstrument] mirrors: one category per preset, no
+ * sub-categories, and `None` a real category rather than the absence of one, so demo mode
+ * exercises the same `allowsUnassigned = false` editor path. Ordered alphabetically with `None`
+ * last, as a Nord shows them. Nothing here describes real hardware.
  */
 internal object DemoCategories {
 
@@ -32,12 +27,7 @@ internal object DemoCategories {
 
     val taxonomy = CategoryTaxonomy(NAMES.map { MainCategory(it, emptyList()) })
 
-    /**
-     * What each seeded preset is filed under, by preset name.
-     *
-     * A couple sit in [NONE] on purpose, so the listing shows that state rather than implying
-     * every preset always has a category.
-     */
+    /** What each seeded preset is filed under, by preset name; a couple sit in [NONE], so the listing shows that state. */
     val BY_PRESET: Map<String, String> = mapOf(
         "Concert Grand" to "Grand",
         "Studio Upright" to "Upright",

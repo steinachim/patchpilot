@@ -46,19 +46,16 @@ import androidx.compose.runtime.setValue
 
 /**
  * The hidden debug menu, reached by tapping the instrument name five times on the preset screen.
+ * A route of its own rather than a dialog, because the regression test needs room for a progress
+ * line and a scrollable report.
  *
- * A route of its own rather than a dialog or a bottom sheet, because the regression test needs
- * real room: a progress line while it runs, and a scrollable report afterwards.
+ * Both entries put the instrument, rather than the app, under test:
  *
- * Two entries, both of which exist for the same reason - putting the instrument, rather than the
- * app, under test:
- *
- * - **the device report**, always available here; the preset screen offers it only for a device
- *   outside the catalog or on untested firmware. Read once, then offered for sharing or saving,
- *   rather than a share button and a save button that each read the instrument on their own.
- * - **the regression test**, which exercises every operation the connected instrument declares
- *   and says what happened. See [de.thewolfwalkexperience.software.patchpilot.core.RegressionTester]
- *   for what it will and will not do to an instrument.
+ * - the device report, always available here and on the preset screen only for a device outside
+ *   the catalog or on untested firmware. Read once, then offered for sharing or saving.
+ * - the regression test, which exercises every operation the connected instrument declares - see
+ *   [de.thewolfwalkexperience.software.patchpilot.core.RegressionTester] for what it will and
+ *   will not do.
  */
 @Composable
 fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
@@ -74,12 +71,10 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val reportRunner = viewModel.deviceReportRunner
     val reportState by reportRunner.state.collectAsState()
     val reportError by reportRunner.error.collectAsState()
-    // What the connected instrument offers, keyed on the session the same way ProgramsScreen
-    // keys its facet reads: the accessors behind these are plain getters, and nothing about a
-    // plain getter tells Compose when the answer changes. Read once as properties, the report
-    // button stayed greyed out after a cable pull and never came back when the session did. The
-    // hand-off to ConnectScreen when the session is lost is PatchPilotNavHost's, not this
-    // screen's; this only keeps the buttons honest through a reconnect's dip.
+    // What the connected instrument offers, keyed on the session as ProgramsScreen keys its facet
+    // reads: nothing about a plain getter tells Compose when the answer changes, so read as plain
+    // properties these would not recover when a session came back. The hand-off when a session is
+    // lost is PatchPilotNavHost's; this only keeps the buttons honest through a reconnect's dip.
     val session by viewModel.state.collectAsState()
     val hasReport = remember(session) { viewModel.hasReport }
     val canVerifyFactoryNames = remember(session) { viewModel.canVerifyFactoryNames }
@@ -94,20 +89,19 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val readingLabel = stringResource(R.string.share_reading_device)
     val verifyStartingLabel = stringResource(R.string.debug_verify_starting)
 
-    // "Save to device": the content is resolved when the picker returns, from the held report
-    // it was launched for, not captured when it was launched. The picker is another Activity,
-    // and a configuration change while it is up recreates this composition; anything captured
-    // in plain `remember` is gone by the time the Uri arrives, while both reports survive in
-    // the ViewModel. Each kind of report has its own launcher, so the result already says which
-    // one it is for.
+    // "Save to device": the content is resolved when the picker returns rather than captured when
+    // it was launched. The picker is another Activity, and a configuration change while it is up
+    // recreates this composition, so anything in plain `remember` is gone by the time the Uri
+    // arrives - while both reports survive in the ViewModel. One launcher per kind of report, so
+    // the result says which one it is for.
     val saveFailed = stringResource(R.string.debug_save_failed)
     fun onSaveResult(uri: Uri?, content: () -> String?) {
         val text = content()
         if (uri == null || text == null) return
         scope.launch {
             try {
-                // Off the main thread, and not abandonable part way: the picker has already
-                // created the document, and a cancelled write would leave it truncated.
+                // Off the main thread and not abandonable part way: the picker has already created
+                // the document, and a cancelled write would leave it truncated.
                 withContext(Dispatchers.IO + NonCancellable) { saveTextReport(context, uri, text) }
             } catch (e: CancellationException) {
                 throw e
@@ -126,10 +120,9 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
         }
 
     // The factory-name check: which bank the result belongs to, whether a read is running, and
-    // what it found. Deliberately not saved like the two reports - a two-minute
-    // read is not worth resuming across process death, and a stale verdict would be worse than
-    // none. The bank is kept because checking PRE1 and then PRE2 would otherwise leave a verdict
-    // on screen with nothing saying which bank earned it.
+    // what it found. Not saved like the two reports, since a stale verdict would be worse than
+    // none; the bank is kept, or checking PRE1 and then PRE2 would leave a verdict with nothing
+    // saying which bank earned it.
     var verifyBank by remember { mutableStateOf<String?>(null) }
     var verifyProgress by remember { mutableStateOf<String?>(null) }
     var verifyResult by remember { mutableStateOf<List<String>?>(null) }
@@ -152,12 +145,9 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
         }
     }
 
-    // Back out of a *report* - either kind - to the debug menu, not out of the debug screen.
-    //
-    // The reports are rendered inside this screen rather than on routes of their own, so the
-    // scaffold's arrow was leaving for the programs list and skipping the menu the user had just
-    // come from - which reads as the app losing your place. A finished report is a state of this
-    // screen, so back clears the state; only from the menu itself does back actually leave.
+    // Back out of a report - either kind - to the debug menu, not out of the debug screen: the
+    // reports render inside this screen rather than on routes of their own, so a finished report
+    // is a state of it, and back clears that state. Only from the menu itself does back leave.
     val atMenu = run !is RegressionRunState.Done && reportState !is DeviceReportState.Done
     // Clears both; only one is ever set, since each report hides the button that starts the other.
     fun backToMenu() {
@@ -168,21 +158,17 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     // Also catches the system/gesture back, which otherwise disagrees with the arrow beside it.
     BackHandler(enabled = !atMenu) { backToMenu() }
 
-    // A run in progress is not dismissable. It survives the screen (it runs in the ViewModel),
-    // but its confirmation dialogs are shown only here, and it holds the instrument mutex while
-    // it waits on one - so leaving would strand the run on a question nobody can see and block
-    // every edit behind it. The arrow is greyed out and the gesture swallowed, the presets
-    // screen's shape during an edit. The wait is bounded: a run is a handful of writes with
-    // pauses between them, and an instrument that stops answering fails the run through the
-    // exchange timeouts. Never enabled together with the handler above, since `Running` counts
-    // as `atMenu`, so which of the two Compose consults first does not matter.
+    // A run in progress is not dismissable: it survives the screen, but its confirmation dialogs
+    // are shown only here and it holds the instrument mutex while it waits on one, so leaving
+    // would strand it on a question nobody can see and block every edit behind it. The wait is
+    // bounded by the exchange timeouts. Never enabled together with the handler above, since
+    // `Running` counts as `atMenu`.
     //
-    // The device report read is not held like this: it writes nothing, and it carries on in the
-    // ViewModel if the screen is left, so coming back finds the result waiting.
+    // The device report read is not held like this: it writes nothing and carries on in the
+    // ViewModel, so coming back finds the result waiting.
     val running = run is RegressionRunState.Running
     BackHandler(enabled = running) {
-        // Deliberately empty: refusing the gesture *is* the behaviour, and the step line already
-        // says what is running.
+        // Empty: refusing the gesture is the behaviour, and the step line says what is running.
     }
 
     PatchPilotScaffold(
@@ -204,12 +190,10 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
             val state = run
             val report = reportState
             when {
-                // Precedence, not state: at most one of the first four holds at a time, since each
-                // replaces the menu and with it the buttons that start the others. The device
-                // report is read on demand and then *held* - the same shape as the regression run,
-                // and for the same reason: a single "Generate" whose result offers Share and Save
-                // says what each does, where "Save to device" as a second entry point did not
-                // (does it generate? must one generate first?).
+                // At most one of the first four holds at a time, since each replaces the menu and
+                // with it the buttons that start the others. The device report is read on demand
+                // and then held, the same shape as the regression run: one "Generate" whose result
+                // offers Share and Save.
                 report is DeviceReportState.Done -> DeviceReportReadyView(
                     sizeBytes = report.json.toByteArray().size,
                     failures = report.failures,
@@ -219,8 +203,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             description = report.description,
                             suffix = jsonSuffix,
                             initialStem = report.stem,
-                            // From the held report, not a fresh read: the read is the slow part
-                            // this view exists to keep.
+                            // From the held report: the read is the slow part this view keeps.
                             onConfirm = { stem ->
                                 shareTextReport(
                                     context = context,
@@ -265,7 +248,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     Text(stringResource(R.string.debug_report_body), style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
                     // Gated on the factory-name check, whose progress and verdict live inline on
-                    // this menu: a report read replaces the menu, and would hide them mid-read.
+                    // this menu: a report read replaces the menu and would hide them mid-read.
                     Button(
                         onClick = { reportRunner.start(readingLabel) },
                         enabled = hasReport && verifyProgress == null,
@@ -284,8 +267,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                         Text(stringResource(R.string.debug_regression_action))
                     }
                     // Only where there is a shipped name table to check, which today means a
-                    // Motif XS. Read-only throughout: it issues dump requests and writes nothing,
-                    // which is why it needs none of the regression test's confirmations.
+                    // Motif XS. Read-only, so it needs none of the regression test's confirmations.
                     if (canVerifyFactoryNames) {
                         Spacer(Modifier.height(24.dp))
                         Text(
@@ -324,9 +306,9 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.error,
                                 )
-                                // Every one of them, not a count. A mismatch means the shipped
-                                // table is wrong, and the only useful next step is knowing which
-                                // slot and what the instrument actually calls it.
+                                // Every one, not a count: a mismatch means the shipped table is
+                                // wrong, and what matters is which slot and what the instrument
+                                // calls it.
                                 mismatches.forEach {
                                     Text(it, style = MaterialTheme.typography.bodySmall)
                                 }
@@ -340,8 +322,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
 
     pending?.let { confirmation ->
         AlertDialog(
-            // Dismissing without answering is a "no": the run is waiting on this, and treating a
-            // tap outside as consent is exactly what a warning dialog must not do.
+            // Dismissing without answering is a "no": a tap outside is not consent.
             onDismissRequest = { confirmation.answer.complete(false) },
             title = { Text(stringResource(confirmation.question.title)) },
             text = {
@@ -349,6 +330,8 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     when (val question = confirmation.question) {
                         is PendingQuestion.ConfirmSelect ->
                             stringResource(R.string.debug_confirm_select_body, question.shownOnDevice)
+                        // The swap alone has its own wording, since the three-test body names
+                        // two tests that are not in question there.
                         is PendingQuestion.ConfirmRealSlotMutation -> when (question.reason) {
                             OccupiedSlotReason.NO_FREE_SLOT -> stringResource(
                                 R.string.debug_confirm_occupied_body,
@@ -358,9 +341,6 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                                 R.string.debug_confirm_occupied_body,
                                 stringResource(R.string.debug_confirm_occupied_reason_no_copy),
                             )
-                            // The sandbox copy exists; only the swap has nowhere else to go. Its
-                            // own wording, since the three-test body names two tests that are
-                            // not in question here.
                             OccupiedSlotReason.NO_SECOND_FREE_SLOT ->
                                 stringResource(R.string.debug_confirm_swap_body)
                         }
@@ -397,13 +377,10 @@ private fun RunningView(title: String, step: String) {
 
 /**
  * The device report, read and waiting to go somewhere - the counterpart of [RegressionReportView].
- *
- * The JSON itself is not shown: for a Nord it is tens of kilobytes, most of it hex payloads, and
- * the useful thing to do with it is to send it on rather than read it on a phone. What is shown
- * is enough to know the read happened and roughly what it produced - and, when reads failed,
- * which: a report whose cable was pulled halfway reaches this view exactly like a whole one
- * otherwise, and it is shared to have a catalog entry written from it. Share and Save stay,
- * since a partial report still says more than none; the title and the list say it is partial.
+ * The JSON itself is not shown: for a Nord it is tens of kilobytes of hex, and the useful thing to
+ * do with it is send it on. What is shown is enough to know the read happened and, where reads
+ * failed, which - since a report whose cable was pulled halfway reaches this view like a whole
+ * one. Share and Save stay, and the title and list say it is partial.
  */
 @Composable
 private fun DeviceReportReadyView(
@@ -468,7 +445,7 @@ private fun RegressionReportView(
             result.detail,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            // Monospaced so a run of addresses ("A:1:1", "A:1:4") lines up down the report.
+            // Monospaced, so a run of addresses lines up down the report.
             fontFamily = FontFamily.Monospace,
         )
         Spacer(Modifier.height(8.dp))

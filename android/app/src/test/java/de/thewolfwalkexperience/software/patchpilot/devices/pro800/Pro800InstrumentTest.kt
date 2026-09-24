@@ -418,11 +418,9 @@ class Pro800InstrumentTest {
     }
 
     /**
-     * "Selected", because the pointer was read back and agreed.
-     *
-     * The old program-change path could only ever say "Sent" - nothing acknowledged it, so a wrong
-     * channel and a working one looked identical. What still cannot be confirmed is the audible
-     * recall, which the instrument reports nowhere; this claims the pointer, which is verified.
+     * "Selected", because the pointer was read back and agreed - which a bank-select and program
+     * change could not claim, since nothing acknowledges those. What cannot be confirmed is the
+     * audible recall, which the instrument reports nowhere; this claims only the pointer.
      */
     @Test
     fun `the selection confirmation says selected`() = runTest {
@@ -468,9 +466,9 @@ class Pro800InstrumentTest {
      * The reply a real Pro-800 gives for an address that holds nothing: a bare `F0 F7`, with no
      * manufacturer header and no echoed address.
      *
-     * Rejecting it costs two full timeouts per address. On the instrument this was found on,
-     * three of four banks answered this way - about twenty minutes of a scan spent waiting for
-     * replies that had already arrived.
+     * Rejecting it costs two full timeouts per address, and on an instrument with three of four
+     * banks empty that is about twenty minutes of a scan spent waiting for replies that have
+     * already arrived.
      */
     @Test
     fun `a bare F0 F7 is an empty slot, not a timeout`() = runTest {

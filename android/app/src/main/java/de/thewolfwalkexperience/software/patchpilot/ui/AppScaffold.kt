@@ -29,27 +29,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 
 /**
- * The frame every screen sits in: a Material `Scaffold` with a real `TopAppBar`.
+ * The frame every screen sits in: a Material `Scaffold` with a real `TopAppBar`, which brings the
+ * system back arrow (mirrored in a right-to-left locale, where a `←` glyph is not), a title in
+ * the same place on every screen, content scrolling under the bar, and the window insets
+ * edge-to-edge needs (see `MainActivity`).
  *
- * One shared frame rather than a per-screen header row, because the platform's own does several
- * things a hand-rolled one does not:
- *
- * - The back affordance is the system arrow, [Icons.AutoMirrored.Filled.ArrowBack], which mirrors
- *   in a right-to-left locale where a `←` glyph does not.
- * - The title sits in the same place on every screen rather than moving with whatever is beside
- *   it.
- * - Content scrolls *under* the bar, which is the elevation cue Android uses to say "there is
- *   more above this".
- * - `Scaffold` is also what applies window insets, which is what makes edge-to-edge work at all
- *   (see `MainActivity`) rather than something each screen has to remember.
- *
- * @param onBack null on a root screen, which is what decides whether a back arrow is drawn - the
- *   arrow's presence should follow from the navigation graph rather than from a flag somebody has
- *   to keep in step with it.
+ * @param onBack null on a root screen, so the arrow's presence follows from the navigation graph.
  * @param backEnabled false while leaving would interrupt something that cannot be interrupted -
- *   see ProgramsScreen's use of it. Deliberately greys the arrow out rather than hiding it: an
- *   arrow that vanishes for a few seconds reads as a layout bug, while a disabled one reads as
- *   "not now", which is what is actually meant. A screen with no such state leaves this true.
+ *   see ProgramsScreen. Greys the arrow out rather than hiding it, since an arrow that vanishes
+ *   for a few seconds reads as a layout bug.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,18 +55,17 @@ fun PatchPilotScaffold(
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val theme = LocalThemeStyle.current
     Scaffold(
-        // The frame decoration lives on the Scaffold's own outer bounds, not on the TopAppBar or
-        // the scrollable body - one consistent placement rule shared with ConnectScreen's root
-        // (see ThemeStyle.screenFrame's doc comment), rather than two different rivet treatments
-        // that moved between screens.
+        // The frame decoration goes on the Scaffold's own outer bounds, not the TopAppBar or the
+        // scrollable body - the same placement ConnectScreen's root uses (see
+        // ThemeStyle.screenFrame).
         modifier = modifier
             .nestedScroll(scrollBehavior.nestedScrollConnection)
             .let { theme.screenFrame(it) },
         topBar = {
             TopAppBar(
                 title = {
-                    // A preset name or a device name can be longer than the bar; ellipsis rather
-                    // than wrapping, which is what every other Android app does here.
+                    // A preset or device name can be longer than the bar; ellipsis rather than
+                    // wrapping.
                     Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = titleModifier)
                 },
                 navigationIcon = {
@@ -98,11 +85,9 @@ fun PatchPilotScaffold(
         snackbarHost = {
             if (snackbarHostState != null) {
                 SnackbarHost(snackbarHostState) { data ->
-                    // **Deliberately not the Material default.** M3's `Snackbar` uses
-                    // `inverseSurface`/`inverseOnSurface`, which in a dark theme means a near-white
-                    // slab - by design, so it contrasts with the app rather than blending in. In a
-                    // dark room, next to an instrument, that is a flashbulb every time a preset is
-                    // selected. These colours keep it legible and on-theme instead.
+                    // Not the Material default: M3's `Snackbar` uses `inverseSurface`, a
+                    // near-white slab in a dark theme, which next to an instrument in a dark room
+                    // is a flashbulb every time a preset is selected.
                     Snackbar(
                         snackbarData = data,
                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -118,11 +103,8 @@ fun PatchPilotScaffold(
 }
 
 /**
- * A centred one-line state - loading, empty, or "nothing matched".
- *
- * One composable for every nothing-to-show state, so they all centre the same way; a progress
- * indicator dropped in as a plain `Column` child renders in the top-left corner rather than
- * anywhere a user would look for it.
+ * A centred one-line state - loading, empty, or "nothing matched". One composable for every
+ * nothing-to-show state, since a progress indicator dropped into a `Column` renders top-left.
  */
 @Composable
 fun CenteredMessage(modifier: Modifier = Modifier, content: @Composable () -> Unit) {

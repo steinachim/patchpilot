@@ -11,24 +11,19 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 
 /**
- * A Motif XS voice's categories and its favorite mark.
+ * A Motif XS voice's categories and its favorite mark - two stores that behave differently. The
+ * categories are four bytes inside the voice; the favorite mark is one byte in a separate
+ * per-bank table at `71 mm 00`. Hence [canSetCategories] and [canSetFavorite] disagreeing about a
+ * factory bank: the instrument lets a host write a favorite for one, but a category is the
+ * factory voice itself.
  *
- * **Two stores, not one, and they behave differently at every turn.** The categories are four
- * bytes inside the voice; the favorite mark is one byte in a separate per-bank table at `71 mm 00`
- * that the instrument keeps alongside the voices. That is why [canSetCategories] and
- * [canSetFavorite] disagree about a factory bank - a favorite is the user's own data about factory
- * content, and the instrument lets a host write it; a category is the factory voice itself.
+ * The mark names which of the voice's own assignments the instrument's browser files it under, so
+ * this facet offers assignment slots rather than categories. A slot the voice has not assigned is
+ * a legal target, and the voice then appears under no category.
  *
- * The flag is not a boolean. It names which of the voice's *own* assignments the instrument's
- * browser files the favorite under - which is why this facet offers assignment *slots* rather than
- * categories. A slot the voice has not assigned is still a legal target: the mark is written, and
- * the instrument lists the voice in its Favorite bank under no category. So a voice with no
- * categories at all can still be a favorite.
- *
- * **Verified against an XS6.** A favorite written from the app leaves the rest of its bank's
- * marks intact with their flag values (the whole-table rule), and a category write of
- * `Bass`/`Dr/Pc` with no sub stores `(4, 4)`/`(12, 4)`, one past each main's last sub rather
- * than a fixed 5.
+ * Verified against an XS6: a favorite written from the app leaves the rest of its bank's marks
+ * intact, and a category write of `Bass`/`Dr/Pc` with no sub stores `(4, 4)`/`(12, 4)`, one past
+ * each main's last sub.
  */
 internal class MotifXsTagger(
     private val instrument: MotifXsInstrument,
@@ -37,13 +32,7 @@ internal class MotifXsTagger(
     private val factoryVoices: MotifXsFactoryVoices,
 ) : PresetTagger {
 
-    /**
-     * Shipped, not read - and off the **device catalog**, not the voice-name table.
-     *
-     * The encoding describes the instrument's format, which is why a user voice can be filed under
-     * the same categories a factory one is. A catalog without it gets no facet at all rather than
-     * one that can name nothing - see `MotifXsInstrument.tagger`.
-     */
+    /** Shipped in the device catalog rather than the voice-name table: the encoding describes the instrument's format. */
     override val taxonomy: CategoryTaxonomy = encoding.taxonomy
 
     /** Yamaha's `Category 1` and `Category 2`. Fixed by the format, not by the catalog. */
@@ -55,23 +44,15 @@ internal class MotifXsTagger(
     override fun canSetCategories(address: SlotAddress): Boolean =
         config.banks.getOrNull(address.bank)?.readOnly == false
 
-    /**
-     * Outside the voice, so any catalogued bank will take one.
-     *
-     * Confirmed on hardware against PRE1, which is read-only and accepted the write regardless.
-     */
+    /** Outside the voice, so any catalogued bank takes one - confirmed against PRE1, which is read-only. */
     override fun canSetFavorite(address: SlotAddress): Boolean =
         address.bank in config.banks.indices
 
     /**
-     * What is stored at [address].
-     *
-     * **A factory voice is never dumped.** Its categories come from the shipped table, which is
-     * the same rule `MotifXsInstrument.indexFactory` keeps and for the same reason: the factory
-     * listing costs no round trips and must go on costing none. A user voice's come out of the
-     * `0C` payload the browser already reads, so they cost nothing either.
-     *
-     * The mark is a different store and always costs one small dump per bank, cached below.
+     * What is stored at [address]. A factory voice is never dumped: its categories come from the
+     * shipped table, as in `MotifXsInstrument.indexFactory`, and a user voice's out of the `0C`
+     * payload the browser already reads. The mark is a different store and costs one small dump
+     * per bank, cached below.
      */
     override suspend fun read(address: SlotAddress): PresetTags {
         val spec = config.banks.getOrNull(address.bank)
@@ -90,12 +71,7 @@ internal class MotifXsTagger(
         )
     }
 
-    /**
-     * Writes all four category bytes through the documented path.
-     *
-     * The read-back is the browser's own `0C` view rather than the blocks just written, so what
-     * is verified is what the user will see.
-     */
+    /** Writes all four category bytes through the documented path, verified against the browser's own `0C` view. */
     override suspend fun setCategories(address: SlotAddress, categories: List<CategoryRef?>) {
         val wanted = List(ASSIGNMENTS) { categories.getOrNull(it) }
         wanted.filterNotNull().forEach { ref ->
@@ -124,11 +100,8 @@ internal class MotifXsTagger(
     }
 
     /**
-     * Files [address] under [under], or clears the mark when it is empty.
-     *
-     * Read the bank's whole table, change one byte, send the whole table back. See
-     * [MotifXsSysEx.writeFavorites] for why it is whole-table, needs no store marker, and cannot
-     * be verified by an immediate read.
+     * Files [address] under [under], or clears the mark when it is empty: read the bank's whole
+     * table, change one byte, send it back - see [MotifXsSysEx.writeFavorites].
      */
     override suspend fun setFavorite(address: SlotAddress, under: Set<Int>) {
         val spec = config.banks.getOrNull(address.bank)
@@ -137,14 +110,10 @@ internal class MotifXsTagger(
             "A Motif XS voice has $ASSIGNMENTS category slots; $under names another."
         }
 
-        // **A mark against an unassigned category is legal, and the instrument makes them itself.**
-        // Measured on hardware: marking a category-less USER voice from the front panel -
-        // Category Search -> FAVORITE - writes `2`, the same value `setOf(0)` encodes to here,
-        // and the voice then appears in the instrument's own FAVORITE bank. So this is the
-        // ordinary way to favorite a voice that is filed under nothing (43 of the 128 voices in
-        // one USR1 bank measured are in that state), and no read of the voice's own categories
-        // is needed to decide it.
-
+        // A mark against an unassigned category is legal and the instrument makes them itself:
+        // marking a category-less USER voice from its own Category Search -> FAVORITE writes `2`,
+        // the same value `setOf(0)` encodes to, and the voice then appears under no category. So
+        // no read of the voice's own categories is needed here.
         val value = encodeMark(under)
         val table = instrument.readFavoriteTable(spec).copyOf()
         require(address.slot in table.indices) {
@@ -160,12 +129,7 @@ internal class MotifXsTagger(
 
     // ---- The mark byte ----
 
-    /**
-     * `0` none, `1` both, `2` Category 1 only, `3` Category 2 only.
-     *
-     * Not a bitmask, however much `1`/`2`/`3` invites reading it as one: `1` is *both*, and
-     * writing a fourth value produces no listing rather than a third one.
-     */
+    /** `0` none, `1` both, `2` Category 1 only, `3` Category 2 only. Not a bitmask: `1` is both. */
     private fun decodeMark(value: Int): Set<Int> = when (value) {
         MARK_BOTH -> setOf(0, 1)
         MARK_FIRST -> setOf(0)
@@ -184,13 +148,10 @@ internal class MotifXsTagger(
     // ---- The per-bank mark table ----
 
     /**
-     * One bank's marks, remembered for the life of the session or until something writes.
-     *
-     * Cached because a favorite dialog opening on a row would otherwise cost a dump every time.
-     * The table changes when this app writes one - and also when the *player* marks something on
-     * the front panel, mid-session, which nothing here can be told about. So the cache is dropped
-     * on every write and at the start of every listing, which is the app's own "re-read the
-     * instrument" gesture: see `MotifXsInstrument.index`.
+     * One bank's marks, remembered so a favorite dialog opening on a row does not cost a dump
+     * every time. The table also changes when the player marks something on the front panel, so
+     * the cache is dropped on every write and at the start of every listing - see
+     * `MotifXsInstrument.index`.
      */
     private val marks = HashMap<String, ByteArray>()
 

@@ -28,15 +28,9 @@ import de.thewolfwalkexperience.software.patchpilot.ui.theme.ThemePreferences
 import kotlinx.coroutines.launch
 
 /**
- * The theme picker, the auto-connect toggle, and the legal links.
- *
- * The theme picker is a radio list rather than a single on/off switch even though there are only
- * two entries: [AppTheme] is what a third skin would extend, and a switch has nowhere to grow to
- * that a radio list already does.
- *
- * Both settings apply immediately - [ThemePreferences.setTheme] and
- * [ConnectionPreferences.setAutoConnectToFirstFound] write through DataStore, which their
- * respective readers are already collecting live, so nothing here needs a restart to take effect.
+ * The theme picker, the auto-connect toggle, and the legal links. The theme picker is a radio list
+ * rather than a switch, since [AppTheme] is what a third skin would extend. Both settings apply
+ * immediately: they write through DataStore, which their readers collect live.
  */
 @Composable
 fun SettingsScreen(

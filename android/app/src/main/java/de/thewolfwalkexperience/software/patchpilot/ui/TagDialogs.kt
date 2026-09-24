@@ -40,25 +40,18 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 
 /*
- * The preset screen's two tagging dialogs.
- *
- * Same rule as `ProgramDialogs`: each takes plain data and callbacks, reads no screen state and no
- * view model, and knows nothing about which instrument is plugged in - everything family-specific
+ * The preset screen's two tagging dialogs. As in `ProgramDialogs`, each takes plain data and
+ * callbacks and knows nothing about which instrument is plugged in: everything family-specific
  * arrives as a [CategoryTaxonomy] and a count.
  */
 
 /**
- * Which of a preset's own categories the instrument should list it under.
+ * Which of a preset's own categories the instrument should list it under. The checkboxes are the
+ * preset's assignment slots rather than the whole taxonomy, since a Motif XS favorite flag
+ * selects among the voice's two assignments rather than naming a category.
  *
- * **The checkboxes are the preset's assignment slots, not the whole taxonomy**, because that is
- * what the hardware expresses: a Motif XS favorite flag selects among the voice's two category
- * assignments rather than naming a category outright.
- *
- * **A slot the voice has not assigned is still offered.** Marking one is legal and the instrument
- * does it itself - the voice then appears in its Favorite bank listed under no category - so a
- * voice with one assignment can be favorited under that category or under none, and a voice with
- * neither can still be a favorite. Those rows read "No category"; a voice with nothing assigned
- * shows one of them rather than two indistinguishable ones.
+ * A slot the voice has not assigned is still offered: marking one is legal and the instrument
+ * does it itself, and the voice then appears in its Favorite bank under no category.
  *
  * @param tags what is stored now; [PresetTags.categories] positions the rows.
  */
@@ -81,16 +74,11 @@ internal fun SetFavoriteDialog(
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(stringResource(R.string.programs_favorite_body))
                 Spacer(Modifier.height(8.dp))
-                // **Every slot, not only the assigned ones.** Filing under a slot the voice has
-                // not set is legal and visible - the instrument's own front panel writes such a
-                // mark and lists the voice in its Favorite bank under no category - so a voice
-                // with one assignment can be favorited under that category or under none.
-                // Offering only the assigned slot hid the second of those two real choices.
-                //
-                // **One row when the voice has neither**, rather than two both reading "No
-                // category": with nothing assigned there is nothing to tell the slots apart, and
-                // slot 0 encodes to the value the panel writes. The list keeps the same shape it
-                // has everywhere else, one entry shorter.
+                // Every slot, not only the assigned ones, so a voice with one assignment can be
+                // favorited under that category or under none. One row where the voice has
+                // neither, rather than two both reading "No category": with nothing assigned
+                // there is nothing to tell the slots apart, and slot 0 encodes to the value the
+                // panel writes.
                 val slotsShown = if (assigned.isEmpty()) 1 else assignmentCount
                 (0 until slotsShown).forEach { slot ->
                     val category = tags.categories.getOrNull(slot)?.let(taxonomy::label)
@@ -120,32 +108,29 @@ internal fun SetFavoriteDialog(
             }
         },
         confirmButton = {
-            // Enabled even when nothing changed: "Save" that does nothing is less confusing
-            // than a button that looks broken, and the write is a no-op the driver skips.
+            // Enabled even when nothing changed: the write is a no-op the driver skips, and a
+            // "Save" that does nothing is less confusing than a button that looks broken.
             TextButton(onClick = { onConfirm(checked) }) {
                 Text(stringResource(R.string.action_save))
             }
         },
         dismissButton = {
-            // **Always Cancel**, even when the voice has no categories: a favorite can be set
-            // regardless, and Set categories is a row-menu action, not a way out of this dialog.
+            // Always Cancel, even with no categories: a favorite can be set regardless, and
+            // Set categories is a row-menu action rather than a way out of this dialog.
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }
 
 /**
- * A preset's category assignments: a main category and, where the family has them, a sub.
+ * A preset's category assignments: a main category and, where the family has them, a sub - one
+ * group per assignment slot, two dropdowns per group. Dropdowns rather than a list of every pair,
+ * which is around eighty rows wide on a Motif XS; a flat taxonomy renders one group with its sub
+ * dropdown suppressed.
  *
- * **One group per assignment slot, two dropdowns per group.** Dropdowns rather than a scrolling
- * list of every pair because the taxonomy is two-level and around eighty pairs wide on a Motif XS,
- * and a dialog is the wrong place to scroll through eighty rows. A family with a flat taxonomy -
- * a Nord - renders one group with its sub dropdown suppressed, without this composable branching
- * on which instrument it is.
- *
- * @param allowsUnassigned whether to offer a synthetic "None" entry meaning *no* category. False
- *   on a Nord, which has a real category called `None` of its own: offering both would put two
- *   entries with the same word in one dropdown, one of which the instrument cannot store.
+ * @param allowsUnassigned whether to offer a synthetic "None" meaning no category. False on a
+ *   Nord, which has a real category called `None`, and two entries with one word would put a
+ *   value the instrument cannot store in the dropdown.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,9 +148,8 @@ internal fun SetCategoriesDialog(
     }
     val noneLabel = stringResource(R.string.programs_categories_none)
     val noSubLabel = stringResource(R.string.programs_categories_no_sub)
-    // How far the dropdown's indices run ahead of the taxonomy's, which is 1 while the synthetic
-    // "None" occupies row 0 and 0 without it - written once so the two dropdown callbacks below
-    // cannot disagree about it.
+    // How far the dropdown's indices run ahead of the taxonomy's: 1 while the synthetic "None"
+    // occupies row 0, 0 without it. Written once, so the two callbacks below cannot disagree.
     val offset = if (allowsUnassigned) 1 else 0
 
     AlertDialog(

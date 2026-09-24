@@ -8,7 +8,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 
 /**
- * The "Brass & Aether" palette from the earlier mockup, carried over as-is: brass primary,
+ * The "Brass & Aether" palette: brass primary,
  * copper secondary, verdigris tertiary (also what the connect screen's "connected" jewel and
  * device-row status read as), a rust error role, warm near-black surfaces, parchment text.
  *
@@ -26,9 +26,8 @@ private val BrassDark = Color(0xFF6A4C1E)
  *
  * [BrassMuted] is `outline`, which draws the visible edge of *interactive* controls - an
  * `OutlinedTextField`, an `OutlinedButton`, a `SegmentedButton`. WCAG 1.4.11 wants 3:1 for that,
- * and this clears it against the lightest panel it can land on (3.6:1 on `PanelHigh`) where
- * [BrassDark] managed 2.0:1. It stays well below [Brass] so it still reads as an edge rather than
- * as the accent colour.
+ * and this clears it against the lightest panel it can land on (3.6:1 on `PanelHigh`). It stays
+ * well below [Brass], so it still reads as an edge rather than as the accent colour.
  *
  * [CopperMuted] is `outlineVariant`, the decorative-divider role. That one is *not* held to 3:1 -
  * Material's own baseline ships it at 1.6:1 light and 2.0:1 dark, because a separator that carries

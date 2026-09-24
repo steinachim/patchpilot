@@ -14,11 +14,9 @@ private val Context.themeDataStore by preferencesDataStore(name = "theme_prefere
 private val THEME_KEY = stringPreferencesKey("app_theme")
 
 /**
- * Persists which [AppTheme] the user picked in Settings, across launches.
- *
- * Stored by [AppTheme.name] rather than an ordinal - an ordinal silently points at the wrong
- * theme the day this enum's order changes, where an unrecognised name just falls back to
- * [AppTheme.Default] (see [theme] below), which is always a safe value to land on.
+ * Persists which [AppTheme] the user picked in Settings. Stored by [AppTheme.name] rather than an
+ * ordinal, which would point at the wrong theme the day the enum's order changed; an unrecognised
+ * name falls back to [AppTheme.Default].
  */
 class ThemePreferences(private val context: Context) {
     val theme: Flow<AppTheme> = context.themeDataStore.data.map { prefs ->

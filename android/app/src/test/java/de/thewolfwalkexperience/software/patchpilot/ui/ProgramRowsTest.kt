@@ -10,11 +10,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The rules `ProgramsScreen` derives its rows from.
- *
- * **These had no coverage at all while they lived inside the composable**, which is most of why
- * [buildProgramListing] was lifted out: the devices differ in what they report, and each rule
- * below was previously only checkable by running the app against hardware.
+ * The rules `ProgramsScreen` derives its rows from. [buildProgramListing] is a pure function
+ * outside the composable, so each of them is checkable here rather than only against hardware -
+ * which matters because the devices differ in what they report.
  */
 class ProgramRowsTest {
 
@@ -50,7 +48,7 @@ class ProgramRowsTest {
     }
 
     /**
-     * A Pro-800 answers for all 400 addresses, which made every empty slot look occupied and gave
+     * A Pro-800 answers for all 400 addresses, so treating every reported address as occupied gives
      * it a drag handle and a Rename button it had no business offering.
      */
     @Test

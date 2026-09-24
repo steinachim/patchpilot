@@ -7,13 +7,11 @@ package de.thewolfwalkexperience.software.patchpilot.devices.pro800
  * Sample program dumps and status messages covering the Pro-800 SysEx protocol's field-length
  * edge cases.
  *
- * **These exist because hand-written fixtures could not catch the bugs that mattered.** A fixture
- * built to match what the code already believes cannot expose a wrong belief: an empty-slot
- * fixture built as "a short record" only proves the code agrees with itself that short means
- * empty; a firmware fixture with its version bytes placed where the code looks for them cannot
- * catch an off-by-one in that placement; a name fixture built from the production offset constant
- * cannot catch that the constant is wrong. Independently-sourced byte sequences do not share the
- * code's assumptions, so they can actually fail when the code is wrong.
+ * Independently sourced rather than hand-written, because a fixture built to match what the code
+ * already believes cannot expose a wrong belief: an empty-slot fixture built as "a short record"
+ * only proves the code agrees with itself, a firmware fixture with its version bytes where the
+ * code looks for them cannot catch an off-by-one, and a name fixture built from the production
+ * offset constant cannot catch that the constant is wrong.
  *
  * The program records are the project's own. [DUMP_B00] is a preset saved on the instrument and
  * dumped with the Pro800 Manager Plugin. The other three are **derived** from it outside this
@@ -48,8 +46,7 @@ object Pro800Fixtures {
     const val FIRMWARE_REPLY = "f0002032000124000900010406f7"
 
     /** Undocumented types that answer with a fixed payload nobody has decoded, recorded verbatim
-     * in case that changes: `0x02` -> `03 00`, `0x04` -> `05` + ASCII "P0E9I". Both match what
-     * `docs/Pro800SysExMessages.md` records. */
+     * in case that changes: `0x02` -> `03 00`, `0x04` -> `05` + ASCII "P0E9I". */
     const val TYPE_02_REPLY = "f0002032000124000300f7"
     const val TYPE_04_REPLY = "f00020320001240005503045394900f7"
 

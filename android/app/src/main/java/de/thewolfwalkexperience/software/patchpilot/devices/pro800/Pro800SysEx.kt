@@ -25,13 +25,9 @@ object Pro800SysEx {
     const val SYSEX_END = 0xF7.toByte()
 
     /**
-     * Status: the answer to most commands, and to a write.
-     *
-     * **Two parameter bytes, and the code is the second one** - offset [STATUS_CODE_INDEX], 0 on
-     * success and 1 on failure; offset 9 is a constant 0 across every status reply. Reading the
-     * code from 9 makes every status look like a success, which is the same off-by-one the
-     * firmware reply has (see [FIRMWARE_VERSION_INDEX]). A write answers `01 00 00`; a read of
-     * an out-of-range address answers `01 00 01`.
+     * Status: the answer to most commands, and to a write. Two parameter bytes, and the code is
+     * the second (offset [STATUS_CODE_INDEX]): 0 on success, 1 on failure; offset 9 is a constant
+     * 0. A write answers `01 00 00`; a read of an out-of-range address answers `01 00 01`.
      */
     const val TYPE_STATUS = 0x01
     const val STATUS_CODE_INDEX = 0x0A
@@ -44,13 +40,8 @@ object Pro800SysEx {
     const val TYPE_DEVICE_NAME_REPLY = 0x07
 
     /**
-     * Request firmware version; answered by [TYPE_FIRMWARE_REPLY].
-     *
-     * **The request carries a `0x00` parameter** (`VersionMessage::request()` sends
-     * `{REQUEST_ID, 0x00}`), and the reply's three version bytes start at message index
-     * [FIRMWARE_VERSION_INDEX] - one past where the payload of every other reply begins, because
-     * index 9 echoes that parameter. Reading from 9 yields a version one byte out of step - a
-     * version like 1.4.6 decoded from the wrong offset comes out as nonsense.
+     * Request firmware version, with a `0x00` parameter; answered by [TYPE_FIRMWARE_REPLY], whose
+     * three version bytes start at [FIRMWARE_VERSION_INDEX] because index 9 echoes the parameter.
      */
     const val TYPE_FIRMWARE = 0x08
     const val TYPE_FIRMWARE_REPLY = 0x09
@@ -62,83 +53,48 @@ object Pro800SysEx {
     /** A program dump. Also the *write* command, with the data appended. */
     const val TYPE_DUMP = 0x78
 
-    // ---- Hazards: named on purpose, sent never (except 0x32 with parameter 0x00) ----
-    //
-    // **An unnamed hazard gets rediscovered by whoever probes next, and gets rediscovered by
-    // *sending* it.** Naming each one and saying what it does is what stops that.
-    //
-    // None of these has a UI path, and nothing in this app sends any of them - the one exception
-    // being 0x32 with parameter 0x00, which is the documented preset reload (see [reloadPreset]).
-    // Any raw-message tool built on this object must demand a typed confirmation first.
+    // ---- Hazards: named so nobody rediscovers them by sending them; never sent, except 0x32
+    // with parameter 0x00, the documented preset reload ([reloadPreset]). ----
 
     /** **Factory reset. No confirmation from the instrument, and no undo.** */
     const val TYPE_FACTORY_RESET = 0x7D
 
     /**
-     * Reboots the instrument into its bootloader - **at parameter [BOOTLOADER_PARAM] and nowhere
-     * else**.
-     *
-     * The display reads `boot`, the panel stops responding and the USB device re-enumerates; only
-     * a power cycle brings it back, which it then does with presets and firmware intact. Not a
-     * crash, and **not a range**: a sweep of every other parameter from `0x00` to `0x3F`, plus
-     * `0x40`, `0x60` and `0x7F`, answered a plain OK status and did nothing at all. That is exactly
-     * what makes it dangerous to probe - the type looks inert until one specific value.
+     * Reboots the instrument into its bootloader at parameter [BOOTLOADER_PARAM]: the display
+     * reads `boot`, the panel stops responding and USB re-enumerates; only a power cycle returns
+     * it, with presets and firmware intact. Every other parameter from `0x00` to `0x3F`, plus
+     * `0x40`, `0x60` and `0x7F`, answers a plain OK status and does nothing, which is what makes
+     * the type dangerous to probe.
      */
     const val TYPE_UNKNOWN_03 = 0x03
     const val BOOTLOADER_PARAM = 0x30
 
     /**
-     * Reset mode. **Parameter `0x00` is the preset reload, and it is the only safe parameter.**
-     *
-     * `0x00` makes the instrument recall the preset its settings block points at, which is what
-     * turns a pointer write into an actual preset change - see [reloadPreset] and
-     * [Pro800Instrument.select]. It also discards unsaved front-panel edits, which loading a preset
-     * does anyway.
-     *
-     * **Every non-zero parameter is a hazard and is never sent**: it puts the synth into a state
-     * where it displays 8888 and stops responding properly to its own controls. The safety belongs
-     * to the parameter, not to the type, so nothing here may send this with anything but `0x00`.
+     * Reset mode. Parameter `0x00` recalls the preset the settings block points at, discarding
+     * unsaved panel edits ([reloadPreset], [Pro800Instrument.select]). Every non-zero parameter
+     * puts the synth into a state where it displays 8888 and stops responding to its own
+     * controls; `0x32 0x00` restores it.
      */
     const val TYPE_RESET_MODE = 0x32
 
     /**
-     * Writes both MIDI channel fields, and **its parameter is a flag rather than a value**.
-     *
-     * `0x00` sets RX and TX to DIP-switch mode; anything else writes `MIDI RX Channel` = 249, which
-     * is outside the field's range - and every out-of-range value makes the instrument **deaf to
-     * all channel-voice MIDI**: notes, Program Changes and CC alike.
-     *
-     * Milder than the rest of these: nothing is lost, and the recovery is an ordinary settings
-     * write, which needs no channel. It is named because the failure is completely silent, and
-     * because a sweep will produce it - a host that sends this simply stops the synth answering
-     * notes, with nothing on the wire to say why.
+     * Writes both MIDI channel fields; its parameter is a flag, not a value. `0x00` sets RX and
+     * TX to DIP-switch mode; anything else writes `MIDI RX Channel` = 249, out of range, which
+     * makes the instrument deaf to all channel-voice MIDI. Recovered by an ordinary settings
+     * write.
      */
     const val TYPE_CHANNEL_WRITE = 0x0E
 
     /**
-     * Writes preset name bytes directly. **It is not a rename, and must not be used as one.**
-     *
-     * A blind sweep of it with no payload blanked the name of every occupied preset in a library -
-     * persisting through a power cycle, visible on the instrument's own display, recovered only by
-     * a factory reset.
-     *
-     * It is unusable even when sent correctly. A name written this way reads back one character
-     * short through a `0x77` dump while the display is right, or reads back right while the display
-     * renders a stray glyph, depending on the trailing NUL; and 14 characters is its ceiling rather
-     * than the name field's actual 16, with a 15th character that survives a power cycle and
-     * appears in no dump. It writes name bytes without the record-length bookkeeping `0x77` reports
-     * from, so the two stay permanently out of step. Behringer's own editor does not use it either.
-     *
-     * [Pro800Editor] renames the way that leaves the record consistent: a `0x77` read, a patch of
-     * the name field, and a `0x78` write of the whole record.
+     * Writes preset name bytes directly, without the record-length bookkeeping `0x77` reports
+     * from. Sent with no payload it blanks the name of every occupied preset, persistently,
+     * recoverable only by a factory reset; sent correctly it stores at most 14 characters and
+     * reads back inconsistently with the display. [Pro800Editor] renames through a `0x77`/`0x78`
+     * round trip instead, as Behringer's own editor does.
      */
     const val TYPE_SET_NAME = 0x50
 
-    /**
-     * Programs occupy 0..399; the settings block lives at 510 (`7E 03` as LSB/MSB) and must never
-     * appear in a browsable index - a row that corrupts global settings when written to is not a
-     * preset.
-     */
+    /** Programs occupy 0..399; the settings block lives at 510 (`7E 03` as LSB/MSB) and never appears in a browsable index. */
     const val PROGRAM_COUNT = 400
     const val SETTINGS_ADDRESS = 510
 
@@ -154,16 +110,9 @@ object Pro800SysEx {
         HEADER + byteArrayOf(type.toByte()) + params.map { it.toByte() }.toByteArray() + SYSEX_END
 
     /**
-     * A write: the same `0x78` type as a dump, with the data appended.
-     *
-     * An **empty** [encodedPayload] is how a slot is set back to uninitialized - the protocol
-     * notes say the data "may be empty -> set to 'uninitialized'", and a slot written that way
-     * answers subsequent reads with [isEmptyReply]'s bare `F0 F7`.
-     *
-     * The reference implementation sends this fire-and-forget with a 20 ms pause between writes
-     * and never inspects a reply, so this app does not depend on one either - it verifies by
-     * reading the address back, which is a stronger check than a status byte anyway (see
-     * [Pro800Editor]).
+     * A write: the same `0x78` type as a dump, with the data appended. An empty [encodedPayload]
+     * sets the slot back to uninitialized, after which it answers reads with [isEmptyReply]'s bare
+     * `F0 F7`. Sent fire-and-forget and verified by read-back (see [Pro800Editor]).
      */
     fun writeDump(programNumber: Int, encodedPayload: ByteArray): ByteArray =
         HEADER +
@@ -178,23 +127,13 @@ object Pro800SysEx {
     /** The settings block's own dump request - the same 0x77 mechanism, at [SETTINGS_ADDRESS]. */
     fun requestSettings(): ByteArray = requestDump(SETTINGS_ADDRESS)
 
-    /**
-     * A write of the settings block - the same `0x78` mechanism, at [SETTINGS_ADDRESS].
-     *
-     * Named separately from [writeDump] so the one legitimate write to 510 is greppable. Every
-     * other write in this app goes to a preset address, and [Pro800Instrument]'s preset write path
-     * bounds itself to 0..399 precisely so this address can never be reached by accident from a
-     * browsable row.
-     */
+    /** A write of the settings block at [SETTINGS_ADDRESS] - named separately so the one legitimate write to 510 is greppable. */
     fun writeSettings(encodedPayload: ByteArray): ByteArray = writeDump(SETTINGS_ADDRESS, encodedPayload)
 
     /**
-     * Recall the preset the settings block points at.
-     *
-     * [TYPE_RESET_MODE] with the one parameter that is not a hazard. A settings-block write moves
-     * the pointer - the display and every "current preset" field follow it - while the voice engine
-     * keeps playing whatever was loaded before; this is the message that makes the instrument
-     * actually act on the pointer. Answered by a status.
+     * Recalls the preset the settings block points at: [TYPE_RESET_MODE] with the one parameter
+     * that is not a hazard. A settings write alone moves the pointer while the voice engine keeps
+     * playing the previous preset. Answered by a status.
      */
     fun reloadPreset(): ByteArray = request(TYPE_RESET_MODE, 0x00)
 
@@ -202,13 +141,7 @@ object Pro800SysEx {
     fun requestDump(programNumber: Int): ByteArray =
         request(TYPE_REQUEST_DUMP, programNumber and 0x7F, (programNumber shr 7) and 0x7F)
 
-    /**
-     * Is this one of ours at all?
-     *
-     * Checked on every inbound message before anything else looks at it, because on a shared MIDI
-     * bus other devices' SysEx *will* arrive, and a foreign message that happens to be the right
-     * length is otherwise indistinguishable from a reply.
-     */
+    /** Is this one of ours at all? On a shared MIDI bus other devices' SysEx arrives too. */
     fun isOurs(message: ByteArray): Boolean =
         message.size > TYPE_INDEX &&
             message.last() == SYSEX_END &&
@@ -225,14 +158,7 @@ object Pro800SysEx {
         return (msb shl 7) or lsb
     }
 
-    /**
-     * The status code a `0x01` reply carries, or null if this is not one.
-     *
-     * **Read from [STATUS_CODE_INDEX] (offset 10), not offset 9.** A write answers `01 00 00`; a
-     * read of an out-of-range address answers `01 00 01` - offset 9 is a constant `00` in both, so
-     * reading the code from there would report **every** status as a success, including every
-     * rejection.
-     */
+    /** The status code a `0x01` reply carries (offset [STATUS_CODE_INDEX]; offset 9 is a constant 0), or null if this is not one. */
     fun statusCodeOf(message: ByteArray): Int? =
         if (typeOf(message) == TYPE_STATUS && message.size > STATUS_CODE_INDEX) {
             message[STATUS_CODE_INDEX].toInt() and 0x7F
@@ -248,19 +174,9 @@ object Pro800SysEx {
         statusCodeOf(message)?.let { it != STATUS_OK } == true
 
     /**
-     * A bare `F0 F7` - a SysEx message with no body at all.
-     *
-     * **This is how the instrument says "nothing is stored at that address".**
-     * Every dump request for an address holding nothing comes back as exactly these two bytes,
-     * while populated ones answer with dumps of *varying* length - so a dump means a preset
-     * exists, and its length says nothing. It carries no
-     * manufacturer header, so [isOurs] rejects it, and it carries no echoed address, so it cannot
-     * be matched to the request that prompted it - it can only be accepted as "the answer to
-     * whatever is currently in flight", which is safe here because exchanges are serialized.
-     *
-     * Treating it as a timeout instead would be expensive rather than merely wrong: two full
-     * two-second waits per address, which on an instrument with three empty banks is around
-     * twenty minutes of a scan spent waiting for a reply that has already arrived.
+     * A bare `F0 F7`, the instrument's answer for an address holding nothing. It carries no header
+     * ([isOurs] rejects it) and no echoed address, so it can only be accepted as the answer to
+     * whatever is in flight, which is safe because exchanges are serialized.
      */
     fun isEmptyReply(message: ByteArray): Boolean =
         message.size == 2 && message[0] == HEADER[0] && message[1] == SYSEX_END

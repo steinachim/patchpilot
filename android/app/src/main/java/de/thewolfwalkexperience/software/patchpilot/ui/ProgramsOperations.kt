@@ -11,28 +11,17 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * The slice of [InstrumentViewModel] that [ProgramsController] actually uses.
- *
- * **This exists so the controller can be tested.** [InstrumentViewModel] is an `AndroidViewModel`:
- * constructing one needs an `Application`, and reaching an instrument through it needs a USB or
- * MIDI session. Neither is available to a plain JVM unit test, and the project deliberately has no
- * mocking framework - so without a seam here the operation logic would be exactly as untestable
- * after being lifted out of the composable as it was inside it, which would make the whole move
- * cosmetic.
- *
- * It is a narrow interface named for the caller rather than a general-purpose one: twelve members
- * is the whole of what this screen's operations need, and anything wider would start describing
- * the ViewModel instead of describing this dependency.
+ * The slice of [InstrumentViewModel] that [ProgramsController] uses, so the controller can be
+ * tested: constructing an `AndroidViewModel` needs an `Application`, reaching an instrument needs
+ * a session, and the project has no mocking framework. Narrow and named for the caller - anything
+ * wider would describe the ViewModel rather than this dependency.
  */
 internal interface ProgramsOperations {
     /** Which listing is on screen. The controller reads it when a copy has to move the browser. */
     val scope: StateFlow<PresetScope>
     fun setScope(scope: PresetScope)
 
-    /**
-     * Runs an edit on a scope that outlives the screen - see [InstrumentViewModel.launchEdit] for
-     * why interrupting one mid-write is the one thing that can leave an instrument stuck.
-     */
+    /** Runs an edit on a scope that outlives the screen - see [InstrumentViewModel.launchEdit]. */
     fun launchEdit(block: suspend () -> Unit): Job
 
     fun reloadIndex(): Int?
@@ -48,21 +37,15 @@ internal interface ProgramsOperations {
 }
 
 /**
- * Resolves a string resource, so the controller needs no `Context`.
- *
- * Two things fall out of this beyond testability: nothing user-facing gets hardcoded in the
- * controller to work around not having a `Context`, and a `Context` is not retained by an object
- * held in `remember`.
+ * Resolves a string resource, so the controller needs no `Context` - which also keeps a `Context`
+ * out of an object held in `remember`.
  */
 internal fun interface StringResolver {
     fun get(resId: Int, vararg args: Any): String
 }
 
 /**
- * Which operation a destination pick is going to perform.
- *
- * The two differ in what counts as a valid destination, which is why the screen needs to know
- * rather than just remembering that *a* pick is in progress: a copy needs somewhere empty to write
- * to, while a move can land on anything - an empty slot moves, an occupied one swaps.
+ * Which operation a destination pick will perform: the two differ in what counts as a valid
+ * destination, since a copy needs somewhere empty while a move can land on anything.
  */
 internal enum class PickIntent { COPY, MOVE }

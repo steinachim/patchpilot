@@ -28,11 +28,9 @@ import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 private const val CATALOG_ASSET = "yamaha_motif_xs.json"
 
 /**
- * The factory voice-name table - see [MotifXsFactoryVoices] for why it ships rather than being read.
- *
- * A separate asset from the catalog, because it is a different kind of thing: the catalog is
- * configuration a person edits, this is 94 kB of transcribed reference data. Bundling them would
- * mean every device entry carried the whole table through `InstrumentDescriptor.familyConfig`.
+ * The factory voice-name table - see [MotifXsFactoryVoices]. A separate asset from the catalog:
+ * 94 kB of transcribed reference data rather than configuration, and bundling them would carry
+ * the whole table through every `InstrumentDescriptor.familyConfig`.
  */
 private const val FACTORY_VOICES_ASSET = "motifxs_factory_voices.json"
 
@@ -43,20 +41,9 @@ data class MotifXsBank(
     val slotCount: Int,
     val addressHi: Int,
     val addressMid: Int,
-    /**
-     * What the instrument's own display calls this bank, e.g. `USER 3` or `USER DR`.
-     *
-     * Separate from [label] because they are different things: [label] is this project's own
-     * internal shorthand, while this is what a player reads off the screen. Defaults to [label]
-     * so a bank added without one still renders something.
-     */
+    /** What the instrument's own display calls this bank, e.g. `USER 3`; [label] is this project's internal shorthand. */
     val displayLabel: String = "",
-    /**
-     * The two-or-so characters the bank index rail draws, e.g. `U1` for `USER 1`.
-     *
-     * Not derived from [displayLabel]: `USER DR` shortens to `U DR`, not `UD`, and no rule that
-     * produces one produces the other. Defaults to [displayLabel] when unset.
-     */
+    /** The two-or-so characters the bank index rail draws, e.g. `U1`. Not derived: `USER DR` shortens to `U DR`. */
     val shortLabel: String = "",
     /**
      * Whether the instrument refuses writes here. True for the factory banks.
@@ -65,67 +52,41 @@ data class MotifXsBank(
      */
     val readOnly: Boolean = false,
     /**
-     * Whether this bank holds **drum kits** rather than normal voices.
-     *
-     * Defaulted from the address rather than configured, because the instrument's own bank map
-     * puts the drum banks at `0x20` and above and the normal ones below it: the drum banks
-     * offset by `0x20`, and the three drum banks are `20`, `21` and `28`. Overridable all the
-     * same, since a derived device could in principle report something the map does not cover.
-     *
-     * **Load-bearing, not cosmetic.** A drum kit and a normal voice are different objects - ~12.6
-     * kB against ~1.9 kB, and completely different documented block sequences - and the
-     * instrument **accepts a payload of the wrong kind without complaint** (a normal voice
-     * offered to `0C 28 00` is acknowledged, and a drum kit to `0C 0A 7F` likewise). So nothing
-     * below this app will stop a copy or a move across that boundary; this flag is what does.
+     * Whether this bank holds drum kits rather than normal voices, defaulted from the address:
+     * the drum banks are `0x20` and above (`20`, `21`, `28`). Load-bearing, since a drum kit and
+     * a normal voice are different objects (~12.6 kB against ~1.9 kB, different block sequences)
+     * and the instrument accepts a payload of the wrong kind without complaint - this flag is the
+     * only thing that refuses a copy or move across the boundary.
      */
     val isDrum: Boolean = addressMid >= MotifXsSysEx.FIRST_DRUM_BANK,
     /**
-     * Whether a full index walks this bank.
-     *
-     * False for the factory banks. Walking them would take several minutes - an extrapolation
-     * from the measured ~160 ms per normal voice and ~1 s per drum kit, against the measured 93 s
-     * for the 416 user voices; the eleven banks have never been walked end to end. They are
-     * read-only and never change, so paying that on every connect buys nothing; their names ship
-     * with the app instead (see [MotifXsFactoryVoices]).
+     * Whether a full index walks this bank. False for the factory banks: walking them would take
+     * several minutes (extrapolated from the measured ~160 ms per normal voice and ~1 s per drum
+     * kit, against the measured 93 s for the 416 user voices; the eleven banks have never been
+     * walked end to end), and they are read-only and never change - their names ship with the app
+     * instead (see [MotifXsFactoryVoices]).
      */
     val indexByDefault: Boolean = true,
     /**
-     * This bank's **bank-select LSB**, which is *not* [addressMid].
-     *
-     * They agree for PRE1 and USER DR and disagree for every user normal bank - USER 1 selects
-     * with `0x08` and dumps at `0x0A`. Reusing one for the other selects a different bank
-     * silently, so they are separate fields rather than one with an adjustment.
-     *
-     * Null where it is not known. Only banks with a confirmed bank-select LSB carry one here; the
-     * rest are absent rather than guessed, because a plausible wrong value here selects somebody
-     * else's voice and reports success.
+     * This bank's bank-select LSB, which is not [addressMid]: they agree for PRE1 and USER DR and
+     * differ for every user normal bank (USER 1 selects with `0x08` and dumps at `0x0A`). Null
+     * where it is not confirmed, since a wrong value here selects another bank's voice and
+     * reports success.
      */
     val selectLsb: Int? = null,
     /**
-     * This bank's **bank-select MSB**, `0x3F` for every normal voice bank.
-     *
-     * A field rather than a constant because it is not one: GM selects at `0x00` and GM DR at
-     * `0x7F`. It matters more than its two exceptions suggest - PRE1, GM and GM DR share
-     * bank-select LSB `0x00`, so this byte is the only thing separating them, and a wrong pair is
-     * *ignored* rather than refused.
+     * This bank's bank-select MSB, `0x3F` for every normal voice bank but `0x00` for GM and
+     * `0x7F` for GM DR. PRE1, GM and GM DR share LSB `0x00`, so this byte is the only thing
+     * separating them, and an unrecognised pair is ignored rather than refused.
      */
     val selectMsb: Int = MotifXsSysEx.BANK_MSB,
 )
 
 /**
- * The per-model configuration for this family.
- *
- * The bank table is data rather than code because it is the part most likely to be wrong: a
- * different Motif XS - or a Motif XF - may lay its memory out differently. Correcting it should
- * be a catalog edit, not a code change.
- *
- * **Carries no id or name.** Those belong to [InstrumentDescriptor], which [MotifXsFamily.create]
- * already has on hand and passes straight to [MotifXsInstrument] - putting them here too would
- * only be a second place for the same two strings to drift apart.
- *
- * [banks] defaults to empty here rather than being required, because a device entry in the
- * catalog is free to omit it and inherit [resolvedConfig]'s shared one instead - see there for
- * why the XS6/7/8 do.
+ * The per-model configuration for this family. The bank table is catalog data, so a model that
+ * lays its memory out differently is a catalog edit; [banks] defaults to empty, since a device
+ * entry may inherit the family's shared table (see [resolvedConfig]). The id and name belong to
+ * [InstrumentDescriptor].
  */
 @Serializable
 data class MotifXsConfig(
@@ -134,26 +95,19 @@ data class MotifXsConfig(
     val deviceNumber: Int = 0,
     val banks: List<MotifXsBank> = emptyList(),
     /**
-     * How this instrument encodes a voice's category assignments.
-     *
-     * **A property of the instrument, so it lives here** rather than beside the factory voice
-     * names: a user voice is filed under the same categories a factory one is, and the encoding
-     * describes the format rather than the shipped list. Null in a catalog that does not carry it,
-     * which is what leaves the app without a tagging facet at all.
+     * How this instrument encodes a voice's category assignments - a property of the instrument
+     * rather than of the shipped voice list. Null in a catalog that does not carry it, which
+     * leaves the app without a tagging facet.
      */
     val categoryEncoding: MotifXsCategoryEncoding? = null,
 )
 
 /**
  * How the four category bytes at `0x18`-`0x1B` of a voice's Common block encode two assignments.
- *
- * Ships as catalog data rather than as Kotlin constants because it is per-family *data*, and
- * because the sub-category order is a hardware measurement that Yamaha's own published voice list
- * contradicts - `Brass` prints as `Orche, Solo, BrsEn` and indexes as `Solo, BrsEn, Orche`.
- *
- * The JSON also carries `mainSource`, `subSource` and `subNoAssignmentRule`: prose explaining
- * where each half came from. They are not decoded here, and they are why the file is worth reading
- * before anyone changes this table.
+ * Catalog data, because the sub-category order is a hardware measurement that Yamaha's published
+ * voice list contradicts (`Brass` prints `Orche, Solo, BrsEn` and indexes `Solo, BrsEn, Orche`).
+ * The JSON's `mainSource`, `subSource` and `subNoAssignmentRule` say where each half came from
+ * and are worth reading before changing this table; they are not decoded here.
  */
 @Serializable
 data class MotifXsCategoryEncoding(
@@ -184,15 +138,8 @@ data class MotifXsCategoryEncoding(
 
 /**
  * A device's [MotifXsConfig], with [MotifXsConfig.banks] filled in from the catalog's shared
- * [catalogFamilyConfig] when [deviceFamilyConfig] does not carry its own.
- *
- * **Why a fallback rather than always reading the shared one.** The XS6, XS7 and XS8 are the same
- * instrument electrically - same memory map, same endpoints, same cable - confirmed against the
- * vendor's own driver package (see `CatalogParsesTest`), so their bank table would otherwise be
- * copied three times in the catalog for no reason but which product id it sits next to. A device
- * that turns out to lay its memory out differently - a Motif XF, say - still overrides it by
- * simply giving its own catalog entry a `banks` array; nothing here special-cases that, the
- * per-device one just wins because it is checked first.
+ * [catalogFamilyConfig] where [deviceFamilyConfig] carries none: the XS6, XS7 and XS8 share one
+ * memory map, and a device that does not simply gives its own entry a `banks` array.
  */
 internal fun resolvedConfig(
     catalogFamilyConfig: JsonObject,
@@ -209,12 +156,7 @@ internal fun resolvedConfig(
     )
 }
 
-/**
- * The payload written over a slot to erase it, one per kind of voice.
- *
- * Not part of [MotifXsConfig] because it is not configuration: it is real instrument data that
- * ships with the app, and a catalog entry has no business carrying kilobytes of it.
- */
+/** The payload written over a slot to erase it, one per kind of voice - real instrument data, not configuration. */
 data class MotifXsBlanks(val normal: ByteArray, val drum: ByteArray) {
     fun forBank(bank: MotifXsBank): ByteArray = if (bank.isDrum) drum else normal
 
@@ -238,26 +180,17 @@ object MotifXsFamily : InstrumentFamily {
     private val factoryVoices = CatalogLoader(FACTORY_VOICES_ASSET, MotifXsFactoryVoices.serializer())
 
     /**
-     * This instrument's messages do not fit the default framer.
-     *
-     * A normal voice dump is ~1.9 kB, but a **drum voice is ~12.6 kB** - three times
-     * `SysExFramer.DEFAULT_MAX_MESSAGE_BYTES`, which would drop all 32 of them as over-long. The
-     * default is sized for a Pro-800's 210-byte program and was never a protocol limit; this is
-     * the same kind of bound, set from what this instrument actually sends (largest known: 12,622
+     * A drum voice is ~12.6 kB, three times `SysExFramer.DEFAULT_MAX_MESSAGE_BYTES`, which would
+     * drop every one as over-long. Set from what this instrument sends (largest known 12,622
      * bytes) with room for a bigger kit on a related model.
      */
     private const val MAX_MESSAGE_BYTES = 32768
 
     /**
-     * Payloads written over a slot to erase it, one per kind of voice.
-     *
-     * **Real instrument data, not constructed.** Each is a voice initialised through the normal
-     * instrument workflow and whose 20 name bytes were then cleared through the documented write
-     * path, read back through `0C`.
-     *
-     * Shipped rather than copied from an empty slot in the same bank at run time: that would fail
-     * outright on a bank with no empty slots, such as a fully populated USER DR, where delete and
-     * move would then not work at all.
+     * Payloads written over a slot to erase it, one per kind of voice: each an initialised voice
+     * whose 20 name bytes were cleared through the documented write path, read back through `0C`.
+     * Shipped rather than copied from an empty slot at run time, which would fail on a fully
+     * populated bank.
      */
     private const val BLANK_NORMAL = "motifxs_blank_normal.bin"
     private const val BLANK_DRUM = "motifxs_blank_drum.bin"
@@ -285,15 +218,10 @@ object MotifXsFamily : InstrumentFamily {
         val scope = transportScope(descriptor.name)
         val midi = midiOver(transport, descriptor, scope)
         return MotifXsInstrument(
-            // Three attempts, not the default two. A dropped message on this bus is ordinary
-            // rather than exceptional - see UsbMidiBulkTransport's buffer note for what causes it
-            // - and one voice lost out of 416 is a visible hole in the browser. The extra attempt
-            // costs nothing on the overwhelming majority of slots that succeed first time, and a
-            // scan that has already committed to 93 seconds is not the place to be stingy about a
-            // second retry.
-            //
-            // **A backstop, not the fix.** The cause is buffer overflow under a GC pause, and it
-            // is addressed there; this is what remains for genuinely lost transfers.
+            // Three attempts, not the default two: a dropped message on this bus is ordinary
+            // (see UsbMidiBulkTransport's buffer note), and one voice lost out of 416 is a
+            // visible hole in the browser. A backstop for genuinely lost transfers; the buffer
+            // is what addresses the cause.
             SysExExchange(midi, scope, framer = SysExFramer(MAX_MESSAGE_BYTES), retries = 2),
             config,
             blanks,
@@ -304,29 +232,19 @@ object MotifXsFamily : InstrumentFamily {
     }
 
     /**
-     * The factory name table, or an empty one if it cannot be read.
-     *
-     * **Never throws, unlike the blanks above it.** `InstrumentRegistry.create` is not wrapped in
-     * `runCatching` the way `descriptors` is, so anything thrown here does not degrade a feature -
-     * it fails the whole connect, and a Motif XS becomes unusable. The blanks are allowed that
-     * because delete and move genuinely cannot work without them; a missing name table only means
-     * [MotifXsInstrument] does not offer the factory listing, which it decides by asking whether
-     * this is empty.
+     * The factory name table, or an empty one if it cannot be read. Never throws, unlike the
+     * blanks: `InstrumentRegistry.create` is not guarded, so a throw here would fail the whole
+     * connect, while a missing table only drops the factory listing. Delete and move genuinely
+     * cannot work without the blanks.
      */
     private fun loadFactoryVoices(context: Context): MotifXsFactoryVoices =
         runCatching { factoryVoices.load(context) }.getOrElse { MotifXsFactoryVoices() }
 
     /**
-     * The instrument speaks MIDI SysEx; the bus it speaks it over is not `android.media.midi`.
-     *
-     * A Motif XS declares a single **vendor-specific** interface and no MIDIStreaming one, so
-     * `MidiManager` never enumerates it and there is no MIDI port to open. The way through is to
-     * pack a Universal Device Inquiry into USB-MIDI event packets by hand and read the reply back
-     * off the bulk endpoint directly.
-     *
-     * A [MidiTransport] is still accepted, because nothing here is Motif-specific except which
-     * bus that particular instrument is on, and a Motif XF or a class-compliant sibling would
-     * arrive the other way.
+     * The instrument speaks MIDI SysEx over raw bulk endpoints: it declares a single
+     * vendor-specific interface, so `MidiManager` never enumerates it and the packets are packed
+     * by hand ([UsbMidiBulkTransport]). A [MidiTransport] is still accepted, for a class-compliant
+     * sibling.
      */
     private fun midiOver(
         transport: Transport,

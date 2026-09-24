@@ -35,9 +35,9 @@ class Pro800DecodingTest {
     }
 
     /**
-     * The version bytes start at index 10, not 9 - index 9 echoes the request's `0x00` parameter.
-     * Reading from 9 would turn a firmware version like 1.4.6 into nonsense, and the fixture that
-     * was supposed to cover it had been built to match the wrong offset.
+     * The version bytes start at index 10, not 9 - index 9 echoes the request's `0x00` parameter,
+     * and reading from 9 would turn a firmware version like 1.4.6 into nonsense. The fixture is a
+     * captured reply, so it pins the offset rather than agreeing with the code.
      */
     @Test
     fun `the firmware reply decodes to 1_4_6`() {
@@ -305,11 +305,11 @@ class Pro800DecodingTest {
     /**
      * **Both real codes, because reading the wrong byte passes with only one of them.**
      *
-     * The status message has two parameter bytes and the code is the *second*, at offset 10.
-     * Offset 9 is a constant `00` in both replies, so a check reading from 9 reports every status
-     * as a success - including every refusal. A write answers `01 00 00`; a read of an
-     * out-of-range address answers `01 00 01` - `isStatusOk` must tell these two apart, not just
-     * recognize the first. A test carrying only the success case would still pass with the bug.
+     * The status message has two parameter bytes and the code is the second, at offset 10. Offset
+     * 9 is a constant `00` in both replies, so a check reading from 9 would report every status as
+     * a success, refusals included. A write answers `01 00 00` and a read of an out-of-range
+     * address `01 00 01`, so `isStatusOk` has to tell the two apart rather than recognise the
+     * first - which a test carrying only the success case could not show.
      */
     @Test
     fun `the status code is read from offset ten, not offset nine`() {
@@ -324,7 +324,7 @@ class Pro800DecodingTest {
         assertFalse(Pro800SysEx.isStatusFailure(ok))
         assertTrue(Pro800SysEx.isStatusFailure(failure))
 
-        // The bug, stated so it cannot come back: the two differ *only* at offset 10.
+        // Stated outright: the two replies differ only at offset 10.
         assertEquals(
             "offset 9 is identical in both, which is why reading it there sees nothing",
             ok[9], failure[9],

@@ -196,15 +196,11 @@ class InstrumentFacetTest {
     }
 
     /**
-     * The other half of the same rule: an op *not* declared must not be quietly implemented
-     * either, or the UI is hiding something that works.
+     * The other half of the same rule: an op not declared must not be quietly implemented either,
+     * or the UI is hiding something that works.
      *
-     * **The example has now moved twice, and that is the point.** It was a Nord delete until that
-     * was ported (sub-opcode 20/21), then the Motif XS's rename until Yamaha's documented write
-     * path was implemented and that was ported too. It is now [NoCopyFixtureInstrument]'s copy,
-     * which is a fixture rather than a family - so
-     * the next port cannot invalidate it, and the property stops being hostage to how much of
-     * each instrument happens to be understood this month.
+     * The example is [NoCopyFixtureInstrument]'s copy, a fixture rather than a family, so
+     * implementing an operation on any real instrument cannot invalidate it.
      */
     @Test
     fun `an undeclared edit throws rather than silently working`() = runTest {

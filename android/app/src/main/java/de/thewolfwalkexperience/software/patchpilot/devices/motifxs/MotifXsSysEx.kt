@@ -23,11 +23,7 @@ object MotifXsSysEx {
     /** Bank bytes at or above this are drum banks: `20` PRE DR, `21` GM DR, `28` USER DR. */
     const val FIRST_DRUM_BANK = 0x20
 
-    /**
-     * Two model ids exist, split by **who is speaking**: everything the host sends carries
-     * [MODEL_HOST], everything the instrument sends carries [MODEL_DEVICE]. Which one to send is
-     * all this app needs to know; why the two values differ is not otherwise relevant here.
-     */
+    /** Two model ids, split by who is speaking: the host sends [MODEL_HOST], the instrument sends [MODEL_DEVICE]. */
     const val MODEL_HI = 0x7F
     const val MODEL_HOST = 0x03
     const val MODEL_DEVICE = 0x0B
@@ -38,12 +34,7 @@ object MotifXsSysEx {
     const val TYPE_DUMP_REQUEST = 0x20
     const val TYPE_PARAM_REQUEST = 0x30
 
-    /**
-     * Host -> device "parameter set", used only for selecting a voice.
-     *
-     * Selection uses this type where other parameter writes use [TYPE_PARAM_CHANGE]. Both carry
-     * [MODEL_HOST] and an address, and the device answers both with [TYPE_PARAM_CHANGE].
-     */
+    /** Host -> device "parameter set", used only for selecting a voice; the device answers with [TYPE_PARAM_CHANGE]. */
     const val TYPE_SELECT = 0x40
 
     /** Device -> host acknowledgement of a bulk dump the host sent: `F0 43 60 02 F7`. */
@@ -56,11 +47,9 @@ object MotifXsSysEx {
     const val BULK_ADDRESS_INDEX = 7
 
     /**
-     * Where the address sits in everything that is *not* a bulk dump.
-     *
-     * **Two bytes earlier, because only a dump carries a byte count.** A request is
-     * `F0 43 2n 7F 03 <addr> F7` and a dump is `F0 43 0n 7F 0B <count> <addr> <data> <sum> F7`, so
-     * reading a request at the dump's offset would pick up its last address byte and its `F7`.
+     * Where the address sits in everything that is not a bulk dump: two bytes earlier, since only
+     * a dump carries a byte count (`F0 43 2n 7F 03 <addr> F7` against
+     * `F0 43 0n 7F 0B <count> <addr> <data> <sum> F7`).
      */
     const val REQUEST_ADDRESS_INDEX = 5
 
@@ -90,30 +79,19 @@ object MotifXsSysEx {
 
     /**
      * The favorited-voice marks: a second address family parallel to the `0C` voice extension,
-     * reusing its bank byte at a different high byte.
+     * one small dump per bank at `71 mm 00`, where `mm` is the bank's own
+     * [MotifXsBank.addressMid]. The payload is one raw byte per slot, indexed by zero-based slot,
+     * and is not MSB-packed - running the unpacker over it produces plausible nonsense rather
+     * than an error.
      *
-     * One small dump per bank at `71 mm 00`, where `mm` is the bank's own [MotifXsBank.addressMid]
-     * - the same selector as a voice dump. The payload is **one raw byte per slot**, indexed by
-     * zero-based slot: `0` for unmarked, and `1`, `2` or `3` for marked - see the note below on
-     * what each of those three means.
+     * The mark is neither a boolean nor a bitmask: it names which of the voice's own two category
+     * assignments the instrument's browser files the favorite under. `0` not favorited, `1` both,
+     * `2` Category 1 only, `3` Category 2 only; anything else is stored verbatim and lists the
+     * voice under neither.
      *
-     * **Not MSB-packed.** Every other payload this app reads from a `0C` address is packed 7 bits
-     * per byte and has to be unpacked; this one is not, and running the unpacker over it produces
-     * plausible-looking nonsense rather than an error.
-     *
-     * **Never sweep the middle byte.** An unmapped address is not merely refused - it puts an
-     * *Illegal Bulk Data* message on the instrument's own screen, in front of the user, once per
-     * attempt. `mm = 0x08` is a permanent hole between PRE8 and GM. Only ever pass a value that
-     * came out of the catalog's bank table.
-     *
-     * **The mark values are decoded**, and they are not a boolean or a bitmask. The byte names
-     * which of the voice's *own two category assignments* the instrument's browser files the
-     * favorite under: `0` not favorited, `1` both, `2` Category 1 only, `3` Category 2 only.
-     * Anything else is stored verbatim and lists the voice under neither - which is what rules
-     * the bitmask reading out, since a third bit produced no third listing.
-     *
-     * **Writable, and confirmed on hardware** - see [writeFavorites] for the four rules that
-     * differ from the `0C` path.
+     * Never sweep the middle byte: an unmapped address puts an *Illegal Bulk Data* message on the
+     * instrument's own screen, and `mm = 0x08` is a permanent hole between PRE8 and GM. Only pass
+     * a value from the catalog's bank table. Writable - see [writeFavorites].
      */
     const val FAVORITES_ADDRESS_HI = 0x71
 
@@ -122,25 +100,18 @@ object MotifXsSysEx {
         requestDump(device, FAVORITES_ADDRESS_HI, bankByte, 0)
 
     /**
-     * A whole bank's favorite marks, written back to `71 mm 00`.
+     * A whole bank's favorite marks, written back to `71 mm 00`. [table] is the entire bank's
+     * table: read it, change one byte, send it back, so the declared length is always the
+     * instrument's own - an ill-formed write at a neighbouring address family has been observed
+     * to leave this instrument ignoring MIDI until a power cycle.
      *
-     * **[table] is the entire bank's table, not one slot.** Read it, change one byte, send it
-     * back, so the length declared is always the instrument's own. A wrong-length write at a
-     * neighbouring address family once left this instrument ignoring MIDI until it was power
-     * cycled, and nothing about a favorite is worth risking that to save a round trip.
+     * Four things differ from the stored-voice path, all measured:
      *
-     * Four things here are the opposite of the stored-voice path, all measured on hardware:
-     *
-     * - **No store marker.** This reaches non-volatile storage by itself; an uncommitted write
-     *   survived a cold power cycle. Sending [storeMarker] anyway is not merely redundant, it
-     *   commits every unrelated pending write too.
-     * - **It applies on a delay.** An immediate read-back returns the *old* table, so a caller
-     *   that verifies straight away reports a working write as a no-op. Poll instead.
-     * - **The read-only-bank rule does not apply.** PRE1 is read-only and its favorites table
-     *   accepts a write and acknowledges it. That rule belongs to `0C`.
-     * - **Out-of-range values are kept, not clamped.** Writing `4` is accepted, survives a power
-     *   cycle, and lists the voice nowhere - so a caller must refuse anything outside `0..3`
-     *   rather than letting the instrument sort it out.
+     * - No store marker: this reaches non-volatile storage by itself, and sending [storeMarker]
+     *   anyway would commit every unrelated pending write too.
+     * - It applies on a delay, so an immediate read-back returns the old table. Poll instead.
+     * - The read-only-bank rule does not apply: PRE1's table accepts a write.
+     * - Out-of-range values are kept, not clamped, so a caller must refuse anything outside 0..3.
      *
      * Acknowledged with [isAck] like any other bulk dump.
      */
@@ -157,24 +128,17 @@ object MotifXsSysEx {
     const val SELECT_PROGRAM = 0x02
 
     /**
-     * The bank-select MSB for a **normal** voice bank - a default, not a constant.
-     *
-     * It holds for every normal user or preset bank, but **GM answers only at `0x00` and GM DR
-     * only at `0x7F`**, so it is not a fixed value across the whole instrument.
-     *
-     * The consequence for a caller: PRE1, GM and GM DR all use bank-select LSB `0x00` and are
-     * told apart *only* by this byte, so selecting on the LSB alone silently picks a different
-     * bank - and an unrecognised pair is ignored rather than refused, leaving the program change
-     * to land in whatever bank was already current. Pass [MotifXsBank.selectMsb].
+     * The bank-select MSB for a normal voice bank - a default, not a constant: GM answers only at
+     * `0x00` and GM DR only at `0x7F`. PRE1, GM and GM DR share bank-select LSB `0x00` and are
+     * told apart only by this byte, and an unrecognised pair is ignored rather than refused, so
+     * pass [MotifXsBank.selectMsb].
      */
     const val BANK_MSB = 0x3F
 
     /**
-     * The three parameter sets that select a voice, in the order the editor sends them.
-     *
-     * [program] is the **flat zero-based slot**, so the panel's group and position fall straight
-     * out of it - group `program / 16`, position `program % 16 + 1`. Whether the instrument
-     * tolerates fewer messages, or a different order, is untested: all three are sent, in order.
+     * The three parameter sets that select a voice, in the order the vendor's editor sends them.
+     * [program] is the flat zero-based slot. Whether fewer messages or another order would do is
+     * untested.
      */
     fun selectVoice(
         device: Int,
@@ -201,17 +165,10 @@ object MotifXsSysEx {
             (message[6].toInt() and 0xFF) == SELECT_ADDRESS_MID
 
     /**
-     * True for the acknowledgement a bulk dump draws back (`F0 43 60 02 F7`).
-     *
-     * **This means "accepted", and its absence means "refused".** The `0x02` payload byte carries
-     * no information of its own; the signal is not in the payload byte at all - it is in whether
-     * an acknowledgement arrives.
-     *
-     * A write to a read-only bank, a dump with a broken checksum, and a dump whose declared count
-     * disagrees with its length are **all answered with silence**, and none of the three is
-     * buffered.
-     *
-     * Accepted is still not the same as stored - see [storeMarker].
+     * True for the acknowledgement a bulk dump draws back (`F0 43 60 02 F7`). Its arrival means
+     * "accepted" and its absence "refused"; the `0x02` payload byte carries no information. A
+     * write to a read-only bank, a broken checksum and a count disagreeing with the length are
+     * all answered with silence, and none is buffered. Accepted is not stored - see [storeMarker].
      */
     fun isAck(message: ByteArray): Boolean =
         message.size == 5 && message[0] == SYSEX_START && message[4] == SYSEX_END &&
@@ -219,16 +176,12 @@ object MotifXsSysEx {
             (message[2].toInt() and 0xF0) == TYPE_ACK
 
     /**
-     * A bulk dump addressed to [addressHi]/[addressMid]/[addressLo] carrying [payload].
-     *
-     * The byte count and checksum are computed here so a caller cannot get them wrong; the
-     * payload is passed through untouched, because the only payload this app has any business
-     * writing is one it read back off the same instrument.
+     * A bulk dump addressed to [addressHi]/[addressMid]/[addressLo] carrying [payload]. The byte
+     * count and checksum are computed here; the payload is passed through untouched.
      */
     fun bulkDump(device: Int, addressHi: Int, addressMid: Int, addressLo: Int, payload: ByteArray): ByteArray {
-        // The counted region is the payload **only** - the three address bytes are outside it.
-        // A 1,903-byte dump declares 0x0E 0x63 = 1,891, which is its payload length, and
-        // 1,891 + BULK_OVERHEAD = 1,903.
+        // The counted region is the payload only: a 1,903-byte dump declares 1,891, its payload
+        // length, and 1,891 + BULK_OVERHEAD = 1,903.
         val count = payload.size
         val out = ByteArray(payload.size + BULK_OVERHEAD)
         out[0] = SYSEX_START
@@ -248,22 +201,15 @@ object MotifXsSysEx {
     }
 
     /**
-     * The store marker: `11 00 00` as a zero-payload bulk dump. **This is the commit.**
+     * The store marker: `11 00 00` as a zero-payload bulk dump, and the commit. A bulk dump to a
+     * stored-voice address is acknowledged and not applied; the marker writes the pending dumps
+     * to flash.
      *
-     * It is not a formality. A bulk dump written to a stored-voice address is *acknowledged and
-     * not applied* - read the slot straight back and it still holds what it held before. The
-     * marker is what writes the pending dumps to flash, and until one arrives the instrument
-     * holds them.
-     *
-     * Two consequences that shape everything above:
-     *
-     * - **It commits everything outstanding, not just the write before it.** Writes left pending
-     *   by an abandoned operation are still there even if the instrument is reconnected to a
-     *   different host, and a single marker commits all of them. So a write that is abandoned is
-     *   not discarded; it is armed, and the next operation's marker fires it.
-     * - **It is idempotent.** The vendor editor sends two. The first is acknowledged in ~160 ms
-     *   (a flash write), the second in ~12 ms, and one is enough - three writes followed by one
-     *   marker committed all three. This sends one.
+     * - It commits everything outstanding, not just the write before it - and pending writes
+     *   survive being abandoned, even across a reconnect to a different host, so an abandoned
+     *   write is armed rather than discarded.
+     * - It is idempotent (the vendor editor sends two, acknowledged in ~160 ms and ~12 ms); one
+     *   marker committed three writes, and this sends one.
      */
     fun storeMarker(device: Int): ByteArray = bulkDump(device, STORE_HI, STORE_MID, STORE_LO, ByteArray(0))
 
@@ -292,12 +238,9 @@ object MotifXsSysEx {
         )
 
     /**
-     * The instrument's current mode, readable with a parameter request at `0A 00 01`.
-     *
-     * **This is what makes a selection safe to attempt.** The undocumented `4n` selection works in
-     * Voice mode *only*: in Performance and Song mode the instrument does not acknowledge it and
-     * changes nothing. Since the echo repeats what was sent rather than what happened, a client
-     * with no way to read the mode cannot tell the difference.
+     * The instrument's current mode, readable with a parameter request at `0A 00 01`. The `4n`
+     * selection works in Voice mode only, and its echo repeats what was sent rather than what
+     * happened, so reading the mode is the only way to tell.
      */
     const val MODE_ADDRESS_HI = 0x0A
     const val MODE_ADDRESS_MID = 0x00
@@ -316,13 +259,9 @@ object MotifXsSysEx {
     }
 
     /**
-     * Switches the instrument's mode - `F0 43 1n 7F 03 0A 00 01 dd F7`.
-     *
-     * Documented, and a Parameter Change is the only way to switch between Performance, Song,
-     * Pattern, and Voice mode - there is no other route.
-     *
-     * **This changes what the player sees and hears**, so nothing in this app sends it without
-     * asking first - see `InstrumentException.BlockedByDeviceState`.
+     * Switches the instrument's mode - `F0 43 1n 7F 03 0A 00 01 dd F7`, the documented and only
+     * route. It changes what the player hears, so nothing here sends it without asking first -
+     * see `InstrumentException.BlockedByDeviceState`.
      */
     fun setMode(device: Int, mode: MotifXsMode): ByteArray =
         byteArrayOf(
@@ -343,11 +282,9 @@ object MotifXsSysEx {
         requestParam(device, COMMON_HI, COMMON_MID, offset)
 
     /**
-     * Bulk Header and Bulk Footer - Yamaha's own way to address one stored voice.
-     *
-     * `mm` is the same bank byte the extension's `0C` uses and `nn` the slot, so a voice is
-     * transferred as **header -> a fixed sequence of parameter blocks -> footer**. The footer is
-     * what saves to Flash ROM: a write survives a power cycle.
+     * Bulk Header and Bulk Footer - Yamaha's own way to address one stored voice, at the same
+     * bank byte `0C` uses. A voice transfers as header, a fixed sequence of parameter blocks,
+     * footer; the footer is what saves to Flash ROM.
      */
     const val BULK_HEADER_HI = 0x0E
     const val BULK_FOOTER_HI = 0x0F
@@ -366,37 +303,25 @@ object MotifXsSysEx {
         typeOf(message) == TYPE_BULK_DUMP && addressOf(message)?.first == BULK_FOOTER_HI
 
     /**
-     * Normal Voice Common1 - the block whose first 20 bytes are the voice name.
-     *
-     * **Fixed width, one byte per character, NUL padded**, and none of the `0C` serialisation's
-     * variable-length, doubled-name, undecoded-trailer trouble applies here: that trouble is a
-     * property of the `0C` encoding, not of the instrument's parameter model.
+     * Normal Voice Common1 - the block whose first 20 bytes are the voice name: fixed width, one
+     * byte per character, NUL padded, with none of the `0C` encoding's variable-length trouble.
      */
     const val COMMON_HI = 0x40
     const val COMMON_MID = 0x00
     const val COMMON_LO = 0x00
 
     /**
-     * Drum Common1 - the same field at a different address.
-     *
-     * A Drum Voice's sequence is a different shape entirely: eight `46 xx` Common blocks (note
-     * `46 08`, not the Normal Voice's `46 06`) and **73** `47 ee` elements against eight `41`/`42`
-     * pairs, matching the Data List's `ee : 0 - 72`.
-     *
-     * **What does not differ is the name**: the first 20 bytes of Common1, fixed width, NUL
-     * padded, in both. `46 00 00` is 74 bytes where `40 00 00` is 82, and nothing about renaming
-     * depends on that.
+     * Drum Common1 - the same name field at a different address. A Drum Voice's sequence is a
+     * different shape (eight `46 xx` Common blocks and 73 `47 ee` elements, matching the Data
+     * List's `ee : 0 - 72`), but the first 20 bytes of Common1 are the name in both.
      */
     const val DRUM_COMMON_HI = 0x46
 
     /**
-     * Where a voice's category assignments sit in its Common block: `main1, sub1, main2, sub2`.
-     *
-     * From Yamaha's own Data List (`MIDI_Data_Table_en.xls`, VOICE NORMAL rows 26-29), which names
-     * them `Voice Category 1 (Main)` through `Voice Category 2 (Sub)`. The *values* those bytes
-     * take are another matter: Yamaha documents the main half and says only "Refer to Category
-     * List" for the sub half, and that list is in no released file - see the shipped
-     * `categoryEncoding`, which was measured on hardware.
+     * Where a voice's category assignments sit in its Common block: `main1, sub1, main2, sub2`,
+     * from Yamaha's Data List (`MIDI_Data_Table_en.xls`, VOICE NORMAL rows 26-29). The values
+     * those bytes take are only half documented - the sub half refers to a category list that is
+     * in no released file - so the shipped `categoryEncoding` was measured on hardware.
      */
     const val CATEGORY_OFFSET = 0x18
     const val CATEGORY_LENGTH = 4
@@ -407,11 +332,9 @@ object MotifXsSysEx {
     }
 
     /**
-     * Re-frames a dump the instrument sent as one the host may send.
-     *
-     * **Never echo a block back verbatim.** The instrument sends model [MODEL_DEVICE] and the host
-     * must send [MODEL_HOST]; the checksum covers that byte, so a message copied unchanged is
-     * wrong twice. Rebuilding from the address and payload is the only safe conversion.
+     * Re-frames a dump the instrument sent as one the host may send: the instrument sends model
+     * [MODEL_DEVICE] and the host must send [MODEL_HOST], and the checksum covers that byte, so
+     * a block echoed verbatim is wrong twice.
      */
     fun rebuildForHost(device: Int, message: ByteArray): ByteArray {
         val (hi, mid, lo) = addressOf(message)
@@ -420,12 +343,9 @@ object MotifXsSysEx {
     }
 
     /**
-     * The Universal Device Inquiry - read-only and idempotent.
-     *
-     * **Addressed to device `00`, not to the `7F` broadcast.** `00` is what the Motif XS Editor
-     * sends and what this instrument answers; whether it also answers a broadcast inquiry is
-     * untested, and a request that goes unanswered means the instrument is never found at all.
-     * The reply comes back addressed `7F`, which is the device saying "to everyone".
+     * The Universal Device Inquiry - read-only and idempotent, addressed to device `00`, which is
+     * what the vendor's editor sends and this instrument answers. Whether it answers the `7F`
+     * broadcast is untested. The reply comes back addressed `7F`.
      */
     fun identityRequest(): ByteArray =
         byteArrayOf(SYSEX_START, 0x7E, 0x00, 0x06, 0x01, SYSEX_END)
@@ -440,12 +360,9 @@ object MotifXsSysEx {
         if (isOurs(message)) message[TYPE_INDEX].toInt() and 0xF0 else null
 
     /**
-     * The (hi, mid, lo) address a message is *for* - a dump's echoed address, or the one a request
-     * is asking about.
-     *
-     * The offset is chosen from the message type rather than fixed, because the two shapes differ
-     * (see [REQUEST_ADDRESS_INDEX]). Correlating a reply to a request means comparing these two,
-     * so a single function that reads both correctly is the point.
+     * The (hi, mid, lo) address a message is for - a dump's echoed address, or the one a request
+     * asks about. The offset is chosen from the message type, since the two shapes differ (see
+     * [REQUEST_ADDRESS_INDEX]).
      */
     fun addressOf(message: ByteArray): Triple<Int, Int, Int>? {
         val type = typeOf(message) ?: return null
@@ -465,13 +382,7 @@ object MotifXsSysEx {
             (message[COUNT_HI_INDEX + 1].toInt() and 0x7F)
     }
 
-    /**
-     * Is this a structurally sound bulk dump?
-     *
-     * Checks the declared length *and* the checksum. A reader that trusts a length field will
-     * decode whatever follows it, and this app cannot see what it is decoding, so both checks are
-     * made unconditionally; both are cheap.
-     */
+    /** Is this a structurally sound bulk dump? Checks the declared length and the checksum, both cheap. */
     fun isWellFormedBulkDump(message: ByteArray): Boolean {
         if (typeOf(message) != TYPE_BULK_DUMP) return false
         val count = declaredCount(message) ?: return false

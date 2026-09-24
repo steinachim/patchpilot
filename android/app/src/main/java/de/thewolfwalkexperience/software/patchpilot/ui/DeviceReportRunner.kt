@@ -19,16 +19,13 @@ internal sealed interface DeviceReportState {
     data class Running(val step: String) : DeviceReportState
 
     /**
-     * A report read and held, with everything sharing or saving it needs.
+     * A report read and held, with everything sharing or saving it needs. [stem] and [description]
+     * are resolved during the read, while the instrument was connected: sharing opens the system
+     * chooser, and the resume from it rebuilds the session, so nothing here may be resolved at
+     * share time.
      *
-     * [stem] and [description] are the instrument's own wording, resolved during the read while
-     * it was connected: sharing opens the system chooser, which is an Activity of its own, and a
-     * resume from it rebuilds a USB session from scratch. Between the teardown and the reconnect
-     * there is no instrument, so nothing about a held report may be resolved at share time.
-     *
-     * [failures] is what the read could not complete, one "what: why" line each - empty for a
-     * complete report. Carried beside the JSON so a screen can say the report is incomplete
-     * without reading family-specific JSON; the JSON's own `failures` map says the same.
+     * [failures] is what the read could not complete, one "what: why" line each, carried beside
+     * the JSON so a screen can say the report is incomplete without parsing it.
      */
     data class Done(
         val json: String,
@@ -41,15 +38,11 @@ internal sealed interface DeviceReportState {
 }
 
 /**
- * Reads one device report at a time and holds the result for whichever screen asked.
- *
- * Owned by the ViewModel rather than by a screen for the same reason [RegressionRunner] is: a
- * Nord report walks every item on the instrument and takes minutes, and a read tied to a
- * composition is cancelled by a rotation and starts over. The read only queries, so cancelling
- * it changes nothing on the instrument; it is the minutes that are worth keeping. A finished
- * report also survives process death through [savedState]. The report is bounded (the largest
- * part of a Nord's is the raw hex of its category replies; it carries no preset names or data),
- * so it is nowhere near what a Bundle can carry.
+ * Reads one device report at a time and holds the result for whichever screen asked. Owned by the
+ * ViewModel, since a Nord report walks every item and takes minutes, and a read tied to a
+ * composition would be cancelled by a rotation. The read only queries, so cancelling changes
+ * nothing on the instrument; it is the minutes that are worth keeping. A finished report survives
+ * process death through [savedState], and is bounded well within what a Bundle carries.
  *
  * Three screens use it: the debug menu holds the result and offers Share and Save, while the
  * preset and connect screens share it straight away and then [dismiss] it.
@@ -81,8 +74,8 @@ internal class DeviceReportRunner(
             _error.value = null
             set(DeviceReportState.Running(readingLabel))
             try {
-                // Resolved inside the try, so a teardown in the meantime fails the report the
-                // way a failed read does instead of throwing out of the caller's click.
+                // Inside the try, so a teardown in the meantime fails the report as a failed read
+                // does rather than throwing out of the caller's click.
                 val (stem, description) = identity()
                 val built = build { step -> set(DeviceReportState.Running(step)) }
                 set(
@@ -121,8 +114,7 @@ internal class DeviceReportRunner(
         /** How many entries precede the failure lines in the saved array. */
         private const val FIXED_FIELDS = 3
 
-        /** Only a held report is saved; Idle and Running both restore to Idle. The three fixed
-         * fields come first, and every entry after them is one failure line. */
+        /** Only a held report is saved. The three fixed fields come first, then one entry per failure line. */
         fun flatten(state: DeviceReportState): List<String> {
             val done = state as? DeviceReportState.Done ?: return emptyList()
             return listOf(done.json, done.stem, done.description) + done.failures

@@ -26,16 +26,12 @@ import kotlinx.coroutines.flow.flow
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 
 /**
- * A fictitious instrument, implemented directly against [Instrument] with an in-memory library -
- * no fake wire underneath it. Mirrors a Nord: grouped addressing, categories, a display, native
- * edits - the shape "Try demo mode" on the connect screen shows, and the only one this class is
- * responsible for being faithful to.
+ * A fictitious instrument, implemented directly against [Instrument] with an in-memory library
+ * rather than a fake transport, so showing the UI needs no fake wire protocol per family. Mirrors
+ * a Nord: grouped addressing, one category per preset, native edits, no favorites.
  *
- * Built on [Instrument] rather than on a fake transport, so that showing the UI does not require
- * a fake wire protocol per family. `DemoUsbTransport` in the test source set does fabricate Nord
- * wire bytes for the real `NordDevice` to parse, and is a test fixture; so is
- * `core.NoCopyFixtureInstrument`, a Pro-800-shaped profile that exercises the screens'
- * facet-gating without hardware.
+ * `DemoUsbTransport` and `core.NoCopyFixtureInstrument` in the test source set are the fixtures
+ * that do fabricate wire bytes and a second facet shape.
  */
 class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, DeviceReporter {
 
@@ -63,13 +59,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
     override val browser: PresetBrowser get() = this
     override val selector: PresetSelector get() = this
     override val editor: PresetEditor get() = this
-    /**
-     * Categories, shaped like a Nord's - see [DemoCategories].
-     *
-     * Favorites are the one tagging capability demo mode does *not* offer: a favorite mark is a
-     * per-bank table a Motif XS keeps beside its voices, and inventing one here would put a
-     * control on screen that no part of this class is modelling.
-     */
+    /** Categories, shaped like a Nord's - see [DemoCategories]. No favorites: nothing here models the per-bank table one lives in. */
     override val tagger: PresetTagger = DemoTagger()
 
     override val report: DeviceReporter? = this
@@ -85,11 +75,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
 
     // ---- PresetBrowser ----
 
-    /**
-     * One batch, like a real Nord - no artificial progress/delay to simulate here.
-     *
-     * [scope] is ignored; the demo library declares only [PresetScope.USER].
-     */
+    /** One batch, like a real Nord. [scope] is ignored; the demo library declares only [PresetScope.USER]. */
     override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
         emit(IndexUpdate.Slots(library.slots(layout)))
         emit(IndexUpdate.Complete)
@@ -110,12 +96,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
 
     override fun isEmulated(op: EditOp) = false
 
-    /**
-     * A limit, because every real family has one and demo mode exists to exercise the same UI
-     * paths. Without it the rename field behaves differently here than anywhere else -
-     * uncapped, and with no character counter - which is exactly the divergence demo mode is
-     * supposed to catch rather than introduce. 16 to match the Nord shape this mirrors.
-     */
+    /** A limit, so the rename field behaves here as it does against a real instrument. 16, matching the Nord shape this mirrors. */
     override val maxNameLength = MAX_NAME_LENGTH
 
     override suspend fun rename(address: SlotAddress, newName: String) = library.rename(address, newName)
@@ -126,13 +107,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
 
     // ---- PresetTagger ----
 
-    /**
-     * The demo's category editor, backed by the same in-memory library the browser reads.
-     *
-     * An inner class rather than another facet on [DemoInstrument] itself, because it is the only
-     * one whose operations do not already have a name on one of the interfaces this implements -
-     * `read` and `setCategories` would sit oddly beside `rename` and `select`.
-     */
+    /** The demo's category editor, backed by the same in-memory library the browser reads. */
     private inner class DemoTagger : PresetTagger {
         override val taxonomy = DemoCategories.taxonomy
 
@@ -198,8 +173,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
         /** Derived, so the two halves of the layout cannot disagree. */
         private const val SLOTS_PER_BANK = GROUPS_PER_BANK * SLOTS_PER_GROUP
 
-        /** 16, matching the Nord shape this mirrors - see [maxNameLength]'s own note on why demo
-         * mode declares a limit at all. */
+        /** 16, matching the Nord shape this mirrors - see [maxNameLength]. */
         private const val MAX_NAME_LENGTH = 16
         private val NAMES = listOf(
             "Concert Grand", "Studio Upright", "Rhodes Mk I", "Wurli 200A", "Clavinet D6",

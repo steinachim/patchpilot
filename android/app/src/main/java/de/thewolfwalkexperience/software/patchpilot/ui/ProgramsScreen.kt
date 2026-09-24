@@ -106,13 +106,7 @@ private const val TAG = "ProgramsScreen"
 /** Material's medium width breakpoint - see `badgesFit` in [ProgramsScreen]. */
 private const val BADGE_MIN_WIDTH_DP = 600
 
-/**
- * The measurements the preset list and its floating drag ghost have to agree on.
- *
- * Named constants rather than literals repeated between the row and the ghost: the ghost is meant
- * to sit exactly over the row it was lifted from, so each of these is one value, not two that
- * happen to coincide.
- */
+/** The measurements the preset list and its floating drag ghost have to agree on, so the ghost sits over the row it was lifted from. */
 private object ProgramListMetrics {
     /** Clears the bank rail (48.dp) plus its 4.dp inset, so no row slides underneath it. */
     val listEndPadding = 56.dp
@@ -134,11 +128,9 @@ private object ProgramListMetrics {
 }
 
 /**
- * An operation the instrument's state blocked, and what the user can do about it.
- *
- * [apply] and [retry] are held rather than re-derived so the dialog does not need to know which
- * operation raised it - it renders whatever the family said and calls back. Adding a second
- * blockable operation means catching the exception there too, not touching this.
+ * An operation the instrument's state blocked, and what the user can do about it. [apply] and
+ * [retry] are held, so the dialog renders whatever the family said without knowing which
+ * operation raised it.
  */
 internal data class BlockedOperation(
     val message: String,
@@ -149,17 +141,9 @@ internal data class BlockedOperation(
 )
 
 /**
- * Puts a failed edit on the screen **and** in the log, and returns the text for the screen.
- *
- * The logging half is not decoration. A move or swap failure on a Motif XS can otherwise leave no
- * record anywhere but a sentence in a snackbar the user has already dismissed - `logcat` holds the
- * whole conversation with the instrument, and without this nothing in it names the operation that
- * failed. Without a logged record, the only way to learn what went wrong is asking the user to
- * read the error back off the screen.
- *
- * The user-facing string is left exactly as the instrument layer wrote it; those messages are
- * written to be read by whoever is holding the phone, and rephrasing them here would put the
- * wording two files away from the condition that produces it.
+ * Puts a failed edit on the screen and in the log, and returns the text for the screen: `logcat`
+ * holds the whole conversation with the instrument, and without the log line nothing in it names
+ * the operation that failed. The user-facing string is left as the instrument layer wrote it.
  */
 internal fun reportFailure(what: String, error: Throwable, fallback: String): String {
     Log.w(TAG, "$what failed", error)
@@ -168,41 +152,27 @@ internal fun reportFailure(what: String, error: Throwable, fallback: String): St
 
 // PullToRefreshBox is marked experimental in Material3 1.4; opted in once for the whole screen.
 /**
- * The preset browser. Tapping a preset loads it. Long-pressing a preset's drag handle and dropping
- * it elsewhere relocates it: onto an occupied row that's a two-way swap, onto an empty slot a
- * one-way move. [ProgramsController.onSwapDropped] picks between them from the loaded index, since
- * an instrument with native operations rejects either call at the wrong kind of destination. The
- * drag gesture is detected on a Box wrapping the whole LazyColumn - not on the individual row -
- * and hit-tests the touch position against the row it landed in (via listState.layoutInfo) plus a
- * left-edge width band approximating the handle glyph's column. A per-row pointerInput's coroutine
- * would be cancelled the moment the dragged row scrolls out of the composed range (e.g. via
- * auto-scroll), aborting the drag; a gesture owned by the always-composed wrapper survives that.
+ * The preset browser. Tapping a preset loads it; long-pressing its drag handle and dropping it
+ * elsewhere relocates it, an occupied row being a swap and an empty slot a move
+ * ([ProgramsController.onSwapDropped] picks between them from the loaded index).
  *
- * The dragged row itself is left in place (dimmed) rather than translated to follow the finger:
- * LazyColumn decides what to compose from each item's untranslated layout slot, so a graphicsLayer
- * translation would keep dragging a row whose content is torn down once that slot scrolls off the
- * (pre-translation) viewport, leaving an empty box. Instead a separate "ghost" ListItem,
- * positioned via pointerY (the finger's own position, tracked independently of any row), is drawn
- * on top as the visual stand-in for whichever preset is being dragged.
+ * The drag gesture is detected on a Box wrapping the whole LazyColumn rather than on a row, and
+ * hit-tests the touch position against `listState.layoutInfo` plus a left-edge band for the
+ * handle's column: a per-row `pointerInput` would be cancelled the moment the dragged row
+ * scrolled out of the composed range. The dragged row stays in place, dimmed, and a separate
+ * ghost ListItem positioned from the finger's own y follows the finger, since LazyColumn composes
+ * from each item's untranslated layout slot and would tear the row down.
  *
- * Rows alternate shading for readability, overridden by an accent color for the dragged row and
- * its current drop target - set via ListItem's own `colors` param, since an external
- * `Modifier.background()` sits underneath ListItem's own container paint and isn't visible.
+ * Bank captions are interleaved into the same LazyColumn, so the drag indices are into
+ * `visibleRows` rather than the preset list, and headers and rows are not the same height - which
+ * is why a position resolves to a row through `hitRowInfo` rather than by dividing by a row
+ * height. Row shading alternates, and the dragged row and its drop target are set through
+ * ListItem's own `colors`, which an external `Modifier.background()` would sit beneath.
  *
- * Bank caption rows (see ProgramRow) are interleaved into the same LazyColumn as the preset rows,
- * so draggedIndex/dropTargetIndex are indices into visibleRows (which include headers), not into
- * the preset list. That also means the row under a given screen position can no longer be found by
- * dividing a pixel offset by a single sampled row height - headers and preset rows aren't the same
- * height - so onDragStart/onDrag/the auto-scroll effect all resolve a position to a row via
- * hitRowInfo (a direct lookup against listState.layoutInfo.visibleItemsInfo) instead.
- * [ProgramsController.onSwapDropped] takes the two rows' slots rather than indices, since that's what the
- * instrument-facing call actually needs and stays valid independent of row vs. preset index space.
- *
- * **Three things here are driven by what the connected instrument declares**, not by
- * assumption: the tag actions and the Share button appear only where those facets exist;
- * the drag handle and the Rename button appear only for edits the instrument supports; and the
- * list renders while an index is still arriving, with drag disabled until it is whole, because a
- * drop into a region that has not loaded yet has no defined target.
+ * Three things follow what the instrument declares: the tag actions and the Share button appear
+ * only where those facets exist; the drag handle and Rename only for edits it supports; and drag
+ * is disabled until the index is whole, since a drop into a region that has not loaded has no
+ * defined target.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -218,19 +188,17 @@ fun ProgramsScreen(
     // [ProgramsController]. What stays below is the state that only describes the view.
     val ops = rememberProgramsController(viewModel)
 
-    // Whether a row has room for its category badges beside the preset id. 600dp is Material's
-    // medium width breakpoint: a phone in portrait is below it, the same phone turned landscape
-    // and any tablet are above. Read from the configuration rather than measured per row, so
-    // every row in the list agrees and the column does not appear on some rows and not others.
+    // Whether a row has room for its category badges beside the preset id: Material's medium
+    // width breakpoint, a phone in landscape or a tablet. From the configuration rather than
+    // measured per row, so every row agrees.
     val badgesFit = LocalConfiguration.current.screenWidthDp >= BADGE_MIN_WIDTH_DP
 
     val resources = LocalResources.current
     var showEmptySlots by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
 
-    // The device report is read in the ViewModel, so a rotation mid-read costs nothing - see
-    // DeviceReportRunner. This screen shares it as soon as it is done; the stem the user typed
-    // is saved with the screen so the share still happens if the screen was recreated meanwhile.
+    // Read in the ViewModel, so a rotation mid-read costs nothing (see DeviceReportRunner). The
+    // stem the user typed is saved, so the share still happens if the screen was recreated.
     val reportRunner = viewModel.deviceReportRunner
     val reportState by reportRunner.state.collectAsState()
     val reportError by reportRunner.error.collectAsState()
@@ -248,9 +216,8 @@ fun ProgramsScreen(
         if (done.isComplete) {
             ops.statusMessage = resources.getString(R.string.programs_shared_as, shared)
         } else {
-            // Through the failure channel, which does not time out: a report with reads missing
-            // is shared all the same (its own failure map says what is missing), but whoever
-            // just sent it needs to know, and a confirmation that fades would not tell them.
+            // Through the failure channel, which does not time out: the report is shared all the
+            // same, but whoever sent it needs to know, and a confirmation that fades would not say.
             ops.operationError = resources.getString(R.string.report_shared_incomplete, done.failures.size)
         }
     }
@@ -259,31 +226,19 @@ fun ProgramsScreen(
     // Captured at screen level rather than inside a dialog: it is needed *as* the dialog is being
     // disposed, by which point a controller resolved inside it is already going away.
     val keyboardController = LocalSoftwareKeyboardController.current
-    // Pull-to-refresh. A Material pattern rather than an iOS import: it is in the Material spec
-    // and ships in Compose Material3. The gesture is the discoverable half of the answer to
-    // "the listing is cached, how do I make it re-read?"; the overflow item is the other half,
-    // because a gesture nobody performs is a feature nobody has.
-    //
-    // `PullToRefreshBox` hoists the refreshing flag to the caller, so this screen owns it and the
-    // gesture's own callback starts the refresh.
+    // Pull-to-refresh, the gesture half of "the listing is cached, how do I make it re-read?";
+    // the app bar's button is the discoverable half. `PullToRefreshBox` hoists the flag to the
+    // caller, so this screen owns it.
     var isRefreshing by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
-    // Drag-to-reorder: four pieces of state, a hit-test and an auto-scroll loop, all of which
-    // only ever change together - see ProgramListDragState.
+    // Drag-to-reorder - see ProgramListDragState.
     val drag = rememberProgramListDragState(listState)
 
-    // What the connected instrument actually offers. Read once per composition rather than
-    // at every call site, so a screen never asks a facet a question it has already been told the
-    // answer to.
-    //
-    // **Keyed on the session, not on a counter this screen bumps by hand.** These change exactly
-    // when the connected instrument changes, and nothing about a plain getter tells Compose
-    // that; a hand-bumped trigger would depend on every mutation remembering to bump it. `state`
-    // is a StateFlow Compose already observes, and the accessors behind these are null-safe (see
-    // `connected()`), so recomposing while disconnected is safe.
-    // The hand-off to ConnectScreen when the session settles somewhere this screen cannot render
-    // is not this screen's: PatchPilotNavHost watches the same state for every session route.
+    // What the connected instrument offers, read once per composition and keyed on the session:
+    // these change exactly when the instrument changes, and nothing about a plain getter tells
+    // Compose that. The accessors are null-safe (see `connected()`), so recomposing while
+    // disconnected is safe. The hand-off to ConnectScreen is PatchPilotNavHost's.
     val session by viewModel.state.collectAsState()
     val supportedEdits = remember(session) { viewModel.supportedEdits }
     val canRename = EditOp.RENAME in supportedEdits
@@ -291,52 +246,39 @@ fun ProgramsScreen(
     val canRelocate = EditOp.MOVE in supportedEdits || EditOp.SWAP in supportedEdits
     val canCopyOp = EditOp.COPY in supportedEdits
     val canSelect = remember(session) { viewModel.canSelect }
-    // Which listing is on screen, and which the instrument offers at all. A family with one scope
-    // shows no selector, so nothing about the Nord, Pro-800 or demo screens changes.
+    // Which listing is on screen, and which the instrument offers; one scope shows no selector.
     val browseScope by viewModel.scope.collectAsState()
     val browsingScopes = remember(session) { viewModel.browsingScopes() }
-    // Banks the instrument refuses writes to. Per-row rather than per-instrument, because the
-    // favorites listing mixes the two: a favorited factory voice and a favorited user voice sit
-    // in the same list, and only one of them can be renamed.
+    // Per-row rather than per-instrument, because the favorites listing mixes the two: a
+    // favorited factory voice and a user voice sit in one list, and only one can be renamed.
     val readOnlyBanks = remember(session) { viewModel.readOnlyBanks() }
     // Null where the instrument has no categories at all, which is what hides both row actions.
     val tagger = remember(session) { viewModel.tagger }
 
     val hasReport = remember(session) { viewModel.hasReport }
     val isUnknownDevice = remember(session) { viewModel.isUnknownDevice }
-    // Non-null where the instrument is usable but not vouched for - today, untested firmware.
-    // The connect screen gates on this once; this keeps it visible, because a warning accepted
-    // before the list appeared is a warning forgotten by the time anything is renamed.
+    // Non-null where the instrument is usable but not vouched for. The connect screen gates on
+    // this once; the banner below keeps it visible for the session.
     val advisory = remember(session) { viewModel.advisory }
-    // Null where the instrument declares no limit. Where it does, the rename field enforces it -
-    // an instrument that silently keeps the first N characters should not be the thing that tells
-    // the user their name was too long.
+    // Null where the instrument declares no limit; where it does, the rename field enforces it
+    // rather than letting the instrument truncate silently.
     val maxNameLength = remember(session) { viewModel.maxPresetNameLength }
 
-    // Brief confirmations (selected/swapped/renamed/deleted) surface as a Snackbar rather than a
-    // Toast: a Toast is a system overlay that outlives the screen that raised it, cannot host an
-    // action, and sits outside the app's own accessibility tree.
+    // A Snackbar rather than a Toast: a Toast outlives the screen that raised it, cannot host an
+    // action, and sits outside the app's accessibility tree.
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(ops.statusMessage) {
         val message = ops.statusMessage ?: return@LaunchedEffect
-        // Clear *after* showing, never before. `showSnackbar` suspends until the snackbar is
-        // dismissed, and clearing first changes this effect's key - which cancels the very call
-        // that was about to render it.
+        // Cleared after showing: `showSnackbar` suspends until dismissal, and clearing first
+        // would change this effect's key and cancel the call about to render it.
         snackbarHostState.showSnackbar(message, withDismissAction = true)
         ops.statusMessage = null
     }
 
-    // Failures use the same Snackbar, and **do not time out**.
-    //
-    // The same place as the confirmations, not a line above the list: a refusal - "cannot put a
-    // drum kit into a slot that holds a normal voice" - is the same kind of feedback as
-    // "Swapped A:01 <-> A:02", and a line above the list pushes every row down while it shows.
-    //
-    // Indefinite rather than the confirmations' brief show, because these are not all refusals.
-    // Some report that the *instrument's* state is uncertain - "the instrument did not confirm
-    // the commit, so the writes may or may not have been stored" - and a message telling somebody
-    // their data might be in an unknown state must not disappear on a timer while they are looking
-    // at the keyboard. One tap on the dismiss action clears it.
+    // Failures use the same Snackbar and do not time out: some report that the instrument's own
+    // state is uncertain ("the instrument did not confirm the commit"), and a message saying
+    // somebody's data may be in an unknown state must not disappear on a timer. One tap on the
+    // dismiss action clears it.
     LaunchedEffect(ops.operationError, reportError) {
         val message = ops.operationError ?: reportError ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(
@@ -348,84 +290,45 @@ fun ProgramsScreen(
         reportRunner.clearError()
     }
 
-    // Rows render as they arrive rather than behind a spinner - the difference between usable and
-    // unusable on an instrument whose index costs one round trip per slot.
-    // Collected in the ViewModel, not here: a scan tied to the composition would be cancelled and
-    // restarted by a rotation - 93 seconds on a Motif XS.
+    // Rows render as they arrive rather than behind a spinner, on an instrument whose index costs
+    // one round trip per slot. Collected in the ViewModel, so a rotation does not restart a
+    // 93-second scan.
     val index by viewModel.index.collectAsState()
 
     // Announces "this screen needs a listing"; the ViewModel decides whether that means work.
-    //
-    // **Keyed on Unit, not on the session**, even though the session is collected above for the
-    // facet-shape reads. Restarting a reconnect's listing is the ViewModel's job - it calls
-    // startIndex() itself when a session begins - and a rotation must leave a scan already
-    // running alone.
-    //
-    // The screen recomposes *while disconnected* during that dip, so every accessor it reads
-    // during composition answers null rather than throwing (see `InstrumentViewModel.connected()`);
-    // that is what makes collecting the session above safe, and it is a separate question from
-    // what the listing is keyed on.
+    // Keyed on Unit, not the session: restarting a reconnect's listing is the ViewModel's job
+    // (it calls startIndex() when a session begins), and a rotation must leave a running scan be.
     LaunchedEffect(Unit) { viewModel.startIndex() }
     /*
-     * Editing is off while the listing is still arriving.
+     * Editing is off while the listing is still arriving, and again while an edit is running.
+     * A drag dropped onto a region that has not loaded has no defined target, rename and delete
+     * would be composed against a filling index, and a second tap during an edit would queue a
+     * second edit behind the first. The gate covers dragging, the overflow menu and the device
+     * report alike.
      *
-     * Not merely defensive. A drag dropped onto a region that has not loaded yet has no defined
-     * target, and rename and delete would be composed against an index that is still filling -
-     * on a Motif XS that window is about 93 seconds, which is long enough to be used rather than
-     * long enough to be noticed. The gate covers dragging, the overflow menu and the device
-     * report alike, so no destructive operation is reachable mid-scan.
-     *
-     * Three things deliberately stay live, because none of them is composed against the index:
-     *
-     * - **The bank rail.** Jumping between banks during a long load is what makes it bearable,
-     *   and it changes nothing on the instrument.
-     * - **The filter and the empty-slot toggle**, which only ever narrow what is already shown.
-     * - **Tapping a row to select it.** It stores nothing, and `SysExExchange` serializes
-     *   requests, so a selection issued mid-scan lands *between* two dumps rather than in the
-     *   middle of one - about 160 ms on a Motif XS, not a hang. Auditioning presets while the
-     *   rest of the bank loads is a feature, not a race.
+     * Three things stay live, because none is composed against the index: the bank rail, which
+     * changes nothing on the instrument; the filter and the empty-slot toggle, which only narrow
+     * what is shown; and tapping a row to select it, which stores nothing and lands between two
+     * dumps rather than inside one, since `SysExExchange` serializes requests.
      */
-    // ...and off again while one is running. An edit is seconds of round trips, and a second tap
-    // in that time would queue a second edit behind the first - two copies, several seconds
-    // apart, from one apparent gesture.
-    //
-    // Selection is deliberately *not* gated on this. It stores nothing, it is the fastest thing
-    // here, and auditioning one preset while another edit finishes is reasonable.
     val editsEnabled = index.complete && ops.busy == null
 
-    // The gesture drops the cached listing and re-runs the scan; the scan reaching Complete is
-    // what stops the spinner. Driving the spinner off `index.complete` rather than off a timer
-    // means it reflects the instrument finishing rather than an animation finishing - which on a
-    // Motif XS is a 93-second difference.
-    // Which run *this* gesture started, so the effect below can tell it from any other.
+    // Which run this gesture started, so the effect below can tell it from any other; the
+    // spinner stops when the scan completes rather than on a timer.
     var pendingRefresh by remember { mutableStateOf<Int?>(null) }
-    // Keyed on the **generation**, not only on `complete`.
-    //
-    // Keying on `complete` alone looks right and does not work: a fast listing - demo mode, a
-    // Nord, a cache hit - resets and completes inside one recomposition, so Compose never
-    // observes the intermediate `false`, the key never changes, this never re-runs, and the
-    // spinner hangs forever on exactly the instruments where the refresh was instant.
-    //
-    // `index.generation` changes on every re-read whatever its duration, so comparing it against
-    // the trigger we just bumped answers "has *my* refresh finished?" rather than "is something
-    // finished?".
+    // Keyed on the generation, not only on `complete`: a fast listing (demo mode, a Nord, a cache
+    // hit) resets and completes inside one recomposition, so Compose never observes the
+    // intermediate `false` and the spinner would hang on exactly those instruments.
     LaunchedEffect(index.generation, index.complete, index.error) {
         if (!isRefreshing) return@LaunchedEffect
         if (index.generation != pendingRefresh) return@LaunchedEffect
         if (index.complete || index.error != null) isRefreshing = false
     }
-    // Shared by the pull gesture and the app bar's refresh button, so both give the same
-    // `isRefreshing` feedback rather than only the gesture's own indicator moving.
-    //
-    // **Guards against re-entry itself**, rather than trusting the button's own `enabled` state
-    // to have caught up: `enabled` only reflects the last recomposition, so two taps arriving
-    // before Compose re-renders between them both reach this function regardless. `isRefreshing`
-    // is a local Compose state var, though, so - unlike navigation completion, which lives in
-    // NavController's own state and genuinely needs a recomposition to observe - a synchronous
-    // check-then-set here is enough: the second call sees the first's write immediately, in the
-    // same snapshot, with no recomposition required in between.
-    // Not while an edit is running either: the edit's own reload follows it anyway, and a listing
-    // started under it would only compete with the edit for the instrument.
+    // Shared by the pull gesture and the app bar's button, so both give the same feedback.
+    // Guards re-entry itself rather than trusting `enabled`, which only reflects the last
+    // recomposition: `isRefreshing` is local Compose state, so the second of two quick taps sees
+    // the first's write in the same snapshot. Not while an edit is running either, since the
+    // edit's own reload follows it.
     fun startRefresh() {
         if (isRefreshing || ops.busy != null) return
         isRefreshing = true
@@ -434,17 +337,15 @@ fun ProgramsScreen(
     val programs = index.slots
 
     // Everything the list needs, derived in one pure pass - see [buildProgramListing], which
-    // holds the rules about how the families report occupancy and is testable without Compose.
-    // `scope` is a key even though it is not an argument: `viewModel.allSlots(scope)` is a plain
-    // call, so nothing else here would tell Compose the address space had changed underneath it.
+    // holds the occupancy rules and is testable without Compose. `browseScope` is a key even
+    // though it is not an argument, since `viewModel.allSlots(scope)` is a plain call.
     val listing = remember(programs, showEmptySlots, searchText, ops.picking, browseScope) {
         buildProgramListing(
             reported = programs,
             allSlots = viewModel.allSlots(browseScope),
-            // Only the user listing has empty slots to show, and the checkbox is hidden in the
-            // other two - but hiding a control does not reset it. Left ticked from the user
-            // listing, it would make the favorites one render *nothing*: that scope has no
-            // address space, so "show every address, occupied or not" is an empty set.
+            // Only the user listing has empty slots to show, and hiding the checkbox in the other
+            // two does not reset it: left ticked, it would render the favorites listing empty,
+            // since that scope has no address space.
             showEmptySlots = showEmptySlots && browseScope == PresetScope.USER,
             picking = ops.picking,
             searchText = searchText,
@@ -454,44 +355,32 @@ fun ProgramsScreen(
     val occupied = listing.occupied
     // Drawn in the rail instead of the full label, which does not fit at the rail's width.
     val bankRailLabels = remember(index) { viewModel.bankRailLabels() }
-    // **The user listing's free slots, whatever is on screen.** A copy can only ever be written to
-    // a writable slot, so the destination pool is a property of the user scope - not of the
-    // listing being displayed. Taking it from `listing` instead is wrong in the factory scope,
-    // where every one of the 1,217 rows holds a voice: `freeSlots` would be empty and the Copy
-    // item would be hidden on exactly the rows the feature exists for.
+    // The user listing's free slots, whatever is on screen: a copy can only be written to a
+    // writable slot, so the destination pool belongs to the user scope. From `listing` it would
+    // be empty in the factory scope, where every row holds a voice.
     val userIndex by viewModel.userIndex.collectAsState()
     val copyDestinations = remember(userIndex, session) {
         freeSlots(userIndex.slots, viewModel.allSlots(PresetScope.USER))
     }
-    // Hidden rather than shown-disabled where there is nowhere to copy to: the row menu has no
-    // other disabled-but-visible items, and entering picking mode only to find no valid target
-    // is not worth offering.
-    //
-    // Gated on the *user* listing being complete rather than on `editsEnabled`, which describes
-    // whichever listing is displayed - and the factory one completes the moment it is opened,
-    // which would offer a copy before the destinations were known.
+    // Hidden rather than disabled where there is nowhere to copy to. Gated on the user listing
+    // being complete rather than on `editsEnabled`, which describes whichever listing is
+    // displayed - and the factory one completes the moment it is opened, before the destinations
+    // are known.
     val canCopy = canCopyOp && userIndex.complete && copyDestinations.isNotEmpty()
 
     // While a row is dragged near an edge of the viewport, keep scrolling so targets outside the
-    // visible range can be reached. Keyed on draggedIndex, so onDragEnd/onDragCancel setting it
-    // back to null cancels the loop.
+    // visible range can be reached. Keyed on draggedIndex, so ending the drag cancels the loop.
     LaunchedEffect(drag.draggedIndex) {
         if (drag.draggedIndex == null) return@LaunchedEffect
         drag.autoScroll { i -> visibleRows.getOrNull(i) is ProgramRow.ProgramEntry }
     }
 
-    // Lets an instrument's owner send back everything the app can read off it, for turning into
-    // a catalog entry. Read-only, but slow: the probe walks every item, so this reports progress
-    // and blocks the button while it runs.
-
-    // The system-back half of `backEnabled` below. Disabling the arrow does nothing for the
-    // gesture or the hardware key, and with `enableOnBackInvokedCallback` set in the manifest a
-    // predictive-back swipe would otherwise animate this screen away mid-write. Enabled only
-    // while an edit is running, so it is inert - and predictive back is not intercepted at all -
-    // the rest of the time.
+    // The system-back half of `backEnabled` below: disabling the arrow does nothing for the
+    // gesture or the hardware key, and with `enableOnBackInvokedCallback` set a predictive-back
+    // swipe would animate this screen away mid-write. Enabled only while an edit is running, so
+    // predictive back is not intercepted the rest of the time.
     BackHandler(enabled = ops.busy != null) {
-        // Deliberately empty: refusing the gesture *is* the behaviour. The progress line already
-        // says what is running, so there is nothing further to tell the user here.
+        // Empty: refusing the gesture is the behaviour, and the progress line says what is running.
     }
 
     PatchPilotScaffold(
@@ -499,41 +388,25 @@ fun ProgramsScreen(
         // which instrument the app is talking to, which matters when more than one is plugged in
         // at once. Falls back only while disconnecting.
         title = viewModel.instrumentName ?: stringResource(R.string.programs_title_fallback),
-        // Five taps on the instrument name opens the debug menu. Deliberately undiscoverable -
-        // no ripple, no content description, nothing that reads as a control - since everything
-        // behind it is for whoever is developing against an instrument, not for whoever is
-        // playing one. Local state: it means nothing outside this composition and there is
-        // nothing to restore if the process dies mid-gesture.
-        //
-        // **`pointerInput`, not `clickable`.** `clickable` adds a click semantics node, so
-        // TalkBack announced the app bar title as a button and offered to activate it - a control
-        // where the whole point is that there is no control, and one that appears to do nothing,
-        // since a single activation is one tap of five. Handling the taps as a raw gesture leaves
-        // the title as the plain heading it reads as everywhere else.
+        // Five taps on the instrument name opens the debug menu: undiscoverable by design, since
+        // everything behind it is for whoever is developing against an instrument. `pointerInput`
+        // rather than `clickable`, which would add a click semantics node and have TalkBack
+        // announce the title as a button that appears to do nothing, one tap of five being no
+        // activation at all.
         titleModifier = Modifier.pointerInput(Unit) {
             detectTapGestures { if (debugTaps.tap()) onOpenDebugMenu() }
         },
-        // Back returns to the connect screen, which re-scans on arrival - the way to pick up an
-        // instrument that was plugged in after the app started, or to swap between two.
+        // Back returns to the connect screen, which re-scans on arrival.
         onBack = onBack,
-        // Off while an edit is in flight. `busy` is only ever a discrete edit - seconds - and
-        // never the index scan, which reports through `index.progress` and leaves back available
-        // for the whole 93 seconds it can take. So this greys the arrow out for a moment during a
-        // rename or a copy, not for the long wait somebody might genuinely want out of.
-        //
-        // Belt and braces rather than the safety itself: launchEdit already keeps the write alive
-        // across navigation, and exchangeAfterAll already refuses to stop mid-sequence. What this
-        // adds is telling the user *why* nothing happened when they tapped, instead of appearing
-        // to leave while a write is still running against the instrument.
+        // Off while an edit is in flight, which `busy` only ever is - never the index scan, which
+        // leaves back available for the whole 93 seconds it can take. Not the safety itself
+        // (launchEdit and exchangeAfterAll are), but what tells the user why nothing happened.
         backEnabled = ops.busy == null,
         snackbarHostState = snackbarHostState,
-        // The discoverable half of "re-read from the instrument". The pull gesture is the fast
-        // half, and invisible to anyone not already expecting it - which on a screen whose rows
-        // may have come from memory rather than from the wire is not good enough on its own.
+        // The discoverable half of "re-read from the instrument", the pull gesture being the
+        // invisible one - which matters on a screen whose rows may have come from memory.
         actions = {
-            // Offered in demo mode too: the pull gesture works there, and the button is the only
-            // discoverable one of the two, in the one configuration somebody exploring the app
-            // is most likely to be in.
+            // In demo mode too, where somebody exploring the app is most likely to be.
             IconButton(
                 // Same as the pull gesture: drop the cache, then re-read from the instrument.
                 onClick = ::startRefresh,
@@ -571,25 +444,17 @@ fun ProgramsScreen(
             ScopeSelector(
                 scopes = browsingScopes,
                 selected = browseScope,
-                // **Off during an edit, not during a listing.** The three scopes would otherwise
-                // be gated on something none of them shares: a factory listing costs no round
-                // trips at all, and a favorites read interleaves with a running scan rather than
-                // fighting it - `SysExExchange` locks one request/reply pair at a time, so the
-                // two alternate, no reply can reach the wrong collector, and the scan pays about
-                // fifteen extra round trips out of its four hundred. Switching away does not
-                // abandon a scan either; each scope keeps its own job. Gating on `editsEnabled`
-                // bought nothing and left every tab dead for the 93 seconds after a connect.
-                //
-                // An edit is different, and not because of the bus: `runEdit` reloads whichever
-                // scope is current when it finishes, so switching underneath it reloads the wrong
-                // one. Picking a copy destination owns the list until it resolves.
+                // Off during an edit, not during a listing: a factory listing costs no round
+                // trips, a favorites read interleaves with a running scan (`SysExExchange` locks
+                // one request/reply at a time), and each scope keeps its own job. An edit is
+                // different - `runEdit` reloads whichever scope is current when it finishes - and
+                // picking a copy destination owns the list until it resolves.
                 enabled = ops.busy == null && !ops.picking,
                 onSelect = viewModel::setScope,
             )
         }
-        // Stays for the whole session rather than being dismissible. The connect screen already
-        // asked once and the user said continue; the point of this is that the reason is still on
-        // screen when a rename goes wrong an hour later, which a dismissed banner would not be.
+        // Stays for the whole session: the reason has to still be on screen when a rename goes
+        // wrong an hour after the connect screen asked.
         if (advisory != null) {
             Surface(
                 color = MaterialTheme.colorScheme.errorContainer,
@@ -604,13 +469,10 @@ fun ProgramsScreen(
                 )
             }
         }
-        // Picking a copy destination happens in the list itself rather than behind a separate
-        // dialog: occupied rows below grey out and stop responding to taps, empty rows show
-        // regardless of the filter or "show empty slots" (see visiblePrograms/bankLabels above),
-        // and tapping one resolves the pick immediately - see
-        // [ProgramsController.onPickConfirmed]. This banner is the
-        // one persistent sign that mode is active, and its Cancel is the only way out besides
-        // picking a target; there is deliberately no dialog stacked on top of another.
+        // Picking a destination happens in the list itself rather than behind a dialog: occupied
+        // rows grey out, empty rows show regardless of the filter, and tapping one resolves the
+        // pick (see [ProgramsController.onPickConfirmed]). This banner is the persistent sign
+        // that the mode is active, and its Cancel the only way out besides picking a target.
         ops.pickSource?.let { source ->
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
@@ -639,10 +501,8 @@ fun ProgramsScreen(
                 }
             }
         }
-        // Hidden rather than disabled while picking a copy destination: neither has any effect on
-        // the list in that mode (see visiblePrograms/bankLabels), and the banner above already
-        // says what mode this is - a filter and a checkbox that visibly do nothing would only
-        // repeat that with dead controls.
+        // Hidden rather than disabled while picking: neither affects the list in that mode, and
+        // the banner above already says what mode this is.
         if (!ops.picking) {
             OutlinedTextField(
                 value = searchText,
@@ -651,13 +511,9 @@ fun ProgramsScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            // One control, not two nodes: the label is part of the target and TalkBack reads it
-            // as a single checkbox rather than a box and an unrelated string.
-            //
-            // **Only in the user listing, where an empty slot is a thing that exists.** Every
-            // factory slot holds a voice, so the box would be a no-op there; and the favorites
-            // listing has no address space of its own to have gaps in, so ticking it would replace
-            // eleven favorites with nothing at all.
+            // One control, not two nodes, so TalkBack reads it as a single checkbox. Only in the
+            // user listing: every factory slot holds a voice, and the favorites listing has no
+            // address space to have gaps in.
             if (browseScope == PresetScope.USER) Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -669,17 +525,15 @@ fun ProgramsScreen(
                     .minimumInteractiveComponentSize(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // onCheckedChange = null makes the box non-interactive on its own - the Row above
-                // owns the click - but it also drops the padding a standalone Checkbox brings, so
-                // the gap has to be put back explicitly.
+                // onCheckedChange = null leaves the click to the Row above, and also drops the
+                // padding a standalone Checkbox brings, hence the explicit Spacer.
                 Checkbox(checked = showEmptySlots, onCheckedChange = null)
                 Spacer(Modifier.width(12.dp))
                 Text(stringResource(R.string.programs_show_empty))
             }
         }
         index.failures.takeIf { it.isNotEmpty() }?.let { failures ->
-            // Individual unreadable slots are a finding, not a failure of the whole scan - say so
-            // without throwing away the rows that did arrive.
+            // Unreadable slots are a finding rather than a failure of the whole scan.
             Text(
                 pluralStringResource(
                     R.plurals.programs_unreadable_slots, failures.size, failures.size,
@@ -691,8 +545,7 @@ fun ProgramsScreen(
         ops.busy?.takeIf { it.showProgress }?.let { (what, _) ->
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Text(what, style = MaterialTheme.typography.labelMedium)
-                // Indeterminate: the instrument reports no progress through an edit, and a bar
-                // that invented one would be claiming to know something the app cannot see.
+                // Indeterminate: the instrument reports no progress through an edit.
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
         }
@@ -709,47 +562,31 @@ fun ProgramsScreen(
         // Bound to a local because `index` is a delegated property and cannot smart-cast.
         val scanError = index.error
         when {
-            // A resume rebuilds the USB session (MainActivity.onResume -> forceReconnect), and
-            // this screen stays up through the Disconnected/Searching/Opening dip on purpose -
-            // see PatchPilotNavHost's session-lost effect, which is also what leaves for
-            // ConnectScreen once the session settles anywhere else. The rows it was showing are
-            // still in memory, so without this they sat under a "Not Connected" title for the
-            // second or two the rebuild takes, looking like a listing of an instrument the app
-            // had just said it was not talking to. The reconnect is a wait like any other: show
-            // the wait.
+            // This screen stays up through a resume's Disconnected/Searching/Opening dip (see
+            // PatchPilotNavHost's session-lost effect), so the reconnect shows as the wait it is
+            // rather than leaving the old rows under a "Not Connected" title.
             session !is ConnectionState.Connected -> ConnectingWait()
             scanError != null ->
                 Text(stringResource(R.string.programs_error, scanError), color = MaterialTheme.colorScheme.error)
             // The theme's own indicator, the same one ConnectScreen shows while it opens a
-            // device. A bare CircularProgressIndicator here meant the two waits either side of a
-            // connect looked like they belonged to different apps under the Steampunk theme, where
-            // one is a compass and the other a Material spinner.
-            //
-            // Centred, like the empty states below, rather than left as a plain child of this
-            // Column - which has no horizontal alignment, so the indicator sat in the top-left
-            // corner. Barely noticeable for the default theme's small spinner; unmissable for the
-            // gauge, which is 120.dp of brass pinned to the left margin.
+            // device, and centred like the empty states below - this Column has no horizontal
+            // alignment of its own.
             index.slots.isEmpty() && index.loading -> ConnectingWait()
             else -> PullToRefreshBox(
                 isRefreshing = isRefreshing,
-                // The gesture starts the work directly now, rather than flipping a flag an effect
-                // then noticed. Dropping the cache and re-reading is exactly what the app bar's
-                // refresh button does, so the two ways in agree by construction.
+                // The same function the app bar's refresh button calls, so the two agree.
                 onRefresh = ::startRefresh,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .pointerInput(visibleRows, canRelocate, index.complete, ops.picking, browseScope) {
-                        // Dragging is off while the index is still arriving: a drop into a region
-                        // that has not loaded yet has no defined target, and off entirely on an
-                        // instrument that cannot relocate presets at all. Also off while picking a
-                        // copy destination - the two gestures would otherwise fight over the same
-                        // rows, and a copy pick is resolved by a tap, not a drag.
+                        // Off while the index is still arriving (a drop into a region that has not
+                        // loaded has no target), on an instrument that cannot relocate presets,
+                        // and while picking a destination, which is resolved by a tap.
                         if (!canRelocate || !index.complete || ops.picking) return@pointerInput
-                        // Reordering is a user-listing gesture. A read-only bank refuses the write,
-                        // and the favorites listing is not an address space - its rows are the
-                        // marked voices across every bank, so "the row below" is not a
-                        // destination and dropping onto it would mean nothing.
+                        // A user-listing gesture: a read-only bank refuses the write, and the
+                        // favorites listing is not an address space, so "the row below" is not a
+                        // destination.
                         if (browseScope != PresetScope.USER) return@pointerInput
                         detectDragGesturesAfterLongPress(
                             onDragStart = { offset ->
@@ -782,9 +619,8 @@ fun ProgramsScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 if (searchText.isBlank()) {
-                                    // "This instrument reports no presets" would be a wrong and
-                                    // slightly alarming thing to say about an instrument full of
-                                    // them that simply has none marked.
+                                    // An instrument full of presets with none marked is not one
+                                    // that "reports no presets".
                                     if (browseScope == PresetScope.FAVORITES) {
                                         stringResource(R.string.programs_no_favorites)
                                     } else {
@@ -835,12 +671,9 @@ fun ProgramsScreen(
                                 val isDragged = drag.draggedIndex == rowIndex
                                 val isDropTarget = drag.dropTargetIndex == rowIndex &&
                                     drag.draggedIndex != null && drag.draggedIndex != rowIndex
-                                // While picking, which rows a tap can do anything with depends on
-                                // what is being picked *for*. A copy needs somewhere empty to
-                                // write - including a slot that was already empty before picking
-                                // started, not just ones "Show empty slots" would add. A move can
-                                // land anywhere except its own source: an empty destination moves,
-                                // an occupied one swaps.
+                                // Which rows a tap can act on depends on what is being picked
+                                // for: a copy needs somewhere empty, a move can land anywhere but
+                                // its own source.
                                 val isPickTarget = ops.picking && when (ops.pickIntent) {
                                     PickIntent.COPY -> isEmpty
                                     PickIntent.MOVE -> program.address != ops.pickSource?.address
@@ -856,31 +689,19 @@ fun ProgramsScreen(
                                         if (program.name == null) EmptySlotText() else Text(program.name)
                                     },
                                     supportingContent = {
-                                        // Badges are short family-supplied strings (a category, a
-                                        // preset version) rendered uniformly, so a family can add
-                                        // one without this screen learning what it means.
-                                        //
-                                        // **Pushed to the trailing edge**, so a column of them
-                                        // lines up down the list instead of starting wherever the
-                                        // id happens to end. The badge text takes the remaining
-                                        // width rather than a spacer taking it, which is what lets
-                                        // a long one shrink and ellipsize instead of shoving the
-                                        // id off the row.
+                                        // Badges are short family-supplied strings rendered
+                                        // uniformly, pushed to the trailing edge so a column of
+                                        // them lines up. The badge text takes the remaining width
+                                        // rather than a spacer, so a long one ellipsizes instead
+                                        // of shoving the id off the row.
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             Text(program.displayId)
-                                            // **Only where the row is wide enough to hold them.**
-                                            // A Motif XS voice can carry two assignments, and two
-                                            // full labels beside the id do not fit a portrait
-                                            // phone: on one line the second was ellipsised away,
-                                            // and wrapped to two the whole list read as crowded.
-                                            // Neither is worth the space it costs on every row, so
-                                            // the badge column appears from Material's medium
-                                            // width breakpoint up - a phone in landscape, or a
-                                            // tablet either way round - and the categories stay a
-                                            // row-menu question below it.
+                                            // Only where the row is wide enough: two full labels
+                                            // beside the id do not fit a portrait phone, and the
+                                            // categories stay a row-menu question there.
                                             if (badgesFit) {
                                                 if (program.badges.isNotEmpty()) {
                                                     Spacer(Modifier.width(8.dp))
@@ -892,11 +713,9 @@ fun ProgramsScreen(
                                                         overflow = TextOverflow.Ellipsis,
                                                     )
                                                 } else if (tagger != null && program.name != null) {
-                                                    // Said, not left blank: an empty gap where
-                                                    // every other row carries a category reads as
-                                                    // "not loaded yet" rather than "filed under
-                                                    // nothing". Only where the instrument has
-                                                    // categories at all.
+                                                    // Said rather than left blank: an empty gap
+                                                    // where every other row carries a category
+                                                    // reads as "not loaded yet".
                                                     Spacer(Modifier.width(8.dp))
                                                     Text(
                                                         text = stringResource(R.string.programs_no_category),
@@ -928,27 +747,22 @@ fun ProgramsScreen(
                                         val rowRename = canRename && rowWritable
                                         val rowDelete = canDelete && rowWritable &&
                                             browseScope == PresetScope.USER
-                                        // Offered in every listing, favorites included: a
-                                        // favorited voice is as good a thing to duplicate as any
-                                        // other, and picking a destination already moves to the
-                                        // user banks, so a read-only source needs no special case.
+                                        // In every listing, favorites included: picking a
+                                        // destination already moves to the user banks, so a
+                                        // read-only source needs no special case.
                                         val rowCopy = canCopy
-                                        // Same conditions the drag gesture is enabled under: a
-                                        // move is a user-listing operation, needs a writable
-                                        // source, and needs the instrument to support relocation
-                                        // at all. Offering it where a drag would be refused would
-                                        // make the accessible path the *less* capable one.
+                                        // The same conditions the drag gesture is enabled under,
+                                        // so the accessible path is not the less capable one.
                                         val rowMove = canRelocate && rowWritable &&
                                             browseScope == PresetScope.USER
-                                        // Asked of the facet, not derived from `rowWritable`,
-                                        // because the two disagree: a Motif XS can favorite a
-                                        // factory voice but not re-categorise one.
+                                        // Asked of the facet rather than derived from
+                                        // `rowWritable`: a Motif XS can favorite a factory voice
+                                        // but not re-categorise one.
                                         val rowFavorite = viewModel.canSetFavorite(program.address)
                                         val rowCategories =
                                             viewModel.canSetCategories(program.address)
-                                        // Hidden outright while picking, not merely disabled: none
-                                        // of these applies to *any* row until the pick is resolved
-                                        // or cancelled, including the row being copied from.
+                                        // Hidden outright while picking: none of these applies to
+                                        // any row until the pick resolves.
                                         if (ops.picking || isEmpty ||
                                             (!rowRename && !rowDelete && !rowCopy &&
                                                 !rowFavorite && !rowCategories)
@@ -956,11 +770,6 @@ fun ProgramsScreen(
                                             null
                                         } else {
                                             {
-                                            // An overflow menu rather than two always-visible
-                                            // buttons. In a 128-row bank those were 256 controls
-                                            // competing with the preset names, and a destructive
-                                            // action sat permanently a few dp from a benign one
-                                            // in a scrolling list.
                                             RowActionsMenu(
                                                 program = program,
                                                 canRename = rowRename,
@@ -988,9 +797,8 @@ fun ProgramsScreen(
                                             }
                                         }
                                     },
-                                    // Always reserves the handle's 32.dp column, even for an empty row with
-                                    // no glyph in it - otherwise its headline text would sit flush left
-                                    // instead of aligned with the other rows' text.
+                                    // Always reserves the handle's column, so an empty row's
+                                    // headline stays aligned with the others.
                                     leadingContent = {
                                         Box(
                                             contentAlignment = Alignment.Center,
@@ -999,17 +807,12 @@ fun ProgramsScreen(
                                                 .let { theme.slotBezel(it, occupied = !isEmpty) },
                                         ) {
                                             if (!isEmpty && canRelocate && !ops.picking && browseScope == PresetScope.USER) {
-                                                // The glyph is decorative; the *row* is what a
-                                                // screen reader should describe, so the handle
-                                                // carries the instruction and nothing else does.
-                                                //
-                                                // Dimmed while the listing is still arriving,
-                                                // because dragging is already inert then - and an
-                                                // affordance that looks live and does nothing is
-                                                // worse than one that says it is unavailable.
-                                                // Resolved out here, not inside `semantics {}`:
-                                                // that lambda is not a composable scope, so
-                                                // `stringResource` cannot be called from it.
+                                                // The glyph is decorative and the row is what a
+                                                // screen reader describes, so the handle carries
+                                                // the instruction. Dimmed while the listing is
+                                                // still arriving, since dragging is inert then.
+                                                // Resolved out here because `semantics {}` is not
+                                                // a composable scope.
                                                 val handleDescription = if (editsEnabled) {
                                                     stringResource(
                                                         R.string.cd_reorder,
@@ -1034,15 +837,9 @@ fun ProgramsScreen(
                                             }
                                         }
                                     },
-                                    // Dimmed in place rather than translated - the floating ghost below is
-                                    // what visually follows the finger, since this row's own composable
-                                    // gets torn down by LazyColumn once its untranslated layout slot (which
-                                    // a graphicsLayer translation doesn't move) scrolls out of the viewport.
-                                    // Empty slots (no preset stored there, shown only when "Show empty
-                                    // slots" is checked) get the same dimming treatment to read as
-                                    // greyed-out/non-interactive - as does every occupied row, including
-                                    // the copy source itself, while picking a destination: nothing about
-                                    // it is a valid tap target until the pick is resolved or cancelled.
+                                    // Dimmed in place rather than translated - the ghost below
+                                    // follows the finger. Empty slots and, while picking, every
+                                    // row that is not a valid target get the same treatment.
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .let { theme.rowPanel(it, dragged = isDragged, dropTarget = isDropTarget) }
@@ -1067,17 +864,14 @@ fun ProgramsScreen(
                                                         program.displayId,
                                                     )
                                                     // Gated while an edit runs: the picker stays
-                                                    // open across the copy it started, so without
-                                                    // this a second destination could be tapped
-                                                    // and queued behind the first.
+                                                    // open across the copy it started.
                                                     m.clickable(enabled = ops.busy == null) {
                                                         ops.pickSource?.let {
                                                             ops.onPickConfirmed(it, program, isEmpty)
                                                         }
                                                     }.semantics { contentDescription = description }
                                                 }
-                                                // Occupied and not the source: inert while picking,
-                                                // same reasoning as the hidden overflow menu above.
+                                                // Inert while picking, as the row menu is.
                                                 ops.picking -> m
                                                 isEmpty || !canSelect -> m
                                                 else -> m.clickable { ops.onProgramTapped(program) }
@@ -1102,9 +896,8 @@ fun ProgramsScreen(
                                     contentAlignment = Alignment.Center,
                                     modifier = Modifier.size(ProgramListMetrics.handleSize),
                                 ) {
-                                    // The floating copy that follows the finger mid-drag: purely
-                                    // visual, and explicitly hidden from accessibility so it does
-                                    // not read as a second control.
+                                    // Purely visual, and hidden from accessibility so it does not
+                                    // read as a second control.
                                     Text(
                                         theme.dragHandleGlyph,
                                         style = MaterialTheme.typography.titleMedium,
@@ -1126,12 +919,10 @@ fun ProgramsScreen(
                         banks = listing.bankLabels,
                         railLabel = { bankRailLabels[it] ?: it },
                         onJump = { letter ->
-                            // A plain jump rather than animateScrollToItem: that animates through every
-                            // intermediate row, and with header rows breaking the list's average-item-size
-                            // estimate (used to gauge how far to scroll), a long jump - e.g. bank A to bank
-                            // I - would visibly overshoot/correct instead of landing in one smooth motion.
-                            // It also sidesteps successive drag-scrub jumps interrupting each other's
-                            // animation mid-flight, which was a second source of the same jerkiness.
+                            // A plain jump rather than animateScrollToItem, which animates through
+                            // every intermediate row: header rows break the average-item-size
+                            // estimate it scrolls by, so a long jump overshoots and corrects, and
+                            // successive drag-scrub jumps interrupt each other's animation.
                             listing.bankHeaderIndex[letter]?.let { row -> scope.launch { listState.scrollToItem(row) } }
                         },
                         modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
@@ -1140,19 +931,16 @@ fun ProgramsScreen(
             }
         }
 
-        // For a device the catalog does not recognise, **or one running firmware nobody has
-        // tested this app against** - in both cases its owner is the one person who can send back
-        // what the app managed to read off it, and in both cases that report is the most useful
-        // thing they can do. For a known instrument on known firmware the report says nothing
-        // nobody has already written down, so it lives in the debug menu instead (five taps on
-        // the title) rather than on the screen people use.
+        // For a device the catalog does not recognise, or one on firmware nobody has tested this
+        // app against: in both cases its owner is the one person who can send back what the app
+        // read off it. For a known instrument the report lives in the debug menu instead.
         if (hasReport && (isUnknownDevice || advisory != null)) {
             TextButton(
                 onClick = {
                     ops.pendingShare = PendingShare(
                         title = shareReportTitle,
-                        // Supplied by the instrument's own reporter: the families read entirely
-                        // different things, so no one wording fits them all.
+                        // Supplied by the instrument's own reporter, since the families read
+                        // different things.
                         description = viewModel.reportDescription,
                         suffix = jsonSuffix,
                         initialStem = viewModel.suggestedReportFilename(),
@@ -1162,9 +950,8 @@ fun ProgramsScreen(
                         },
                     )
                 },
-                // Off while a report is already running, and off while a listing is: the report
-                // walks every item on the instrument, so starting one mid-scan puts two long
-                // reads on the same serialized bus.
+                // Off while a report or a listing is running: the report walks every item, and
+                // two long reads would share one serialized bus.
                 enabled = reportState !is DeviceReportState.Running && editsEnabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -1207,8 +994,8 @@ fun ProgramsScreen(
         )
     }
 
-    // Both are guarded on `tagger` as well as on their target, because a disconnect between the
-    // read and the dialog opening would otherwise leave a dialog with no facet to save through.
+    // Guarded on `tagger` as well as on their target, since a disconnect between the read and
+    // the dialog opening would leave a dialog with no facet to save through.
     tagger?.let { facet ->
         ops.favoriteTarget?.let { target ->
             SetFavoriteDialog(
@@ -1236,13 +1023,10 @@ fun ProgramsScreen(
 }
 
 /**
- * Counts taps on the instrument name, and says when five of them have landed close enough
- * together to have been meant.
- *
- * Plain state in the composition rather than in the ViewModel: it is transient, it means nothing
- * to any other screen, and a half-finished gesture is not worth surviving anything. The window
- * matters as much as the count - without it, five taps spread over an afternoon of ordinary use
- * would eventually open a screen the user never asked for.
+ * Counts taps on the instrument name, and says when five have landed close enough together to
+ * have been meant - the window matters as much as the count, or five taps spread over an
+ * afternoon would eventually open the screen. Plain state in the composition: a half-finished
+ * gesture is not worth surviving anything.
  */
 private class DebugTapCounter {
     private var taps: List<Long> = emptyList()
@@ -1263,10 +1047,9 @@ private class DebugTapCounter {
 }
 
 /**
- * The wait shown in place of the list: the theme's own indicator over "Connecting…", the pair
- * ConnectScreen shows while it searches and opens. Used both for the first read after a connect
- * and for the reconnect dip a resume goes through - the same wait from the user's side, so the
- * same picture.
+ * The wait shown in place of the list: the theme's own indicator over "Connecting…", as
+ * ConnectScreen shows while it searches. Used for the first read after a connect and for the
+ * reconnect dip a resume goes through, which are the same wait from the user's side.
  */
 @Composable
 private fun ConnectingWait() {
@@ -1281,11 +1064,8 @@ private fun ConnectingWait() {
 }
 
 /**
- * Dismisses the on-screen keyboard when the dialog that owns this leaves composition.
- *
- * Tied to disposal rather than to each button, because a dialog with a text field has three ways
- * out - confirm, cancel, and tapping outside it. Doing it here means a new dismissal path cannot
- * forget.
+ * Dismisses the on-screen keyboard when the dialog that owns this leaves composition - tied to
+ * disposal rather than to each button, since a dialog with a text field has three ways out.
  */
 @Composable
 private fun HideKeyboardOnDismiss(keyboardController: SoftwareKeyboardController?) {
@@ -1297,16 +1077,13 @@ private fun HideKeyboardOnDismiss(keyboardController: SoftwareKeyboardController
 /**
  * Which of the instrument's listings to show, plus a line saying what the current one is.
  *
- * **Segmented buttons rather than tabs.** Tabs say "the same kind of thing, paged"; these three
- * differ in what can be *done* to a row, not merely in which rows are shown, and a segmented
- * control reads as choosing a mode rather than turning a page. It also carries `Role.RadioButton`
- * and a selected state on each segment for free, so a screen reader announces "Factory, selected,
- * 2 of 3" without any semantics written here.
+ * Segmented buttons rather than tabs: these three differ in what can be done to a row, not only
+ * in which rows are shown, and each segment carries `Role.RadioButton` and a selected state, so a
+ * screen reader announces "Factory, selected, 2 of 3" without any semantics here.
  *
- * The caption is not decoration. Two of these listings would otherwise misrepresent themselves:
- * the factory names are transcribed from Yamaha's Data List rather than read off the instrument,
- * and the favorite marks are the instrument's own, changed from a row menu rather than from the
- * listing, so somebody looking for a way to star a voice is told where that lives.
+ * The caption keeps two of the listings from misrepresenting themselves: the factory names are
+ * transcribed from Yamaha's Data List rather than read off the instrument, and the favorite marks
+ * are the instrument's own, changed from a row menu rather than from the listing.
  */
 @Composable
 private fun ScopeSelector(
@@ -1339,8 +1116,7 @@ private fun ScopeSelector(
     }
 }
 
-/** The segment's label. Kept out of [PresetScope] itself: strings live in `strings.xml`, and the
- * enum is in `core`, which knows nothing about resources. */
+/** The segment's label, kept out of [PresetScope], which is in `core` and knows nothing about resources. */
 @StringRes
 private fun PresetScope.labelRes(): Int = when (this) {
     PresetScope.USER -> R.string.programs_scope_user
@@ -1357,14 +1133,10 @@ private fun PresetScope.noteRes(): Int? = when (this) {
 }
 
 /**
- * Per-row Rename / Copy / Delete, behind one overflow button.
- *
- * One menu rather than always-visible buttons: in a 128-row bank those are hundreds of controls
- * competing with the preset names, and a destructive action sitting permanently a few dp from a
- * benign one in a scrolling list leaves the confirmation dialog doing work the layout should do.
- * Copy sits between the two: unlike Delete it gets no confirmation of its own, since it is
- * exactly as safe as Rename - choosing a destination in the list itself (`pickSource`/`picking`
- * in [ProgramsController]) is the only decision it needs from the user.
+ * Per-row Rename / Copy / Delete, behind one overflow button: in a 128-row bank always-visible
+ * buttons would be hundreds of controls competing with the preset names, with a destructive
+ * action permanently a few dp from a benign one. Copy gets no confirmation of its own, being as
+ * safe as Rename; choosing a destination in the list is the only decision it needs.
  */
 @Composable
 private fun RowActionsMenu(
@@ -1389,14 +1161,14 @@ private fun RowActionsMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        // The button is disabled rather than hidden. A control that vanishes and reappears as a
-        // list loads is harder to read than one that is visibly not yet available, and the reason
-        // is already on screen: the progress row above says which slot is being read.
+        // Disabled rather than hidden: a control that vanishes and reappears as a list loads is
+        // harder to read than one that is visibly not yet available, and the progress row above
+        // says why.
         IconButton(onClick = { expanded = true }, enabled = enabled) {
             Icon(
                 Icons.Default.MoreVert,
-                // Named for the row it belongs to: in a list of 128, "More options" alone tells a
-                // screen-reader user nothing about which preset they are on.
+                // Named for its row: in a list of 128, "More options" alone says nothing about
+                // which preset a screen-reader user is on.
                 contentDescription = stringResource(
                     R.string.cd_row_options, program.name ?: program.displayId,
                 ),
@@ -1415,19 +1187,15 @@ private fun RowActionsMenu(
                     onClick = { expanded = false; onCopy() },
                 )
             }
-            // **The reachable half of drag-to-reorder.** Dragging a row is a long-press gesture
-            // with no keyboard or screen-reader equivalent, which left one of this screen's four
-            // editing operations unavailable to a TalkBack user entirely. This is the same
-            // destination-picking flow Copy uses, so it costs no new interaction paradigm - and it
-            // is the only path to a move for anyone who cannot hold and drag precisely, which is a
-            // larger group than screen-reader users alone.
+            // The reachable half of drag-to-reorder: a long-press drag has no keyboard or
+            // screen-reader equivalent, and this is the same destination-picking flow Copy uses.
             if (canMove) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_move)) },
                     onClick = { expanded = false; onMove() },
                 )
             }
-            // Before Delete: these are ordinary edits, and the destructive item stays last.
+            // Before Delete, which stays last.
             if (canSetFavorite) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_set_favorite)) },
@@ -1458,14 +1226,11 @@ private fun RowActionsMenu(
 }
 
 /**
- * Right-edge fast-scroll index (a la iOS Contacts): tapping or dragging across a bank letter
- * jumps the list to that bank's caption row. Drag uses detectDragGestures rather than the
- * long-press variant the row-reorder gesture above uses - an index jump should react to the
- * very first touch, not a held one. It lives in its own pointerInput scope on this narrow
- * column, so it only competes with the list-wide drag-to-reorder detector where their hit areas
- * actually overlap (this column's own width) - and there it always wins, since a touch that
- * starts here is already past dragHandleZoneWidthPx, which makes the reorder detector's own
- * onDragStart a no-op regardless of gesture-arbitration timing.
+ * Right-edge fast-scroll index: tapping or dragging across a bank letter jumps the list to that
+ * bank's caption row. `detectDragGestures` rather than the long-press variant the row reorder
+ * uses, since an index jump should react to the first touch. In its own `pointerInput` scope on
+ * this narrow column, and a touch starting here is already past the reorder detector's handle
+ * band, so that detector's `onDragStart` is a no-op regardless of arbitration timing.
  */
 @Composable
 private fun BankIndex(
@@ -1484,25 +1249,20 @@ private fun BankIndex(
     }
     Column(
         modifier
-            // Inset from the edge and from top and bottom, so the rail reads as something
-            // floating *over* the list rather than as the list's own right-hand margin; a
-            // full-bleed strip in `surface` would be an opaque column hiding the rows under it.
+            // Inset, so the rail reads as floating over the list rather than as its right-hand
+            // margin.
             .padding(vertical = 12.dp, horizontal = 4.dp)
-            // Wide enough for a label like "USER DR" without abbreviating; at 20.dp "PREDR"
-            // wraps to three stacked lines, which is what `BankSpec.shortLabel` exists for.
+            // Wide enough for a label like "USER DR" without abbreviating.
             .width(ProgramListMetrics.railWidth)
             // A container tone rather than `surface`, so it separates itself in both light and
-            // dark without a border. Clipped before the background, or the ripple from the label
-            // taps below would paint square corners over the rounded ones.
+            // dark without a border. Clipped before the background, or the label taps' ripple
+            // would paint square corners over the rounded ones.
             .clip(pillShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .let { theme.railDecoration(it) }
-            // **After the decoration, before the measurement.** The rivets are painted over the
-            // whole plate, so they keep their positions; everything below divides only what is
-            // left between them. Putting it here rather than on the Column's outer padding is
-            // what keeps dragging and tapping in agreement: `onSizeChanged` and `pointerInput`
+            // After the decoration, before the measurement: `onSizeChanged` and `pointerInput`
             // both sit after it, so the height `jumpToY` divides is the same box the weighted
-            // cells fill, and a y position means the same thing to both.
+            // cells fill and a y position means the same thing to both.
             .padding(vertical = theme.railEndInset)
             .onSizeChanged { columnHeightPx = it.height.toFloat() }
             .pointerInput(banks) {
@@ -1514,14 +1274,9 @@ private fun BankIndex(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         banks.forEach { letter ->
-            // An equal weighted share of the rail each, and the **whole cell** is the target -
-            // not just the glyph plus its padding, or most of the rail is dead space between
-            // letters and a tap that looks on-target does nothing.
-            //
-            // It also makes the two ways of using the rail agree: `jumpToY` maps a y position by
-            // dividing the rail's height into `banks.size` equal bands, which is exactly what
-            // these weights produce, so dragging and tapping resolve the same letter at the same
-            // place.
+            // An equal weighted share each, with the whole cell as the target rather than the
+            // glyph: `jumpToY` divides the rail's height into `banks.size` equal bands, which is
+            // what these weights produce, so dragging and tapping resolve the same letter.
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -1532,8 +1287,7 @@ private fun BankIndex(
                 Text(
                     railLabel(letter),
                     style = MaterialTheme.typography.labelSmall,
-                    // An index is secondary to what it indexes; `onSurfaceVariant` says so
-                    // without making the labels hard to read against the container behind them.
+                    // An index is secondary to what it indexes.
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )

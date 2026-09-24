@@ -8,15 +8,9 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 
 /**
- * The in-memory content behind [DemoInstrument]: a sparse map of occupied slots, mutable exactly
- * where a real instrument would let preset-list editing change it.
- *
- * Small, static and UI-only. There is no real instrument's catalog behind this, unlike
- * `devices/nord_devices.json` - the point is to give every screen something plausible to render,
- * not to model any particular hardware. [nameList] and [slotsPerBank] are what a caller shapes
- * differently - [DemoInstrument] is the only production caller, but the same engine backs
- * `core.NoCopyFixtureInstrument`, a test-only fixture shaped like a family with no copy of its
- * own, which is why this class knows nothing about who is asking.
+ * The in-memory content behind [DemoInstrument]: a sparse map of occupied slots, mutable where a
+ * real instrument would let preset-list editing change it. [nameList] and [slotsPerBank] are what
+ * a caller shapes, since the same engine backs `core.NoCopyFixtureInstrument` in the tests.
  */
 class DemoLibrary(
     private val nameList: List<String>,
@@ -29,12 +23,9 @@ class DemoLibrary(
 ) {
 
     /**
-     * One preset: its name and its category tag.
-     *
-     * **The tag travels with the name rather than in a parallel map keyed by address**, which is
-     * how a real instrument stores it too - inside the preset. It is also the only version of this
-     * that cannot desynchronise: move, swap, copy and delete all relocate the whole record, so a
-     * preset cannot arrive somewhere wearing the category of whatever used to be there.
+     * One preset: its name and its category tag. The tag travels with the name, as a real
+     * instrument stores it, so move, swap, copy and delete relocate the whole record and a preset
+     * cannot arrive somewhere wearing another's category.
      */
     data class Program(val name: String, val category: String? = null)
 
@@ -63,7 +54,7 @@ class DemoLibrary(
 
     fun rename(address: SlotAddress, newName: String) {
         requireOccupied(address)
-        // Copied, not replaced: a rename must not silently clear the category tag.
+        // Copied, not replaced, so a rename keeps the category tag.
         programs[address] = programs.getValue(address).copy(name = newName)
     }
 
@@ -82,10 +73,10 @@ class DemoLibrary(
     }
 
     /**
-     * Duplicates [from] into the empty slot [to], leaving [from] alone, and names the copy itself -
-     * the way a real Nord does ([de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice.copyProgram]) -
-     * so [de.thewolfwalkexperience.software.patchpilot.core.PresetEditor.copyProgram]'s contract of
-     * returning the instrument-assigned name holds in demo mode too.
+     * Duplicates [from] into the empty slot [to], leaving [from] alone, and names the copy itself
+     * as a real Nord does, so
+     * [de.thewolfwalkexperience.software.patchpilot.core.PresetEditor.copyProgram]'s contract
+     * holds here too.
      */
     fun copy(from: SlotAddress, to: SlotAddress): String {
         requireOccupied(from)
@@ -111,13 +102,9 @@ class DemoLibrary(
         programs.remove(address)
     }
 
-    /**
-     * Leaves deliberate gaps, so "show empty slots" and the move-versus-swap distinction both have
-     * something to act on.
-     */
+    /** Leaves gaps, so "show empty slots" and the move-versus-swap distinction have something to act on. */
     private fun seedPrograms(): Map<SlotAddress, Program> = buildMap {
         nameList.forEachIndexed { index, name ->
-            // Spread across banks with gaps rather than filling bank A first.
             val flat = index * 3
             put(
                 SlotAddress(flat / slotsPerBank, flat % slotsPerBank),

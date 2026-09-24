@@ -21,26 +21,16 @@ import androidx.core.view.WindowCompat
 /**
  * Wraps [content] in the chosen [AppTheme].
  *
- * [AppTheme.Default] is stock Material: it follows the system light/dark setting (minSdk 26
- * predates the "force dark" APIs, so this is the only reliable signal), with dynamic
- * (wallpaper-derived) color on API 31+ and a static scheme below that. Anyone who never opens
- * Settings sees exactly that, unconditionally.
+ * [AppTheme.Default] is stock Material following the system light/dark setting, with dynamic
+ * colour on API 31 and later. [AppTheme.Steampunk] is a fixed dark look that does not follow the
+ * system setting, built from [SteampunkColorScheme], [steampunkTypography] and [SteampunkShapes].
+ * [LocalThemeStyle] is provided alongside for the things a token swap cannot produce, so screens
+ * never branch on the raw [AppTheme].
  *
- * [AppTheme.Steampunk] is a single committed dark look - like a real WinAmp skin, it does not
- * follow the system setting - built from [SteampunkColorScheme]/[steampunkTypography]/
- * [SteampunkShapes]. [LocalThemeStyle] is provided alongside it, holding [appTheme]'s [ThemeStyle]
- * ([AppTheme.style]), for the handful of things a `MaterialTheme` token swap cannot produce (the
- * connect-screen gauge, the slot bezel, the device rows, the drag handle glyph) - screens read
- * [LocalThemeStyle.current] rather than branching on the raw [AppTheme] themselves.
- *
- * **`MaterialTheme`/[content] are called from exactly one call site**, never one per branch of a
- * theme `when`. [content] is `PatchPilotApp`'s `NavHost`, and calling it from two different
- * branches gives it two different positions in the composition's slot table - switching themes
- * then reads as "the old position's subtree went away, a new one appeared", which tears the whole
- * subtree down and rebuilds it - and with it `rememberNavController()` and its back stack, which
- * would reset to the start destination on every theme change. Computing the values first and
- * calling `MaterialTheme`/[content] once, after the `when`s, keeps `content` at one stable
- * position, so a theme switch only ever changes what `MaterialTheme` resolves to.
+ * `MaterialTheme` and [content] are called from exactly one call site, never one per branch of a
+ * theme `when`: [content] is `PatchPilotApp`'s `NavHost`, and two branches would give it two
+ * positions in the composition, so a theme switch would tear the subtree down and reset
+ * `rememberNavController()`'s back stack to the start destination.
  */
 @Composable
 fun PatchPilotTheme(
@@ -67,23 +57,18 @@ fun PatchPilotTheme(
         AppTheme.Default -> MaterialTheme.shapes
         AppTheme.Steampunk -> SteampunkShapes
     }
-    // **The status bar has to follow the *app's* theme, not the system's.**
-    // `enableEdgeToEdge()` in MainActivity opts into drawing behind the bars and, left to itself,
-    // picks the bar icon colours from the system light/dark setting. That is right for
-    // [AppTheme.Default], which follows the same setting - but [AppTheme.Steampunk] is
-    // deliberately always dark, so with the system in light mode the platform drew dark icons over
-    // this theme's near-black surface and the clock, battery and back gesture hint disappeared.
-    //
-    // Derived from the theme rather than from `darkTheme` alone, so a future theme gets this right
-    // by declaring what it is instead of by remembering to touch MainActivity.
+    // The status bar follows the app's theme, not the system's: `enableEdgeToEdge()` picks the bar
+    // icon colours from the system light/dark setting, which is right for [AppTheme.Default] but
+    // would put dark icons over [AppTheme.Steampunk]'s near-black surface. Derived from the theme,
+    // so a future theme gets this right by declaring what it is.
     val darkBars = when (appTheme) {
         AppTheme.Default -> darkTheme
         AppTheme.Steampunk -> true
     }
     val view = LocalView.current
     if (!view.isInEditMode) {
-        // A SideEffect, not a LaunchedEffect: this is a one-line write to window state that has to
-        // land after every successful composition, including the one a theme change causes.
+        // A SideEffect, not a LaunchedEffect: a one-line write to window state that has to land
+        // after every successful composition, the one a theme change causes included.
         SideEffect {
             (view.context as? Activity)?.window?.let { window ->
                 WindowCompat.getInsetsController(window, view).apply {

@@ -23,29 +23,20 @@ import kotlinx.coroutines.CancellationException
 /** What an edit currently in flight is doing, or null when nothing is. */
 internal data class BusyOperation(val label: String, val showProgress: Boolean)
 
-/**
- * A row plus the tags read for it, which is what a tag dialog opens on.
- *
- * The tags travel with the row rather than being re-read by the dialog: see
- * [ProgramsController.openTagDialog] on why they are read before it opens.
- */
+/** A row plus the tags read for it - see [ProgramsController.openTagDialog] on why they are read before the dialog opens. */
 internal data class TagTarget(val slot: PresetSlot, val tags: PresetTags)
 
 /**
- * Everything ProgramsScreen *does*, as opposed to everything it draws.
+ * Everything ProgramsScreen does, as opposed to everything it draws, so the operation logic can
+ * be read and tested without standing up a composition.
  *
- * **Why this is not a set of `remember { mutableStateOf(...) }` calls and local functions in the
- * composable.** Separated, the operation logic can be read - and changed - without scrolling
- * through layout, and it can be tested without standing up a whole composition.
+ * What lives here is the state an instrument operation owns: what is running, what failed, what
+ * the instrument refused, and which dialog the answer comes from. State that is about the view -
+ * the search text, the "show empty slots" tick, the refresh spinner, the scroll position - stays
+ * in the composable.
  *
- * **State that is genuinely about the view stays in the composable.** The search box's text, the
- * "show empty slots" tick, the pull-to-refresh spinner and the list's scroll position describe
- * what is on screen and nothing else; they are not operations and they do not belong here. What
- * lives here is the state an *instrument operation* owns: what is running, what failed, what the
- * instrument refused, and which dialog the answer is going to come from.
- *
- * Held by `remember`, so it lives exactly as long as the screen does - one exception being the
- * edits themselves, which [InstrumentViewModel.launchEdit] deliberately outlives it.
+ * Held by `remember`, so it lives as long as the screen; the edits themselves outlive it (see
+ * [InstrumentViewModel.launchEdit]).
  */
 @Stable
 internal class ProgramsController(
@@ -82,9 +73,8 @@ internal class ProgramsController(
     private val inFlight = mutableStateListOf<BusyOperation>()
 
     /**
-     * An operation the instrument's *current state* blocked, together with the fix the family
-     * offered and the action to retry once it is applied. Kept separate from [operationError]
-     * because this one is answerable: the user gets a choice, not a report.
+     * An operation the instrument's current state blocked, with the fix the family offered and
+     * the retry. Separate from [operationError] because this one is answerable.
      */
     var blocked by mutableStateOf<BlockedOperation?>(null)
 
@@ -94,10 +84,7 @@ internal class ProgramsController(
     var renameText by mutableStateOf("")
     var deleteTarget by mutableStateOf<PresetSlot?>(null)
 
-    /**
-     * The two tag dialogs. Both carry the tags as read, not just the row: what the dialog offers
-     * depends on what the preset is already filed under, so it cannot open until that is known.
-     */
+    /** The two tag dialogs, both carrying the tags as read: what a dialog offers depends on what the preset is filed under. */
     var favoriteTarget by mutableStateOf<TagTarget?>(null)
     var categoriesTarget by mutableStateOf<TagTarget?>(null)
 
@@ -114,27 +101,21 @@ internal class ProgramsController(
 
     private var scopeBeforePicking by mutableStateOf<PresetScope?>(null)
 
-    /**
-     * Non-null [pickSource] doubles as "picking a destination is in progress" - there is no second
-     * flag that can disagree with it.
-     */
+    /** Non-null [pickSource] is "picking a destination is in progress"; there is no second flag to disagree with it. */
     val picking: Boolean get() = pickSource != null
 
     /**
-     * Runs one instrument operation, owning the busy line, the error path and the blocked-by-state
-     * dialog for it.
+     * Runs one instrument operation, owning the busy line, the error path and the
+     * blocked-by-state dialog for it.
      *
-     * @param reloadAfter re-reads the listing once the operation succeeds. False where nothing was
-     *   stored - a selection, or a read that only opened a dialog.
-     * @param retry re-runs the whole operation, and is what makes a [BlockedOperation] answerable.
-     *   Null where there is nothing sensible to retry.
-     * @param showProgress whether to put a progress line above the list while this runs. False for
-     *   selection, which is the one operation fast enough that the line is pure cost: it appears
-     *   and disappears within a couple of hundred milliseconds, and because it sits above the list
-     *   it pushes every row down and lets them spring back on every single tap. The operation is
-     *   still tracked in [busy]; it just does not move the thing the user is aiming at.
-     * @param block returns the line the snackbar shows, or null where there is nothing to report -
-     *   an operation whose whole result is a dialog that just opened, say.
+     * @param reloadAfter re-reads the listing once the operation succeeds. False where nothing
+     *   was stored - a selection, or a read that only opened a dialog.
+     * @param retry re-runs the whole operation, which is what makes a [BlockedOperation]
+     *   answerable. Null where there is nothing sensible to retry.
+     * @param showProgress whether to put a progress line above the list. False for selection,
+     *   which is fast enough that the line would push every row down and let them spring back on
+     *   every tap; the operation is still tracked in [busy].
+     * @param block returns the line the snackbar shows, or null where there is nothing to report.
      */
     fun runEdit(
         busyLabel: String,
@@ -148,10 +129,9 @@ internal class ProgramsController(
         // Before the launch, not inside it - see [busy].
         val mine = BusyOperation(busyLabel, showProgress)
         inFlight += mine
-        // **Not the screen's `rememberCoroutineScope()`.** An edit outlives the screen
-        // deliberately - see [InstrumentViewModel.launchEdit] for why cancelling one mid-write is
-        // the one thing that can leave an instrument stuck. Writing the result back into this
-        // object's state after the screen is gone is harmless; nothing retains it.
+        // Not the screen's `rememberCoroutineScope()`: an edit outlives the screen - see
+        // [InstrumentViewModel.launchEdit]. Writing the result back into this object's state
+        // after the screen is gone is harmless, since nothing retains it.
         viewModel.launchEdit {
             operationError = null
             statusMessage = null
@@ -161,9 +141,8 @@ internal class ProgramsController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: InstrumentException.BlockedByDeviceState) {
-                // Answerable rather than merely reportable: the family knows a fix and the user
-                // decides whether to take it. That fix changes what the instrument is playing,
-                // so it is never applied without asking.
+                // Answerable rather than reportable: the family knows a fix, and it changes what
+                // the instrument is playing, so the user decides.
                 val fix = e.remedy
                 if (fix == null || retry == null) {
                     operationError = reportFailure(what, e, failed)
@@ -188,9 +167,8 @@ internal class ProgramsController(
     }
 
     fun onProgramTapped(slot: PresetSlot) {
-        // The confirmation comes from the instrument, not from here: one that echoes the address
-        // back can honestly say "Selected", one that is sent a fire-and-forget message cannot
-        // (see PresetSelector.confirmationFor). Nothing is stored, so nothing is re-listed.
+        // The confirmation comes from the instrument (see PresetSelector.confirmationFor).
+        // Nothing is stored, so nothing is re-listed.
         runEdit(
             busyLabel = strings.get(R.string.programs_busy_selecting, slot.displayId),
             reloadAfter = false,
@@ -200,16 +178,15 @@ internal class ProgramsController(
     }
 
     fun onBlockedRemedyConfirmed(pending: BlockedOperation) {
-        // Same reasoning as runEdit: `pending.retry()` is the edit that was blocked, and it must
-        // not become abandonable just because it arrived via the remedy dialog.
+        // `pending.retry()` is the blocked edit, so it must not become abandonable just because
+        // it arrived through the remedy dialog.
         viewModel.launchEdit {
             blocked = null
             operationError = null
             try {
                 pending.apply()
-                // Retry only after the fix reports success. The remedy verifies itself - a mode
-                // change draws no reply of its own - so a silent no-op here would otherwise show
-                // the user the same dialog twice with no explanation.
+                // Only after the fix reports success: the remedy verifies itself, so a silent
+                // no-op would show the user the same dialog twice.
                 pending.retry()
             } catch (e: CancellationException) {
                 throw e
@@ -222,8 +199,8 @@ internal class ProgramsController(
     }
 
     fun onDeleteConfirmed(slot: PresetSlot) {
-        // Dismissed *before* the work starts, not after it finishes. An edit is seconds on this
-        // instrument, and a dialog left standing over them hides the progress line.
+        // Dismissed before the work starts: an edit takes seconds, and a dialog left standing
+        // over it hides the progress line.
         deleteTarget = null
         runEdit(strings.get(R.string.programs_busy_deleting, slot.displayId)) {
             viewModel.deleteProgram(slot)
@@ -238,12 +215,9 @@ internal class ProgramsController(
     }
 
     /**
-     * Reads a preset's tags, then opens the dialog that needs them.
-     *
-     * **Read before the dialog opens, not inside it.** A dialog that appears empty and fills in
-     * gives the user a moment where every box is unchecked, which is indistinguishable from "not
-     * a favorite" - and a tap in that moment writes that. Reading first costs at most one small
-     * dump, and [runEdit] already owns the busy line and the error path.
+     * Reads a preset's tags, then opens the dialog that needs them - read before the dialog opens,
+     * since a dialog that fills in gives the user a moment where every box is unchecked, which a
+     * tap would then write.
      */
     fun openTagDialog(slot: PresetSlot, forFavorite: Boolean) {
         runEdit(
@@ -274,15 +248,9 @@ internal class ProgramsController(
     }
 
     /*
-     * Picking a copy destination has one way in and one way out, deliberately.
-     *
-     * A copy's destination is always a *user* slot, so starting one from the factory listing has
-     * to move the browser there - picking in a list of read-only rows would offer targets the
-     * instrument refuses. Where it came from is remembered so cancelling, or finishing, puts the
-     * user back in the listing they were browsing rather than stranding them in the user banks.
-     *
-     * Both exits go through [endPicking], which is what keeps them from drifting apart once there
-     * is more to undo than one field.
+     * Picking a copy destination has one way in and one way out. A copy's destination is always a
+     * user slot, so starting one from the factory listing moves the browser there, and where it
+     * came from is remembered so cancelling returns to it. Both exits go through [endPicking].
      */
     fun beginPicking(source: PresetSlot, intent: PickIntent = PickIntent.COPY) {
         val browseScope = viewModel.scope.value
@@ -295,12 +263,9 @@ internal class ProgramsController(
     }
 
     /**
-     * Leaves destination-picking, going back to where it started - or staying put after a copy.
-     *
-     * **A finished copy deliberately does not return to the factory listing.** The new voice is in
-     * the user banks and that is what the user just made; bouncing back to the read-only list they
-     * launched from hides the result of the action and leaves them to find their way to it. A
-     * cancelled pick has made nothing, so it does go back.
+     * Leaves destination-picking, going back to where it started - except after a copy, which
+     * stays in the user banks where the new voice is. A cancelled pick has made nothing, so it
+     * does go back.
      */
     fun endPicking(returnToPreviousScope: Boolean = true) {
         pickSource = null
@@ -311,9 +276,8 @@ internal class ProgramsController(
     /**
      * Resolves a destination pick, as whichever operation [beginPicking] was started for.
      *
-     * @param destinationIsEmpty decides move-vs-swap for [PickIntent.MOVE], the same way a drop
-     *   does - an instrument with a separate one-way move refuses the two-way swap onto an empty
-     *   slot. Ignored for a copy, which only ever offers empty destinations.
+     * @param destinationIsEmpty decides move-vs-swap for [PickIntent.MOVE], as a drop does.
+     *   Ignored for a copy, which only offers empty destinations.
      */
     fun onPickConfirmed(source: PresetSlot, destination: PresetSlot, destinationIsEmpty: Boolean) {
         // The picker stays open across the operation it started (see below), so a second row
@@ -332,9 +296,8 @@ internal class ProgramsController(
         }
         val intent = pickIntent
         runEdit(label) {
-            // The picker closes only once the operation has actually landed. On failure it stays
-            // open, same reasoning as delete: show what went wrong against the change that was
-            // about to be made rather than dismissing first.
+            // The picker closes only once the operation has landed; on failure it stays open, so
+            // the error shows against the change that was about to be made.
             when (intent) {
                 PickIntent.COPY -> viewModel.copyProgram(source, destination)
                 PickIntent.MOVE -> viewModel.moveProgram(source, destination, destinationIsEmpty)
@@ -350,30 +313,22 @@ internal class ProgramsController(
     }
 
     /**
-     * @param occupied which addresses currently hold a preset - the listing's own view of it,
-     *   passed in rather than re-derived, since the drop was aimed at the rows the user can see.
+     * @param occupied which addresses hold a preset, from the listing rather than re-derived,
+     *   since the drop was aimed at the rows the user can see.
      */
     fun onSwapDropped(source: PresetSlot, target: PresetSlot, occupied: Set<SlotAddress>) {
         if (source.address == target.address) return
         val targetWasEmpty = target.address !in occupied
-        // A source has nothing to move - onDragStart already blocks starting a drag from an
-        // empty row, this is just a defensive re-check. An empty *target*, on the other hand, is
-        // a valid drop target; targetWasEmpty picks the operation, since an instrument with a
-        // separate one-way move rejects the two-way swap there.
+        // onDragStart already blocks a drag from an empty row; this is a re-check. An empty target
+        // is valid, and targetWasEmpty picks move over swap.
         if (source.address !in occupied) return
-        // No confirmation step, even where the operation is emulated rather than a single device
-        // command: composed move and swap were verified on real hardware, and a dialog in front of
-        // every drag is friction the reliability does not justify. The safety that mattered lives
-        // in the operation itself - read-back verification, destructive step last, rollback on a
-        // half-completed swap - not in asking first.
+        // No confirmation, even for an emulated operation: the safety lives in the operation
+        // itself - read-back verification, destructive step last, rollback on a half-done swap.
         runRelocation(source, target, targetWasEmpty)
     }
 }
 
-/**
- * Keyed on both collaborators, so a new session or a new configuration builds a new controller
- * rather than carrying a half-finished operation's dialog state into one.
- */
+/** Keyed on both collaborators, so a new session or configuration does not inherit a half-finished operation's dialog state. */
 @Composable
 internal fun rememberProgramsController(viewModel: InstrumentViewModel): ProgramsController {
     val resources = LocalResources.current

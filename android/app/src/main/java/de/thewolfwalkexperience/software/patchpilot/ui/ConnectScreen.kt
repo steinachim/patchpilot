@@ -51,21 +51,19 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
     val state by viewModel.state.collectAsState()
     val theme = LocalThemeStyle.current
 
-    // **The report is reachable from the untested-firmware gate**, not only after continuing.
-    // Someone who does not want to touch an instrument the app cannot vouch for should still be
-    // able to send back the one thing that would let it be supported - and telling them to
-    // continue first, into the very session they were hesitating about, is a poor way to ask.
-    // The instrument is already connected here (the advisory is raised after the handshake), so
-    // the reporter facet is available exactly as it is on the program screen.
+    // The report is reachable from the untested-firmware gate, not only after continuing: someone
+    // who does not want to touch an instrument the app cannot vouch for can still send back what
+    // would let it be supported. The instrument is already connected here, since the advisory is
+    // raised after the handshake.
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
-    // Read in the ViewModel and shared as soon as it is done - the same shape as ProgramsScreen,
-    // for the same reason: the read is minutes on a Nord and must not restart on rotation.
+    // Read in the ViewModel and shared as soon as it is done, as on ProgramsScreen: the read is
+    // minutes on a Nord and must not restart on rotation.
     val reportRunner = viewModel.deviceReportRunner
     val reportState by reportRunner.state.collectAsState()
     val reportError by reportRunner.error.collectAsState()
     var pendingReportStem by rememberSaveable { mutableStateOf<String?>(null) }
-    // Said here rather than swallowed: the report is shared the moment it is read, and a read
-    // the cable interrupted lands in the same Done as a whole one. Kept until the next read.
+    // Said rather than swallowed: a read the cable interrupted lands in the same Done as a whole
+    // one, and the report is shared the moment it is read. Kept until the next read.
     var incompleteReads by rememberSaveable { mutableStateOf(0) }
     val context = LocalContext.current
     val reportShareTitle = stringResource(R.string.programs_share_report)
@@ -88,12 +86,10 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
     }
 
     Box(
-        // No Scaffold here: this screen is a centred hero with its own title, and a top app bar
-        // would just repeat it. The frame goes on this outer, full-bleed box - edge to edge, the
-        // same true screen bounds `PatchPilotScaffold` frames - rather than on the inset box
-        // below; putting it on the inset box crowded the rivets against both the settings icon
-        // and the system status bar, and left Connect's border sitting inside the frame Programs
-        // draws flush with the edge.
+        // No Scaffold: this screen is a centred hero with its own title, which a top app bar would
+        // repeat. The frame goes on this outer, full-bleed box - the same screen bounds
+        // `PatchPilotScaffold` frames - rather than on the inset box below, which would sit
+        // Connect's border inside the frame Programs draws flush with the edge.
         modifier = Modifier
             .fillMaxSize()
             .let { theme.screenFrame(it) },
@@ -107,12 +103,10 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
         Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.cd_settings))
     }
     Column(
-        // Scrollable, not just centred: NothingFound's supported-instrument list alone is ten
-        // names (and grows every time a device is added, see [ConnectionState.NothingFound]'s doc
-        // comment), which overflows a landscape phone's height on its own before the retry/demo
-        // buttons below it are even counted - and Arrangement.Center on a fixed-height Column
-        // clips instead of scrolling, leaving those buttons genuinely unreachable rather than just
-        // scrolled past. Short content still centres between the scroll bounds exactly as before.
+        // Scrollable, not only centred: NothingFound's supported-instrument list overflows a
+        // landscape phone before the retry and demo buttons are counted, and Arrangement.Center
+        // on a fixed-height Column clips rather than scrolling, leaving them unreachable. Short
+        // content still centres between the scroll bounds.
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp)
@@ -138,12 +132,10 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
             is ConnectionState.Opening -> {
                 theme.ProgressIndicator()
                 Spacer(Modifier.height(8.dp))
-                // One message for both buses, and it does not mention the permission prompt:
-                // `UsbConnectionManager.requestPermission` returns immediately once permission
-                // has been granted, so "waiting for permission" would be true only the first
-                // time an instrument is plugged in, and this state also covers opening the
-                // endpoints and the family's handshake. When a prompt really is raised, the
-                // system puts its own dialog on top of this.
+                // One message for both buses, without naming the permission prompt: this state
+                // also covers opening the endpoints and the family's handshake, and the prompt
+                // only appears the first time an instrument is plugged in - with the system's own
+                // dialog on top of this.
                 Text(stringResource(R.string.connect_opening, s.displayName, s.bus.label))
             }
             is ConnectionState.Error -> {
@@ -163,10 +155,9 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
-            // Deliberately not styled as an error. Nothing is broken and nothing failed that the
-            // user can read as their fault - the instrument is listening on a different port, and
-            // what they need is the sequence that changes it, legible enough to follow while
-            // standing at the instrument.
+            // Not styled as an error: nothing is broken, the instrument is listening on a
+            // different port, and what the user needs is the sequence that changes it, legible
+            // while standing at the instrument.
             is ConnectionState.NeedsManualSetting -> {
                 Text(s.message, style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(16.dp))
@@ -194,12 +185,8 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
             }
             is ConnectionState.DeviceSelection -> {
                 val recognised = s.entries.count { it is PickerEntry.Known }
-                // The heading depends on why we are here, because the two cases are opposites.
-                // With an instrument attached this is a choice among things that work (one entry
-                // if the user asked to see the picker after backing out with a single device
-                // still plugged in, more than one if several are); with none it is a last resort.
-                // Saying "No supported instrument was found" in the first case would be plainly
-                // untrue.
+                // The heading depends on why we are here: with an instrument attached this is a
+                // choice among things that work, with none it is a last resort.
                 if (recognised > 0) {
                     Text(
                         stringResource(
@@ -211,16 +198,12 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                 } else {
                     Text(stringResource(R.string.connect_none_found))
                     Spacer(Modifier.height(8.dp))
-                    // Every attached device is listed, including the ones that cannot be opened.
-                    // Hiding those would be indistinguishable from the device not being plugged
-                    // in, and would send somebody hunting a cable fault that does not exist - so
-                    // they are shown, they stay selectable, and picking one explains itself
-                    // below.
+                    // Every attached device, including the ones that cannot be opened: hiding
+                    // those would be indistinguishable from the device not being plugged in.
                     Text(stringResource(R.string.connect_pick_unknown))
                 }
                 Spacer(Modifier.height(8.dp))
-                // Recognised entries come first from the view model. Each says which it is, so a
-                // list mixing "your Nord Grand" with "some USB hub" cannot be misread.
+                // Recognised entries come first from the view model, and each says which it is.
                 s.entries.forEach { entry ->
                     val sublabel = when (entry) {
                         is PickerEntry.Known -> stringResource(
@@ -263,9 +246,8 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                 Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
             is ConnectionState.AdvisoryWarning -> {
-                // Same shape as the unknown-device gate below, deliberately: the user is being
-                // asked the same kind of question - "this will probably work, do you want to" -
-                // and a second visual language for it would only make it easier to click past.
+                // The same shape as the unknown-device gate below: the same kind of question, and
+                // a second visual language for it would make it easier to click past.
                 Text(
                     stringResource(R.string.connect_advisory_title),
                     style = MaterialTheme.typography.titleMedium,
@@ -348,17 +330,15 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
             ShareFilenameDialog(pending) { pendingShare = null }
         }
 
-        // Not offered while a real connection attempt is in flight or has already landed -
-        // Connected navigates away on its own, and Searching/Opening are moments
-        // when a real instrument might still show up.
+        // Not offered while a real connection attempt is in flight or has landed: Connected
+        // navigates away, and Searching/Opening are moments when an instrument might show up.
         if (state !is ConnectionState.Searching &&
             state !is ConnectionState.Opening &&
             state !is ConnectionState.Connected
         ) {
             Spacer(Modifier.height(24.dp))
-            // One demo device, not one per family: a second entry here would read as a second
-            // instrument the app claims to support. The Pro-800-shaped fixture that exercises the
-            // screens' facet gating lives in the test source set (core.NoCopyFixtureInstrument).
+            // One demo device, not one per family: a second entry would read as a second
+            // instrument the app claims to support.
             TextButton(onClick = { viewModel.connectDemo() }) { Text(stringResource(R.string.action_try_demo)) }
         }
     }

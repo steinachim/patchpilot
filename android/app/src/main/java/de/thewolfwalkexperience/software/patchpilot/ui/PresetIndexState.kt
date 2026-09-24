@@ -7,12 +7,9 @@ import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 
 /**
- * A preset index as it arrives, rather than only once it is whole.
- *
- * A loading/error/data trio cannot express this: a Pro-800 scan is 400 sequential dumps, so
- * "loading" and "has data" overlap for most of a minute, and the rows have to be renderable
- * throughout. A Nord fills this in one batch and lands on [complete] immediately, so the
- * same screen serves both.
+ * A preset index as it arrives, rather than only once it is whole: a Pro-800 scan is 400
+ * sequential dumps, so "loading" and "has data" overlap for most of a minute, while a Nord fills
+ * this in one batch and lands on [complete] immediately.
  */
 data class PresetIndexState(
     val slots: List<PresetSlot> = emptyList(),
@@ -23,24 +20,16 @@ data class PresetIndexState(
     /** Set only when the scan itself failed, which is the one case with nothing to show. */
     val error: String? = null,
     /**
-     * Which run of the index this describes - the `key` that produced it.
-     *
-     * Carried because [complete] alone cannot answer "has *my* refresh finished?". A caller that
-     * triggers a re-read and then waits for `complete` to become true is watching a value that
-     * may never be observed as false: when a listing is fast (demo mode, a Nord, a cache hit) the
-     * reset and the completion land inside a single recomposition, so a `LaunchedEffect` keyed on
-     * `complete` never sees its key change and never re-runs. Comparing this against the key that
-     * was just requested is unambiguous whether the run takes a millisecond or 93 seconds.
+     * Which run of the index this describes, because [complete] alone cannot answer "has my
+     * refresh finished?": on a fast listing (demo mode, a Nord, a cache hit) the reset and the
+     * completion land in one recomposition, so a `LaunchedEffect` keyed on `complete` never sees
+     * its key change.
      */
     val generation: Any? = null,
 ) {
     val loading: Boolean get() = !complete && error == null
 
-    /**
-     * Folds one update in. Pure, so the collector can live anywhere - in the ViewModel, where a
-     * rotation cannot restart a 93-second listing - and so the rule that `Failed` is never fatal
-     * is something a unit test can hold.
-     */
+    /** Folds one update in. Pure, so the collector can live in the ViewModel and a unit test can hold the rule that `Failed` is never fatal. */
     fun plus(update: IndexUpdate): PresetIndexState = when (update) {
         is IndexUpdate.Slots -> copy(slots = slots + update.slots)
         is IndexUpdate.Progress -> copy(progress = update)
@@ -49,19 +38,13 @@ data class PresetIndexState(
     }
 
     /**
-     * This listing with [slot]'s address showing [slot], or unchanged if it does not hold it.
+     * This listing with [slot]'s address showing [slot], or unchanged if it does not hold it,
+     * in place so a row re-read after a rename stays where it was.
      *
-     * **In place, keeping its position.** A row re-read after a rename has to stay where it was;
-     * removing and appending it would move a renamed voice to the bottom of its bank.
-     *
-     * What this is for: the same address can appear in more than one listing - a favorited user
-     * voice is in both the user listing and the favorites one - and an edit made from either has
-     * to correct both. Writing the re-read slot through to the cache only fixes whichever listing
-     * is collected next, which leaves a listing that has already finished showing the old name
-     * until something re-reads it.
-     *
-     * A no-op for an absent address rather than an insertion: a listing is the set of slots that
-     * scan found, and adding a row to it would be inventing one.
+     * The same address can appear in more than one listing - a favorited user voice is in both -
+     * and an edit made from either has to correct both, while the cache write-through only
+     * reaches whichever is collected next. A no-op for an absent address rather than an
+     * insertion: a listing is the set of slots a scan found.
      */
     fun replacing(slot: PresetSlot): PresetIndexState {
         val index = slots.indexOfFirst { it.address == slot.address }

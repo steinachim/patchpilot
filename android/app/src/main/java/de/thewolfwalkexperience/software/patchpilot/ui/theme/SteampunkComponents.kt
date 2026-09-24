@@ -49,7 +49,7 @@ import de.thewolfwalkexperience.software.patchpilot.R
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** A brass rivet dot, radial-shaded, at one point. */
+/** A brass rivet dot, radial-shaded, drawn at one point. */
 private fun DrawScope.rivet(center: Offset, radius: Float, light: Color, dark: Color) {
     drawCircle(
         brush = Brush.radialGradient(colors = listOf(light, dark), center = center, radius = radius),
@@ -72,7 +72,7 @@ private fun rememberReduceMotion(): Boolean {
 }
 
 /**
- * The riveted-plate frame from the mockup: a rounded brass border inset from the box's own true
+ * The riveted-plate frame: a rounded brass border inset from the box's own true
  * edges, with a rivet sitting on each of its four rounded corners. Drawn **after** content
  * (`drawWithContent`, not `drawBehind`), so it always reads as sitting on top.
  *
@@ -154,7 +154,7 @@ fun Modifier.steampunkVerticalRivets(): Modifier = composed {
 }
 
 /**
- * The brushed-metal backdrop from the mockup - a faint warm wash from the top plus fine diagonal
+ * The brushed-metal backdrop: a faint warm wash from the top plus fine diagonal
  * hairlines - applied once at the app's own root ([MainActivity]'s outer `Surface`) rather than
  * per screen, so every screen shares one continuous texture instead of each redrawing its own.
  * A flat theme color alone reads as "a dark theme"; this is what makes it read as a panel.
@@ -198,7 +198,7 @@ fun Modifier.steampunkTexture(): Modifier = composed {
 
 /**
  * The circular brass bezel drawn behind a preset row's handle glyph (see [dragHandleGlyph]) -
- * the "mechanical slot" identity from the mockup, sized to fit the existing
+ * the "mechanical slot" identity, sized to fit the existing
  * `ProgramListMetrics.handleSize` column so it changes nothing about the row's layout or the
  * drag gesture's hit-testing, which is keyed on that column's pixel width alone.
  */

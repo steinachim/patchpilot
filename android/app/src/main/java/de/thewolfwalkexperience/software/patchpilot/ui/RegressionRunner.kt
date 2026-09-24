@@ -24,8 +24,7 @@ internal sealed interface RegressionRunState {
 
     data class Running(val step: String) : RegressionRunState
 
-    /** [stem] is the instrument's filename stem, resolved before the run in case the instrument
-     * is gone by the time the report is shared. */
+    /** [stem] is resolved before the run, in case the instrument is gone by the time the report is shared. */
     data class Done(val report: RegressionReport, val stem: String) : RegressionRunState
 }
 
@@ -59,13 +58,11 @@ internal class PendingConfirmation(
 )
 
 /**
- * Drives one regression run at a time and holds its state for the debug screen.
- *
- * Owned by the ViewModel rather than by the screen, because a run writes to the instrument and
- * has to outlive the composition: a configuration change tears the debug screen down, and a run
- * cancelled between a swap and its swap-back leaves a real preset in the wrong slot. The screen
- * collects [state] and [question] and answers the latter; a finished report also survives
- * process death through [savedState], so the screen shows it again after a restore.
+ * Drives one regression run at a time and holds its state for the debug screen. Owned by the
+ * ViewModel, because a run writes to the instrument and has to outlive the composition: a
+ * configuration change tears the debug screen down, and a run cancelled between a swap and its
+ * swap-back leaves a preset in the wrong slot. The screen collects [state] and [question] and
+ * answers the latter; a finished report survives process death through [savedState].
  *
  * @param run the ViewModel's own regression entry point, which holds the instrument mutex for the
  *   whole run, confirmation dialogs included.
@@ -146,9 +143,9 @@ internal class RegressionRunner(
         const val SAVED_KEY = "regressionRun"
 
         /**
-         * A finished report as a flat string list, which is what [SavedStateHandle] can hold
-         * without a `@Parcelize` dependency. Idle and Running both flatten to nothing and
-         * restore to Idle: a run in progress cannot survive process death.
+         * A finished report as a flat string list, which [SavedStateHandle] holds without a
+         * `@Parcelize` dependency. A run in progress flattens to nothing: it cannot survive
+         * process death.
          */
         fun flatten(state: RegressionRunState): List<String> {
             val done = state as? RegressionRunState.Done ?: return emptyList()

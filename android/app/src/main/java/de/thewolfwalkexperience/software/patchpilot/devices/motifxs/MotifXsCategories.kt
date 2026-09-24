@@ -7,36 +7,26 @@ import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 
 /**
- * How a Motif XS packs one category assignment into a number, both ways.
- *
- * The instrument stores an assignment as two bytes - a main category and a sub-category - at
- * `0x18`-`0x1B` of a voice's Common block. The cheap `0C` voice dump carries the same two values
- * packed as `main * 16 + sub` and printed as decimal ASCII (see [MotifXsVoice.categoriesOf]). One
- * object converts both, so the packed form and the byte pair cannot drift apart.
+ * How a Motif XS packs one category assignment into a number, both ways: the instrument stores an
+ * assignment as a main and a sub byte at `0x18`-`0x1B` of a voice's Common block, and the `0C`
+ * voice dump carries the same pair packed as `main * 16 + sub` in decimal ASCII (see
+ * [MotifXsVoice.categoriesOf]).
  */
 object MotifXsCategories {
 
     /** How many sub-category values one main category's figure packs. */
     const val SUBS_PER_MAIN = 16
 
-    /**
-     * The main-category value meaning "no assignment".
-     *
-     * Also the last entry of the shipped `mainByValue` table, where it reads `NoAsg`.
-     */
+    /** The main-category value meaning "no assignment"; the last entry of the shipped `mainByValue` table, `NoAsg`. */
     const val NO_ASSIGNMENT_MAIN = 16
 
     /** The figure an unassigned slot reads as: `16 * 16 + 0`. */
     const val NO_ASSIGNMENT_FIGURE = NO_ASSIGNMENT_MAIN * SUBS_PER_MAIN
 
     /**
-     * The assignment [figure] names, or null where it names none.
-     *
-     * [taxonomy] decides what the sub half means. **"No sub-category" is one past the main's last
-     * sub, not a fixed value** - `subs.size`, which is 5 for fourteen mains and 4 for `Bass` and
-     * `Dr/Pc`, the two with only four subs each. A hard-coded 5 decodes those two wrongly, and
-     * every *factory* voice happens to avoid the case, so nothing in a catalog check would catch
-     * it. Anything at or past that boundary is read as "main assigned, no sub".
+     * The assignment [figure] names, or null where it names none. "No sub-category" is one past
+     * the main's last sub (`subs.size`: 5 for fourteen mains, 4 for `Bass` and `Dr/Pc`), not a
+     * fixed value; anything at or past that boundary reads as "main assigned, no sub".
      */
     fun refOf(figure: Int, taxonomy: CategoryTaxonomy?): CategoryRef? {
         val main = figure / SUBS_PER_MAIN
@@ -47,11 +37,9 @@ object MotifXsCategories {
     }
 
     /**
-     * The two bytes [ref] is stored as: main, then sub. Null means no assignment.
-     *
-     * **An unassigned slot stores `(16, 0)`, not `(16, subs.size)`.** With no main assigned the
-     * sub is meaningless and the instrument zeroes it, so writing the no-sub sentinel alongside
-     * main 16 reads back different from what was sent and fails a read-back verification.
+     * The two bytes [ref] is stored as: main, then sub. Null means no assignment, which stores
+     * `(16, 0)`: with no main assigned the instrument zeroes the sub, so the no-sub sentinel
+     * would read back different from what was sent.
      */
     fun bytesOf(ref: CategoryRef?, taxonomy: CategoryTaxonomy?): Pair<Int, Int> {
         if (ref == null) return NO_ASSIGNMENT_MAIN to 0
@@ -60,11 +48,9 @@ object MotifXsCategories {
     }
 
     /**
-     * The shipped factory table's assignments, resolved against [encoding].
-     *
-     * An assignment naming a category the encoding does not list is dropped rather than rendered
-     * as an index, so a catalog whose two halves disagree loses a badge instead of showing a
-     * number no one can read.
+     * The shipped factory table's assignments, resolved against [encoding]. An assignment naming
+     * a category the encoding does not list is dropped, so a catalog whose halves disagree loses
+     * a badge rather than showing an index.
      */
     fun refsOf(
         listed: List<MotifXsFactoryCategory>,

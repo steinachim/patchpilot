@@ -14,28 +14,14 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/**
- * The report writer's Json, built once.
- *
- * encodeDefaults: kotlinx.serialization's default config omits a property entirely when its value
- * equals the declared default, which would drop nullable fields from the report. The schema allows
- * them to be absent, but a report is more useful spelling out every field the recipient has to
- * fill in than silently leaving holes.
- */
+/** The report writer's Json. encodeDefaults, so the report spells out every field. */
 private val REPORT_JSON = Json { prettyPrint = true; encodeDefaults = true }
 
 /**
- * Everything the app can read off a Pro-800 without changing anything on it, as JSON.
- *
- * **Read-only, and deliberately narrow about it.** Every request below is a documented query:
- * the identity and firmware probes, the two undocumented-but-answering types `0x02` and `0x04`
- * (pure responders nobody has decoded, worth recording), the settings block, and program dumps.
- * Nothing in the ranges whose effects are unknown is sent, and `0x7D`/`0x32` are never sent by
- * anything.
- *
- * **Preset content stays on the instrument.** The dumps are read to count them, but the report
- * carries only aggregates - how many slots are occupied, how many are unnamed, how many presets
- * of each format version, and which message lengths occur - never a preset's bytes or its name.
+ * Everything the app can read off a Pro-800 without changing anything on it, as JSON: the
+ * identity and firmware probes, the two undocumented types `0x02` and `0x04` (fixed replies
+ * nobody has decoded), the settings block, and program dumps. The dumps are read to count them;
+ * the report carries only aggregates, never a preset's bytes or its name.
  */
 class Pro800Reporter(
     private val exchange: SysExExchange,
@@ -60,8 +46,7 @@ class Pro800Reporter(
                 Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_FIRMWARE_REPLY
             }.toHex()
         }
-        // Two types the documentation lists as answering with a fixed payload nobody has decoded.
-        // Recording them costs one round trip each and may be what lets someone decode them.
+        // Fixed replies nobody has decoded, recorded for whoever does.
         val unknown02 = probes.probe("type02", "") { rawReply(0x02, expectType = 0x03).toHex() }
         val unknown04 = probes.probe("type04", "") { rawReply(0x04, expectType = 0x05).toHex() }
 
@@ -175,8 +160,7 @@ data class Pro800Report(
     val unnamedCount: Int,
     /** How many presets carry each format version - the spread the decoder has to cope with. */
     val presetVersionHistogram: Map<String, Int>,
-    /** Every distinct message length seen. A single value here would have meant fixed-size
-     * records; several is what proves they are not. */
+    /** Every distinct message length seen; several is what shows records are variable length. */
     val messageLengths: List<Int>,
     val failures: Map<String, String>,
 )

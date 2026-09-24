@@ -15,53 +15,24 @@ import de.thewolfwalkexperience.software.patchpilot.transport.transportScope
 import kotlinx.serialization.Serializable
 import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 
-/** Named for the instrument it describes, not for a family of them - this file covers exactly
- * one model. The name carries no meaning to the loader; the `family` field inside it does. */
+/** Named for the one instrument it describes; the loader dispatches on the `family` field inside it. */
 private const val CATALOG_ASSET = "behringer_pro800.json"
 
 /**
- * The per-model configuration this family needs - the typed form of a [FamilyCatalog.familyConfig]
- * block.
- *
- * Everything here is Pro-800-specific and none of it exists on a Nord, which is exactly why it
- * lives in an opaque block rather than in the shared descriptor: a flat cross-family schema would
- * carry these as five more mostly-null columns.
- *
- * **Read from the catalog's top-level familyConfig, not the device's.** There is exactly one
- * Pro-800 catalog entry (see [Pro800Family]'s own doc), so there is no second device for a
- * per-device block to ever need to differ from - unlike the Motif XS catalog's shared bank table,
- * this has no per-device override to fall back past, which is why [Pro800Family.create] decodes it
- * straight off [FamilyCatalog.familyConfig] with no merge step.
- *
- * **Carries no id or name.** Those belong to [InstrumentDescriptor], which [Pro800Family.create]
- * already has on hand and passes straight to [Pro800Instrument] - putting them here too would
- * only be a second place for the same two strings to drift apart.
+ * The configuration this family needs, the typed form of the catalog's top-level
+ * [FamilyCatalog.familyConfig] block. There is one Pro-800 entry, so there is no per-device
+ * override. The id and name belong to [InstrumentDescriptor].
  */
 @Serializable
 data class Pro800Config(
     val bankCount: Int = 4,
     val slotsPerBank: Int = 100,
     val slotDigits: Int = 2,
-    /**
-     * Firmware versions this app has been tested against. Empty means "skip the check".
-     *
-     * Mirrors `VersionMessage::SUPPORTED_FIRMWARE_VERSIONS` in the reference implementation, and
-     * the same posture `NordDevice` takes: decline rather than risk mis-reading presets on
-     * firmware whose layout nobody has verified.
-     */
+    /** Firmware versions this app has been tested against; empty skips the check. */
     val supportedFirmwareVersions: Set<String> = setOf("1.4.6"),
 )
 
-/**
- * The Pro-800 family: `devices/behringer_pro800.json` plus a factory.
- *
- * Its catalog is written in the generic [FamilyCatalog] shape directly, unlike the Nord one, which
- * keeps its own native shape because other tooling reads that file too. Both arrive at the registry
- * as descriptors either way - which is the point of letting each family load its own file.
- *
- * "Family" here is the code-level dispatch key, not a claim about how many instruments the file
- * holds: this one holds a single Pro-800, and is named accordingly.
- */
+/** The Pro-800 family: `devices/behringer_pro800.json`, in the generic [FamilyCatalog] shape, plus a factory. */
 object Pro800Family : InstrumentFamily {
 
     override val id = Pro800Instrument.FAMILY
@@ -81,8 +52,6 @@ object Pro800Family : InstrumentFamily {
         // Resolved before the exchange starts its collector, so a catalog fault cannot leave a
         // collector running on a transport nobody owns.
         val config = catalog.format.decodeFromJsonElement(Pro800Config.serializer(), catalog.load(context).familyConfig)
-        // The exchange owns the collector draining this transport, so its scope has to outlive
-        // any single operation. It ends when the transport is closed and the instrument with it.
         val scope = transportScope(descriptor.name)
         return Pro800Instrument(
             SysExExchange(midi, scope),
