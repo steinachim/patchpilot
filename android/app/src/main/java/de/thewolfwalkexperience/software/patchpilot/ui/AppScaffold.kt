@@ -7,7 +7,10 @@ import de.thewolfwalkexperience.software.patchpilot.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemGestures
+import androidx.compose.foundation.layout.union
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -22,7 +25,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.BarAction
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
@@ -62,6 +68,13 @@ fun PatchPilotScaffold(
             .let { theme.screenFrame(it) },
         topBar = {
             TopAppBar(
+                // The default omits `systemGestures`, so on a device with edge-swipe-back
+                // navigation the actions can sit inside the swipe strip on whichever side has no
+                // system bar to hold `systemBars` insets out for it - see ConnectScreen, whose gear
+                // this bar's own actions line up with. Capped: some configurations report a gesture
+                // inset well past the width the swipe strip actually needs, which would otherwise
+                // eat into the title for no reason.
+                windowInsets = TopAppBarDefaults.windowInsets.union(cappedSystemGestures()),
                 title = {
                     // A preset or device name can be longer than the bar; ellipsis rather than
                     // wrapping.
@@ -105,6 +118,25 @@ fun PatchPilotScaffold(
  */
 internal val TOP_BAR_HEIGHT = 64.dp
 internal val TOP_BAR_ACTION_INSET = 4.dp
+
+/**
+ * [WindowInsets.systemGestures], with each side's width held to at most [max]. The reported
+ * inset is meant to keep a tap out of the edge-swipe-back strip, but some configurations report
+ * one well past that (see the audit that added this - a plain phone measured 4dp before this
+ * fix and needed it, an emulator measured 45dp with it, more than the strip itself). A generous
+ * fixed ceiling keeps the clearance real without letting an outlier value eat the title.
+ */
+@Composable
+internal fun cappedSystemGestures(max: Dp = 24.dp): WindowInsets {
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val gestures = WindowInsets.systemGestures
+    val maxPx = with(density) { max.roundToPx() }
+    return WindowInsets(
+        left = minOf(gestures.getLeft(density, layoutDirection), maxPx),
+        right = minOf(gestures.getRight(density, layoutDirection), maxPx),
+    )
+}
 
 /**
  * A centred one-line state - loading, empty, or "nothing matched". One composable for every

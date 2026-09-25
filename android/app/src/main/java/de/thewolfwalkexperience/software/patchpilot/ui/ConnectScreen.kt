@@ -6,6 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 import de.thewolfwalkexperience.software.patchpilot.R
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -94,17 +96,30 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
     ) {
     Box(
         // Clears the system bars itself under edge-to-edge; the frame above is measured against
-        // the full screen, not against this.
-        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
+        // the full screen, not against this. The capped gesture inset too (see AppScaffold): a
+        // side with no bar (most phones, both sides; large screens, the settings-gear side) gets
+        // no inset at all from `safeDrawing` alone, which on a device with edge-swipe-back
+        // navigation puts a tap right inside the swipe strip - discoverable by pressing there,
+        // not by looking at it.
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing.union(cappedSystemGestures())),
     ) {
     // Placed where `PatchPilotScaffold` puts its own actions, so the gear does not jump when the
     // preset screen replaces this one: centred in a bar-height strip, an icon button's own 4.dp
     // from the end. Material's `TopAppBar` metrics are not public, hence the two constants.
+    //
+    // `zIndex` because the scrollable Column below is a later sibling that also fills the whole
+    // screen: its own content is centred and never draws up here, but its layout bounds still
+    // cover this corner, and a later sibling wins hit-testing over an earlier one wherever they
+    // overlap. Without this, part of the gear's own reported touch target silently belonged to
+    // the Column's scroll gesture detector instead of the button.
     Box(
         modifier = Modifier
             .align(Alignment.TopEnd)
             .height(TOP_BAR_HEIGHT)
-            .padding(end = TOP_BAR_ACTION_INSET),
+            .padding(end = TOP_BAR_ACTION_INSET)
+            .zIndex(1f),
         contentAlignment = Alignment.Center,
     ) {
         IconButton(onClick = onOpenSettings) {
