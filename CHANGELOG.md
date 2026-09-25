@@ -2,6 +2,8 @@
 
 ## Next release
 
+## 1.0
+
 ### Added
 - Six more Nord keyboards are recognized, each confirmed against real hardware: Electro 7, Grand 2, Lead A1, Piano 6, Stage 4 and Wave 2.
 - The Yamaha Motif XS7 and XS8 are recognized in addition to the XS6, sharing its protocol and catalog configuration. Their USB product ids are inferred from Yamaha's driver files and not yet confirmed on real hardware.

@@ -1,5 +1,6 @@
 - Six more Nord keyboards: Electro 7, Grand 2, Lead A1, Piano 6, Stage 4 and Wave 2.
-- Yamaha Motif XS: factory voices and favorites, categories, XS7/XS8 recognized.
+- Yamaha Motif XS: factory voices, favorites, categories, XS7/XS8 recognized.
 - Preset categories shown in the browser; "Move to…" from a row's menu.
 - Behringer Pro-800 loads presets without needing its MIDI channel.
-- Fixes: interrupted Motif XS writes, USB permission hangs, unplugged instruments lingering in the list, Steampunk theme contrast.
+- Steampunk theme: brass icons, bank header and buttons redrawn.
+- Fixes: interrupted Motif XS writes, USB permission hangs, lingering unplugged instruments, launch briefly showing the wrong theme.
