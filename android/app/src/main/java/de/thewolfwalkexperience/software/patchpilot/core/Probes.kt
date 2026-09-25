@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.core
 
 import android.util.Log
@@ -6,17 +9,11 @@ import kotlinx.coroutines.CancellationException
 private const val TAG = "Probes"
 
 /**
- * Collects the results of a device report's queries, ensuring **no single query is allowed to be
- * fatal**.
+ * Collects the results of a device report's queries, so that no single query is fatal.
  *
- * A report exists to describe an instrument nobody has profiled yet, which is precisely the
- * situation where an advanced query may be unsupported, time out, or answer something this app
- * cannot parse. A report missing its storage figures but carrying the categories, the firmware
- * version and the raw bytes is worth far more to whoever receives it than no report at all - and a
- * failure that *is* recorded is itself a finding about the instrument.
- *
- * Family-agnostic: every family's report follows this same discipline even though each report's
- * *contents* differ.
+ * A report describes an instrument nobody has profiled yet, which is where a query may be
+ * unsupported, time out, or answer something this app cannot parse. A partial report is worth
+ * more than none, and a recorded failure is itself a finding about the instrument.
  */
 class Probes {
     private val _failures = LinkedHashMap<String, String>()
@@ -26,9 +23,7 @@ class Probes {
 
     /**
      * Runs one query, recording a failure under [what] and carrying on with [fallback].
-     *
-     * Deliberately not `runCatching`, which swallows [CancellationException] and would leave a
-     * report the user backed out of still querying the instrument.
+     * Not `runCatching`, which would swallow [CancellationException].
      */
     suspend fun <T> probe(what: String, fallback: T, block: suspend () -> T): T = try {
         block()

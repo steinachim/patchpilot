@@ -1,6 +1,10 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
@@ -291,38 +295,137 @@ class Pro800InstrumentTest {
         assertTrue(updates.last() is IndexUpdate.Complete)
     }
 
+    // ---- Selection: the settings-block pointer, and no MIDI channel anywhere ----
+
     /**
-     * Selection is bank select then program change - and exactly the (bank, slot) pair the address
-     * already carries, with no flattening arithmetic in between.
+     * The whole sequence, in order: read the settings block, write the pointer back, confirm it by
+     * reading again, then reload.
+     *
+     * **Nothing channel-voice goes out at all.** That is the point of the change: a bank select and
+     * a program change need a channel, nothing acknowledges either, and the channel is not always
+     * knowable - so a mismatch was a Load button that silently did nothing.
      */
     @Test
-    fun `select sends a bank select then a program change`() = runTest {
-        val (pro800, transport) = instrument(backgroundScope)
-        pro800.selector!!.select(SlotAddress(bank = 1, slot = 37))
+    fun `select writes the settings pointer and then reloads`() = runTest {
+        val fake = FakePro800()
+        val pro800 = fullSizeInstrument(fake, backgroundScope)
 
-        val voice = transport.sent.filter { it.isNotEmpty() && it[0] != 0xF0.toByte() }
-        assertEquals(2, voice.size)
-        assertArrayEquals(byteArrayOf(0xB0.toByte(), 0x00, 0x01), voice[0])
-        assertArrayEquals(byteArrayOf(0xC0.toByte(), 0x25), voice[1])
+        pro800.selector!!.select(SlotAddress(bank = 1, slot = 5))
+
+        assertTrue(
+            "selection must be pure SysEx - no channel-voice message may be sent",
+            fake.requestLog.none { it.isNotEmpty() && it[0] != 0xF0.toByte() },
+        )
+        val settings = fake.currentSettings()
+        assertEquals(105, settings.currentPresetNumber)
+        assertEquals(1, settings.currentBank)
+        assertArrayEquals(
+            byteArrayOf(
+                0xF0.toByte(), 0x00, 0x20, 0x32, 0x00, 0x01, 0x24, 0x00, 0x32, 0x00, 0xF7.toByte(),
+            ),
+            fake.requestLog.last(),
+        )
     }
 
-    /** The bank select goes out every time: tracking the instrument's current bank host-side is
-     * wrong the moment the user touches the front panel. */
+    /**
+     * The pointer is the *flat* program number, not the slot within its bank.
+     *
+     * The firmware takes the slot digits from this modulo 100 and the bank letter from the separate
+     * `Current Bank` field, so D05 is 305 here. Writing 5 would leave the instrument pointed at the
+     * right slot digits in whatever bank it happened to already be in.
+     */
     @Test
-    fun `the bank select is repeated even when the bank has not changed`() = runTest {
-        val (pro800, transport) = instrument(backgroundScope)
-        pro800.selector!!.select(SlotAddress(0, 1))
-        pro800.selector!!.select(SlotAddress(0, 2))
+    fun `the pointer carries the flat program number and the bank separately`() = runTest {
+        val fake = FakePro800()
+        val pro800 = fullSizeInstrument(fake, backgroundScope)
 
-        val bankSelects = transport.sent.count { it.size == 3 && it[0] == 0xB0.toByte() && it[1] == 0x00.toByte() }
-        assertEquals(2, bankSelects)
+        pro800.selector!!.select(SlotAddress(bank = 3, slot = 5))
+
+        assertEquals(305, fake.currentSettings().currentPresetNumber)
+        assertEquals(3, fake.currentSettings().currentBank)
     }
 
-    /** Nothing acknowledges a program change, so the app must not claim it landed. */
+    /**
+     * The write touches the two pointer bytes and nothing else.
+     *
+     * A settings write carries the whole 46-byte block back, including every global setting the
+     * user has configured, so "what else changed" is the question that matters. It is also why the
+     * payload is patched in place rather than decoded and re-encoded - see
+     * [Pro800ProgramCodec.patchValue].
+     */
     @Test
-    fun `the selection confirmation says sent, not selected`() = runTest {
+    fun `the settings write changes only the pointer bytes`() = runTest {
+        val fake = FakePro800()
+        val before = fake.settingsPayload().copyOf()
+        val pro800 = fullSizeInstrument(fake, backgroundScope)
+
+        pro800.selector!!.select(SlotAddress(bank = 1, slot = 5))
+
+        val after = fake.settingsPayload()
+        assertEquals("the block must keep its length", before.size, after.size)
+        val changed = before.indices.filter { before[it] != after[it] }
+        // Raw offset 6 is the preset number's low byte and raw 23 is the bank. The number's high
+        // byte (raw 7) is 0 both before and after here, so it does not show up as a difference.
+        assertEquals(listOf(6, 23), changed)
+    }
+
+    /**
+     * **The reload waits for the pointer to actually land.**
+     *
+     * A settings write is not guaranteed to be visible on the next read - real hardware commits
+     * some of them over a second later - and a reload sent before the pointer commits recalls the
+     * preset that is on its way out. So the poll is not a formality: it is what makes the ordering
+     * correct rather than usually correct.
+     */
+    @Test
+    fun `the reload is sent only once the read-back matches`() = runTest {
+        val fake = FakePro800(staleSettingsReads = 2)
+        val pro800 = fullSizeInstrument(fake, backgroundScope)
+
+        pro800.selector!!.select(SlotAddress(bank = 1, slot = 5))
+
+        val types = fake.requestLog.map { Pro800SysEx.typeOf(it) }
+        val reload = types.indexOf(Pro800SysEx.TYPE_RESET_MODE)
+        assertTrue("a reload must have been sent", reload >= 0)
+        assertEquals("the reload must come last", types.size - 1, reload)
+        // One read before the write, then three after it: two that still report the old pointer
+        // and the one that finally agrees.
+        assertEquals(4, types.count { it == Pro800SysEx.TYPE_REQUEST_DUMP })
+    }
+
+    /**
+     * A pointer that never lands is a failure, and **no reload is sent**.
+     *
+     * Reloading anyway would recall whatever the instrument is still pointed at - the preset the
+     * user was moving away from - which looks like the app loading the wrong thing rather than
+     * like the write having failed.
+     */
+    @Test
+    fun `a pointer that never lands fails without reloading`() = runTest {
+        val fake = FakePro800(ignoreWrites = true)
+        val pro800 = fullSizeInstrument(fake, backgroundScope)
+
+        try {
+            pro800.selector!!.select(SlotAddress(bank = 1, slot = 5))
+            throw AssertionError("a select that never landed reported success")
+        } catch (expected: InstrumentException.ProtocolDesync) {
+            assertTrue(expected.message!!.contains("B05"))
+        }
+        assertTrue(
+            "no reload may be sent when the pointer never landed",
+            fake.requestLog.none { Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_RESET_MODE },
+        )
+    }
+
+    /**
+     * "Selected", because the pointer was read back and agreed - which a bank-select and program
+     * change could not claim, since nothing acknowledges those. What cannot be confirmed is the
+     * audible recall, which the instrument reports nowhere; this claims only the pointer.
+     */
+    @Test
+    fun `the selection confirmation says selected`() = runTest {
         val (pro800, _) = instrument(backgroundScope)
-        assertEquals("Sent A00.", pro800.selector!!.confirmationFor("A00"))
+        assertEquals("Selected A00.", pro800.selector!!.confirmationFor("A00"))
     }
 
     @Test
@@ -363,9 +466,9 @@ class Pro800InstrumentTest {
      * The reply a real Pro-800 gives for an address that holds nothing: a bare `F0 F7`, with no
      * manufacturer header and no echoed address.
      *
-     * Rejecting it costs two full timeouts per address. On the instrument this was found on,
-     * three of four banks answered this way - about twenty minutes of a scan spent waiting for
-     * replies that had already arrived.
+     * Rejecting it costs two full timeouts per address, and on an instrument with three of four
+     * banks empty that is about twenty minutes of a scan spent waiting for replies that have
+     * already arrived.
      */
     @Test
     fun `a bare F0 F7 is an empty slot, not a timeout`() = runTest {
@@ -398,26 +501,17 @@ class Pro800InstrumentTest {
         assertEquals(10, transport.sent.count { Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_REQUEST_DUMP })
     }
 
-    // ---- Firmware check and MIDI channel resolution ----
+    // ---- Firmware check ----
 
-    /** A settings dump carrying one MIDI RX Channel setting, encoded as the instrument would. */
-    private fun settingsDump(rxChannelSetting: Int): ByteArray {
-        val dense = ByteArray(Pro800Settings.RX_CHANNEL_DENSE + 1)
-        Pro800ProgramCodec.writeValue(dense, Pro800Settings.RX_CHANNEL_DENSE, 1, rxChannelSetting)
-        return Pro800SysEx.HEADER +
-            byteArrayOf(Pro800SysEx.TYPE_DUMP.toByte()) +
-            byteArrayOf(
-                (Pro800SysEx.SETTINGS_ADDRESS and 0x7F).toByte(),
-                ((Pro800SysEx.SETTINGS_ADDRESS shr 7) and 0x7F).toByte(),
-            ) +
-            Pro800ProgramCodec.encode(dense) +
-            Pro800SysEx.SYSEX_END
-    }
+    /** A real-sized instrument on a stateful fake - what the selection tests need. */
+    private fun fullSizeInstrument(fake: FakePro800, scope: CoroutineScope) = Pro800Instrument(
+        SysExExchange(fake.transport, scope),
+        Pro800Config(bankCount = 4, slotsPerBank = 100, slotDigits = 2),
+    )
 
     private fun instrumentWith(
         /** Null models a firmware query that goes unanswered - a transient, not a bad version. */
         firmware: ByteArray?,
-        rxChannelSetting: Int,
         config: Pro800Config = this.config,
         scope: CoroutineScope,
     ): Pair<Pro800Instrument, FakeMidiTransport> {
@@ -428,8 +522,6 @@ class Pro800InstrumentTest {
                         "PRO-800".toByteArray(Charsets.US_ASCII) + Pro800SysEx.SYSEX_END,
                 )
                 Pro800SysEx.typeOf(request) == Pro800SysEx.TYPE_FIRMWARE -> listOfNotNull(firmware)
-                Pro800SysEx.addressOf(request) == Pro800SysEx.SETTINGS_ADDRESS ->
-                    listOf(settingsDump(rxChannelSetting))
                 else -> listOf(byteArrayOf(0xF0.toByte(), 0xF7.toByte()))
             }
         }
@@ -443,11 +535,11 @@ class Pro800InstrumentTest {
 
     @Test
     fun `an untested firmware version warns instead of refusing`() = runTest {
-        val (pro800, _) = instrumentWith(firmwareReply(1, 4, 5), Pro800Settings.RX_ALL, scope = backgroundScope)
+        val (pro800, _) = instrumentWith(firmwareReply(1, 4, 5), scope = backgroundScope)
 
-        // **It used to throw here, and that was the wrong call.** Refusing locked out the one
-        // person who could establish what an untested firmware actually does - and who can send
-        // back the device report saying so. The session is allowed; the warning rides along.
+        // A warning, not a refusal: refusing would lock out the one person who could establish
+        // what an untested firmware actually does, and who can send back the device report
+        // saying so. The session is allowed; the warning rides along.
         pro800.connect()
 
         val advisory = pro800.advisory
@@ -472,7 +564,7 @@ class Pro800InstrumentTest {
     /** The supported firmware raises nothing - the advisory must not become background noise. */
     @Test
     fun `a tested firmware version raises no advisory`() = runTest {
-        val (pro800, _) = instrumentWith(firmwareReply(1, 4, 6), Pro800Settings.RX_ALL, scope = backgroundScope)
+        val (pro800, _) = instrumentWith(firmwareReply(1, 4, 6), scope = backgroundScope)
         pro800.connect()
         assertNull(pro800.advisory)
     }
@@ -480,52 +572,9 @@ class Pro800InstrumentTest {
     /** A firmware query that goes unanswered is a transient, not an untested version. */
     @Test
     fun `an unreadable firmware version raises no advisory`() = runTest {
-        val (pro800, _) = instrumentWith(null, Pro800Settings.RX_ALL, scope = backgroundScope)
+        val (pro800, _) = instrumentWith(null, scope = backgroundScope)
         pro800.connect()
         assertNull("silence is not evidence of an unsupported version", pro800.advisory)
-    }
-
-    /**
-     * The instrument's own MIDI RX Channel setting decides where selection is sent.
-     *
-     * A program change on the wrong channel is ignored, and nothing acknowledges it, so getting
-     * this wrong is completely silent: an instrument on channel 3 with an app configured for
-     * channel 1 looks like a button that does nothing.
-     */
-    @Test
-    fun `selection is sent on the channel the instrument says it listens to`() = runTest {
-        // Setting 5 = channel 4 on the front panel = wire channel 3.
-        val (pro800, transport) = instrumentWith(firmwareReply(1, 4, 6), 5, scope = backgroundScope)
-        pro800.connect()
-        pro800.selector!!.select(SlotAddress(bank = 1, slot = 7))
-
-        val voice = transport.sent.filter { it.isNotEmpty() && it[0] != 0xF0.toByte() }
-        assertArrayEquals(byteArrayOf(0xB3.toByte(), 0x00, 0x01), voice[0])
-        assertArrayEquals(byteArrayOf(0xC3.toByte(), 0x07), voice[1])
-    }
-
-    @Test
-    fun `an instrument set to receive on ALL is sent channel 1`() = runTest {
-        val (pro800, transport) = instrumentWith(firmwareReply(1, 4, 6), Pro800Settings.RX_ALL, scope = backgroundScope)
-        pro800.connect()
-        pro800.selector!!.select(SlotAddress(0, 0))
-
-        val voice = transport.sent.filter { it.isNotEmpty() && it[0] != 0xF0.toByte() }
-        assertArrayEquals(byteArrayOf(0xB0.toByte(), 0x00, 0x00), voice[0])
-    }
-
-    /** Better a clear refusal than a button that silently does nothing. */
-    @Test
-    fun `selection refuses outright when the instrument has MIDI receive off`() = runTest {
-        val (pro800, transport) = instrumentWith(firmwareReply(1, 4, 6), Pro800Settings.RX_OFF, scope = backgroundScope)
-        pro800.connect()
-        try {
-            pro800.selector!!.select(SlotAddress(0, 0))
-            throw AssertionError("a select was sent to an instrument that cannot hear it")
-        } catch (expected: de.thewolfwalkexperience.software.patchpilot.core.InstrumentException.NotSupported) {
-            assertTrue(expected.message!!.contains("OFF"))
-        }
-        assertTrue(transport.sent.none { it.isNotEmpty() && it[0] == 0xB0.toByte() })
     }
 
     /**
@@ -544,86 +593,5 @@ class Pro800InstrumentTest {
 
         pro800.close()
         assertTrue("the MIDI port must be released", transport.closed)
-    }
-
-    // ---- DIP-switch mode: the one setting the instrument will not report ----
-
-    /**
-     * In DIP-switch mode the instrument says "the switches decide" and will not say what they are
-     * set to. Falling back to a configured default here would silently send to the wrong channel
-     * whenever the switches disagree with it, so the app asks instead.
-     */
-    @Test
-    fun `dip-switch mode raises a question instead of guessing a channel`() = runTest {
-        val (pro800, _) = instrumentWith(
-            firmwareReply(1, 4, 6),
-            Pro800Settings.RX_DIP_SWITCHES,
-            scope = backgroundScope,
-        )
-        pro800.connect()
-
-        val question = pro800.setup!!.question
-        assertTrue("a question should be pending", question != null)
-        assertEquals(16, question!!.options.size)
-        assertEquals("Channel 1", question.options.first())
-        assertEquals("Channel 16", question.options.last())
-        assertTrue(question.explanation.contains("DIP"))
-    }
-
-    /** Better a refusal naming the reason than a Load button that silently does nothing. */
-    @Test
-    fun `selection refuses until the dip-switch channel is answered`() = runTest {
-        val (pro800, transport) = instrumentWith(
-            firmwareReply(1, 4, 6),
-            Pro800Settings.RX_DIP_SWITCHES,
-            scope = backgroundScope,
-        )
-        pro800.connect()
-
-        try {
-            pro800.selector!!.select(SlotAddress(0, 0))
-            throw AssertionError("a select was sent before the channel was known")
-        } catch (expected: de.thewolfwalkexperience.software.patchpilot.core.InstrumentException.NotSupported) {
-            assertTrue(expected.message!!.contains("DIP"))
-        }
-        assertTrue(transport.sent.none { it.isNotEmpty() && (it[0].toInt() and 0xF0) == 0xC0 })
-    }
-
-    @Test
-    fun `answering the question sends selection on the chosen channel`() = runTest {
-        val (pro800, transport) = instrumentWith(
-            firmwareReply(1, 4, 6),
-            Pro800Settings.RX_DIP_SWITCHES,
-            scope = backgroundScope,
-        )
-        pro800.connect()
-
-        pro800.setup!!.answer(2) // "Channel 3" -> wire channel 2
-        assertNull("nothing further should be pending", pro800.setup!!.question)
-
-        pro800.selector!!.select(SlotAddress(bank = 1, slot = 7))
-        val voice = transport.sent.filter { it.isNotEmpty() && it[0] != 0xF0.toByte() }
-        assertArrayEquals(byteArrayOf(0xB2.toByte(), 0x00, 0x01), voice[0])
-        assertArrayEquals(byteArrayOf(0xC2.toByte(), 0x07), voice[1])
-    }
-
-    /** An instrument that reports a usable channel must not be asked anything. */
-    @Test
-    fun `a reported channel raises no question`() = runTest {
-        val (pro800, _) = instrumentWith(firmwareReply(1, 4, 6), 5, scope = backgroundScope)
-        pro800.connect()
-        assertNull(pro800.setup!!.question)
-    }
-
-    /** MIDI receive OFF is not a question either - no channel would help. */
-    @Test
-    fun `midi receive off raises no question, it just refuses`() = runTest {
-        val (pro800, _) = instrumentWith(
-            firmwareReply(1, 4, 6),
-            Pro800Settings.RX_OFF,
-            scope = backgroundScope,
-        )
-        pro800.connect()
-        assertNull(pro800.setup!!.question)
     }
 }

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.transport
 
 import kotlinx.coroutines.flow.Flow
@@ -24,9 +27,8 @@ interface Transport {
 /**
  * The vendor-protocol bus: paired bulk endpoints plus the control pipe.
  *
- * [controlTransfer] is generic on purpose. It used to be `controlReadFirmware(wLength)`, which is
- * not a transport concept at all - it is Nord vendor request 4, and it now lives in the Nord
- * device layer where the rest of that protocol's constants are.
+ * [controlTransfer] is generic on purpose: which request reads what (Nord vendor request 4 reads
+ * the firmware version) is a property of a protocol, and lives in that device layer.
  */
 interface UsbBulkTransport : Transport {
     fun bulkWrite(data: ByteArray)
@@ -35,31 +37,36 @@ interface UsbBulkTransport : Transport {
     /**
      * Reads up to [bufferSize] bytes, returning empty if nothing arrived within [timeoutMs].
      *
-     * Separate from [bulkRead] because the two callers disagree about what a timeout *is*. The
-     * Nord path reads only after asking for something, so silence is a fault. A MIDI IN endpoint
-     * is polled continuously whether or not anything was asked for, so silence is the normal case
-     * and throwing on it would turn an idle instrument into an error loop.
-     *
-     * The default delegates, which is right for a fake serving a scripted exchange.
+     * Separate from [bulkRead] because the callers disagree about what a timeout is: the Nord
+     * path reads only after a request, so silence is a fault, while a USB-MIDI endpoint is polled
+     * continuously, so silence is the normal case. The default delegates, which suits a fake.
      */
     fun bulkReadOrEmpty(bufferSize: Int, timeoutMs: Int): ByteArray = bulkRead(bufferSize)
     fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int): ByteArray
+
+    /**
+     * Discards whatever the device has already queued on the IN endpoint: a session killed
+     * mid-reply leaves the rest of that reply on the device, where the next session's first read
+     * would receive it. Called once at the start of a session by a protocol that answers exactly
+     * one reply per request; a continuously polled USB-MIDI transport has nothing to drain. The
+     * default does nothing.
+     */
+    fun drainInput() {}
 }
 
 /**
  * A MIDI port pair, as a byte stream.
  *
- * [incoming] is deliberately **not** message-aligned: Android's MIDI callback makes no such
- * promise, and a type that claimed otherwise would be a lie the whole stack above would then
- * depend on. [SysExFramer][de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer] is what
- * turns it into messages.
- *
- * Nothing in this interface mentions Android, which is the point: the same contract is
- * implementable over `android.media.midi` (where the platform unpacks USB-MIDI event packets for
- * us) or directly over [UsbBulkTransport] by packing those 32-bit packets by hand. Swapping one
- * for the other touches no code above this line.
+ * [incoming] is not message-aligned, because Android's MIDI callback makes no such promise;
+ * [SysExFramer][de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer] turns it into
+ * messages. Implemented over `android.media.midi` and directly over a [UsbBulkTransport];
+ * nothing above this interface can tell which.
  */
 interface MidiTransport : Transport {
-    fun send(bytes: ByteArray)
+    /**
+     * Writes one message to the port. Suspending, so a blocking USB bulk write can be moved off
+     * the caller's thread.
+     */
+    suspend fun send(bytes: ByteArray)
     val incoming: Flow<ByteArray>
 }

@@ -1,6 +1,14 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot
 
+import android.content.Intent
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
@@ -13,63 +21,94 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import de.thewolfwalkexperience.software.patchpilot.ui.PatchPilotApp
 import de.thewolfwalkexperience.software.patchpilot.ui.InstrumentViewModel
-import de.thewolfwalkexperience.software.patchpilot.ui.theme.AppTheme
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.PatchPilotTheme
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.ThemePreferences
 
+private const val TAG = "MainActivity"
+
 class MainActivity : ComponentActivity() {
     private val viewModel: InstrumentViewModel by viewModels()
 
-    // Skips the reconnect-on-resume below for the very first onResume() after onCreate(), which
-    // is just the normal launch path already handled by ConnectScreen's own initial connect().
+    // The first onResume() after onCreate() is the launch path ConnectScreen's own initial
+    // connect() already handles, so the reconnect below skips it.
     private var hasResumedBefore = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Opt in before the content is set. Android 15 makes this mandatory for anything
-        // targeting SDK 35, so doing it now is the difference between choosing the layout and
-        // having it imposed - and every screen already goes through PatchPilotScaffold, which is
-        // what actually applies the insets.
+        // Before the content is set; PatchPilotScaffold is what applies the insets.
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        // Held here rather than on the ViewModel: it is a display setting, not instrument state,
-        // and every screen needs it before any instrument is even connected (SettingsScreen is
-        // reachable from ConnectScreen too).
+        // A cold start from the manifest's USB_DEVICE_ATTACHED filter needs nothing beyond this
+        // log line: the ViewModel is new, and ConnectScreen scans from Disconnected on its own.
+        intent.attachedUsbDevice()?.let { Log.i(TAG, "Started for the USB attach of ${it.deviceName}") }
+        // A display setting rather than instrument state, and every screen needs it before an
+        // instrument is connected (Settings is reachable from ConnectScreen).
         val themePreferences = ThemePreferences(applicationContext)
         setContent {
-            // Created here, outside PatchPilotTheme's content lambda, and threaded down as a
-            // parameter rather than left for PatchPilotApp to rememberNavController() itself:
-            // NavHostController owns the back stack outside Compose's slot table, but the
-            // `remember` call that hands out *this session's* instance still lives in whatever
-            // composition position calls it - and that position turned out not to be as
-            // theme-independent as it looked (see PatchPilotTheme's doc comment). Anchoring it at
-            // the outermost, unconditional position keeps the same controller across a theme
-            // switch instead of losing the back stack to a fresh one every time.
+            // Created outside PatchPilotTheme's content lambda and threaded down: the `remember`
+            // that hands out this controller lives in whatever composition position calls it (see
+            // PatchPilotTheme), so anchoring it at the outermost position keeps the same back
+            // stack across a theme switch.
             val navController = rememberNavController()
-            val appTheme by themePreferences.theme.collectAsState(initial = AppTheme.Default)
-            PatchPilotTheme(appTheme = appTheme) {
-                val theme = LocalThemeStyle.current
-                Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .let { theme.screenTexture(it) },
-                ) {
-                    PatchPilotApp(viewModel, themePreferences, navController)
+            // Nothing until the stored theme arrives, which is a frame or more after onCreate:
+            // painting the default theme in the meantime was a visible flash of the wrong one on
+            // a Steampunk install. The launch background covers the gap instead (themes.xml).
+            val appTheme by themePreferences.theme.collectAsState(initial = null)
+            appTheme?.let { chosen ->
+                PatchPilotTheme(appTheme = chosen) {
+                    val theme = LocalThemeStyle.current
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .let { theme.screenTexture(it) },
+                    ) {
+                        PatchPilotApp(viewModel, themePreferences, navController)
+                    }
                 }
             }
         }
     }
 
+    /**
+     * The manifest's USB_DEVICE_ATTACHED filter, when this activity already exists (launchMode is
+     * singleTop). The ViewModel decides by connection state whether a rescan is wanted - the
+     * "nothing found" screen left standing after the instrument was plugged in is the case this
+     * covers. Android has granted the device's permission by the time this runs.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val device = intent.attachedUsbDevice() ?: return
+        Log.i(TAG, "USB attach delivered for ${device.deviceName}")
+        viewModel.onUsbDeviceAttached(device)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // A resume discards a running scan anyway (see below), and on a Motif XS its own display
+        // would otherwise sit on "dump in progress" for the whole scan with the phone locked.
+        //
+        // Not on a rotation: that pauses this instance only to recreate it, the ViewModel and its
+        // scan survive, and the new instance's first resume does not rebuild.
+        if (!isChangingConfigurations) viewModel.cancelScanOnBackground()
+    }
+
     override fun onResume() {
         super.onResume()
-        // Whether a rebuild is wanted is the session's own answer, not this screen's: it comes
-        // from the connected instrument's transport (see Instrument.rebuildOnResume). USB host
-        // needs it, because unrelated bus activity while backgrounded can leave its endpoints
-        // permanently erroring; a MIDI port has add/remove callbacks and does not, and a demo
-        // session has no hardware to repair at all.
+        // Whether a rebuild is wanted is the session's own answer - see Instrument.rebuildOnResume.
         if (hasResumedBefore && viewModel.shouldRebuildOnResume) {
             viewModel.forceReconnect()
         }
         hasResumedBefore = true
+    }
+}
+
+/** The device a USB_DEVICE_ATTACHED intent is about, or null for any other intent. */
+private fun Intent.attachedUsbDevice(): UsbDevice? {
+    if (action != UsbManager.ACTION_USB_DEVICE_ATTACHED) return null
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+    } else {
+        @Suppress("DEPRECATION")
+        getParcelableExtra(UsbManager.EXTRA_DEVICE)
     }
 }

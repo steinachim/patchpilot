@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
@@ -8,6 +11,9 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -63,8 +69,16 @@ class MotifXsInstrumentTest {
         return out
     }
 
-    /** Slot 0 named, slot 1 empty, slot 2 long-named, in every bank. */
+    /**
+     * Slot 0 named, slot 1 empty, slot 2 long-named, in every **voice** bank.
+     *
+     * **Refuses anything but `0x0C`, and that guard is load-bearing.** Without it this answered a
+     * favorites request at `71 mm 00` with a well-formed 1,919-byte voice dump echoing the right
+     * address - which passes every check a favorites read makes, and would have been decoded as
+     * about nineteen hundred marks. The fake would have been the thing under test.
+     */
     private fun defaultVoiceAt(hi: Int, mid: Int, lo: Int): ByteArray? {
+        if (hi != 0x0C) return null
         val source = when (lo) {
             0 -> MotifXsFixtures.namedVoice
             1 -> MotifXsFixtures.emptyVoice
@@ -72,6 +86,22 @@ class MotifXsInstrumentTest {
             else -> return null
         }
         return dumpAt(source, hi, mid, lo)
+    }
+
+    /**
+     * One bank's favorite marks, framed as the device sends them.
+     *
+     * Synthesized rather than recorded, unlike everything in [MotifXsFixtures]. That is honest
+     * here: these payloads carry no instrument-specific encoding to get wrong - they are one plain
+     * byte per slot - so there is nothing a recording would pin down that a constructed array does
+     * not. The *framing* still goes through [MotifXsSysEx.bulkDump] and is re-stamped as
+     * device-originated, because that part is real.
+     */
+    private fun favoritesDump(mid: Int, marks: ByteArray): ByteArray {
+        val dump = MotifXsSysEx.bulkDump(0, MotifXsSysEx.FAVORITES_ADDRESS_HI, mid, 0, marks)
+        dump[4] = MotifXsSysEx.MODEL_DEVICE.toByte()
+        dump[dump.size - 2] = MotifXsSysEx.checksumOf(dump).toByte()
+        return dump
     }
 
     /**
@@ -265,6 +295,22 @@ class MotifXsInstrumentTest {
         loadedVoiceName: String? = null,
         /** Answer the documented read with a Drum Voice's shape rather than a Normal Voice's. */
         drumShape: Boolean = false,
+        /** Whether the Universal Device Inquiry is answered. False models an instrument
+         * routing MIDI somewhere other than USB - it enumerates and opens, then says nothing. */
+        answersIdentity: Boolean = true,
+        /**
+         * Favorite marks per bank **address-mid byte**, one raw byte per slot.
+         *
+         * A bank absent from this map answers nothing at all, which is what a real instrument does
+         * for an address it does not recognise - so a test that expects a bank to be skipped and a
+         * test that expects it to be read cannot be confused with one another.
+         */
+        favorites: Map<Int, ByteArray> = emptyMap(),
+        /** Marks whose reply is corrupted on every attempt, to exercise the retry and the
+         * per-bank failure isolation. */
+        damagedFavorites: Set<Int> = emptySet(),
+        /** The names the factory listing draws on; empty means no factory scope is offered. */
+        factoryVoices: MotifXsFactoryVoices = MotifXsFactoryVoices(),
     ): Pair<MotifXsInstrument, FakeMidiTransport> {
         val slots = FakeSlots(readOnlyBanks)
         var currentMode = mode
@@ -278,7 +324,7 @@ class MotifXsInstrumentTest {
             val address = MotifXsSysEx.addressOf(request)
             when {
                 request.size > 4 && request[1].toInt() == 0x7E ->
-                    listOf(MotifXsFixtures.identityReply)
+                    if (answersIdentity) listOf(MotifXsFixtures.identityReply) else emptyList()
 
                 // A host bulk dump on the documented path: header, block or footer.
                 MotifXsSysEx.typeOf(request) == MotifXsSysEx.TYPE_BULK_DUMP &&
@@ -359,12 +405,31 @@ class MotifXsInstrumentTest {
                     if (name == null) emptyList() else listOf(editBufferNameByte(name, address.third))
                 }
 
+                // The favorite marks. Ahead of the catch-all below, which would otherwise hand
+                // back a voice dump - see defaultVoiceAt.
+                MotifXsSysEx.typeOf(request) == MotifXsSysEx.TYPE_DUMP_REQUEST &&
+                    address?.first == MotifXsSysEx.FAVORITES_ADDRESS_HI -> {
+                    val mid = address.second
+                    when {
+                        mid in damagedFavorites -> listOf(
+                            // Truncated after the address: the count says more is coming and the
+                            // message ends anyway, which is what a dropped packet looks like.
+                            favoritesDump(mid, favorites[mid] ?: ByteArray(0)).copyOfRange(0, 11)
+                                .plus(MotifXsSysEx.SYSEX_END),
+                        )
+                        favorites.containsKey(mid) -> listOf(favoritesDump(mid, favorites.getValue(mid)))
+                        else -> emptyList()
+                    }
+                }
+
                 else -> listOfNotNull(
                     address?.let { slots.read(it, defaultVoiceAt(it.first, it.second, it.third)) }
                 )
             }
         }
-        return MotifXsInstrument(SysExExchange(transport, scope), withConfig, testBlanks) to transport
+        return MotifXsInstrument(
+            SysExExchange(transport, scope), withConfig, testBlanks, factoryVoices = factoryVoices,
+        ) to transport
     }
 
     /** One byte of the edit buffer's name, NUL padded, as a `1n` parameter change. */
@@ -531,23 +596,29 @@ class MotifXsInstrumentTest {
         motif.connect()
         assertEquals("Yamaha Motif XS", motif.identity.name)
         // USB, not MIDI: this instrument is matched by USB ids and has no MIDI port at all.
-        // This assertion used to enshrine the hardcoded "MIDI" the identity reported.
         assertEquals(Bus.USB, motif.identity.bus)
         assertEquals("6.0.0.127", motif.identity.firmwareVersion)
     }
 
-    /** A silent instrument still browses: the voices are what the user came for, and an
-     * unanswered inquiry is a cosmetic loss. */
+    /**
+     * A transport that answers nothing at all is refused, not accepted with a blank firmware.
+     *
+     * An unanswered inquiry alone is a cosmetic loss and the voices are what the user came for -
+     * see `an unanswered identity inquiry alone still connects` - but an instrument answering
+     * nothing has no voices to offer either: every operation would time out on its own, and none
+     * of them could explain why.
+     */
     @Test
-    fun `connect survives an instrument that will not identify itself`() = runTest {
+    fun `connect refuses an instrument that answers nothing at all`() = runTest {
         val transport = FakeMidiTransport { emptyList() }
         val motif = MotifXsInstrument(
             SysExExchange(transport, backgroundScope, defaultTimeout = 20.milliseconds, retries = 0),
             config,
             testBlanks,
         )
-        motif.connect()
-        assertEquals("unknown", motif.identity.firmwareVersion)
+        assertThrows(InstrumentException.NeedsManualSetting::class.java) {
+            runBlocking { motif.connect() }
+        }
     }
 
     /** Read-only for now, and the nulls say so - see MotifXsInstrument's class doc. */
@@ -567,7 +638,46 @@ class MotifXsInstrumentTest {
         // Still nothing anywhere about these.
         assertNull(motif.transfer)
         assertNull(motif.report)
-        assertNull(motif.setup)
+    }
+
+    // ---- Connecting to an instrument that is not listening on USB ----
+
+    /**
+     * **Total silence is refused, with the fix spelled out.**
+     *
+     * A Motif XS routes MIDI to one destination - DIN, USB or mLAN - and set to any but USB it
+     * still enumerates, still opens, and then ignores everything. A session built anyway would be
+     * a working-looking app in which each operation times out separately and none can say why.
+     */
+    @Test
+    fun `an instrument answering nothing is refused, with the setting to change`() = runTest {
+        val (motif, _) = instrument(backgroundScope, mode = null, answersIdentity = false)
+        try {
+            motif.connect()
+            throw AssertionError("a silent instrument was accepted as a working session")
+        } catch (expected: InstrumentException.NeedsManualSetting) {
+            assertTrue(expected.message!!.contains("MIDI In/Out"))
+            // The button sequence has to be usable while standing at the instrument.
+            assertTrue(expected.steps.any { it.contains("UTILITY") })
+            assertTrue(expected.steps.any { it.contains("[F5]") && it.contains("[SF2]") })
+            assertTrue(expected.steps.any { it.contains("USB") })
+            // Silence has other causes, and the app is inferring from an absence.
+            assertTrue(expected.alsoCheck!!.contains("TO HOST"))
+        }
+    }
+
+    /**
+     * **One silent probe is not enough to refuse a session.**
+     *
+     * The identity reply is cosmetic and allowed to be missing on an instrument that otherwise
+     * works, so the refusal above requires the Yamaha-specific mode request to be unanswered too.
+     * Gating on the identity inquiry alone would lock out a working instrument.
+     */
+    @Test
+    fun `an unanswered identity inquiry alone still connects`() = runTest {
+        val (motif, _) = instrument(backgroundScope, mode = MotifXsMode.VOICE, answersIdentity = false)
+        motif.connect()
+        assertEquals(MotifXsInstrument.UNKNOWN_FIRMWARE, motif.identity.firmwareVersion)
     }
 
     // ---- Mode gating ----
@@ -1044,7 +1154,7 @@ class MotifXsInstrumentTest {
         val before = motif.browser.refresh(SlotAddress(0, 0)).name
         assertNotNull(before)
 
-        // The write on its own - exactly what the app used to send - changes nothing.
+        // The write on its own changes nothing.
         transport.send(
             MotifXsSysEx.bulkDump(
                 0, 0x0C, 0x0A, 0,
@@ -1205,7 +1315,7 @@ class MotifXsInstrumentTest {
     /**
      * A full index skips the factory banks.
      *
-     * Walking all 15 banks costs about 7.5 minutes against 93 s for the user banks, and the
+     * Walking all 15 banks would take several minutes against 93 s for the user banks, and the
      * factory ones are read-only and never change. The saving is the point of the flag, so the
      * test asserts the *requests*, not just the rows: a bank that is skipped must cost nothing.
      */
@@ -1280,6 +1390,56 @@ class MotifXsInstrumentTest {
         assertEquals(SlotAddress(1, 44), format.parse("USR2:045"))
         assertEquals(SlotAddress(2, 52), format.parse("USR3:053"))
     }
+
+    /**
+     * **A write and its commit are one unit, and cancelling must not split them.**
+     *
+     * `commit()` applies everything offered since the last commit, so an acknowledged-but-
+     * uncommitted write is not discarded when its coroutine dies - it is armed, and some later,
+     * unrelated edit's commit applies it. `NonCancellable` on the send loop inside
+     * `exchangeAfterAll` does not cover this: delete, copy, move and swap do not use that path,
+     * they issue plain exchanges and then commit separately.
+     *
+     * Cancellation is delivered from inside the transport, the moment the write goes out, which
+     * puts it exactly in the window this is about rather than relying on timing.
+     */
+    @Test
+    fun `a cancelled delete still commits the write it already sent`() = runTest {
+        val sent = mutableListOf<ByteArray>()
+        var job: Job? = null
+        val transport = FakeMidiTransport { request ->
+            sent += request
+            val address = MotifXsSysEx.addressOf(request)
+            // The write has just been accepted; the commit has not gone out yet.
+            if (address != null && address.first == 0x0C) job?.cancel()
+            // `F0 43 60 02 F7` - the same acknowledgement FakeSlots serves, restated here
+            // because that one is private to it.
+            listOf(byteArrayOf(0xF0.toByte(), 0x43, 0x60, 0x02, 0xF7.toByte()))
+        }
+        val motif = MotifXsInstrument(
+            SysExExchange(transport, backgroundScope, defaultTimeout = 200.milliseconds),
+            MotifXsConfig(
+                banks = listOf(
+                    MotifXsBank(label = "USR1", slotCount = 1, addressHi = 0x0C, addressMid = 0x0A,
+                        displayLabel = "USER 1", selectLsb = 0x08),
+                ),
+            ),
+            testBlanks,
+        )
+
+        job = launch(start = CoroutineStart.LAZY) {
+            runCatching { motif.editor.delete(SlotAddress(0, 0)) }
+        }
+        job!!.start()
+        job!!.join()
+
+        val committed = sent.any { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.STORE_HI }
+        assertTrue(
+            "an accepted write left uncommitted is armed, not discarded - a later unrelated " +
+                "commit would apply it",
+            committed,
+        )
+    }
 }
 
 /**
@@ -1318,4 +1478,5 @@ private fun packMsb(dense: ByteArray): ByteArray {
         i += 7
     }
     return out.toByteArray()
+
 }

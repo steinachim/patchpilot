@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import android.content.Context
@@ -31,14 +34,9 @@ import kotlinx.coroutines.withContext
 private data class LicenseEntry(val groupRes: Int, val licenseNameRes: Int, val assetFile: String)
 
 /**
- * The four things this app's own GPLv3 license doesn't cover: the libraries and fonts it bundles.
- * Names and asset files are hand-listed here rather than read off the Gradle dependency graph -
- * there are exactly four, they change about as often as a dependency version bump, and
- * `android/NOTICE.md` is the place that list is cross-checked against, not this screen.
- *
- * Full text comes from assets rather than a web link: this is a USB/MIDI hardware tool the
- * manifest declares no INTERNET permission for, so a license anyone can actually read here has to
- * be bundled, not fetched.
+ * The libraries and fonts this app bundles, hand-listed rather than read off the Gradle
+ * dependency graph: there are four, and `android/NOTICE.md` is where that list is cross-checked.
+ * The full text comes from assets, since the manifest declares no INTERNET permission.
  */
 private val LICENSE_ENTRIES = listOf(
     LicenseEntry(R.string.licenses_group_patchpilot, R.string.licenses_patchpilot_license, "LICENSE-GPL-3.0.txt"),
@@ -72,7 +70,12 @@ fun LicenseTextScreen(assetFile: String, onBack: () -> Unit) {
     LaunchedEffect(assetFile) {
         text = readLicenseAsset(context, assetFile)
     }
-    PatchPilotScaffold(title = assetFile.substringBeforeLast('.'), onBack = onBack) { innerPadding ->
+    // The license's own name rather than the filename, which is a build artefact, or the group
+    // name ("AndroidX, Jetpack Compose, Kotlin, kotlinx"), which would only ellipsize.
+    val title = LICENSE_ENTRIES.firstOrNull { it.assetFile == assetFile }
+        ?.let { stringResource(it.licenseNameRes) }
+        ?: assetFile.substringBeforeLast('.')
+    PatchPilotScaffold(title = title, onBack = onBack) { innerPadding ->
         SelectionContainer {
             Text(
                 text.orEmpty(),

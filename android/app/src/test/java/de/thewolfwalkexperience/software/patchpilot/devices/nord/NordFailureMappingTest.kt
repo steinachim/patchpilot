@@ -1,9 +1,13 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,11 +15,9 @@ import org.junit.Test
 /**
  * The Nord adapter turns protocol failures into [InstrumentException]s.
  *
- * **This family was the last one throwing raw `IllegalStateException`s.** Pro-800 and Motif XS
- * adopted the hierarchy when they were written; Nord predates it, so the type whose own doc says
- * the UI must not match on message strings did not cover the family most users have. These tests
- * pin the translation, which is behaviour no other test exercises: the protocol tests drive
- * `NordDevice` directly and never go through the adapter.
+ * These tests pin the translation, which is behaviour no other test exercises: the protocol tests
+ * drive `NordDevice` directly and never go through the adapter, and the screens branch on the
+ * exception's type rather than on its message.
  */
 class NordFailureMappingTest {
 
@@ -96,6 +98,81 @@ class NordFailureMappingTest {
             }
         }
         assertEquals(NordDevice.STATUS_FILE_EXISTS, failure.status)
+        // The status survives for the log; what the *user* is shown has to be the condition, not
+        // the code. "(status 4)" says something went wrong without saying what or what to do.
+        assertEquals(
+            "Couldn't copy a preset: the instrument says that slot already holds one, though the " +
+                "listing shows it as empty. Refresh the listing.",
+            failure.message,
+        )
+    }
+
+    /**
+     * The counterpart: a code with no documented meaning must not be given an invented one. The
+     * generic wording is honest - the app has the instrument's answer and cannot interpret it.
+     */
+    @Test
+    fun `a status the protocol does not name keeps the generic wording`() = runTest {
+        val instrument = instrument(
+            listOf(
+                1 to rootList(),
+                5 to ByteArray(0),
+                21 to (uint32BE(9) + uint32BE(8) + uint32BE(12)),
+                7 to ByteArray(0),
+            ),
+        )
+        val failure = assertThrows(InstrumentException.DeviceRejected::class.java) {
+            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
+        }
+        assertNull(failure.explanation)
+        assertTrue(failure.message!!.contains("status 9"))
+    }
+
+    /**
+     * A reply out of step with the request - here, every reply answering some other sub-opcode -
+     * is a desync too, not a lost link: the instrument is talking, just not to this session's
+     * requests.
+     */
+    @Test
+    fun `replies out of step with the requests become ProtocolDesync, not TransportLost`() = runTest {
+        val instrument = NordInstrument(
+            NordFixtures.device(OutOfStepTransport(), NordFixtures.GRAND_PROFILE),
+        )
+        assertThrows(InstrumentException.ProtocolDesync::class.java) {
+            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
+        }
+    }
+
+    /** Answers every request with a well-formed reply to some other one. */
+    private class OutOfStepTransport : de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport {
+        override fun bulkWrite(data: ByteArray) = Unit
+        override fun bulkRead(bufferSize: Int): ByteArray =
+            buildMessage(NordDevice.PROTOCOL_FILE_TRANSFER, 10, 31, ByteArray(40))
+        override fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int): ByteArray =
+            ByteArray(length)
+        override fun close() = Unit
+        override val rebuildOnResume = true
+    }
+
+    /** The transport's own failure is the one case a retry can fix, and keeps its own type. */
+    @Test
+    fun `a failed bulk transfer becomes TransportLost`() = runTest {
+        val instrument = NordInstrument(
+            NordFixtures.device(FailingTransport(), NordFixtures.GRAND_PROFILE),
+        )
+        assertThrows(InstrumentException.TransportLost::class.java) {
+            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
+        }
+    }
+
+    /** What a detached device looks like to the protocol layer: every transfer fails at once. */
+    private class FailingTransport : de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport {
+        override fun bulkWrite(data: ByteArray) = throw IllegalStateException("USB bulk write failed: sent -1 of ${data.size} bytes")
+        override fun bulkRead(bufferSize: Int): ByteArray = throw IllegalStateException("USB bulk read failed (result=-1)")
+        override fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int): ByteArray =
+            throw IllegalStateException("USB control transfer failed")
+        override fun close() = Unit
+        override val rebuildOnResume = true
     }
 
     /**

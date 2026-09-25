@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
@@ -10,11 +13,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The index fold, which used to live inside a `produceState` in ProgramsScreen.
- *
- * Testable at all only because it moved: the collector now runs in the ViewModel so a
- * configuration change does not restart a 93-second listing, and pulling the fold out to get
- * there turned three rules that were previously only assertable by hand into unit tests.
+ * The index fold, kept pure so the collector can run in the ViewModel and so its three rules can
+ * be asserted here rather than only by hand.
  */
 class PresetIndexStateTest {
 
@@ -69,5 +69,50 @@ class PresetIndexStateTest {
     fun `generation survives the fold`() {
         val state = PresetIndexState(generation = 7).plus(IndexUpdate.Complete)
         assertEquals(7, state.generation)
+    }
+
+    // ---- replacing ----
+
+    /**
+     * A re-read row goes back **where it was**, not on the end.
+     *
+     * A rename re-reads the slot it changed; appending it would move the renamed voice to the
+     * bottom of its bank, which looks exactly like a move nobody asked for.
+     */
+    @Test
+    fun `replacing puts the new slot in the old one's position`() {
+        val state = PresetIndexState()
+            .plus(IndexUpdate.Slots(listOf(slot(0, 0), slot(0, 1), slot(0, 2))))
+
+        val renamed = slot(0, 1).copy(name = "Renamed In Place")
+        val after = state.replacing(renamed)
+
+        assertEquals(3, after.slots.size)
+        assertEquals("Renamed In Place", after.slots[1].name)
+        assertEquals(listOf(0, 1, 2), after.slots.map { it.address.slot })
+    }
+
+    /**
+     * A listing that does not hold the address is left alone.
+     *
+     * Every retained listing is offered the re-read row, because the same address can be in more
+     * than one - a favorited user voice is in both the user listing and the favorites one. The
+     * ones that do not hold it must not gain a row: a listing is what a scan found, and inserting
+     * into it would be inventing an entry. That is exactly the favorites case, where a voice that
+     * is not marked genuinely does not belong.
+     */
+    @Test
+    fun `replacing an address the listing does not hold changes nothing`() {
+        val state = PresetIndexState().plus(IndexUpdate.Slots(listOf(slot(0, 0))))
+
+        val after = state.replacing(slot(1, 5).copy(name = "Somewhere Else"))
+
+        assertEquals(state, after)
+        assertEquals(1, after.slots.size)
+    }
+
+    @Test
+    fun `replacing an empty listing changes nothing`() {
+        assertEquals(PresetIndexState(), PresetIndexState().replacing(slot(0, 0)))
     }
 }

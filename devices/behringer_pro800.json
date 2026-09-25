@@ -1,7 +1,14 @@
 {
   "family": "pro800",
   "schemaVersion": 1,
-  "familyConfig": {},
+  "familyConfig": {
+    "bankCount": 4,
+    "slotsPerBank": 100,
+    "slotDigits": 2,
+    "supportedFirmwareVersions": [
+      "1.4.6"
+    ]
+  },
   "devices": [
     {
       "id": "behringer_pro800",
@@ -10,18 +17,11 @@
       "match": {
         "type": "midiIdentity",
         "probeHex": "f0 00 20 32 00 01 24 00 06 f7",
-        "replyPrefixHex": "f0 00 20 32 00 01 24 00 07"
-      },
-      "familyConfig": {
-        "descriptorId": "behringer_pro800",
-        "name": "Behringer Pro-800",
-        "bankCount": 4,
-        "slotsPerBank": 100,
-        "slotDigits": 2,
-        "midiChannel": 0,
-        "supportedFirmwareVersions": [
-          "1.4.6"
-        ]
+        "replyPrefixHex": "f0 00 20 32 00 01 24 00 07",
+        "launchOnUsbAttach": {
+          "vendorId": 5015,
+          "productId": 4703
+        }
       }
     }
   ]

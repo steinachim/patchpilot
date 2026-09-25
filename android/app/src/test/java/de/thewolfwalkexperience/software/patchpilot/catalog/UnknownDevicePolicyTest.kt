@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
 import org.junit.Assert.assertEquals
@@ -29,7 +32,7 @@ class UnknownDevicePolicyTest {
     private val catalog = listOf(
         usb("nord_grand", "nord", clavia, 1),
         usb("nord_stage_2_ex", "nord", clavia, 2),
-        usb("yamaha_motif_xs", "motifxs", yamaha, 4162),
+        usb("yamaha_motif_xs6", "motifxs", yamaha, 4162),
         usb("behringer_pro800", "pro800", behringer, 4703),
     )
 
@@ -39,7 +42,7 @@ class UnknownDevicePolicyTest {
     }
 
     /**
-     * The decision of 2026-08-21, asserted rather than only documented.
+     * The policy's rule, asserted rather than only documented.
      *
      * Two Nord models have been verified to share one protocol; Yamaha and Behringer contribute
      * one instrument each, and one instrument is no evidence about a vendor.

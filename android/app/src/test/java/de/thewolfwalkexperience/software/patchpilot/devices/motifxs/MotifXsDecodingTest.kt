@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer
@@ -42,10 +45,12 @@ class MotifXsDecodingTest {
     @Test
     fun `a drum voice is the same format at seven times the size`() {
         val drum = MotifXsFixtures.drumVoice
-        assertEquals(12622, drum.size)
+        assertEquals(12600, drum.size)
         assertTrue(MotifXsSysEx.isWellFormedBulkDump(drum))
         assertEquals(Triple(0x0C, 0x28, 0x00), MotifXsSysEx.addressOf(drum))
-        assertEquals("Power Standard Kit 1", MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(drum)))
+        // An initialized kit: its figure pair decodes, and its cleared name reads as none.
+        assertEquals(listOf(192, 192), MotifXsVoice.categoriesOf(MotifXsSysEx.dumpPayload(drum)))
+        assertNull(MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(drum)))
     }
 
     /**
@@ -92,21 +97,21 @@ class MotifXsDecodingTest {
      * A printable read overshoots by one whenever the trailer's first byte happens to be
      * printable, which it is for 54 of the instrument's 334 named slots. The name is repeated
      * [MotifXsVoice.NAME_TRAILER_BYTES] after its real end, so the repeat's position settles the
-     * length. The first two cases below were confirmed against the instrument's own display.
+     * length. All three names below are what the instrument's own display shows.
      */
     @Test
     fun `a name ends where its repeat says it does`() {
-        assertEquals("Big Kit", MotifXsVoice.nameOf(
-            MotifXsSysEx.dumpPayload(MotifXsFixtures.drumKitVoice)))
-        assertEquals("Kawala", MotifXsVoice.nameOf(
-            MotifXsSysEx.dumpPayload(MotifXsFixtures.kawalaVoice)))
-        assertEquals("Timpani/Bell/Glocken", MotifXsVoice.nameOf(
-            MotifXsSysEx.dumpPayload(MotifXsFixtures.fullWidthNameVoice)))
+        assertEquals("TWE2 Stranger", MotifXsVoice.nameOf(
+            MotifXsSysEx.dumpPayload(MotifXsFixtures.overshootVoice)))
+        assertEquals("TWE2 Addicted", MotifXsVoice.nameOf(
+            MotifXsSysEx.dumpPayload(MotifXsFixtures.secondOvershootVoice)))
+        assertEquals("TWE2 Dreadnought 2.0", MotifXsVoice.nameOf(
+            MotifXsSysEx.dumpPayload(MotifXsFixtures.longNameVoice)))
     }
 
-    // `New Stab` is why no "strip a trailing letter" rule is used: its `b` is genuine, and the
-    // bytes after it are byte-for-byte the ordinary case - the repeat sits at +6, not +5. Every
-    // content-based heuristic anyone might reach for corrupts this one.
+    // `TWE2 Growing Pains` is why no "strip a trailing letter" rule is used: its `s` is genuine,
+    // and the bytes after it are byte-for-byte the ordinary case - the repeat sits at +6, not +5.
+    // Every content-based heuristic anyone might reach for corrupts this one.
 
     /**
      * A stray printable byte after a *blank* name is not a name.
@@ -123,7 +128,11 @@ class MotifXsDecodingTest {
      */
     @Test
     fun `a stray printable byte after a blank name reads as empty`() {
-        // "192:192:" then a lone printable byte, then nothing that repeats it.
+        // The real case: the initialized drum kit opens "192:192:" then a lone `b`.
+        assertNull(MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.drumVoice)))
+
+        // The same shape, hand-built: "192:192:" then a lone printable byte, then nothing that
+        // repeats it.
         val withStray = packed("192:192:".toByteArray() + byteArrayOf(0x62) + ByteArray(40))
         assertNull(MotifXsVoice.nameOf(withStray))
 
@@ -158,9 +167,9 @@ class MotifXsDecodingTest {
     }
 
     @Test
-    fun `a genuine trailing consonant is not stripped`() {
-        assertEquals("New Stab", MotifXsVoice.nameOf(
-            MotifXsSysEx.dumpPayload(MotifXsFixtures.genuineTrailingBVoice)))
+    fun `a genuine trailing letter is not stripped`() {
+        assertEquals("TWE2 Growing Pains", MotifXsVoice.nameOf(
+            MotifXsSysEx.dumpPayload(MotifXsFixtures.genuineTrailingLetterVoice)))
     }
 
     /** 20 is an observation the trailer rule yields, not a bound fed into it. */
@@ -181,8 +190,8 @@ class MotifXsDecodingTest {
         val short = MotifXsSysEx.dumpPayload(MotifXsFixtures.shortPrefixVoice)
         assertEquals(7, MotifXsVoice.nameStart(MotifXsVoice.unpack(short.copyOfRange(
             MotifXsVoice.PACKED_OFFSET, short.size))))
-        assertEquals("Dyno Straight MW+AS2", MotifXsVoice.nameOf(short))
-        assertNotEquals("yno Straight MW+AS2", MotifXsVoice.nameOf(short))
+        assertEquals("TWE2 Ashes", MotifXsVoice.nameOf(short))
+        assertNotEquals("WE2 Ashes", MotifXsVoice.nameOf(short))
 
         val zero = MotifXsSysEx.dumpPayload(MotifXsFixtures.zeroPrefixVoice)
         assertEquals(4, MotifXsVoice.nameStart(MotifXsVoice.unpack(zero.copyOfRange(
@@ -191,14 +200,17 @@ class MotifXsDecodingTest {
     }
 
     /**
-     * The width bound and the terminator bound catch different voices. This one's next field
-     * opens with a printable `S`, so only the width stops the read.
+     * A 20-character name behind a two-digit figure, and one behind a three-digit figure whose
+     * next field opens with a printable `S`: both decode to exactly their 20 characters.
      */
     @Test
     fun `a full-width name does not run into the next field`() {
         val payload = MotifXsSysEx.dumpPayload(MotifXsFixtures.fullWidthNameVoice)
-        assertEquals("Timpani/Bell/Glocken", MotifXsVoice.nameOf(payload))
-        assertNotEquals("Timpani/Bell/GlockenS", MotifXsVoice.nameOf(payload))
+        assertEquals("TWE2 Blue Matter 2.0", MotifXsVoice.nameOf(payload))
+
+        val long = MotifXsSysEx.dumpPayload(MotifXsFixtures.longNameVoice)
+        assertEquals("TWE2 Dreadnought 2.0", MotifXsVoice.nameOf(long))
+        assertNotEquals("TWE2 Dreadnought 2.0S", MotifXsVoice.nameOf(long))
     }
 
     /**

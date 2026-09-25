@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.content.Context
@@ -15,15 +18,9 @@ private const val DEVICE_CATALOG_ASSET = "nord_devices.json"
 
 /**
  * The Nord family: `devices/nord_devices.json` plus a factory for [NordDevice]/[NordInstrument].
- *
- * **The catalog file is read in its own native shape, unchanged**, rather than rewritten into the
- * generic [InstrumentDescriptor] shape. So this adapts instead: each [DeviceProfile] becomes a
- * descriptor whose `familyConfig` is that same profile serialized, which the factory below reads
- * straight back. One file per family, merged at load time by
- * [de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentRegistry].
- *
- * List order also decides which device is preferred if more than one supported instrument is
- * connected at once.
+ * The catalog file keeps its own shape; each [DeviceProfile] becomes a descriptor whose
+ * `familyConfig` is that profile serialized, which the factory reads straight back. List order
+ * decides which device is preferred if more than one is connected.
  */
 object NordFamily : InstrumentFamily {
 
@@ -49,11 +46,14 @@ object NordFamily : InstrumentFamily {
     ): Instrument {
         val bulk = transport as? UsbBulkTransport
             ?: error("A Nord speaks its vendor protocol over bulk USB, not ${transport::class.simpleName}.")
-        return NordInstrument(NordDevice(bulk, descriptor.profile()))
+        // The master category list is family-level data; `load` is memoised.
+        return NordInstrument(
+            NordDevice(bulk, descriptor.profile()),
+            catalog.load(context).programCategories,
+        )
     }
 
-    /** The profile [toDescriptor] stashed, read back with no field mapping - the two are the same
-     * type, which is the point of carrying it opaquely. */
+    /** The profile [toDescriptor] stashed, read back with no field mapping. */
     private fun InstrumentDescriptor.profile(): DeviceProfile =
         catalog.format.decodeFromJsonElement(DeviceProfile.serializer(), familyConfig)
 }

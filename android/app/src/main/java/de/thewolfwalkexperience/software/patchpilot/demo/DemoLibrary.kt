@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.demo
 
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
@@ -5,28 +8,28 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 
 /**
- * The in-memory content behind [DemoInstrument]: a sparse map of occupied slots, mutable exactly
- * where a real instrument would let preset-list editing change it.
- *
- * Small, static and UI-only. There is no real instrument's catalog behind this, unlike
- * `devices/nord_devices.json` - the point is to give every screen something plausible to render,
- * not to model any particular hardware. [nameList] and [slotsPerBank] are what a caller shapes
- * differently - [DemoInstrument] is the only production caller, but the same engine backs
- * `core.NoCopyFixtureInstrument`, a test-only fixture shaped like a family with no copy of its
- * own, which is why this class knows nothing about who is asking.
+ * The in-memory content behind [DemoInstrument]: a sparse map of occupied slots, mutable where a
+ * real instrument would let preset-list editing change it. [nameList] and [slotsPerBank] are what
+ * a caller shapes, since the same engine backs `core.NoCopyFixtureInstrument` in the tests.
  */
-class DemoLibrary(private val nameList: List<String>, private val slotsPerBank: Int) {
+class DemoLibrary(
+    private val nameList: List<String>,
+    private val slotsPerBank: Int,
+    /**
+     * What each seeded preset's category tag starts as, by preset name. Empty for a caller with no
+     * categories at all, which is what leaves every row unbadged.
+     */
+    private val categoryByName: Map<String, String> = emptyMap(),
+) {
 
-    private val programs: MutableMap<SlotAddress, String> = seedPrograms().toMutableMap()
+    /**
+     * One preset: its name and its category tag. The tag travels with the name, as a real
+     * instrument stores it, so move, swap, copy and delete relocate the whole record and a preset
+     * cannot arrive somewhere wearing another's category.
+     */
+    data class Program(val name: String, val category: String? = null)
 
-    /** Unused by anything today - kept because nothing established it should go with this change. */
-    private val categories: Map<String, List<String>> = linkedMapOf(
-        "Program" to emptyList(),
-        "Piano" to listOf("Grand Piano A", "Bright Grand", "Mellow Upright", "Honky Tonk", "Studio Grand"),
-        "Live" to listOf("Live Set 1", "Live Set 2", "Live Set 3"),
-        "Samp Lib" to listOf("Strings Lib", "Brass Lib", "Choir Lib"),
-        "Settings" to listOf("Global Settings"),
-    )
+    private val programs: MutableMap<SlotAddress, Program> = seedPrograms().toMutableMap()
 
     /** Every occupied slot, in device order, as browser rows. */
     fun slots(layout: SlotLayout): List<PresetSlot> =
@@ -41,7 +44,8 @@ class DemoLibrary(private val nameList: List<String>, private val slotsPerBank: 
         address = address,
         displayId = layout.format.format(address),
         bankLabel = layout.format.bankLabel(address.bank),
-        name = programs[address],
+        name = programs[address]?.name,
+        badges = listOfNotNull(programs[address]?.category),
     )
 
     fun requireOccupied(address: SlotAddress) {
@@ -50,7 +54,16 @@ class DemoLibrary(private val nameList: List<String>, private val slotsPerBank: 
 
     fun rename(address: SlotAddress, newName: String) {
         requireOccupied(address)
-        programs[address] = newName
+        // Copied, not replaced, so a rename keeps the category tag.
+        programs[address] = programs.getValue(address).copy(name = newName)
+    }
+
+    /** The category tag at [address], or null where the preset carries none. */
+    fun categoryAt(address: SlotAddress): String? = programs[address]?.category
+
+    fun setCategoryAt(address: SlotAddress, category: String) {
+        requireOccupied(address)
+        programs[address] = programs.getValue(address).copy(category = category)
     }
 
     fun move(from: SlotAddress, to: SlotAddress) {
@@ -60,19 +73,20 @@ class DemoLibrary(private val nameList: List<String>, private val slotsPerBank: 
     }
 
     /**
-     * Duplicates [from] into the empty slot [to], leaving [from] alone, and names the copy itself -
-     * the way a real Nord does ([de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice.copyProgram]) -
-     * so [de.thewolfwalkexperience.software.patchpilot.core.PresetEditor.copyProgram]'s contract of
-     * returning the instrument-assigned name holds in demo mode too.
+     * Duplicates [from] into the empty slot [to], leaving [from] alone, and names the copy itself
+     * as a real Nord does, so
+     * [de.thewolfwalkexperience.software.patchpilot.core.PresetEditor.copyProgram]'s contract
+     * holds here too.
      */
     fun copy(from: SlotAddress, to: SlotAddress): String {
         requireOccupied(from)
         check(to !in programs) { "That slot already holds a preset; a copy needs an empty one." }
-        val sourceName = programs.getValue(from)
+        val source = programs.getValue(from)
         val copyName = generateSequence(2) { it + 1 }
-            .map { "$sourceName $it" }
-            .first { candidate -> programs.values.none { it == candidate } }
-        programs[to] = copyName
+            .map { "${source.name} $it" }
+            .first { candidate -> programs.values.none { it.name == candidate } }
+        // The copy keeps the source's category, the way a real instrument's copy does.
+        programs[to] = source.copy(name = copyName)
         return copyName
     }
 
@@ -88,36 +102,14 @@ class DemoLibrary(private val nameList: List<String>, private val slotsPerBank: 
         programs.remove(address)
     }
 
-    fun categoryNames(): List<String> = categories.keys.toList()
-
-    fun itemsIn(categoryName: String, layout: SlotLayout): List<PresetSlot> {
-        if (categoryName.equals("Program", ignoreCase = true)) return slots(layout)
-        val names = categories.entries
-            .firstOrNull { it.key.equals(categoryName, ignoreCase = true) }
-            ?.value
-            ?: error("No '$categoryName' category on this instrument.")
-        // A category's items live in their own address space on a real instrument; one bank of
-        // consecutive slots is close enough for a demo and keeps the rows renderable.
-        return names.mapIndexed { index, name ->
-            val address = SlotAddress(0, index)
-            PresetSlot(
-                address = address,
-                displayId = layout.format.format(address),
-                bankLabel = layout.format.bankLabel(0),
-                name = name,
-            )
-        }
-    }
-
-    /**
-     * Leaves deliberate gaps, so "show empty slots" and the move-versus-swap distinction both have
-     * something to act on.
-     */
-    private fun seedPrograms(): Map<SlotAddress, String> = buildMap {
+    /** Leaves gaps, so "show empty slots" and the move-versus-swap distinction have something to act on. */
+    private fun seedPrograms(): Map<SlotAddress, Program> = buildMap {
         nameList.forEachIndexed { index, name ->
-            // Spread across banks with gaps rather than filling bank A first.
             val flat = index * 3
-            put(SlotAddress(flat / slotsPerBank, flat % slotsPerBank), name)
+            put(
+                SlotAddress(flat / slotsPerBank, flat % slotsPerBank),
+                Program(name, categoryByName[name]),
+            )
         }
     }
 }

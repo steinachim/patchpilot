@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui.theme
 
 import androidx.compose.material3.Typography
@@ -35,7 +38,7 @@ private val ShareTechMonoFamily = FontFamily(Font(R.font.share_tech_mono, weight
  * title, `ListItem`'s `headlineContent` (patch names), dialog titles and empty-state headings
  * all read `titleLarge`/`titleMedium`/`headlineSmall` by default, so this reaches every one of
  * them with no per-composable change. Share Tech Mono across `body*`/`label*` gives IDs, badges,
- * button labels and captions the mechanical-counter feel from the mockup - `ListItem`'s
+ * button labels and captions a mechanical-counter feel - `ListItem`'s
  * `supportingContent` (the "A:01  v2" line) is `bodyMedium`.
  *
  * Sizes, line heights and letter spacing are left exactly as [base] (Material's defaults, or

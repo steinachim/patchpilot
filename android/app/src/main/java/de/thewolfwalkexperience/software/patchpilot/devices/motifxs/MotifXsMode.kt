@@ -1,17 +1,13 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 /**
- * Which mode the instrument is in, read from `0A 00 01`.
- *
- * **This exists because selection is gated on it.** The undocumented `4n` voice selection the app
- * uses works in [VOICE] only; in [PERFORMANCE] and [SONG] the instrument does not acknowledge it
- * and nothing changes. Every one of those failures is silent - the echo repeats what was *sent*
- * rather than reporting what happened - so reading the mode first is the only way the app can
- * tell a player why nothing happened.
- *
- * [PATTERN] and [MASTER] are presumed gated the same way, untested; they are listed because the
- * Data List does, and treating an unverified mode as "probably fine" is the wrong default when a
- * wrong assumption here fails silently.
+ * Which mode the instrument is in, read from `0A 00 01`. Selection is gated on it: the `4n` voice
+ * selection works in [VOICE] only, and in [PERFORMANCE] and [SONG] the instrument does not
+ * acknowledge it and nothing changes, silently - the echo repeats what was sent. [PATTERN] and
+ * [MASTER] are presumed gated the same way, untested.
  */
 enum class MotifXsMode(val value: Int, val label: String) {
     VOICE(0, "Voice"),

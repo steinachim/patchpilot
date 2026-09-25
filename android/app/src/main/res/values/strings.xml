@@ -2,10 +2,10 @@
 <!--
   Every string the user can read.
 
-  Extracted from inline Kotlin literals on 2026-08-21. Not for localization -
-  this is a single-purpose tool with one language - but because a string in a
-  resource is one somebody can find, review and change without reading Compose,
-  and because a wording change stops being a code change.
+  Resources rather than inline literals, not for localization - this is a
+  single-purpose tool with one language - but because a string in a resource is
+  one somebody can find, review and change without reading Compose, and because
+  a wording change stops being a code change.
 
   What is deliberately NOT here: the messages the instrument layer raises
   (`devices/*`), which explain a protocol condition and are written to be read by
@@ -28,30 +28,38 @@
     <string name="action_retry">Retry</string>
     <string name="action_delete">Delete</string>
     <string name="action_rename">Rename</string>
+    <string name="action_save">Save</string>
+    <string name="action_set_favorite">Set favorite</string>
     <string name="action_copy">Copy to…</string>
+    <string name="action_move">Move to…</string>
     <string name="action_share">Share</string>
+    <string name="action_save_to_device">Save to device</string>
     <string name="action_clear_filter">Clear filter</string>
     <string name="action_continue_anyway">Continue anyway</string>
     <string name="action_retry_search">Retry search</string>
     <string name="action_try_demo">Try demo mode</string>
-    <string name="action_use_this_channel">Use this channel</string>
 
     <!-- Content descriptions: spoken by a screen reader, never shown. -->
     <string name="cd_back">Back</string>
     <string name="cd_refresh">Re-read from instrument</string>
+
     <string name="cd_row_options">Options for %1$s</string>
-    <string name="cd_reorder">Reorder %1$s</string>
+    <string name="cd_reorder">Reorder %1$s by dragging. Move to is also in this row’s options.</string>
     <string name="cd_reorder_unavailable">Reordering is unavailable until the listing finishes</string>
     <string name="cd_copy_destination">Copy into %1$s</string>
+    <string name="cd_move_destination">Move into %1$s</string>
     <string name="cd_settings">Settings</string>
 
-    <!-- Settings screen: currently just the theme picker. -->
+    <!-- Settings screen: appearance, connection behaviour and legal info. -->
     <string name="settings_title">Settings</string>
     <string name="settings_theme_heading">Appearance</string>
     <string name="settings_theme_default">System Default</string>
     <string name="settings_theme_default_description">Follows your device\'s light/dark setting and wallpaper colours.</string>
     <string name="settings_theme_steampunk">Steampunk</string>
     <string name="settings_theme_steampunk_description">Brass, copper and mechanical dials — a fixed dark look.</string>
+    <string name="settings_connection_heading">Connection</string>
+    <string name="settings_auto_connect">Auto-Connect to First Found Instrument</string>
+    <string name="settings_auto_connect_description">Connects automatically to the first instrument a scan finds. Turn this off to always see the device list and pick one yourself.</string>
     <string name="settings_legal_heading">Legal</string>
     <string name="settings_open_source_licenses">Open Source Licenses</string>
     <string name="licenses_title">Open Source Licenses</string>
@@ -66,6 +74,11 @@
     <!-- Connect screen. -->
     <string name="connect_idle">Not connected.</string>
     <string name="connect_searching">Looking for an instrument…</string>
+    <!-- Covers the whole open: the permission prompt where one is needed, opening the
+         endpoints, and the family's own handshake. Deliberately does not name the
+         permission step - it is skipped entirely once permission has been granted once,
+         and the system's own dialog is on top and self-explanatory when it is not. -->
+    <string name="connect_opening">Opening %1$s over %2$s…</string>
     <string name="connect_connected">Connected to %1$s</string>
     <string name="connect_firmware">Firmware: %1$s</string>
     <string name="connect_multiple_found">More than one instrument is connected.</string>
@@ -88,8 +101,18 @@
     <string name="programs_show_empty">Show empty slots</string>
     <string name="programs_bank_header">Bank %1$s</string>
     <string name="programs_slot_empty">Empty</string>
+    <string name="programs_no_category">No category</string>
     <string name="programs_no_presets">This instrument reports no presets.</string>
     <string name="programs_no_matches">No presets match \"%1$s\".</string>
+    <!-- Which of an instrument's listings is shown. Only instruments offering more than one
+         show these at all. -->
+    <string name="programs_scope_user">User</string>
+    <string name="programs_scope_factory">Factory</string>
+    <string name="programs_scope_favorites">Favorites</string>
+    <string name="programs_scope_note_factory">Names come from the manufacturer\'s data list, not read from this instrument.</string>
+    <string name="programs_scope_note_favorites">Marked on the instrument. Use Set favorite in a row menu to change one.</string>
+    <string name="programs_no_favorites">Nothing is marked as a favorite on this instrument.</string>
+    <string name="programs_no_favorites_hint">Mark one with Set favorite in a row menu, or on the instrument itself — on a Motif XS, hold [CATEGORY SEARCH] and use the [FAVORITE] bank. Pull down to re-read them.</string>
     <string name="programs_share_report">Share device details</string>
     <string name="share_reading_device">Reading device\u2026</string>
     <string name="programs_shared_as">Shared as %1$s.</string>
@@ -99,6 +122,20 @@
     <string name="programs_new_name">New name</string>
     <string name="programs_name_counter">%1$d / %2$d</string>
     <string name="programs_rename_title">Rename %1$s</string>
+
+    <!--
+      The two tag dialogs. A Motif XS voice carries two category assignments, and its favorite
+      flag names which of those the instrument's own browser files it under - so the favorite
+      dialog offers the voice's own categories and nothing else, and has something to say when
+      there are none to offer.
+    -->
+    <string name="programs_favorite_title">Set favorite — %1$s</string>
+    <string name="programs_favorite_body">Show this preset under:</string>
+    <string name="programs_favorite_slot">Category %1$d</string>
+    <string name="programs_favorite_clear_hint">Clearing every box removes the favorite.</string>
+    <string name="programs_categories_sub">Sub-category</string>
+    <string name="programs_categories_none">None</string>
+    <string name="programs_categories_no_sub">—</string>
     <string name="programs_delete_title">Delete %1$s?</string>
     <!--
       Two forms because a named preset and an empty slot warrant different
@@ -108,16 +145,20 @@
     <string name="programs_delete_body">This erases %1$s on the instrument.</string>
     <string name="programs_delete_body_named">This erases %1$s (\"%2$s\") on the instrument.</string>
     <string name="programs_copy_title">Copy %1$s to…</string>
+    <string name="programs_move_title">Move %1$s to…</string>
     <string name="programs_error">Error: %1$s</string>
 
     <!--
       What the progress line says while an operation runs. Each is also the phrase the failure
       message and the log line are built from, with the ellipsis trimmed - so "Selecting A:1:1\u2026"
-      becomes "Selecting A:1:1 failed." rather than the lowercase second copy these used to carry.
+      becomes "Selecting A:1:1 failed." with no second copy of the wording to keep in step.
     -->
     <string name="programs_busy_selecting">Selecting %1$s\u2026</string>
     <string name="programs_busy_deleting">Deleting %1$s\u2026</string>
     <string name="programs_busy_renaming">Renaming %1$s\u2026</string>
+    <string name="programs_busy_favoriting">Setting the favorite for %1$s\u2026</string>
+    <string name="programs_busy_categorising">Setting the categories of %1$s\u2026</string>
+    <string name="programs_busy_reading_tags">Reading %1$s\u2026</string>
     <string name="programs_busy_copying">Copying %1$s to %2$s\u2026</string>
     <string name="programs_busy_moving">Moving %1$s to %2$s\u2026</string>
     <string name="programs_busy_swapping">Swapping %1$s and %2$s\u2026</string>
@@ -132,14 +173,19 @@
     <string name="result_moved">Moved %1$s to %2$s.</string>
     <string name="result_swapped">Swapped %1$s and %2$s.</string>
     <string name="result_renamed">Preset %1$s has been renamed to %2$s.</string>
+    <string name="result_favorite_set">%1$s is now a favorite.</string>
+    <string name="result_favorite_cleared">%1$s is no longer a favorite.</string>
+    <string name="result_categories_set">%1$s is now filed under %2$s.</string>
+    <string name="result_categories_cleared">%1$s no longer has a category.</string>
     <string name="result_copied">Copied %1$s to %2$s as \"%3$s\".</string>
     <string name="result_deleted">Preset %1$s has been deleted.</string>
 
     <!-- Connection failures the app itself raises, as opposed to ones an instrument reports. -->
     <string name="connect_failed">Failed to connect</string>
     <string name="connect_failed_demo">Failed to start demo mode</string>
-    <string name="connect_permission_denied">Permission was denied for %1$s.</string>
     <string name="connect_usb_permission_denied">USB permission was denied for %1$s.</string>
+    <string name="connect_permission_denied_hint">Tap Retry to be asked again.</string>
+    <string name="connect_opening_device_unplugged">%1$s was unplugged before the connection finished.</string>
     <string name="listing_unknown_error">Unknown error</string>
     <string name="listing_reading_presets">Reading the preset list\u2026</string>
     <string name="debug_regression_starting">Starting\u2026</string>
@@ -153,6 +199,8 @@
          naming a screen, since a bug that manages to strand this title here should not also
          read as an unrelated screen name. -->
     <string name="programs_title_fallback">Not Connected</string>
+    <!-- Shown in place of the list while the first read runs and while a resume rebuilds the USB session. -->
+    <string name="programs_reconnecting">Connecting…</string>
 
     <!--
       What a delete actually does, which differs by family: a Nord empties the slot with one
@@ -166,12 +214,28 @@
       is ever read by somebody who has not gone looking for it.
     -->
     <string name="debug_title">Debug</string>
-    <string name="debug_report_body">Reads everything configuration details off the instrument and shares it as JSON. Nothing is written.</string>
+    <string name="debug_report_body">Reads every configuration detail off the instrument into a JSON report, which can then be shared or saved to this device. Nothing is written to the instrument.</string>
     <string name="debug_report_action">Generate device report</string>
+    <string name="debug_report_running">Generating the device report\u2026</string>
+    <string name="debug_report_ready">Device report ready</string>
+    <string name="debug_report_ready_incomplete">Device report ready — incomplete</string>
+    <string name="debug_report_ready_body">Read from the instrument: %1$d KB of JSON. Share it, or save it to this device. Going back discards it.</string>
+    <!-- Above the failure lines, which the report's own "failures" map also carries. -->
+    <string name="debug_report_incomplete_body">%1$d of its reads failed; the report records which:</string>
+    <!-- Programs and connect screens share the report as soon as it is read, so this is the one
+         place they can say it is not whole. -->
+    <string name="report_shared_incomplete">The device report is incomplete: %1$d of its reads failed.</string>
     <string name="debug_regression_body">Runs every operation this instrument supports and reports what worked. Edits are made against a copy the test creates and deletes again; where no free slot exists, it asks first.</string>
     <string name="debug_regression_action">Run regression test</string>
+    <!-- Checking the shipped factory voice names against the instrument itself. Read-only. -->
+    <string name="debug_verify_body">The factory voice names shown in the browser are transcribed from the manufacturer\'s data list, not read from this instrument. This reads one factory bank and reports any name that disagrees. It writes nothing, and takes a couple of minutes per bank.</string>
+    <string name="debug_verify_action">Check %1$s against the instrument</string>
+    <string name="debug_verify_starting">Reading the bank…</string>
+    <string name="debug_verify_ok">%1$s: every name matches what the app ships.</string>
+    <string name="debug_verify_mismatches">%1$s: %2$d name(s) disagree with what the app ships:</string>
     <string name="debug_regression_running">Running the regression test…</string>
     <string name="debug_regression_share">Share regression report</string>
+    <string name="debug_save_failed">The report could not be saved.</string>
     <string name="debug_regression_back">Back to the debug menu</string>
     <string name="debug_confirm_select_title">Check the instrument</string>
     <string name="debug_confirm_select_body">The instrument was told to load %1$s. Is that what it is showing now?</string>
@@ -181,6 +245,9 @@
     <string name="debug_confirm_occupied_body">%1$s, so rename, move and swap can only be tested on a preset you actually have. Each one is undone immediately afterwards and checked, but if the instrument fails halfway a preset may be left renamed or in the wrong slot. Nothing will be deleted either way.\n\nDecline to skip these three tests.</string>
     <string name="debug_confirm_occupied_reason_no_slot">There is no free slot to make a scratch copy in</string>
     <string name="debug_confirm_occupied_reason_no_copy">This instrument has no way to copy a preset</string>
+    <!-- The swap alone, when the sandbox copy exists but there is no second free slot for a
+         second copy to swap it with. Same title and buttons as the three-test question. -->
+    <string name="debug_confirm_swap_body">Only one slot is free, so the swap can only be tested between the scratch copy and a preset you actually have. It is swapped back immediately afterwards and checked, but if the instrument fails halfway that preset may be left in the scratch slot. Nothing will be deleted.\n\nDecline to skip the swap test.</string>
     <string name="debug_confirm_occupied_yes">Test on a stored preset</string>
 
     <!--
@@ -190,5 +257,27 @@
     <plurals name="programs_unreadable_slots">
         <item quantity="one">%1$d slot could not be read.</item>
         <item quantity="other">%1$d slots could not be read.</item>
+    </plurals>
+
+    <!--
+      How many categories a preset holds is a per-family fact, so the three places that name
+      them are plurals rather than fixed text. A Nord program has one, a Motif XS voice two,
+      and "Set categories" on an instrument with a single one reads like a mistake.
+
+      The quantity is the *number of assignments the instrument has*, not an index - which is
+      why programs_categories_main can drop the number entirely in the singular case: with one
+      category there is nothing for "Category 1" to distinguish it from.
+    -->
+    <plurals name="action_set_categories">
+        <item quantity="one">Set category</item>
+        <item quantity="other">Set categories</item>
+    </plurals>
+    <plurals name="programs_categories_title">
+        <item quantity="one">Set category — %1$s</item>
+        <item quantity="other">Set categories — %1$s</item>
+    </plurals>
+    <plurals name="programs_categories_main">
+        <item quantity="one">Category</item>
+        <item quantity="other">Category %1$d</item>
     </plurals>
 </resources>

@@ -1,6 +1,6 @@
 # Third-party notices
 
-PatchPilot itself is licensed under the GPLv3 (see [`../LICENSE`](../LICENSE)).
+Patch Pilot itself is licensed under the GPLv3 (see [`../LICENSE`](../LICENSE)).
 It statically links the following libraries, each under the Apache License,
 Version 2.0 (full text at <https://www.apache.org/licenses/LICENSE-2.0>):
 

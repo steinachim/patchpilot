@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import androidx.compose.foundation.layout.Column
@@ -16,24 +19,18 @@ import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 
-/**
- * The preset screen's three question dialogs.
- *
- * Lifted out of `ProgramsScreen` together: each is self-contained, none of them reads the screen's
- * state beyond what it is handed, and as inline `AlertDialog` blocks at the tail of an already long
- * composable they were the easiest part of it to lose track of.
+/*
+ * The preset screen's three question dialogs. Each is self-contained and reads no screen state
+ * beyond what it is handed, which is what lets them live apart from `ProgramsScreen`.
  */
 
 /**
- * The one operation on the preset screen that asks first.
- *
- * Move and swap deliberately do not (see `runRelocation`): they were verified on hardware, they
- * leave the data somewhere, and a dialog in front of every drag is friction the reliability does
- * not justify. Delete is the opposite case - there is nowhere for the preset to have gone
- * afterwards, and on two of the three families nothing in this app can put it back.
+ * The one operation on the preset screen that asks first: move and swap leave the data somewhere
+ * (see `runRelocation`), while a delete has nowhere for the preset to have gone, and on two of
+ * the three families nothing in this app can put it back.
  *
  * @param emulated true where the family composes the erase from a write rather than issuing one
- *   command, which is what decides which of the two effect sentences is shown.
+ *   command, which decides which effect sentence is shown.
  */
 @Composable
 internal fun DeleteConfirmationDialog(
@@ -104,8 +101,8 @@ internal fun BlockedOperationDialog(
             }
         },
         confirmButton = { TextButton(onClick = onApply) { Text(pending.actionLabel) } },
-        // Cancelling leaves the instrument exactly as it is, which is why it is also what a tap
-        // outside does: the remedy must be chosen, never arrived at by dismissing something.
+        // Cancelling leaves the instrument as it is, which is also what a tap outside does: the
+        // remedy has to be chosen rather than arrived at by dismissing something.
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
@@ -116,9 +113,8 @@ internal fun BlockedOperationDialog(
  * Renames one preset.
  *
  * @param maxNameLength null where the instrument declares no limit. Where it does, the field is
- *   capped as the user types rather than validated afterwards: the instrument accepts an over-long
- *   name and quietly stores its first characters, so without this the only sign is the write
- *   verification failing on a preset that was in fact saved.
+ *   capped as the user types rather than validated afterwards, since the instrument accepts an
+ *   over-long name and quietly stores its first characters.
  */
 @Composable
 internal fun RenameDialog(

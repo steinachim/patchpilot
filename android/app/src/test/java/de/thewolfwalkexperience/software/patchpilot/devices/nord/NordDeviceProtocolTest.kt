@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.hex
@@ -87,6 +90,95 @@ class NordDeviceProtocolTest {
         assertEquals(10, device.protocolVersionFileTransfer)
     }
 
+    /**
+     * A transport whose IN endpoint holds leftovers: [queued] whole messages are served before
+     * anything the request under test is answered with, the way a device answers after a
+     * session that died mid-reply. Every request is answered with [reply], protocol id and
+     * sub-opcode taken from the request unless [answerSubOp] says otherwise. Records whether
+     * [drainInput] was called, and how many requests went out.
+     */
+    private class LeftoverTransport(
+        private val queued: List<ByteArray>,
+        private val reply: ByteArray,
+        private val answerSubOp: ((Int) -> Int) = { it + 1 },
+        private val firmwareVersion: Int = 168,
+    ) : UsbBulkTransport {
+        private val pending = ArrayDeque(queued)
+        private var last: NordMessage? = null
+        var drained = false
+        var requests = 0
+
+        override fun drainInput() {
+            drained = true
+        }
+
+        override fun bulkWrite(data: ByteArray) {
+            last = parseMessage(data)
+            requests++
+        }
+
+        override fun bulkRead(bufferSize: Int): ByteArray {
+            pending.removeFirstOrNull()?.let { return it }
+            val msg = checkNotNull(last) { "read with nothing pending" }
+            return buildMessage(msg.protocolId, msg.protocolVersion, answerSubOp(msg.subOp), reply)
+        }
+
+        override fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int) =
+            byteArrayOf((firmwareVersion and 0xFF).toByte(), ((firmwareVersion shr 8) and 0xFF).toByte())
+
+        override val rebuildOnResume = true
+        override fun close() {}
+    }
+
+    /** The tail of a content-database reply a killed session never read - what X9 left queued. */
+    private fun staleFileTransferReply(): ByteArray =
+        buildMessage(NordDevice.PROTOCOL_FILE_TRANSFER, 10, 31, ByteArray(390))
+
+    @Test
+    fun `connect drains the endpoint before its first request`() = runTest {
+        val transport = LeftoverTransport(emptyList(), deviceInfoPayload(10))
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.connect()
+        assertTrue("drainInput() was never called", transport.drained)
+        assertEquals(1, transport.requests)
+    }
+
+    /**
+     * What a process killed mid-read leaves behind: the rest of a reply the device was still
+     * sending, which the next session's first read receives as the answer to the device-info
+     * query. It wears the wrong protocol id, so it is discarded and the real reply read next;
+     * connect() succeeds, with no request repeated.
+     */
+    @Test
+    fun `connect discards a stale reply left over from an earlier session`() = runTest {
+        val transport = LeftoverTransport(
+            listOf(staleFileTransferReply(), staleFileTransferReply()),
+            deviceInfoPayload(10),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.connect()
+        assertEquals(10, device.protocolVersionFileTransfer)
+        assertEquals(1, transport.requests)
+    }
+
+    /**
+     * Stale replies are bounded: an instrument whose every reply answers some other request is
+     * out of step, not merely behind, and is refused with both sides named rather than read
+     * from until a reply happens to fit.
+     */
+    @Test
+    fun `a reply that never matches its request fails after a bounded number of reads`() = runTest {
+        val transport = LeftoverTransport(emptyList(), deviceInfoPayload(10), answerSubOp = { it + 2 })
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        val exc = assertThrows(IllegalStateException::class.java) { runBlocking { device.connect() } }
+        val cause = generateSequence<Throwable>(exc) { it.cause }.first { "out of step" in it.message.orEmpty() }
+        assertTrue(cause.message, cause.message!!.contains("sub-op=2 with a reply for protocol=7 sub-op=4"))
+        // MAX_STALE_REPLIES are discarded; the one after that is the refusal.
+        assertTrue(cause.message, cause.message!!.contains("${NordDevice.MAX_STALE_REPLIES + 1} times"))
+        // The reseat hint is on the wrapping message: this is the first message of the session.
+        assertTrue(exc.message, exc.message!!.contains("unplug the USB cable"))
+    }
+
     @Test
     fun `connect takes the protocol version from the instrument, whatever the profile is`() = runTest {
         // No profile declares a version any more: a Grand profile against a table saying 8
@@ -98,10 +190,9 @@ class NordDeviceProtocolTest {
     }
 
     /**
-     * There is no declared value left to fall back to, and that is deliberate.
+     * There is no declared value to fall back to, and that is deliberate.
      *
-     * A profile field used to hold one and stand in when the instrument could not be asked. It was
-     * removed because it could only ever agree with what was read (adding nothing) or disagree with
+     * A catalog value could only ever agree with what was read (adding nothing) or disagree with
      * it - in which case trusting it means parsing the instrument's responses against the wrong
      * layout, on the protocol that carries the writes. The query is the first bulk message of every
      * session and needs no prerequisite, so an instrument that will not answer it is one nothing
@@ -177,8 +268,8 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `an implausible capacity is still refused as an addressing bound`() = runTest {
-        // The security property the parser's guard used to provide, kept where the value
-        // actually becomes one: deriveBankLayout feeds InstrumentViewModel.allSlots.
+        // The plausibility bound sits where the value becomes an addressing bound, not in the
+        // parser: deriveBankLayout feeds InstrumentViewModel.allSlots.
         val root = parseMessage(NordFixtures.GRAND_ROOT_LIST_RESPONSE).payload
         val device = NordFixtures.device(
             ReplayTransport(listOf(1 to root, 3 to childListPayload(listOf("Bank 1" to 9_999_999)))),
@@ -207,10 +298,9 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `parseRootCategories reads each area's allocation unit from its trailer`() {
-        // The first word of a category's trailer is its storage area's
-        // allocation unit in bytes. These are both instruments' own root lists, and
-        // the figures are what the devices state - not the 131072/65536 and 262144/196608 that
-        // devices/nord_devices.json used to configure.
+        // The first word of a category's trailer is its storage area's allocation unit in
+        // bytes. These are both instruments' own root lists, and the figures are what the
+        // devices state.
         val grand = NordFixtures.device(ReplayTransport(emptyList()), NordFixtures.GRAND_PROFILE)
             .parseRootCategories(parseMessage(NordFixtures.GRAND_ROOT_LIST_RESPONSE).payload)
             .associate { it.name to it.unitBytes }
@@ -260,7 +350,9 @@ class NordDeviceProtocolTest {
     // ---- Protocol version rules ----
     //
     // The file-transfer protocol version decides two wire formats: how many flag bytes the
-    // root-category trailer carries, and whether an item record ends with a content id. Both rules are asserted at every version in the accepted range - including the tiers no instrument in this repository sits in.
+    // root-category trailer carries, and whether an item record ends with a content id. Both rules
+    // are asserted at every version in the accepted range - including the tiers no instrument in
+    // this repository sits in.
 
     /**
      * A file-transfer version outside 3-10 is refused, not warned about.
@@ -327,9 +419,7 @@ class NordDeviceProtocolTest {
         assertTrue("nothing went on the wire", transport.sentRequests.isEmpty())
     }
 
-    /**
-     * Protocol 6 at version 1 and protocol 7 at version 0, on both known instruments.
-     */
+    /** Protocol 6 at version 1 and protocol 7 at version 0, on both known instruments. */
     @Test
     fun `both instruments report the UI and Ctrl versions this app expects`() {
         for (response in listOf(NordFixtures.GRAND_DEVICE_INFO_RESPONSE, NordFixtures.STAGE2EX_DEVICE_INFO_RESPONSE)) {
@@ -487,8 +577,8 @@ class NordDeviceProtocolTest {
     @Test
     fun `fetchCategoryItems walks the cursor even when the item count reads zero`() = runTest {
         // The Nord Stage 2 EX reports an item count of 0 for its Live and Settings
-        // categories while both hold items, and the vendor's editor walks them anyway.
-        // Using the count as the loop condition returned nothing.
+        // categories while both hold items. Using the count as the loop condition would
+        // return nothing.
         val itemPayload = parseMessage(NordFixtures.NGP_RECORD_RESPONSE).payload
         val responses = listOf(
             3 to childListPayload(List(2) { "Bank" to 25 }), // two banks
@@ -1014,7 +1104,7 @@ class NordDeviceProtocolTest {
      * Answers every read with a zero-length transfer, after an optional first chunk.
      *
      * A ZLP is a legal USB reply carrying no bytes, so `bulkRead`'s `read >= 0` guard passes it
-     * through as an empty array - which is exactly why it used to hang rather than fail.
+     * through as an empty array, and an unbounded reader would hang on it rather than fail.
      */
     private class EmptyReadTransport(private val first: ByteArray? = null) : UsbBulkTransport {
         private var sentFirst = false

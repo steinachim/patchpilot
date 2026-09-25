@@ -1,12 +1,19 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Message framing for the Nord vendor USB protocol: [4B total length][4B command][4B target]
- * [4B sub-opcode][payload][2B CRC-16/CCITT-FALSE], all big-endian, CRC over everything
- * before it.
+ * Message framing for the Nord vendor USB protocol:
+ * `[4B total length][4B protocol ID][4B protocol version][4B sub-opcode][payload][2B CRC-16/CCITT-FALSE]`,
+ * all big-endian, CRC over everything before it.
+ *
+ * The two middle words carry which protocol the message belongs to (6 = UI, 7 = Ctrl, 12 = file
+ * transfer) and the version that protocol was negotiated at - the same names [NordMessage]'s own
+ * fields and docs/PROTOCOLS.md use for them.
  */
 const val MESSAGE_HEADER_LEN = 16
 const val MESSAGE_CRC_LEN = 2
@@ -42,15 +49,9 @@ fun buildMessage(
 }
 
 /**
- * Decodes one message from the front of [data].
- *
- * **The leading length field delimits the message, not `data.size`.** Reading the last two bytes
- * of whatever the buffer holds as the checksum and everything before them as the payload is
- * correct only when the buffer holds exactly one whole message - something a bulk pipe never
- * promises. A read can come back holding, say, 93 bytes of a declared 408 with a stale reply from
- * an earlier exchange stuck on the end; testing the stale message's checksum against the first 91
- * bytes of a different one then reports the mismatch against the wrong sub-opcode. Bytes past the
- * declared length are ignored here; [NordDevice.readReply] is what keeps them for the next call.
+ * Decodes one message from the front of [data]. The leading length field delimits the message,
+ * not `data.size`: a bulk read may hold more than one message. Bytes past the declared length
+ * are ignored here; [NordDevice.readReply] keeps them for the next call.
  */
 fun parseMessage(data: ByteArray): NordMessage {
     require(data.size >= MESSAGE_HEADER_LEN + MESSAGE_CRC_LEN) {

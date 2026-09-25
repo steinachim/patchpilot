@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.core
 
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
@@ -9,6 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
 
@@ -216,6 +220,105 @@ class RegressionTesterTest {
         assertEquals(Status.SKIPPED, report.of("Copy a preset").status)
         // Never attempted without a sandbox, whatever the user answered.
         assertEquals(Status.SKIPPED, report.of("Delete a preset").status)
+        assertEquals(before, listing(instrument))
+    }
+
+    /**
+     * The swap is the one sandbox test that needs a second occupied slot, and the obvious partner
+     * - the preset the copy was made from - is real data: a process killed between the swap and
+     * the swap-back left that preset sitting in the scratch slot on a real instrument. So the
+     * partner is a second copy, and no address the instrument held before the run is ever passed
+     * to `swap` at all.
+     */
+    @Test
+    fun `the swap test swaps two copies, never a stored preset`() = runTest {
+        val real = nord()
+        val before = listing(real)
+        val swapped = mutableListOf<Pair<SlotAddress, SlotAddress>>()
+        val instrument = object : Instrument by real {
+            override val editor = object : PresetEditor by real.editor!! {
+                override suspend fun swap(a: SlotAddress, b: SlotAddress) {
+                    swapped += a to b
+                    real.editor!!.swap(a, b)
+                }
+            }
+        }
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { real.layout.allAddresses().toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { fail("no question is asked while there is room for a second copy"); false },
+            refreshEdited = {},
+        ).run {}
+
+        assertEquals(emptyList<RegressionResult>(), report.failures())
+        assertEquals(Status.PASS, report.of("Swap two presets").status)
+        // Once there and once back.
+        assertEquals(2, swapped.size)
+        swapped.flatMap { it.toList() }.forEach { address ->
+            assertFalse("$address held a real preset and was swapped", address in before.keys)
+        }
+        // Both copies are gone afterwards, which is the property everything above serves.
+        val delete = report.of("Delete a preset")
+        assertEquals(Status.PASS, delete.status)
+        assertTrue(delete.detail, delete.detail.startsWith("Deleted the copies from"))
+        assertEquals(before, listing(real))
+    }
+
+    /**
+     * With exactly one free slot the copy has nowhere to be swapped with but the preset it came
+     * from, which is the no-sandbox path's situation narrowed to one test - and it is asked the
+     * same way. Move is skipped for the same lack of room.
+     */
+    @Test
+    fun `with one free slot the swap asks first, and runs against real data once confirmed`() = runTest {
+        val instrument = nord()
+        val before = listing(instrument)
+        val free = instrument.layout.allAddresses().first { it !in before.keys }
+        val asked = mutableListOf<OccupiedSlotReason>()
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { (before.keys + free).toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { asked += it; true },
+            refreshEdited = {},
+        ).run {}
+
+        assertEquals(emptyList<RegressionResult>(), report.failures())
+        assertEquals(listOf(OccupiedSlotReason.NO_SECOND_FREE_SLOT), asked)
+        assertEquals(Status.PASS, report.of("Copy a preset").status)
+        assertEquals(Status.SKIPPED, report.of("Move a preset").status)
+        val swap = report.of("Swap two presets")
+        assertEquals(Status.PASS, swap.status)
+        assertTrue(swap.detail, swap.detail.contains("real data"))
+        assertEquals(Status.PASS, report.of("Delete a preset").status)
+        assertEquals(before, listing(instrument))
+    }
+
+    @Test
+    fun `with one free slot a declined swap is skipped and the copy is still deleted`() = runTest {
+        val instrument = nord()
+        val before = listing(instrument)
+        val free = instrument.layout.allAddresses().first { it !in before.keys }
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { (before.keys + free).toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { false },
+            refreshEdited = {},
+        ).run {}
+
+        assertEquals(emptyList<RegressionResult>(), report.failures())
+        val swap = report.of("Swap two presets")
+        assertEquals(Status.SKIPPED, swap.status)
+        assertEquals("declined by the user", swap.detail)
+        assertEquals(Status.PASS, report.of("Delete a preset").status)
         assertEquals(before, listing(instrument))
     }
 

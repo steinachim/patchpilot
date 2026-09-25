@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.usb
 
 import android.app.PendingIntent
@@ -16,46 +19,36 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
 
 private const val ACTION_USB_PERMISSION = "de.thewolfwalkexperience.software.patchpilot.USB_PERMISSION"
-/** Interface 0 on every device this app opens so far - Nord, Motif XS alike. Named for what it
- * is rather than for the one family it was written against: it is simply the first interface. */
+/** Interface 0 on every device this app opens so far - Nord and Motif XS alike. */
 private const val DEVICE_INTERFACE_INDEX = 0
-
-/** Declared in AndroidManifest.xml with protectionLevel="signature", so only this app (or
- * another one signed with the same key) can hold it. Required of the sender in every
- * [Context.registerReceiver] call below, on every API level - not just RECEIVER_NOT_EXPORTED's
- * API 33+ equivalent - because a dynamically-registered receiver with no broadcastPermission is
- * implicitly exported on API 26-32 (this app's minSdk): any other app on the phone could
- * otherwise send de.thewolfwalkexperience.software.patchpilot.USB_PERMISSION with a spoofed
- * EXTRA_PERMISSION_GRANTED and force requestPermission()'s coroutine to resume with a fake
- * result. The PendingIntent this app hands to UsbManager.requestPermission() still satisfies the
- * check below: firing it broadcasts under this app's own identity, which holds this permission
- * like any app signed with the matching key would. */
-private const val USB_PERMISSION_CALLBACK_PERMISSION =
-    "de.thewolfwalkexperience.software.patchpilot.permission.USB_PERMISSION_CALLBACK"
 
 /**
  * Lists what is attached over USB, drives the Android runtime permission flow (needed unless
- * device_filter.xml auto-granted it on attach), and claims an interface.
- *
- * Family-agnostic: [UsbHostDiscovery] matches whatever this returns against the catalog, and the
- * endpoint addresses come from the matched descriptor. It used to say "discovers connected Nord
- * instruments", which was true when the app spoke one protocol.
- *
- * No kernel-driver-detach step is needed here - that is a desktop-libusb concern that does not
- * apply to Android's own USB host stack.
+ * device_filter.xml granted it on attach), and claims an interface. Family-agnostic:
+ * [UsbHostDiscovery] matches the devices against the catalog, which supplies the endpoints.
  */
 class UsbConnectionManager(private val context: Context) {
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
 
-    /** Every USB device Android currently sees, recognised or not. [UsbHostDiscovery] matches
-     * these against the catalog; the connect screen also offers the leftovers as the "pick a
-     * device to try anyway" rows. */
+    /** Every USB device Android currently sees, recognised or not. */
     fun findAllDevices(): List<UsbDevice> = usbManager.deviceList.values.toList()
 
+    /**
+     * Asks the user for permission to open [device], unless it is already granted.
+     *
+     * The result is read from [UsbManager.hasPermission], not from the broadcast's extras: below
+     * API 33 a dynamically registered receiver is exported, so any app could send
+     * `ACTION_USB_PERMISSION` with a spoofed `EXTRA_PERMISSION_GRANTED`. (A broadcast permission
+     * on the receiver does not help, since the system fires the `PendingIntent` under this app's
+     * own uid, and a package holds only the permissions it requests.) A spoofed broadcast can at
+     * worst resume this with "denied" while the real dialog is still up, after which a retry
+     * finds the permission granted.
+     */
     suspend fun requestPermission(device: UsbDevice): Boolean {
         if (usbManager.hasPermission(device)) return true
 
@@ -70,36 +63,38 @@ class UsbConnectionManager(private val context: Context) {
             )
 
             val receiver = object : BroadcastReceiver() {
+                private val unregistered = AtomicBoolean(false)
+
+                /** Once only: the reply and a cancellation can both try, and the second would throw. */
+                fun unregister() {
+                    if (unregistered.compareAndSet(false, true)) context.unregisterReceiver(this)
+                }
+
                 override fun onReceive(receiverContext: Context, intent: Intent) {
                     if (intent.action != ACTION_USB_PERMISSION) return
-                    receiverContext.unregisterReceiver(this)
-                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                    if (cont.isActive) cont.resume(granted)
+                    // A result for some other device - two requests in flight, or a broadcast
+                    // that is not the system's - is not this request's answer.
+                    val answered = intent.usbDevice()
+                    if (answered != null && answered.deviceName != device.deviceName) return
+                    unregister()
+                    if (cont.isActive) cont.resume(usbManager.hasPermission(device))
                 }
             }
             val filter = IntentFilter(ACTION_USB_PERMISSION)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(
-                    receiver, filter, USB_PERMISSION_CALLBACK_PERMISSION, null, Context.RECEIVER_NOT_EXPORTED,
-                )
+                context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
             } else {
-                // No RECEIVER_EXPORTED/RECEIVER_NOT_EXPORTED overload exists below API 33; the
-                // broadcastPermission argument above is this branch's actual protection.
+                // No RECEIVER_NOT_EXPORTED overload below API 33 - see the method's doc.
                 @Suppress("UnspecifiedRegisterReceiverFlag")
-                context.registerReceiver(receiver, filter, USB_PERMISSION_CALLBACK_PERMISSION, null)
+                context.registerReceiver(receiver, filter)
             }
-            cont.invokeOnCancellation { context.unregisterReceiver(receiver) }
+            cont.invokeOnCancellation { receiver.unregister() }
 
             usbManager.requestPermission(device, pendingIntent)
         }
     }
 
-    /**
-     * Opens the device and claims its vendor interface, returning a ready-to-use transport.
-     *
-     * Interface 0 for every device this app opens so far, Nord and Motif XS alike; the endpoint
-     * addresses differ, which is why they are arguments.
-     */
+    /** Opens the device and claims interface 0 (every device this app opens so far), returning a ready-to-use transport. */
     fun openTransport(
         device: UsbDevice,
         endpointOut: Int = AndroidUsbBulkTransport.EP_OUT_ADDRESS,
@@ -114,28 +109,15 @@ class UsbConnectionManager(private val context: Context) {
     }
 
     /**
-     * Emits every USB device Android reports as physically detached while collected - lets a
-     * caller tell "the instrument this session is using just went away" from "some unrelated USB
-     * event happened on the bus" by comparing the emitted device against whatever it is using.
-     *
-     * **Needs no signature-level protection**, unlike [requestPermission]'s receiver.
-     * `ACTION_USB_DEVICE_DETACHED` is a system broadcast the framework's own USB host stack sends
-     * on a real unplug - not one this app triggers itself via a `PendingIntent` another app could
-     * impersonate - so there is nothing here for a spoofed broadcast to fake convincingly enough
-     * to matter: the caller re-checks the reported device against the session actually in use
-     * rather than trusting the broadcast's mere arrival.
+     * Emits every USB device Android reports as physically detached while collected. The caller
+     * compares the device against the one its session uses; like [requestPermission]'s receiver
+     * this one is exported below API 33, so a spoofed detach costs at most a reconnect.
      */
     fun deviceDetachEvents(): Flow<UsbDevice> = callbackFlow {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(receiverContext: Context, intent: Intent) {
                 if (intent.action != UsbManager.ACTION_USB_DEVICE_DETACHED) return
-                val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
-                }
-                if (device != null) trySend(device)
+                intent.usbDevice()?.let { trySend(it) }
             }
         }
         val filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
@@ -149,12 +131,18 @@ class UsbConnectionManager(private val context: Context) {
     }
 }
 
-/** Human-readable label for a [UsbDevice] of unknown make - used by the device-selection/warning
- * screens and as the name in [de.thewolfwalkexperience.software.patchpilot.devices.nord.DeviceProfile.unknown].
- * Falls back to the vendor/product ids since `productName` isn't guaranteed by the USB spec. */
+/** The [UsbDevice] a USB broadcast is about, or null where it carries none. */
+private fun Intent.usbDevice(): UsbDevice? =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+    } else {
+        @Suppress("DEPRECATION")
+        getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+    }
+
+/** Human-readable label for a [UsbDevice] of unknown make, sanitized because it lands next to the
+ * "continue at your own risk" gate. `productName` is not guaranteed by the USB spec. */
 fun UsbDevice.displayLabel(): String {
-    // Sanitized because this lands next to the "continue at your own risk" gate - see
-    // [sanitizeDeviceText], which the MIDI path shares.
     val label = sanitizeDeviceText(productName) ?: "USB device"
     return "$label (0x%04X:0x%04X)".format(vendorId, productId)
 }

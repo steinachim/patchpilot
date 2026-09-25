@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.core
 
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoLibrary
@@ -50,9 +53,10 @@ class NoCopyFixtureInstrument : Instrument, PresetBrowser, PresetSelector, Prese
     override val selector: PresetSelector get() = this
     override val editor: PresetEditor get() = this
 
-    /** No device report, same as the two real families this shape used to stand in for. */
+    /** A fixture: it exists to exercise one editor gap, and reports and tags are not part of it. */
+    override val tagger: PresetTagger? = null
+
     override val report: DeviceReporter? = null
-    override val setup: InstrumentSetup? = null
     override val transfer: PresetTransfer? = null
 
     override suspend fun connect() = Unit
@@ -65,7 +69,7 @@ class NoCopyFixtureInstrument : Instrument, PresetBrowser, PresetSelector, Prese
      * partially-loaded list rendering this fixture is also meant to exercise has something to
      * render partially.
      */
-    override fun index(): Flow<IndexUpdate> = flow {
+    override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
         val all = library.slots(layout)
         all.chunked(BATCH).forEachIndexed { batchIndex, batch ->
             delay(BATCH_DELAY_MS)

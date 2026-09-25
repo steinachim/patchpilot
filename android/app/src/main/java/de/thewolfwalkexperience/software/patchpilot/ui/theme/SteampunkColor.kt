@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui.theme
 
 import androidx.compose.material3.ColorScheme
@@ -5,7 +8,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 
 /**
- * The "Brass & Aether" palette from the earlier mockup, carried over as-is: brass primary,
+ * The "Brass & Aether" palette: brass primary,
  * copper secondary, verdigris tertiary (also what the connect screen's "connected" jewel and
  * device-row status read as), a rust error role, warm near-black surfaces, parchment text.
  *
@@ -16,6 +19,23 @@ import androidx.compose.ui.graphics.Color
 private val Brass = Color(0xFFB8863A)
 private val BrassLight = Color(0xFFD9AB5C)
 private val BrassDark = Color(0xFF6A4C1E)
+
+/**
+ * The boundary tones, held apart from [BrassDark]/[CopperDark] because they answer to a contrast
+ * rule those do not.
+ *
+ * [BrassMuted] is `outline`, which draws the visible edge of *interactive* controls - an
+ * `OutlinedTextField`, an `OutlinedButton`, a `SegmentedButton`. WCAG 1.4.11 wants 3:1 for that,
+ * and this clears it against the lightest panel it can land on (3.6:1 on `PanelHigh`). It stays
+ * well below [Brass], so it still reads as an edge rather than as the accent colour.
+ *
+ * [CopperMuted] is `outlineVariant`, the decorative-divider role. That one is *not* held to 3:1 -
+ * Material's own baseline ships it at 1.6:1 light and 2.0:1 dark, because a separator that carries
+ * no information is exempt - so this matches Material's dark level rather than inventing a
+ * stricter rule for one theme.
+ */
+private val BrassMuted = Color(0xFF9A7130)
+private val CopperMuted = Color(0xFF6E472A)
 private val Copper = Color(0xFFA85F36)
 private val CopperDark = Color(0xFF4A2C1A)
 private val Verdigris = Color(0xFF6F9A83)
@@ -58,14 +78,14 @@ val SteampunkColorScheme: ColorScheme = darkColorScheme(
     surfaceContainerHighest = PanelHigh,
     surfaceContainerLow = Surface,
     surfaceContainerLowest = Ink,
-    outline = BrassDark,
-    outlineVariant = CopperDark,
+    outline = BrassMuted,
+    outlineVariant = CopperMuted,
     inverseSurface = Parchment,
     inverseOnSurface = Ink,
     scrim = Ink,
 )
 
-/** Exposed for the bespoke Steampunk composables (gauge ticks, rivets) that draw outside the
+/** Exposed for the bespoke Steampunk composables (gauge ticks, borders) that draw outside the
  *  `ColorScheme` roles above. */
 object SteampunkAccents {
     val brassLight = BrassLight

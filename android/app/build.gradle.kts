@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.Copy
+import org.gradle.api.tasks.PathSensitivity
 import java.util.Properties
 
 // Release signing credentials live in local.properties (gitignored, never committed) rather than
@@ -17,8 +18,8 @@ plugins {
     // standalone plugin alongside it is an error rather than a redundancy.
     alias(libs.plugins.android.application)
     // The Compose compiler is a Kotlin plugin from Kotlin 2.x on, rather than a separate
-    // artifact pinned to a Kotlin version - which is what `composeOptions` used to do, and what
-    // made a Kotlin upgrade a two-part version-matching exercise.
+    // artifact pinned to a Kotlin version through `composeOptions`, so a Kotlin upgrade is one
+    // version bump rather than two that have to match.
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
@@ -34,18 +35,24 @@ kotlin {
 
 android {
     namespace = "de.thewolfwalkexperience.software.patchpilot"
-    // 37 because Compose 1.12 (BOM 2026.08.00) declares minCompileSdk=37. Compile-time only:
-    // `minSdk` still decides which devices can install this, and `targetSdk` still decides which
-    // runtime behaviours are opted into - neither moves. Compose 1.12 itself declares
-    // minSdkVersion 23, below this app's 26, so nothing is cut off at the low end either.
+    // Compile-time only: `minSdk` still decides which devices can install this, and `targetSdk`
+    // still decides which runtime behaviours are opted into - neither moves with this.
+    //
+    // **37 is Compose 1.12's floor, and headroom for this build rather than its requirement.**
+    // The BOM pinned in libs.versions.toml (2026.01.01) resolves to Compose 1.10.2, whose AAR
+    // metadata declares `minCompileSdk=35`, and this app's own code reaches no further than API
+    // 33 (UsbConnectionManager's TIRAMISU branches) - so 35 compiles today, verified rather than
+    // assumed. It stays at 37 because that is what Compose 1.12's AARs declare, so moving the BOM
+    // forward needs no change here. The price is that anyone building this needs the SDK 37
+    // platform installed, which is the one reason to reconsider it.
     compileSdk = 37
 
     defaultConfig {
         applicationId = "de.thewolfwalkexperience.software.patchpilot"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 1
-        versionName = "0.9"
+        targetSdk = 36
+        versionCode = 2
+        versionName = "1.0"
     }
 
     signingConfigs {
@@ -146,10 +153,10 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
-// devices/*.json (repo root) are the source of truth for per-instrument constants - Python reads
-// devices/nord_devices.json directly, but Android can only load bundled assets at runtime, so this
-// always overwrites the assets copies before every build. Never hand-edit anything in
-// android/app/src/main/assets/; the whole directory is generated and git-ignored.
+// devices/*.json (repo root) are the source of truth for per-instrument constants. Android can
+// only load bundled assets at runtime, so this always overwrites the assets copies before every
+// build. Never hand-edit anything in android/app/src/main/assets/; the whole directory is
+// generated and git-ignored.
 //
 // A catalog file is named for what it holds: nord_devices.json covers several Nord models,
 // behringer_pro800.json covers one instrument. The name is cosmetic - each file declares its own
@@ -189,14 +196,14 @@ val syncLicenses = tasks.register<Copy>("syncLicenses") {
 /**
  * Generates res/xml/device_filter.xml from the catalogs' USB matches.
  *
- * That file used to be maintained by hand, with a comment asking whoever added a device to
- * remember to add a line here too - a standing invitation to forget, and one that fails silently
- * (the app simply never launches on attach). It cannot be loaded from an asset, because Android's
- * PackageManager reads it to match USB_DEVICE_ATTACHED before any app code runs, so generating it
- * is the only way to have one source of truth.
+ * Generated rather than maintained by hand, because a hand-kept copy fails silently when a device
+ * is added to the catalog and not to it (the app simply never launches on attach). It cannot be
+ * loaded from an asset, because Android's PackageManager reads it to match USB_DEVICE_ATTACHED
+ * before any app code runs, so generating it is the only way to have one source of truth.
  *
- * Only USB matches produce an entry. A MIDI-attached instrument is found through MidiManager and
- * has no USB_DEVICE_ATTACHED filter to appear in.
+ * A USB match produces an entry by itself. A MIDI-matched instrument is found through MidiManager
+ * and needs no USB permission, so it contributes one only where its entry sets
+ * `launchOnUsbAttach` - which is what makes Android offer the app when it is plugged in.
  */
 val generateUsbDeviceFilter = tasks.register("generateUsbDeviceFilter") {
     val outputFile = file("src/main/res/xml/device_filter.xml")
@@ -205,9 +212,9 @@ val generateUsbDeviceFilter = tasks.register("generateUsbDeviceFilter") {
     doLast {
         val entries = linkedSetOf<Pair<Int, Int>>()
 
-        // One lazy pattern covers both catalog shapes: the Nord file carries vendorId/productId
-        // directly on each device, the generic one inside a "usb" match or a usbHint. A file with
-        // neither - a MIDI-only instrument - contributes nothing, which is correct.
+        // One lazy pattern covers every catalog shape: the Nord file carries vendorId/productId
+        // directly on each device, the generic one inside a "usb" match, a usbHint or a
+        // launchOnUsbAttach. A file with none of them contributes nothing, which is correct.
         val usbIds = Regex("\"vendorId\"\\s*:\\s*(\\d+)[\\s\\S]*?\"productId\"\\s*:\\s*(\\d+)")
         deviceCatalogDir.listFiles()
             ?.filter { it.name.endsWith(".json") && !it.name.endsWith(".schema.json") }
@@ -245,4 +252,15 @@ tasks.named("preBuild") {
 // missing from the connect screen.
 tasks.withType<Test>().configureEach {
     systemProperty("deviceCatalogDir", deviceCatalogDir.absolutePath)
+    // **Declared as an input, or the tests that read it never re-run when it changes.**
+    // A `systemProperty` is not an input Gradle tracks, so without this editing a catalog leaves
+    // every test task UP-TO-DATE and the tests that assert what the catalogs contain never run.
+    // A catalog is data the tests assert against, so it belongs here beside the property that
+    // points at it.
+    //
+    // RELATIVE rather than ABSOLUTE so the cache still hits when the checkout moves; NAME_ONLY
+    // would ignore the contents, which is exactly what is being tracked.
+    inputs.dir(deviceCatalogDir)
+        .withPropertyName("deviceCatalog")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }

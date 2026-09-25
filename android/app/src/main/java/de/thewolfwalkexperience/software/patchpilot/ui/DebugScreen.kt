@@ -1,7 +1,13 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import de.thewolfwalkexperience.software.patchpilot.R
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,21 +16,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.annotation.StringRes
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.listSaver
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -32,38 +34,51 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.core.OccupiedSlotReason
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionReport
-import de.thewolfwalkexperience.software.patchpilot.core.RegressionResult
 import de.thewolfwalkexperience.software.patchpilot.core.Status
+import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
 /**
  * The hidden debug menu, reached by tapping the instrument name five times on the preset screen.
+ * A route of its own rather than a dialog, because the regression test needs room for a progress
+ * line and a scrollable report.
  *
- * A route of its own rather than a dialog or a bottom sheet, because the regression test needs
- * real room: a progress line while it runs, and a scrollable report afterwards.
+ * Both entries put the instrument, rather than the app, under test:
  *
- * Two entries, both of which exist for the same reason - putting the instrument, rather than the
- * app, under test:
- *
- * - **the device report**, which used to be a button on the preset screen for every device. That
- *   was a temporary testing affordance; it now lives here, where it is always available, and the
- *   preset screen's own button is back to appearing only for a device outside the catalog.
- * - **the regression test**, which exercises every operation the connected instrument declares
- *   and says what happened. See [de.thewolfwalkexperience.software.patchpilot.core.RegressionTester]
- *   for what it will and will not do to an instrument.
+ * - the device report, always available here and on the preset screen only for a device outside
+ *   the catalog or on untested firmware. Read once, then offered for sharing or saving.
+ * - the regression test, which exercises every operation the connected instrument declares - see
+ *   [de.thewolfwalkexperience.software.patchpilot.core.RegressionTester] for what it will and
+ *   will not do.
  */
 @Composable
 fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
-    var run by rememberSaveable(stateSaver = RegressionRunStateSaver) {
-        mutableStateOf<RegressionRunState>(RegressionRunState.Idle)
-    }
-    var pending by remember { mutableStateOf<PendingConfirmation?>(null) }
+    val theme = LocalThemeStyle.current
+    // The run itself lives in the ViewModel, so a configuration change mid-run neither cancels
+    // it nor loses the dialog it is waiting on - see RegressionRunner.
+    val runner = viewModel.regressionRunner
+    val run by runner.state.collectAsState()
+    val pending by runner.question.collectAsState()
+    val runError by runner.error.collectAsState()
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
-    val sharer = rememberReportSharer(viewModel)
+    // The device report, read and held in the ViewModel like the regression run, so neither the
+    // read nor the result is lost to a rotation - see DeviceReportRunner.
+    val reportRunner = viewModel.deviceReportRunner
+    val reportState by reportRunner.state.collectAsState()
+    val reportError by reportRunner.error.collectAsState()
+    // What the connected instrument offers, keyed on the session as ProgramsScreen keys its facet
+    // reads: nothing about a plain getter tells Compose when the answer changes, so read as plain
+    // properties these would not recover when a session came back. The hand-off when a session is
+    // lost is PatchPilotNavHost's; this only keeps the buttons honest through a reconnect's dip.
+    val session by viewModel.state.collectAsState()
+    val hasReport = remember(session) { viewModel.hasReport }
+    val canVerifyFactoryNames = remember(session) { viewModel.canVerifyFactoryNames }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -71,60 +86,97 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val txtSuffix = stringResource(R.string.programs_txt_suffix)
     val reportShareTitle = stringResource(R.string.programs_share_report)
     val regressionShareTitle = stringResource(R.string.debug_regression_share)
+    val regressionStartingLabel = stringResource(R.string.debug_regression_starting)
+    val readingLabel = stringResource(R.string.share_reading_device)
+    val verifyStartingLabel = stringResource(R.string.debug_verify_starting)
 
-    /**
-     * Puts a question to the user from inside the test engine and suspends until it is answered.
-     *
-     * The engine knows nothing about Compose - it is handed two suspending lambdas and awaits
-     * them. This is the half that turns one into a dialog: park a [CompletableDeferred] in screen
-     * state, let the dialog below complete it, and hand the answer back to whoever was waiting.
-     */
-    suspend fun ask(question: PendingQuestion): Boolean {
-        val answer = CompletableDeferred<Boolean>()
-        pending = PendingConfirmation(question, answer)
-        return try {
-            answer.await()
-        } finally {
-            pending = null
-        }
-    }
-
-    fun onRunRegressionTest() {
+    // "Save to device": the content is resolved when the picker returns rather than captured when
+    // it was launched. The picker is another Activity, and a configuration change while it is up
+    // recreates this composition, so anything in plain `remember` is gone by the time the Uri
+    // arrives - while both reports survive in the ViewModel. One launcher per kind of report, so
+    // the result says which one it is for.
+    val saveFailed = stringResource(R.string.debug_save_failed)
+    fun onSaveResult(uri: Uri?, content: () -> String?) {
+        val text = content()
+        if (uri == null || text == null) return
         scope.launch {
-            error = null
-            run = RegressionRunState.Running(context.getString(R.string.debug_regression_starting))
             try {
-                val report = viewModel.runRegressionTest(
-                    onConfirmSelect = { shown -> ask(PendingQuestion.ConfirmSelect(shown)) },
-                    onConfirmRealSlotMutation = { reason -> ask(PendingQuestion.ConfirmRealSlotMutation(reason)) },
-                    progress = { step -> run = RegressionRunState.Running(step) },
-                )
-                run = RegressionRunState.Done(report)
+                // Off the main thread and not abandonable part way: the picker has already created
+                // the document, and a cancelled write would leave it truncated.
+                withContext(Dispatchers.IO + NonCancellable) { saveTextReport(context, uri, text) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                run = RegressionRunState.Idle
+                error = e.message ?: saveFailed
+            }
+        }
+    }
+    val saveJsonLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(JSON_MIME_TYPE)) { uri ->
+            onSaveResult(uri) { (reportRunner.state.value as? DeviceReportState.Done)?.json }
+        }
+    val saveTextLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(TEXT_MIME_TYPE)) { uri ->
+            onSaveResult(uri) { (runner.state.value as? RegressionRunState.Done)?.report?.asText() }
+        }
+
+    // The factory-name check: which bank the result belongs to, whether a read is running, and
+    // what it found. Not saved like the two reports, since a stale verdict would be worse than
+    // none; the bank is kept, or checking PRE1 and then PRE2 would leave a verdict with nothing
+    // saying which bank earned it.
+    var verifyBank by remember { mutableStateOf<String?>(null) }
+    var verifyProgress by remember { mutableStateOf<String?>(null) }
+    var verifyResult by remember { mutableStateOf<List<String>?>(null) }
+    val factoryBanks = remember(session) { viewModel.factoryBanks() }
+
+    fun onVerifyFactoryNames(bank: Int) {
+        scope.launch {
+            error = null
+            verifyResult = null
+            verifyProgress = verifyStartingLabel
+            try {
+                verifyResult = viewModel.verifyFactoryNames(bank) { step -> verifyProgress = step }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 error = e.message
+            } finally {
+                verifyProgress = null
             }
         }
     }
 
-    // Back out of the *report* to the debug menu, not out of the debug screen entirely.
-    //
-    // The report is rendered inside this screen rather than on its own route, so the scaffold's
-    // arrow was leaving for the programs list and skipping the menu the user had just come from -
-    // which reads as the app losing your place. A finished run is a state of this screen, so back
-    // clears the state; only from the menu itself does back actually leave.
-    //
-    // A run still in progress is deliberately *not* dismissable this way: it is writing to the
-    // instrument, and an arrow that abandoned it mid-sequence would be the worst affordance on
-    // the screen.
-    val atMenu = run !is RegressionRunState.Done
-    val handleBack: () -> Unit = { if (atMenu) onBack() else run = RegressionRunState.Idle }
+    // Back out of a report - either kind - to the debug menu, not out of the debug screen: the
+    // reports render inside this screen rather than on routes of their own, so a finished report
+    // is a state of it, and back clears that state. Only from the menu itself does back leave.
+    val atMenu = run !is RegressionRunState.Done && reportState !is DeviceReportState.Done
+    // Clears both; only one is ever set, since each report hides the button that starts the other.
+    fun backToMenu() {
+        runner.dismissReport()
+        reportRunner.dismiss()
+    }
+    val handleBack: () -> Unit = { if (atMenu) onBack() else backToMenu() }
     // Also catches the system/gesture back, which otherwise disagrees with the arrow beside it.
-    BackHandler(enabled = !atMenu) { run = RegressionRunState.Idle }
+    BackHandler(enabled = !atMenu) { backToMenu() }
 
-    PatchPilotScaffold(title = stringResource(R.string.debug_title), onBack = handleBack) { innerPadding ->
+    // A run in progress is not dismissable: it survives the screen, but its confirmation dialogs
+    // are shown only here and it holds the instrument mutex while it waits on one, so leaving
+    // would strand it on a question nobody can see and block every edit behind it. The wait is
+    // bounded by the exchange timeouts. Never enabled together with the handler above, since
+    // `Running` counts as `atMenu`.
+    //
+    // The device report read is not held like this: it writes nothing and carries on in the
+    // ViewModel, so coming back finds the result waiting.
+    val running = run is RegressionRunState.Running
+    BackHandler(enabled = running) {
+        // Empty: refusing the gesture is the behaviour, and the step line says what is running.
+    }
+
+    PatchPilotScaffold(
+        title = stringResource(R.string.debug_title),
+        onBack = handleBack,
+        backEnabled = !running,
+    ) { innerPadding ->
         Column(
             Modifier
                 .fillMaxSize()
@@ -132,58 +184,53 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            (error ?: sharer.error)?.let {
+            (error ?: runError ?: reportError)?.let {
                 Text(stringResource(R.string.programs_error, it), color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(8.dp))
             }
-            when (val state = run) {
-                is RegressionRunState.Idle -> {
-                    Text(stringResource(R.string.debug_report_body), style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = {
-                            pendingShare = PendingShare(
-                                title = reportShareTitle,
-                                description = viewModel.reportDescription,
-                                suffix = jsonSuffix,
-                                initialStem = viewModel.suggestedReportFilename(),
-                                onConfirm = { stem -> sharer.share(stem) },
-                            )
-                        },
-                        enabled = !sharer.isRunning && viewModel.hasReport,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(sharer.progress ?: stringResource(R.string.debug_report_action))
-                    }
-                    Spacer(Modifier.height(24.dp))
-                    Text(stringResource(R.string.debug_regression_body), style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = { onRunRegressionTest() },
-                        enabled = !sharer.isRunning,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.debug_regression_action))
-                    }
-                }
-                is RegressionRunState.Running -> {
-                    Text(stringResource(R.string.debug_regression_running), style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(12.dp))
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(8.dp))
-                    Text(state.step, style = MaterialTheme.typography.bodyMedium)
-                }
-                is RegressionRunState.Done -> RegressionReportView(
+            val state = run
+            val report = reportState
+            when {
+                // At most one of the first four holds at a time, since each replaces the menu and
+                // with it the buttons that start the others. The device report is read on demand
+                // and then held, the same shape as the regression run: one "Generate" whose result
+                // offers Share and Save.
+                report is DeviceReportState.Done -> DeviceReportReadyView(
+                    sizeBytes = report.json.toByteArray().size,
+                    failures = report.failures,
+                    onShare = {
+                        pendingShare = PendingShare(
+                            title = reportShareTitle,
+                            description = report.description,
+                            suffix = jsonSuffix,
+                            initialStem = report.stem,
+                            // From the held report: the read is the slow part this view keeps.
+                            onConfirm = { stem ->
+                                shareTextReport(
+                                    context = context,
+                                    filename = "$stem$jsonSuffix",
+                                    content = report.json,
+                                    mimeType = JSON_MIME_TYPE,
+                                    chooserTitle = reportShareTitle,
+                                )
+                            },
+                        )
+                    },
+                    onSave = { saveJsonLauncher.launch(report.stem + jsonSuffix) },
+                    onBackToMenu = ::backToMenu,
+                )
+                report is DeviceReportState.Running ->
+                    RunningView(stringResource(R.string.debug_report_running), report.step)
+                state is RegressionRunState.Running ->
+                    RunningView(stringResource(R.string.debug_regression_running), state.step)
+                state is RegressionRunState.Done -> RegressionReportView(
                     report = state.report,
                     onShare = {
                         pendingShare = PendingShare(
                             title = regressionShareTitle,
                             description = state.report.summary,
                             suffix = txtSuffix,
-                            // Not `suggestedReportFilename()`: that requires the DeviceReporter
-                            // facet, which a Motif XS does not have - and this share crashed the
-                            // app there. The regression test is offered for every family.
-                            initialStem = "${viewModel.filenameStem}_capabilities",
+                            initialStem = "${state.stem}_capabilities",
                             onConfirm = { stem ->
                                 shareTextReport(
                                     context = context,
@@ -195,16 +242,88 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             },
                         )
                     },
-                    onRunAgain = { run = RegressionRunState.Idle },
+                    onSave = { saveTextLauncher.launch("${state.stem}_capabilities$txtSuffix") },
+                    onBackToMenu = ::backToMenu,
                 )
+                else -> {
+                    Text(stringResource(R.string.debug_report_body), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    // Gated on the factory-name check, whose progress and verdict live inline on
+                    // this menu: a report read replaces the menu and would hide them mid-read.
+                    theme.FilledButton(
+                        onClick = { reportRunner.start(readingLabel) },
+                        enabled = hasReport && verifyProgress == null,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.debug_report_action))
+                    }
+                    Spacer(Modifier.height(24.dp))
+                    Text(stringResource(R.string.debug_regression_body), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    theme.FilledButton(
+                        onClick = { runner.start(regressionStartingLabel) },
+                        enabled = verifyProgress == null,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.debug_regression_action))
+                    }
+                    // Only where there is a shipped name table to check, which today means a
+                    // Motif XS. Read-only, so it needs none of the regression test's confirmations.
+                    if (canVerifyFactoryNames) {
+                        Spacer(Modifier.height(24.dp))
+                        Text(
+                            stringResource(R.string.debug_verify_body),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        factoryBanks.forEach { (bank, label) ->
+                            OutlinedButton(
+                                onClick = { verifyBank = label; onVerifyFactoryNames(bank) },
+                                enabled = verifyProgress == null,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(stringResource(R.string.debug_verify_action, label))
+                            }
+                        }
+                        verifyProgress?.let { step ->
+                            Spacer(Modifier.height(8.dp))
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            Spacer(Modifier.height(4.dp))
+                            Text(step, style = MaterialTheme.typography.bodySmall)
+                        }
+                        verifyResult?.let { mismatches ->
+                            Spacer(Modifier.height(8.dp))
+                            if (mismatches.isEmpty()) {
+                                Text(
+                                    stringResource(R.string.debug_verify_ok, verifyBank.orEmpty()),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            } else {
+                                Text(
+                                    stringResource(
+                                        R.string.debug_verify_mismatches,
+                                        verifyBank.orEmpty(), mismatches.size,
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                // Every one, not a count: a mismatch means the shipped table is
+                                // wrong, and what matters is which slot and what the instrument
+                                // calls it.
+                                mismatches.forEach {
+                                    Text(it, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
     pending?.let { confirmation ->
         AlertDialog(
-            // Dismissing without answering is a "no": the run is waiting on this, and treating a
-            // tap outside as consent is exactly what a warning dialog must not do.
+            // Dismissing without answering is a "no": a tap outside is not consent.
             onDismissRequest = { confirmation.answer.complete(false) },
             title = { Text(stringResource(confirmation.question.title)) },
             text = {
@@ -212,15 +331,20 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     when (val question = confirmation.question) {
                         is PendingQuestion.ConfirmSelect ->
                             stringResource(R.string.debug_confirm_select_body, question.shownOnDevice)
-                        is PendingQuestion.ConfirmRealSlotMutation -> stringResource(
-                            R.string.debug_confirm_occupied_body,
-                            stringResource(
-                                when (question.reason) {
-                                    OccupiedSlotReason.NO_FREE_SLOT -> R.string.debug_confirm_occupied_reason_no_slot
-                                    OccupiedSlotReason.CANNOT_COPY -> R.string.debug_confirm_occupied_reason_no_copy
-                                },
-                            ),
-                        )
+                        // The swap alone has its own wording, since the three-test body names
+                        // two tests that are not in question there.
+                        is PendingQuestion.ConfirmRealSlotMutation -> when (question.reason) {
+                            OccupiedSlotReason.NO_FREE_SLOT -> stringResource(
+                                R.string.debug_confirm_occupied_body,
+                                stringResource(R.string.debug_confirm_occupied_reason_no_slot),
+                            )
+                            OccupiedSlotReason.CANNOT_COPY -> stringResource(
+                                R.string.debug_confirm_occupied_body,
+                                stringResource(R.string.debug_confirm_occupied_reason_no_copy),
+                            )
+                            OccupiedSlotReason.NO_SECOND_FREE_SLOT ->
+                                stringResource(R.string.debug_confirm_swap_body)
+                        }
                     },
                 )
             },
@@ -242,11 +366,69 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     }
 }
 
+/** A title, an indeterminate bar and the current step - what either report looks like mid-read. */
+@Composable
+private fun RunningView(title: String, step: String) {
+    Text(title, style = MaterialTheme.typography.titleMedium)
+    Spacer(Modifier.height(12.dp))
+    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    Spacer(Modifier.height(8.dp))
+    Text(step, style = MaterialTheme.typography.bodyMedium)
+}
+
+/**
+ * The device report, read and waiting to go somewhere - the counterpart of [RegressionReportView].
+ * The JSON itself is not shown: for a Nord it is tens of kilobytes of hex, and the useful thing to
+ * do with it is send it on. What is shown is enough to know the read happened and, where reads
+ * failed, which - since a report whose cable was pulled halfway reaches this view like a whole
+ * one. Share and Save stay, and the title and list say it is partial.
+ */
+@Composable
+private fun DeviceReportReadyView(
+    sizeBytes: Int,
+    failures: List<String>,
+    onShare: () -> Unit,
+    onSave: () -> Unit,
+    onBackToMenu: () -> Unit,
+) {
+    Text(
+        stringResource(
+            if (failures.isEmpty()) R.string.debug_report_ready else R.string.debug_report_ready_incomplete,
+        ),
+        style = MaterialTheme.typography.titleMedium,
+    )
+    Spacer(Modifier.height(12.dp))
+    Text(
+        // Rounded up, so a demo-sized report says "1 KB" rather than "0 KB".
+        stringResource(R.string.debug_report_ready_body, (sizeBytes + 1023) / 1024),
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    if (failures.isNotEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        Text(
+            stringResource(R.string.debug_report_incomplete_body, failures.size),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+        failures.forEach {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    ReportActions(onShare, onSave, onBackToMenu)
+}
+
 @Composable
 private fun RegressionReportView(
     report: RegressionReport,
     onShare: () -> Unit,
-    onRunAgain: () -> Unit,
+    onSave: () -> Unit,
+    onBackToMenu: () -> Unit,
 ) {
     Text(report.summary, style = MaterialTheme.typography.titleMedium)
     Spacer(Modifier.height(12.dp))
@@ -264,107 +446,29 @@ private fun RegressionReportView(
             result.detail,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            // Monospaced so a run of addresses ("A:1:1", "A:1:4") lines up down the report.
+            // Monospaced, so a run of addresses lines up down the report.
             fontFamily = FontFamily.Monospace,
         )
         Spacer(Modifier.height(8.dp))
     }
     Spacer(Modifier.height(12.dp))
-    Button(onClick = onShare, modifier = Modifier.fillMaxWidth()) {
+    ReportActions(onShare, onSave, onBackToMenu)
+}
+
+/** What a finished report of either kind offers: send it on, keep it here, or drop it. */
+@Composable
+private fun ReportActions(onShare: () -> Unit, onSave: () -> Unit, onBackToMenu: () -> Unit) {
+    val theme = LocalThemeStyle.current
+    theme.FilledButton(onClick = onShare, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.action_share))
     }
     Spacer(Modifier.height(8.dp))
-    OutlinedButton(onClick = onRunAgain, modifier = Modifier.fillMaxWidth()) {
+    OutlinedButton(onClick = onSave, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.action_save_to_device))
+    }
+    Spacer(Modifier.height(8.dp))
+    OutlinedButton(onClick = onBackToMenu, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.debug_regression_back))
     }
 }
 
-/**
- * Where the regression run has got to.
- *
- * A sub-state of this screen rather than a fourth navigation route: nothing outside can link to a
- * finished run, and a report that survived leaving the screen would be a claim about an instrument
- * the app may no longer be connected to.
- */
-private sealed interface RegressionRunState {
-    data object Idle : RegressionRunState
-
-    data class Running(val step: String) : RegressionRunState
-
-    data class Done(val report: RegressionReport) : RegressionRunState
-}
-
-private fun regressionRunStateToStrings(state: RegressionRunState): List<String> {
-    val done = state as? RegressionRunState.Done ?: return emptyList()
-    val flattened = mutableListOf(done.report.summary)
-    done.report.results.forEach { result ->
-        flattened.add(result.name)
-        flattened.add(result.status.name)
-        flattened.add(result.detail)
-    }
-    return flattened
-}
-
-private fun regressionRunStateFromStrings(saved: List<String>): RegressionRunState {
-    if (saved.isEmpty()) return RegressionRunState.Idle
-    val summary = saved[0]
-    val results = saved.drop(1).chunked(3).map { triple ->
-        RegressionResult(triple[0], Status.valueOf(triple[1]), triple[2])
-    }
-    return RegressionRunState.Done(RegressionReport(results, summary))
-}
-
-/**
- * Saves a finished [RegressionRunState.Done] across a configuration change; [RegressionRunState
- * .Idle] and a run still [RegressionRunState.Running] both save as nothing and restore to `Idle`.
- *
- * A run in progress could not meaningfully survive regardless of what this saved: its coroutine
- * lives in this screen's `rememberCoroutineScope()`, which a configuration change tears down along
- * with the rest of the composition, so a restored `Running` would show a progress bar nothing is
- * ever going to advance again. Idle is the honest state to land on instead - the buttons that
- * started it are right there.
- *
- * [RegressionReport] carries no `@Parcelize` (this project has no reason for that plugin
- * otherwise), so this flattens it to the flat string list `rememberSaveable` already knows how to
- * put in a Bundle rather than adding a dependency for one screen's state.
- *
- * Confirmed reproducible without this: rotating away from a finished run's report silently
- * reverted the screen to the plain menu, even though navigation itself stayed on `debug` the whole
- * time (2026-08-28).
- *
- * Typed `Saver<RegressionRunState, Any>`, not the `List<Saveable>` its name and samples suggest:
- * `listSaver`'s own declared return type is `Saver<Original, Any>` in this Compose version, since
- * it boxes the list itself rather than parameterising over its element type.
- */
-private val RegressionRunStateSaver: Saver<RegressionRunState, Any> = listSaver(
-    save = { state -> regressionRunStateToStrings(state) },
-    restore = { saved -> regressionRunStateFromStrings(saved) },
-)
-
-/** A question the run is blocked on, and the answer it is waiting for. */
-private class PendingConfirmation(
-    val question: PendingQuestion,
-    val answer: CompletableDeferred<Boolean>,
-)
-
-private sealed interface PendingQuestion {
-    @get:StringRes val title: Int
-
-    @get:StringRes val confirm: Int
-
-    @get:StringRes val decline: Int
-
-    /** Only the person holding the instrument can see what its display says. */
-    data class ConfirmSelect(val shownOnDevice: String) : PendingQuestion {
-        override val title = R.string.debug_confirm_select_title
-        override val confirm = R.string.debug_confirm_select_yes
-        override val decline = R.string.debug_confirm_select_no
-    }
-
-    /** The one prompt covering rename, move and swap against a slot holding real data. */
-    data class ConfirmRealSlotMutation(val reason: OccupiedSlotReason) : PendingQuestion {
-        override val title = R.string.debug_confirm_occupied_title
-        override val confirm = R.string.debug_confirm_occupied_yes
-        override val decline = R.string.action_cancel
-    }
-}

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
@@ -389,9 +392,8 @@ class Pro800EditorTest {
                 config,
             ).layout,
         )
-        // COPY joined the rest once it was implemented: the instrument has no copy command, but
-        // it has the reads and writes to compose one, and RegressionTester gates its copy step on
-        // this set - it used to skip with "this instrument cannot copy a preset", which was untrue.
+        // COPY included: the instrument has no copy command, but it has the reads and writes to
+        // compose one, and RegressionTester gates its copy step on this set.
         assertEquals(
             setOf(EditOp.RENAME, EditOp.MOVE, EditOp.SWAP, EditOp.DELETE, EditOp.COPY),
             editor.supported,

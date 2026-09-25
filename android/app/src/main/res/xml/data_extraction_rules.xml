@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and later read this in place of allowBackup, which stays in the manifest for the
+     versions before it. Both say the same thing: nothing here is copied to a cloud backup or
+     carried to another device. The app holds no user data worth restoring (a theme preference,
+     and the cache directory a report is staged in while it is shared), and PRIVACY.md promises
+     that none of it leaves the phone. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

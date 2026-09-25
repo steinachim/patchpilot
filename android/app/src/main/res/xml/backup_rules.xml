@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Android 11-and-earlier counterpart of data_extraction_rules.xml. allowBackup="false"
+     already keeps those versions out of backups; this states the same exclusion in the form the
+     backup agent reads, so the two attributes cannot disagree. -->
+<full-backup-content>
+    <exclude domain="root" />
+    <exclude domain="file" />
+    <exclude domain="database" />
+    <exclude domain="sharedpref" />
+    <exclude domain="external" />
+</full-backup-content>

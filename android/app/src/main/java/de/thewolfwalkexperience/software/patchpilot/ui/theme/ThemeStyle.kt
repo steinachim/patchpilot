@@ -1,11 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui.theme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -13,38 +24,49 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * Everything a screen needs to draw itself differently per [AppTheme], gathered behind one
- * interface instead of an `if (theme == AppTheme.Steampunk)` at each call site.
+ * Everything a screen needs to draw itself differently per [AppTheme], behind one interface rather
+ * than an `if (theme == AppTheme.Steampunk)` at each call site.
  *
- * This is deliberately *not* where `ColorScheme`/`Typography`/`Shapes` live - those are
- * `MaterialTheme`-level tokens, already centralised in the one `when (appTheme)` in
- * [PatchPilotTheme], and every stock Material component (buttons, dialogs, menus, the destructive
- * Delete styling) already gets them for free. This interface exists only for the handful of
- * things a token swap alone cannot produce: bespoke composables (a pressure gauge standing in for
- * a spinner) and bespoke decoration (a riveted frame, a mechanical slot bezel) that used to be a
- * `Boolean` read off the raw `AppTheme` value and a branch, scattered across `ConnectScreen`,
- * `ProgramsScreen`, `AppScaffold` and `MainActivity`.
+ * Not where `ColorScheme`, `Typography` and `Shapes` live: those are `MaterialTheme` tokens,
+ * centralised in [PatchPilotTheme]'s one `when (appTheme)`, and every stock Material component
+ * picks them up. This interface is for the things a token swap cannot produce - a compass standing
+ * in for a spinner, a brass frame, a brass drag handle.
  *
- * **Adding a third theme** means implementing this interface once (see [SteampunkThemeStyle] for
- * the shape of it) and mapping it in [AppTheme.style] below - no screen file changes, since they
- * only ever read [LocalThemeStyle.current] and never the raw [AppTheme] value.
+ * A third theme is one implementation of this (see [SteampunkThemeStyle]) plus a mapping in
+ * [AppTheme.style]; no screen file changes, since they read [LocalThemeStyle.current].
  */
 interface ThemeStyle {
-    /** The preset row's drag handle glyph - decorative, the row itself carries the a11y label. */
-    val dragHandleGlyph: String
+    /**
+     * One of the top bar's action icons, drawn by the theme rather than named by the screen:
+     * Material's own vector, or a brass bitmap that no tint can be applied to.
+     *
+     * @param contentDescription what a screen reader announces. The caller owns it, since the
+     *   same icon is described differently depending on what it will do.
+     */
+    @Composable
+    fun ActionIcon(action: BarAction, contentDescription: String?, modifier: Modifier = Modifier)
+
+    /**
+     * The preset row's drag handle - decorative, since the row itself carries the a11y label.
+     *
+     * Drawn by the theme rather than described to it: a text glyph dims by taking a colour, a
+     * bitmap that carries its own colour dims by alpha.
+     *
+     * @param enabled false while the listing is still arriving, when dragging does nothing.
+     */
+    @Composable
+    fun DragHandle(enabled: Boolean, modifier: Modifier = Modifier)
 
     /** The screen-level frame/border decoration, if this theme draws one. */
     fun screenFrame(base: Modifier): Modifier
 
     /** The app-wide background texture, applied once at the root ([MainActivity]'s `Surface`). */
     fun screenTexture(base: Modifier): Modifier
-
-    /** The bezel behind a preset row's handle glyph, sized to fit the existing handle column. */
-    fun slotBezel(base: Modifier, occupied: Boolean): Modifier
 
     /** The panel treatment for one preset row, including drag/drop-target highlighting. */
     fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean): Modifier
@@ -63,20 +85,66 @@ interface ThemeStyle {
     /** A bank caption row in the preset list (e.g. "Bank A"). */
     @Composable
     fun BankHeader(text: String, modifier: Modifier = Modifier)
+
+    /**
+     * A prominent, filled action - Retry, Continue anyway, and the like. Default Material's own
+     * `Button`; a theme with something to say about a filled surface (a brass plate rather than a
+     * flat token colour) draws it instead of only tinting one.
+     */
+    @Composable
+    fun FilledButton(
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier,
+        enabled: Boolean = true,
+        content: @Composable RowScope.() -> Unit,
+    )
+
+    /**
+     * Space to keep clear at each end of the bank rail, for decoration drawn over it: zero unless
+     * a theme paints into the rail's ends, which [railDecoration] does after the content is laid
+     * out, so the labels would otherwise sit underneath. With the Motif XS's eleven factory banks
+     * the first and last labels land on the decoration.
+     */
+    val railEndInset: Dp get() = 0.dp
 }
 
-/**
- * Plain Material, unchanged from before this app had a second theme: every function here either
- * hands back [base] untouched or renders the stock component it always rendered.
- */
+/** The actions a top bar can carry, whichever screen puts them there. */
+enum class BarAction { Back, Refresh, Settings }
+
+/** Material's disabled alpha, for the pieces a theme dims for itself rather than by token. */
+internal const val DISABLED_HANDLE_ALPHA = 0.38f
+
+/** Plain Material: every function hands back [base] untouched or renders the stock component. */
 object DefaultThemeStyle : ThemeStyle {
-    override val dragHandleGlyph = "⠿"
+    @Composable
+    override fun ActionIcon(action: BarAction, contentDescription: String?, modifier: Modifier) {
+        val icon = when (action) {
+            // Mirrored in a right-to-left locale, where a `<-` glyph is not.
+            BarAction.Back -> Icons.AutoMirrored.Filled.ArrowBack
+            BarAction.Refresh -> Icons.Filled.Refresh
+            BarAction.Settings -> Icons.Filled.Settings
+        }
+        Icon(icon, contentDescription = contentDescription, modifier = modifier)
+    }
 
     override fun screenFrame(base: Modifier) = base
     override fun screenTexture(base: Modifier) = base
-    override fun slotBezel(base: Modifier, occupied: Boolean) = base
     override fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean) = base
     override fun railDecoration(base: Modifier) = base
+
+    @Composable
+    override fun DragHandle(enabled: Boolean, modifier: Modifier) {
+        Text(
+            "⠿",
+            style = MaterialTheme.typography.titleMedium,
+            color = if (enabled) {
+                LocalContentColor.current
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_HANDLE_ALPHA)
+            },
+            modifier = modifier,
+        )
+    }
 
     @Composable
     override fun ProgressIndicator(modifier: Modifier) {
@@ -99,10 +167,8 @@ object DefaultThemeStyle : ThemeStyle {
 
     @Composable
     override fun BankHeader(text: String, modifier: Modifier) {
-        // A plain background color isn't enough to set the header apart from its neighbors -
-        // alternating row shading means those rows are surfaceVariant half the time, the same
-        // color the header itself uses. The dividers give a seam that's visible regardless of
-        // which shade landed on either side.
+        // The dividers, not the background: alternating row shading makes the neighbouring rows
+        // surfaceVariant half the time, the same colour the header uses.
         Column(modifier.fillMaxWidth()) {
             HorizontalDivider()
             Text(
@@ -117,6 +183,16 @@ object DefaultThemeStyle : ThemeStyle {
             HorizontalDivider()
         }
     }
+
+    @Composable
+    override fun FilledButton(
+        onClick: () -> Unit,
+        modifier: Modifier,
+        enabled: Boolean,
+        content: @Composable RowScope.() -> Unit,
+    ) {
+        Button(onClick = onClick, modifier = modifier, enabled = enabled, content = content)
+    }
 }
 
 /** [ThemeStyle] for the currently active [AppTheme]. */
@@ -127,8 +203,7 @@ val AppTheme.style: ThemeStyle
     }
 
 /**
- * The active [ThemeStyle], provided by [PatchPilotTheme]. Defaults to [DefaultThemeStyle] so a
- * composable previewed or tested outside it degrades to the plain look rather than crashing on a
- * missing provider.
+ * The active [ThemeStyle], provided by [PatchPilotTheme]. Defaults to [DefaultThemeStyle], so a
+ * composable previewed outside it degrades to the plain look rather than crashing.
  */
 val LocalThemeStyle = compositionLocalOf<ThemeStyle> { DefaultThemeStyle }

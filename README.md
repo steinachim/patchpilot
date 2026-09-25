@@ -1,24 +1,38 @@
-# PatchPilot
+# Patch Pilot
 
-PatchPilot is a native Android app for browsing, organizing, and editing presets on hardware synthesizers over USB — renaming, copying, moving, and deleting presets directly from your phone or tablet, without needing a computer or the manufacturer's own editor software.
+Patch Pilot is a native Android app for browsing, organizing and editing the presets stored on a hardware synthesizer, over USB, from a phone or tablet. It renames, copies, moves and deletes presets on the instrument itself; no computer and no manufacturer editor is needed.
 
 ## Supported instruments
 
-- Nord Stage 2EX
-- Nord Grand
-- Behringer Pro-800
-- Yamaha Motif XS (only XS6 tested, device identification might need updates for XS7/8)
+| Instrument | Connection | Status |
+|---|---|---|
+| Nord Electro 7 | USB (vendor protocol) | Verified on hardware |
+| Nord Grand | USB (vendor protocol) | Verified on hardware |
+| Nord Grand 2 | USB (vendor protocol) | Verified on hardware |
+| Nord Lead A1 | USB (vendor protocol) | Verified on hardware |
+| Nord Piano 6 | USB (vendor protocol) | Verified on hardware |
+| Nord Stage 2 EX | USB (vendor protocol) | Verified on hardware |
+| Nord Stage 4 | USB (vendor protocol) | Verified on hardware |
+| Nord Wave 2 | USB (vendor protocol) | Verified on hardware |
+| Behringer Pro-800 | USB-MIDI (class compliant) | Verified on hardware |
+| Yamaha Motif XS6 | USB (USB-MIDI packets on a vendor interface) | Verified on hardware |
+| Yamaha Motif XS7, XS8 | as XS6 | **Assumed.** Their USB product ids are inferred from Yamaha's driver files and have not been confirmed on a unit. |
 
-Each instrument connects over USB (directly, or via USB-MIDI where the instrument supports it).
+"Verified on hardware" means the app has been run against that model. For the Nord models and the Pro-800 the firmware versions it was run with are listed in the device catalog under [devices/](devices/), and connecting with a firmware version that is not listed shows a warning but is allowed. The Motif XS reads its firmware version for display only; no version check is made for it.
 
-### Will PatchPilot support other Nord instruments automatically?
+### Other Nord instruments
 
-Likely, for another instrument in the same Nord/Clavia protocol family. Nord Stage 2EX and Nord Grand share a single protocol implementation in this app; every behavioral difference between them is expressed as data — a device-catalog entry — rather than device-specific code. Adding a further Nord instrument that speaks the same USB protocol is expected to require only a new catalog entry (vendor/product id, bank layout, supported firmware), not new protocol code. Note that for safety reason, a new firmware version will report a warning as it cannot be guaranteed that the instrument behavior will be the same.
-The app allows using unsupported Nord devices (with a warning). There is a debug menu (5 taps on the instrument name in the preset view to open), that allows you to run a regression test and share the report. Send it to me to add the instrument.
+Every Nord model above is handled by one protocol implementation; the differences between models are data in [devices/nord_devices.json](devices/nord_devices.json) (USB ids, bank layout, tested firmware). Another Nord that speaks the same USB protocol is expected to need only a catalog entry. This is an expectation, not a guarantee: a new model may differ in ways the catalog cannot express.
 
-This does not extend across vendors. Behringer Pro-800 and Yamaha Motif XS each required an independent, from-scratch protocol implementation, and nothing about either implies support for other instruments from those manufacturers — a further Behringer or Yamaha instrument would need its own implementation, verified against real hardware, just as these two did.
+An unrecognized Nord (Clavia USB vendor id) can be opened anyway from the connect screen, behind a warning. The preset screen then offers "Share device details", a read-only device report whose `catalogEntry` section is the starting point for a catalog entry. A hidden debug menu (five taps on the instrument name on the preset screen) additionally runs a regression test against the connected instrument and shares its report. To get such an instrument added, open an issue at <https://github.com/steinachim/patchpilot/issues> and attach the device report, plus the regression report if you ran it.
+
+### Other manufacturers
+
+The Behringer Pro-800 and the Yamaha Motif XS each have their own protocol implementation, and neither says anything about other instruments from the same manufacturer. A further Behringer or Yamaha instrument needs its own implementation, verified against real hardware. Requests are welcome as issues; support depends on access to the instrument.
 
 ## Screenshots
+
+The app has two themes, System Default and Steampunk.
 
 <p>
   <img src="docs/screenshots/connect.png" alt="Connecting to an instrument" width="30%">
@@ -26,7 +40,13 @@ This does not extend across vendors. Behringer Pro-800 and Yamaha Motif XS each 
   <img src="docs/screenshots/presets-system.png" alt="Preset browser (System theme)" width="30%">
 </p>
 
+Without an instrument, the connect screen offers a demo mode with a simulated instrument.
+
+By default the app connects straight to the first instrument it finds over USB, without waiting for the slower MIDI bus scan a Pro-800 or Motif XS would need. Settings has an "Auto-Connect to First Found Instrument" toggle to turn that off, so the connect screen always scans both buses and shows the device list instead.
+
 ## Building
+
+Requirements: JDK 17 or newer, and the Android SDK with platform 37 installed (`compileSdk` is 37). The build runs on whatever JDK launches Gradle (`JAVA_HOME`, or the Gradle JDK configured in Android Studio); beyond the Gradle distribution the wrapper fetches and the Maven dependencies, nothing is downloaded.
 
 ```
 cd android
@@ -40,16 +60,32 @@ cd android
 ./gradlew testDebugUnitTest
 ```
 
-The build reads the device catalog from `../devices` relative to `android/` (JSON descriptors and binary fixtures used to generate the app's USB device filter and asset bundle) — keep the `devices/` and `android/` directories as siblings.
+The build reads the device catalog from `../devices` relative to `android/` (the JSON descriptors and the binary blanks under `devices/blanks/`) and copies it into the app's assets; it also generates the USB device filter from the catalog's USB ids. Keep `devices/` and `android/` as siblings.
 
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for a tour of the codebase and [PROTOCOLS.md](docs/PROTOCOLS.md) for the wire protocols each device implementation uses.
+### Continuous integration
+
+[GitHub Actions](.github/workflows/android.yml) runs the unit tests and `assembleRelease bundleRelease` on every pull request and on every push to `main`. Pushes to other branches without a pull request do not trigger a build. On `main` the release APK and bundle are signed with the release key held in repository secrets (see [RELEASING.md](docs/RELEASING.md#signing)) and attached to the run as an artifact for 30 days. Pull-request builds are unsigned.
+
+## Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): a tour of the codebase.
+- [docs/PROTOCOLS.md](docs/PROTOCOLS.md): the wire protocol each device implementation uses.
+- [docs/RELEASING.md](docs/RELEASING.md): how a version is built and published.
+- [devices/README.md](devices/README.md): the device catalog and how to add an instrument.
+- [CHANGELOG.md](CHANGELOG.md).
 
 ## Legal
 
-PatchPilot is an independent, unofficial project. It is not affiliated with, endorsed by, or supported by Clavia DMI AB (Nord), Music Tribe / Behringer, or Yamaha Corporation. Product and brand names are used solely to identify the hardware this app is compatible with.
+Patch Pilot collects no data and has no network access; see [PRIVACY.md](PRIVACY.md).
 
-This software interacts with your instrument's internal storage, including operations that overwrite or delete presets. It is provided "AS IS", without warranty of any kind, as permitted by the license below. Use with real hardware is at your own risk.
+Patch Pilot is an independent, unofficial project. It is not affiliated with, endorsed by, or supported by Clavia DMI AB (Nord), Music Tribe / Behringer, or Yamaha Corporation. Product and brand names are used solely to identify the hardware this app is compatible with.
+
+This software changes your instrument's internal storage, including operations that overwrite or delete presets. It is provided "AS IS", without warranty of any kind, as permitted by the license below. Use with real hardware is at your own risk.
 
 ## License
 
-PatchPilot is licensed under the GNU General Public License v3.0 — see [LICENSE](LICENSE). Third-party license notices for bundled dependencies and fonts are listed in [android/NOTICE.md](android/NOTICE.md).
+Copyright (C) 2026 Achim Stein. Patch Pilot is licensed under the GNU General Public License v3.0 (SPDX: `GPL-3.0-only`); see [LICENSE](LICENSE). Third-party license notices for bundled dependencies and fonts are listed in [android/NOTICE.md](android/NOTICE.md).
+
+## Thank you
+
+Thanks to both my bands, [The Wolfwalk Experience](https://www.youtube.com/@thewolfwalkexperience) and [The Jukes](https://www.youtube.com/@thejukesmusicgermany), without whom this project would not have started. Go and give them a listen.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import androidx.compose.foundation.gestures.scrollBy
@@ -16,27 +19,18 @@ import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /**
- * Drag-to-reorder state for the preset list: which row is held, where the finger is, and the
- * edge auto-scroll that lets a target off-screen be reached.
+ * Drag-to-reorder state for the preset list: which row is held, where the finger is, and the edge
+ * auto-scroll that lets an off-screen target be reached - one mechanism, so one type.
  *
- * **Lifted out of `ProgramsScreen`, where four `var`s, three density conversions, a hit-test and a
- * `LaunchedEffect` were spread across four hundred lines of an already long composable.** They are
- * one mechanism and they only ever change together, which is what makes them worth a type.
- *
- * Deliberately knows nothing about `ProgramRow`: which rows may be picked up and which may be
- * dropped on are questions about the *listing*, and change on every recomposition, so they arrive
- * as predicates rather than being baked in here.
+ * Knows nothing about `ProgramRow`: which rows may be picked up and dropped on are questions
+ * about the listing, which changes on every recomposition, so they arrive as predicates.
  */
 @Stable
 internal class ProgramListDragState(
     private val listState: LazyListState,
     private val autoScrollThresholdPx: Float,
     private val autoScrollMaxSpeedPx: Float,
-    /**
-     * Left-edge band that counts as "touched the drag handle" - generous enough to cover the
-     * handle glyph plus the row's padding around it, while staying clear of the headline text
-     * that starts further right.
-     */
+    /** Left-edge band that counts as "touched the drag handle": the glyph plus the row's padding, clear of the headline text. */
     val handleZoneWidthPx: Float,
 ) {
     /** Row index (into the rendered rows) being dragged, or null when no drag is in flight. */
@@ -48,12 +42,9 @@ internal class ProgramListDragState(
         private set
 
     /**
-     * The finger's own y position in the list's coordinate space.
-     *
-     * Tracked independently of any row, because the dragged row's layout slot scrolls off the top
-     * of the viewport after about one screen height of auto-scroll - `LazyColumn` culls on layout
-     * position, not on the translation used to follow the finger - so judging the edge bands by it
-     * would stop the scrolling well before the target is reached.
+     * The finger's own y position in the list's coordinate space, tracked independently of any
+     * row: the dragged row's layout slot scrolls off the viewport after about one screen height of
+     * auto-scroll, since `LazyColumn` culls on layout position rather than on the translation.
      */
     private var pointerY by mutableStateOf(0f)
     private var grabOffsetWithinRowPx by mutableStateOf(0f)
@@ -62,11 +53,8 @@ internal class ProgramListDragState(
     val ghostOffsetY: Int get() = (pointerY - grabOffsetWithinRowPx).roundToInt()
 
     /**
-     * Resolves a y position to the row under it.
-     *
-     * Falls back to the nearest visible row's edge rather than null when y is beyond the composed
-     * range (the finger dragged above or below the list), so a drop target stays available for the
-     * whole duration of a drag.
+     * Resolves a y position to the row under it, falling back to the nearest visible row where y
+     * is beyond the composed range, so a drop target stays available for the whole drag.
      */
     private fun hitRowInfo(y: Float): LazyListItemInfo? {
         val items = listState.layoutInfo.visibleItemsInfo
@@ -108,11 +96,9 @@ internal class ProgramListDragState(
 
     /**
      * Scrolls the list while the finger sits in an edge band, so targets outside the visible range
-     * can be reached. Runs until cancelled - the caller keys it on [draggedIndex], so ending or
-     * cancelling a drag stops it.
-     *
-     * Once a scroll actually moves content the drop target is re-resolved, since the row under a
-     * stationary [pointerY] has changed.
+     * can be reached. Runs until cancelled; the caller keys it on [draggedIndex]. Once a scroll
+     * moves content the drop target is re-resolved, since the row under a stationary [pointerY]
+     * has changed.
      */
     suspend fun autoScroll(canDrop: (rowIndex: Int) -> Boolean) {
         while (true) {
@@ -141,8 +127,8 @@ internal class ProgramListDragState(
 @Composable
 internal fun rememberProgramListDragState(listState: LazyListState): ProgramListDragState {
     val density = LocalDensity.current
-    // Edge band that triggers auto-scroll, and the fastest the list scrolls once the drag is deep
-    // inside that band - both tuned in dp.
+    // The edge band that triggers auto-scroll, and the fastest the list scrolls once the drag is
+    // deep inside it.
     val threshold = with(density) { 64.dp.toPx() }
     val maxSpeed = with(density) { 24.dp.toPx() }
     val handleZone = with(density) { 56.dp.toPx() }

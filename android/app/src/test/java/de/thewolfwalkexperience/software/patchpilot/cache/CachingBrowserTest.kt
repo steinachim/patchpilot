@@ -1,7 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.cache
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import kotlinx.coroutines.flow.Flow
@@ -16,7 +20,7 @@ import org.junit.Test
 
 class CachingBrowserTest {
 
-    private val key = CacheKey("inst-a", "desc", "1.00", "A:4|B:4")
+    private val key = CacheKey("inst-a", "desc", "1.00", "A:4|B:4", "usb:/dev/bus/usb/001/004")
     private val otherInstrument = key.copy(instrument = "inst-b")
 
     private fun slot(bank: Int, index: Int, name: String?) = PresetSlot(
@@ -38,7 +42,9 @@ class CachingBrowserTest {
             PresetSlot(addr, "${addr.bank}:${addr.slot}", "Bank ${addr.bank}", "refreshed")
         }
 
-        override fun index(): Flow<IndexUpdate> = flow {
+        override val scopes = listOf(PresetScope.USER, PresetScope.FAVORITES)
+
+        override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
             indexRuns++
             emit(IndexUpdate.Slots(slots))
             failures.forEach { emit(IndexUpdate.Failed(it, "unreadable")) }
@@ -137,6 +143,30 @@ class CachingBrowserTest {
         browser.refresh(SlotAddress(0, 1))
 
         assertEquals(listOf(null, "Moved"), cache.get(key)!!.map { it.name })
+    }
+
+    /**
+     * A Nord lists only the slots it holds, so a copy or a move into an empty slot refreshes an
+     * address the cached listing never had. It has to land in device order: appended, the browser
+     * replays it after the last bank and draws its bank header twice.
+     */
+    @Test
+    fun `an address the listing did not hold is inserted in device order`() = runTest {
+        val cache = PresetIndexCache()
+        val delegate = CountingBrowser(
+            listOf(slot(0, 0, "A first"), slot(0, 3, "A last"), slot(1, 0, "B first")),
+        )
+        val browser = CachingBrowser(delegate, cache, key)
+        browser.index().toList()
+
+        delegate.refreshResult = { addr -> slot(addr.bank, addr.slot, "copied") }
+        browser.refresh(SlotAddress(0, 2))
+        browser.refresh(SlotAddress(1, 5))
+
+        assertEquals(
+            listOf(0 to 0, 0 to 2, 0 to 3, 1 to 0, 1 to 5),
+            cache.get(key)!!.map { it.address.bank to it.address.slot },
+        )
     }
 
     @Test

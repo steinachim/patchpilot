@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import kotlinx.coroutines.test.runTest
@@ -353,6 +356,36 @@ class StorageCalibrationTest {
         assertEquals(1, areas.size)
         assertEquals(listOf("Wave Pool"), areas.single().names)
         assertEquals(unit, areas.single().unitBytes)
+    }
+
+    /**
+     * The other way a walk can fail: not the storage query, but the item walk after it - a cable
+     * pulled halfway through "Measuring 'Program'...". The area still lands in the report with its
+     * figures zeroed and a note saying why; what this checks is that the failure *also* reaches
+     * the callback, and through it the report's top-level failure map. A note alone let such a
+     * report read as complete to anyone who did not open every storage area.
+     */
+    @Test
+    fun `a category whose item walk fails is recorded as a failure, not only as a note`() = runTest {
+        val count = countPayload(3, 100, 5, 0, 4)
+        val responses = mutableListOf<Pair<Int, ByteArray>>(
+            1 to rootListPayload(listOf("Wave Pool")),
+            5 to ByteArray(0), 9 to count, 7 to ByteArray(4),
+            // The walk: child list, select, count, first cursor step - and then the instrument
+            // goes silent, which the replay transport reports by running out of replies.
+            3 to singleBankChildList(),
+            5 to ByteArray(0),
+            9 to count,
+        )
+
+        val failed = mutableListOf<String>()
+        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
+        val areas = device.calibrateStorageUnits(onFailure = { name, _ -> failed += name })
+
+        assertEquals(listOf("Wave Pool"), failed)
+        val area = areas.single()
+        assertEquals(0, area.recordCount)
+        assertTrue(area.reason, area.reason.startsWith("couldn't walk 'Wave Pool'"))
     }
 
     @Test

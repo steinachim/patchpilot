@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import de.thewolfwalkexperience.software.patchpilot.R
@@ -10,6 +13,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -24,17 +28,19 @@ import de.thewolfwalkexperience.software.patchpilot.ui.theme.ThemePreferences
 import kotlinx.coroutines.launch
 
 /**
- * Just the theme picker for now - the one setting the app has. A radio list rather than a
- * single on/off switch even though there are only two entries: [AppTheme] is what a third skin
- * would extend, and a switch has nowhere to grow to that a radio list already does.
- *
- * Applies the choice immediately - [ThemePreferences.setTheme] writes through DataStore, which
- * [MainActivity] is already collecting as the live `appTheme` passed to `PatchPilotTheme`, so the
- * whole app recomposes into the new skin without a restart.
+ * The theme picker, the auto-connect toggle, and the legal links. The theme picker is a radio list
+ * rather than a switch, since [AppTheme] is what a third skin would extend. Both settings apply
+ * immediately: they write through DataStore, which their readers collect live.
  */
 @Composable
-fun SettingsScreen(themePreferences: ThemePreferences, onOpenLicenses: () -> Unit, onBack: () -> Unit) {
+fun SettingsScreen(
+    themePreferences: ThemePreferences,
+    connectionPreferences: ConnectionPreferences,
+    onOpenLicenses: () -> Unit,
+    onBack: () -> Unit,
+) {
     val current by themePreferences.theme.collectAsState(initial = AppTheme.Default)
+    val autoConnect by connectionPreferences.autoConnectToFirstFound.collectAsState(initial = true)
     val scope = rememberCoroutineScope()
 
     PatchPilotScaffold(title = stringResource(R.string.settings_title), onBack = onBack) { innerPadding ->
@@ -57,6 +63,30 @@ fun SettingsScreen(themePreferences: ThemePreferences, onOpenLicenses: () -> Uni
                 description = stringResource(R.string.settings_theme_steampunk_description),
                 selected = current == AppTheme.Steampunk,
                 onSelect = { scope.launch { themePreferences.setTheme(AppTheme.Steampunk) } },
+            )
+            Text(
+                stringResource(R.string.settings_connection_heading),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_auto_connect)) },
+                supportingContent = { Text(stringResource(R.string.settings_auto_connect_description)) },
+                trailingContent = {
+                    Switch(
+                        checked = autoConnect,
+                        onCheckedChange = { enabled ->
+                            scope.launch { connectionPreferences.setAutoConnectToFirstFound(enabled) }
+                        },
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        scope.launch { connectionPreferences.setAutoConnectToFirstFound(!autoConnect) }
+                    },
             )
             Text(
                 stringResource(R.string.settings_legal_heading),

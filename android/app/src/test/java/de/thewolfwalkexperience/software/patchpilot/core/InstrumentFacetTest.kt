@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.core
 
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
@@ -50,9 +53,81 @@ class InstrumentFacetTest {
 
     private object NullMidiTransport : MidiTransport {
         override val rebuildOnResume = false
-        override fun send(bytes: ByteArray) = Unit
+        override suspend fun send(bytes: ByteArray) = Unit
         override val incoming: Flow<ByteArray> = emptyFlow()
         override fun close() = Unit
+    }
+
+    // ---- Facet declarations ----
+
+    /**
+     * **A facet a family cannot implement must be null, not an implementation that refuses.**
+     *
+     * `Instrument` states the rule and nothing else enforces it. The Motif XS case is the one that
+     * varies with data rather than with code: its tagger exists only where the shipped catalog
+     * carries a category encoding, and the fixture above deliberately has none - so a build that
+     * started returning a tagger regardless would be offering a dialog with no categories in it.
+     */
+    @Test
+    fun `a family without a capability declares null for it`() {
+        assertNull("no encoding in this fixture, so nothing to tag with", motifXs().tagger)
+        // A Nord's categories need *two* halves - the model's own id subset and the catalog's
+        // master name list - and this fixture profile carries neither, so there is nothing to
+        // resolve. The Nord path with both halves present is covered by NordTaggerTest.
+        assertNull("no category ids and no master list in this fixture", nord().tagger)
+    }
+
+    /**
+     * Demo mode offers categories but not favorites, and says so through the facet rather than by
+     * throwing when asked.
+     *
+     * It exists so every screen has something to render with no hardware attached, so the shape it
+     * declares has to be one a real instrument actually has - a Nord's: one assignment, flat, and
+     * `None` a category rather than the absence of one.
+     */
+    @Test
+    fun `demo mode declares a Nord-shaped tagger`() {
+        val tagger = requireNotNull(DemoInstrument().tagger) { "demo mode should offer categories" }
+        assertEquals(1, tagger.assignmentCount)
+        assertNull("a favorite mark is hardware state demo mode does not model", tagger.favorites)
+        assertTrue("no sub-categories, like the Nord it mirrors", tagger.taxonomy.isFlat)
+        assertFalse(tagger.allowsUnassigned)
+        assertTrue("every demo slot is writable", tagger.canSetCategories(SlotAddress(0, 0)))
+        assertFalse(tagger.canSetFavorite(SlotAddress(0, 0)))
+    }
+
+    /** Every seeded demo preset files under a category the demo's own taxonomy lists. */
+    @Test
+    fun `every demo preset starts in a category the taxonomy names`() = runTest {
+        val demo = DemoInstrument()
+        val tagger = requireNotNull(demo.tagger)
+        val rows = demo.browser.index().toList()
+            .filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }
+        assertTrue("the demo should seed some presets", rows.isNotEmpty())
+        for (row in rows) {
+            val ref = requireNotNull(tagger.read(row.address).categories.single()) {
+                "${row.displayId} ${row.name} should carry a category"
+            }
+            assertNotNull(
+                "${row.displayId} names a category outside the taxonomy",
+                tagger.taxonomy.label(ref),
+            )
+        }
+    }
+
+    /** A category set in demo mode sticks, and shows on the row it was set on. */
+    @Test
+    fun `setting a demo category is stored and badged`() = runTest {
+        val demo = DemoInstrument()
+        val tagger = requireNotNull(demo.tagger)
+        val row = demo.browser.index().toList()
+            .filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }.first()
+
+        val lead = tagger.taxonomy.mains.indexOfFirst { it.name == "Lead" }
+        tagger.setCategories(row.address, listOf(CategoryRef(lead, null)))
+
+        assertEquals(CategoryRef(lead, null), tagger.read(row.address).categories.single())
+        assertEquals(listOf("Lead"), demo.browser.refresh(row.address).badges)
     }
 
     // ---- Every declared edit actually completes ----
@@ -121,15 +196,11 @@ class InstrumentFacetTest {
     }
 
     /**
-     * The other half of the same rule: an op *not* declared must not be quietly implemented
-     * either, or the UI is hiding something that works.
+     * The other half of the same rule: an op not declared must not be quietly implemented either,
+     * or the UI is hiding something that works.
      *
-     * **The example has now moved twice, and that is the point.** It was a Nord delete until that
-     * was ported (sub-opcode 20/21), then the Motif XS's rename until Yamaha's documented write
-     * path was implemented and that was ported too. It is now [NoCopyFixtureInstrument]'s copy,
-     * which is a fixture rather than a family - so
-     * the next port cannot invalidate it, and the property stops being hostage to how much of
-     * each instrument happens to be understood this month.
+     * The example is [NoCopyFixtureInstrument]'s copy, a fixture rather than a family, so
+     * implementing an operation on any real instrument cannot invalidate it.
      */
     @Test
     fun `an undeclared edit throws rather than silently working`() = runTest {

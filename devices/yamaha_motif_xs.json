@@ -1,12 +1,319 @@
 {
   "family": "motifxs",
   "schemaVersion": 1,
-  "familyConfig": {},
+  "familyConfig": {
+    "categoryEncoding": {
+      "description": "How the four category bytes at 0x18-0x1B of a voice's documented Voice Common block encode the two assignments (MIDI_Data_Table_en.xls, VOICE NORMAL r26-r29; the Common block is 0x40 00 00 for a Normal Voice and 0x46 00 00 for a Drum Voice). Each assignment is a main byte then a sub byte.",
+      "mainByValue": [
+        "Piano",
+        "Keys",
+        "Organ",
+        "Guitar",
+        "Bass",
+        "String",
+        "Brass",
+        "SaxWW",
+        "SynLd",
+        "Pads",
+        "SyCmp",
+        "CPerc",
+        "Dr/Pc",
+        "S.EFX",
+        "M.EFX",
+        "Ethnic",
+        "NoAsg"
+      ],
+      "mainSource": "Yamaha's own notes column in the VOICE NORMAL sheet ('Pn, Kb, Or, Gt, Bs, St, Br, SW, Ld, Pd, Sc, Cp, Dr, Se, Me, Et, --'). Value 16 (NoAsg) means no assignment, and is what a voice's Category 2 holds when it has only one.",
+      "subByValuePerMain": {
+        "Piano": [
+          "APno",
+          "Layer",
+          "Modrn",
+          "Vintg",
+          "Arp"
+        ],
+        "Keys": [
+          "EP",
+          "FM",
+          "Clavi",
+          "Synth",
+          "Arp"
+        ],
+        "Organ": [
+          "TnWhl",
+          "Combo",
+          "Pipe",
+          "Synth",
+          "Arp"
+        ],
+        "Guitar": [
+          "A.Gtr",
+          "E.Cln",
+          "E.Dst",
+          "Synth",
+          "Arp"
+        ],
+        "Bass": [
+          "ABass",
+          "EBass",
+          "SynBs",
+          "Arp"
+        ],
+        "String": [
+          "Solo",
+          "Ensem",
+          "Pizz",
+          "Synth",
+          "Arp"
+        ],
+        "Brass": [
+          "Solo",
+          "BrsEn",
+          "Orche",
+          "Synth",
+          "Arp"
+        ],
+        "SaxWW": [
+          "Sax",
+          "Flute",
+          "WWind",
+          "RPipe",
+          "Arp"
+        ],
+        "SynLd": [
+          "Analg",
+          "Digtl",
+          "H Hop",
+          "Dance",
+          "Arp"
+        ],
+        "Pads": [
+          "Analg",
+          "Warm",
+          "Brite",
+          "Choir",
+          "Arp"
+        ],
+        "SyCmp": [
+          "Analg",
+          "Digtl",
+          "Fade",
+          "Hook",
+          "Arp"
+        ],
+        "CPerc": [
+          "Malet",
+          "Bell",
+          "SynBl",
+          "PDrum",
+          "Arp"
+        ],
+        "Dr/Pc": [
+          "Drums",
+          "Perc",
+          "Synth",
+          "Arp"
+        ],
+        "S.EFX": [
+          "Move",
+          "Ambie",
+          "Natur",
+          "SciFi",
+          "Arp"
+        ],
+        "M.EFX": [
+          "Move",
+          "Ambie",
+          "Sweep",
+          "Hit",
+          "Arp"
+        ],
+        "Ethnic": [
+          "Bowed",
+          "Pluk",
+          "Struk",
+          "Blown",
+          "Arp"
+        ]
+      },
+      "subSource": "Measured on hardware: Yamaha documents the sub byte only as 'Refer to Category List', a list not in any released table here, and the VOICE NORMAL sheet's stated range (00-03) is too small. Indices 0-3 of every main, and index 4 of the ten mains that use it, were recovered by reading one factory voice per (main, sub) pair the documented way and matching it against this file's own category names. The order is NOT the one the voice-list spreadsheet prints (Brass is Orche, Solo, BrsEn there but Solo, BrsEn, Orche here). The remaining six index-4 values were set from the front panel on a scratch USER voice and read back: Piano, Keys, Brass and SaxWW have Arp there, and Bass and Dr/Pc have no fifth sub at all. The same round corrected the no-sub sentinel - every factory voice that showed one was in a five-sub main, where a fixed 5 and 'one past the last' are the same byte; Bass and Dr/Pc read 4, so the rule is the latter.",
+      "subNoAssignmentRule": "The 'no sub-category' value is one past the main's last sub - i.e. exactly len(subByValuePerMain[main]). That is 5 for fourteen mains and 4 for Bass and Dr/Pc, which have only four subs each."
+    },
+    "banks": [
+      {
+        "label": "PRE1",
+        "displayLabel": "PRE1",
+        "shortLabel": "P1",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 0,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 0
+      },
+      {
+        "label": "PRE2",
+        "displayLabel": "PRE2",
+        "shortLabel": "P2",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 1,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 1
+      },
+      {
+        "label": "PRE3",
+        "displayLabel": "PRE3",
+        "shortLabel": "P3",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 2,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 2
+      },
+      {
+        "label": "PRE4",
+        "displayLabel": "PRE4",
+        "shortLabel": "P4",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 3,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 3
+      },
+      {
+        "label": "PRE5",
+        "displayLabel": "PRE5",
+        "shortLabel": "P5",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 4,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 4
+      },
+      {
+        "label": "PRE6",
+        "displayLabel": "PRE6",
+        "shortLabel": "P6",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 5,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 5
+      },
+      {
+        "label": "PRE7",
+        "displayLabel": "PRE7",
+        "shortLabel": "P7",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 6,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 6
+      },
+      {
+        "label": "PRE8",
+        "displayLabel": "PRE8",
+        "shortLabel": "P8",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 7,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 7
+      },
+      {
+        "label": "GM",
+        "displayLabel": "GM",
+        "shortLabel": "GM",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 9,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 0,
+        "selectMsb": 0
+      },
+      {
+        "label": "USR1",
+        "displayLabel": "USER 1",
+        "shortLabel": "U1",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 10,
+        "readOnly": false,
+        "indexByDefault": true,
+        "selectLsb": 8
+      },
+      {
+        "label": "USR2",
+        "displayLabel": "USER 2",
+        "shortLabel": "U2",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 11,
+        "readOnly": false,
+        "indexByDefault": true,
+        "selectLsb": 9
+      },
+      {
+        "label": "USR3",
+        "displayLabel": "USER 3",
+        "shortLabel": "U3",
+        "slotCount": 128,
+        "addressHi": 12,
+        "addressMid": 12,
+        "readOnly": false,
+        "indexByDefault": true,
+        "selectLsb": 10
+      },
+      {
+        "label": "PREDR",
+        "displayLabel": "PRE DR",
+        "shortLabel": "P DR",
+        "slotCount": 64,
+        "addressHi": 12,
+        "addressMid": 32,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 32
+      },
+      {
+        "label": "GMDR",
+        "displayLabel": "GM DR",
+        "shortLabel": "G DR",
+        "slotCount": 1,
+        "addressHi": 12,
+        "addressMid": 33,
+        "readOnly": true,
+        "indexByDefault": false,
+        "selectLsb": 0,
+        "selectMsb": 127
+      },
+      {
+        "label": "DRUM",
+        "displayLabel": "USER DR",
+        "shortLabel": "U DR",
+        "slotCount": 32,
+        "addressHi": 12,
+        "addressMid": 40,
+        "readOnly": false,
+        "indexByDefault": true,
+        "selectLsb": 40
+      }
+    ]
+  },
   "devices": [
     {
-      "id": "yamaha_motif_xs",
+      "id": "yamaha_motif_xs6",
       "family": "motifxs",
-      "name": "Yamaha Motif XS",
+      "name": "Yamaha Motif XS6",
       "match": {
         "type": "usb",
         "vendorId": 1177,
@@ -14,57 +321,32 @@
         "endpointOut": 1,
         "endpointIn": 130,
         "midiCable": 3
-      },
-      "familyConfig": {
-        "descriptorId": "yamaha_motif_xs",
-        "name": "Yamaha Motif XS",
-        "deviceNumber": 0,
-        "banks": [
-          {
-            "label": "USR1",
-            "displayLabel": "USER 1",
-            "shortLabel": "U1",
-            "slotCount": 128,
-            "addressHi": 12,
-            "addressMid": 10,
-            "readOnly": false,
-            "indexByDefault": true,
-            "selectLsb": 8
-          },
-          {
-            "label": "USR2",
-            "displayLabel": "USER 2",
-            "shortLabel": "U2",
-            "slotCount": 128,
-            "addressHi": 12,
-            "addressMid": 11,
-            "readOnly": false,
-            "indexByDefault": true,
-            "selectLsb": 9
-          },
-          {
-            "label": "USR3",
-            "displayLabel": "USER 3",
-            "shortLabel": "U3",
-            "slotCount": 128,
-            "addressHi": 12,
-            "addressMid": 12,
-            "readOnly": false,
-            "indexByDefault": true,
-            "selectLsb": 10
-          },
-          {
-            "label": "DRUM",
-            "displayLabel": "USER DR",
-            "shortLabel": "U DR",
-            "slotCount": 32,
-            "addressHi": 12,
-            "addressMid": 40,
-            "readOnly": false,
-            "indexByDefault": true,
-            "selectLsb": 40
-          }
-        ]
+      }
+    },
+    {
+      "id": "yamaha_motif_xs7",
+      "family": "motifxs",
+      "name": "Yamaha Motif XS7",
+      "match": {
+        "type": "usb",
+        "vendorId": 1177,
+        "productId": 4163,
+        "endpointOut": 1,
+        "endpointIn": 130,
+        "midiCable": 3
+      }
+    },
+    {
+      "id": "yamaha_motif_xs8",
+      "family": "motifxs",
+      "name": "Yamaha Motif XS8",
+      "match": {
+        "type": "usb",
+        "vendorId": 1177,
+        "productId": 4164,
+        "endpointOut": 1,
+        "endpointIn": 130,
+        "midiCable": 3
       }
     }
   ]

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import android.content.Context
@@ -12,56 +15,24 @@ import de.thewolfwalkexperience.software.patchpilot.transport.transportScope
 import kotlinx.serialization.Serializable
 import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 
-/** Named for the instrument it describes, not for a family of them - this file covers exactly
- * one model. The name carries no meaning to the loader; the `family` field inside it does. */
+/** Named for the one instrument it describes; the loader dispatches on the `family` field inside it. */
 private const val CATALOG_ASSET = "behringer_pro800.json"
 
 /**
- * The per-model configuration this family needs - the typed form of an
- * [InstrumentDescriptor.familyConfig] block.
- *
- * Everything here is Pro-800-specific and none of it exists on a Nord, which is exactly why it
- * lives in an opaque block rather than in the shared descriptor: a flat cross-family schema would
- * carry these as five more mostly-null columns.
+ * The configuration this family needs, the typed form of the catalog's top-level
+ * [FamilyCatalog.familyConfig] block. There is one Pro-800 entry, so there is no per-device
+ * override. The id and name belong to [InstrumentDescriptor].
  */
 @Serializable
 data class Pro800Config(
-    val descriptorId: String = "behringer_pro800",
-    val name: String = "Behringer Pro-800",
     val bankCount: Int = 4,
     val slotsPerBank: Int = 100,
     val slotDigits: Int = 2,
-    /**
-     * Which MIDI channel to send bank select and program change on (0-based).
-     *
-     * A real configuration input with no Nord counterpart: the instrument's own `MIDI RX Channel`
-     * setting can be ALL, dip-switch-driven, a fixed channel, or OFF, and sending on the wrong one
-     * fails **silently** - there is no acknowledgement to notice its absence in. Once the settings
-     * block at address 510 is readable, this can be derived from its byte 10 instead of
-     * configured, including detecting OFF and saying so rather than presenting a dead button
-     * (design section 7.6).
-     */
-    val midiChannel: Int = 0,
-    /**
-     * Firmware versions this app has been tested against. Empty means "skip the check".
-     *
-     * Mirrors `VersionMessage::SUPPORTED_FIRMWARE_VERSIONS` in the reference implementation, and
-     * the same posture `NordDevice` takes: decline rather than risk mis-reading presets on
-     * firmware whose layout nobody has verified.
-     */
+    /** Firmware versions this app has been tested against; empty skips the check. */
     val supportedFirmwareVersions: Set<String> = setOf("1.4.6"),
 )
 
-/**
- * The Pro-800 family: `devices/behringer_pro800.json` plus a factory.
- *
- * Its catalog is written in the generic [FamilyCatalog] shape directly, unlike the Nord one, which
- * keeps its own native shape because Python reads that file too. Both arrive at the registry
- * as descriptors either way - which is the point of letting each family load its own file.
- *
- * "Family" here is the code-level dispatch key, not a claim about how many instruments the file
- * holds: this one holds a single Pro-800, and is named accordingly.
- */
+/** The Pro-800 family: `devices/behringer_pro800.json`, in the generic [FamilyCatalog] shape, plus a factory. */
 object Pro800Family : InstrumentFamily {
 
     override val id = Pro800Instrument.FAMILY
@@ -78,10 +49,15 @@ object Pro800Family : InstrumentFamily {
     ): Instrument {
         val midi = transport as? MidiTransport
             ?: error("A Pro-800 speaks MIDI SysEx, not ${transport::class.simpleName}.")
-        val config = catalog.format.decodeFromJsonElement(Pro800Config.serializer(), descriptor.familyConfig)
-        // The exchange owns the collector draining this transport, so its scope has to outlive
-        // any single operation. It ends when the transport is closed and the instrument with it.
+        // Resolved before the exchange starts its collector, so a catalog fault cannot leave a
+        // collector running on a transport nobody owns.
+        val config = catalog.format.decodeFromJsonElement(Pro800Config.serializer(), catalog.load(context).familyConfig)
         val scope = transportScope(descriptor.name)
-        return Pro800Instrument(SysExExchange(midi, scope), config)
+        return Pro800Instrument(
+            SysExExchange(midi, scope),
+            config,
+            descriptorId = descriptor.id,
+            catalogName = descriptor.name,
+        )
     }
 }

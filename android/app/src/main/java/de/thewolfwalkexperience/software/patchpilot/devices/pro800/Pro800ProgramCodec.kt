@@ -1,26 +1,18 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 /**
- * The Pro-800's 7-bit-safe encoding, and the one simplification worth having over the reference
- * implementation.
+ * The Pro-800's 7-bit-safe encoding. SysEx cannot carry a byte above `0x7F`, so Behringer inserts
+ * an overflow byte at every position that is a multiple of 8; bit *n* of that byte is the
+ * stripped high bit of the byte at offset +(n+1). Overflow bytes can fall in the middle of a
+ * multi-byte value.
  *
- * SysEx cannot carry a byte above `0x7F`, so Behringer inserts an **overflow byte** at every
- * position that is a multiple of 8; bit *n* of that byte is the stripped high bit of the byte at
- * offset +(n+1). Overflow bytes can fall in the middle of a multi-byte value.
- *
- * **Decode once into a dense array; express field offsets in dense coordinates.** The reference
- * implementation (`Pro800DataMessage.cpp`) instead reads fields straight out of the encoded
- * stream, skipping overflow positions inline and re-deriving the overflow bit on every byte
- * access. That works, but it makes every field offset a hybrid coordinate and the skip logic easy
- * to get subtly wrong where a value straddles an overflow byte.
- *
- * **This is provably equivalent, not a reinterpretation.** For a raw position `p` that is not a
- * multiple of 8, the dense index is `p - p/8 - 1`. The C++ `getValue()` walks raw positions and
- * skips any that land on a multiple of 8 - which maps onto *contiguous* dense indices. So reading
- * n contiguous little-endian bytes from the dense array yields exactly the same value, and
- * straddling an overflow byte stops being a special case at all. `denseIndexOf` below is that
- * mapping, kept so the documented raw offsets can be translated and checked rather than
- * hand-converted.
+ * A record is decoded once into a dense array and field offsets are expressed in dense
+ * coordinates: for a raw position `p` that is not a multiple of 8, the dense index is
+ * `p - p/8 - 1`, and a value straddling an overflow byte is contiguous. [denseIndexOf] is that
+ * mapping, so documented raw offsets can be translated rather than hand-converted.
  */
 object Pro800ProgramCodec {
 
@@ -40,14 +32,9 @@ object Pro800ProgramCodec {
     }
 
     /**
-     * Dense 8-bit bytes -> encoded. The exact inverse of [decode] for any buffer [decode] can
-     * produce from a real record.
-     *
-     * The one shape that does not round-trip is an encoded buffer ending on a *dangling overflow
-     * byte* - one with no data bytes after it - because that byte carries no information and
-     * [decode] rightly drops it. A real dump cannot look like that: a 210-byte program message
-     * carries 198 encoded data bytes, which is 24 whole groups plus an overflow byte and five
-     * values.
+     * Dense 8-bit bytes -> encoded. The inverse of [decode] for every buffer a real record
+     * produces; an encoded buffer ending on a dangling overflow byte does not round-trip, and a
+     * real dump never ends on one.
      */
     fun encode(dense: ByteArray): ByteArray {
         val encoded = ArrayList<Byte>(dense.size + dense.size / (GROUP - 1) + 1)
@@ -66,11 +53,8 @@ object Pro800ProgramCodec {
     }
 
     /**
-     * The dense index of a documented raw offset.
-     *
-     * `docs/Pro800SysExMessages.md` states field positions in *encoded* coordinates, so this is
-     * how a field table ported from that document is translated. Throws for a raw offset that is
-     * an overflow byte, since no field lives there.
+     * The dense index of a documented raw offset - the reference implementation states positions
+     * in encoded coordinates. Throws for an overflow byte, where no field lives.
      */
     fun denseIndexOf(rawOffset: Int): Int {
         require(rawOffset % GROUP != 0) { "raw offset $rawOffset is an overflow byte, not a field" }
@@ -79,6 +63,37 @@ object Pro800ProgramCodec {
 
     /** How many dense bytes an encoded buffer of [encodedSize] holds. */
     fun denseSizeOf(encodedSize: Int): Int = encodedSize - (encodedSize + GROUP - 1) / GROUP
+
+    /**
+     * A copy of [encoded] with [byteCount] little-endian bytes at [denseOffset] set to [value],
+     * touching only those value bytes and the overflow bits that carry their high bits.
+     *
+     * Not a [decode]/[encode] round trip: the settings block is 46 raw bytes and ends mid-group,
+     * so its last overflow byte has two bits no value owns, which a re-encode would zero. Whether
+     * the hardware puts anything there is unknown, so the block is patched in place. Dense index
+     * `d` sits in group `d / 7`, whose overflow byte is at raw `group * 8` and whose value byte
+     * is at raw `group * 8 + d % 7 + 1`, with its high bit in bit `d % 7` of the overflow byte.
+     */
+    fun patchValue(encoded: ByteArray, denseOffset: Int, byteCount: Int, value: Int): ByteArray {
+        require(byteCount in 1..4) { "only 1..4 byte values are defined, asked for $byteCount" }
+        require(denseOffset >= 0) { "dense offset $denseOffset is negative" }
+        val patched = encoded.copyOf()
+        for (i in 0 until byteCount) {
+            val dense = denseOffset + i
+            val group = dense / (GROUP - 1)
+            val overflowPosition = group * GROUP
+            val bit = dense % (GROUP - 1)
+            val valuePosition = overflowPosition + bit + 1
+            require(valuePosition < patched.size) {
+                "dense byte $dense is past the end of this ${encoded.size}-byte record"
+            }
+            val byte = (value shr (i * 8)) and 0xFF
+            patched[valuePosition] = (byte and 0x7F).toByte()
+            val overflow = patched[overflowPosition].toInt() and 0x7F
+            patched[overflowPosition] = ((overflow and (1 shl bit).inv()) or ((byte shr 7) shl bit)).toByte()
+        }
+        return patched
+    }
 
     /** [byteCount] little-endian bytes at [denseOffset], optionally sign-extended. */
     fun readValue(dense: ByteArray, denseOffset: Int, byteCount: Int, signed: Boolean = false): Int {
@@ -107,12 +122,9 @@ object Pro800ProgramCodec {
     }
 
     /**
-     * An ASCII string field - a preset name is stored as a fixed span with no length prefix, so
-     * anything past the name is padding.
-     *
-     * NULs are removed wherever they fall rather than only at the end, matching the reference
-     * implementation, and every other control byte goes with them: this string is rendered
-     * straight into a list row, and a preset name is device-supplied text like any other field.
+     * An ASCII string field: a fixed span with no length prefix. NULs are removed wherever they
+     * fall, matching the reference implementation, and so is every other control byte, since the
+     * string is rendered straight into a list row.
      */
     fun readString(dense: ByteArray, denseOffset: Int, length: Int): String {
         if (denseOffset >= dense.size) return ""

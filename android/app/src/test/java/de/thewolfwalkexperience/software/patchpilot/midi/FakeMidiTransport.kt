@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
 package de.thewolfwalkexperience.software.patchpilot.midi
 
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
@@ -29,7 +32,7 @@ class FakeMidiTransport(
     override val incoming: Flow<ByteArray> = _incoming.asSharedFlow()
     override val rebuildOnResume = false
 
-    override fun send(bytes: ByteArray) {
+    override suspend fun send(bytes: ByteArray) {
         sent += bytes
         respond(bytes).forEach { _incoming.tryEmit(it) }
     }
