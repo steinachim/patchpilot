@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -36,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.core.OccupiedSlotReason
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionReport
 import de.thewolfwalkexperience.software.patchpilot.core.Status
+import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
  */
 @Composable
 fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
+    val theme = LocalThemeStyle.current
     // The run itself lives in the ViewModel, so a configuration change mid-run neither cancels
     // it nor loses the dialog it is waiting on - see RegressionRunner.
     val runner = viewModel.regressionRunner
@@ -249,7 +250,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     // Gated on the factory-name check, whose progress and verdict live inline on
                     // this menu: a report read replaces the menu and would hide them mid-read.
-                    Button(
+                    theme.FilledButton(
                         onClick = { reportRunner.start(readingLabel) },
                         enabled = hasReport && verifyProgress == null,
                         modifier = Modifier.fillMaxWidth(),
@@ -259,7 +260,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     Spacer(Modifier.height(24.dp))
                     Text(stringResource(R.string.debug_regression_body), style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
-                    Button(
+                    theme.FilledButton(
                         onClick = { runner.start(regressionStartingLabel) },
                         enabled = verifyProgress == null,
                         modifier = Modifier.fillMaxWidth(),
@@ -457,7 +458,8 @@ private fun RegressionReportView(
 /** What a finished report of either kind offers: send it on, keep it here, or drop it. */
 @Composable
 private fun ReportActions(onShare: () -> Unit, onSave: () -> Unit, onBackToMenu: () -> Unit) {
-    Button(onClick = onShare, modifier = Modifier.fillMaxWidth()) {
+    val theme = LocalThemeStyle.current
+    theme.FilledButton(onClick = onShare, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.action_share))
     }
     Spacer(Modifier.height(8.dp))

@@ -36,13 +36,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -106,115 +104,77 @@ fun Modifier.steampunkFrame(): Modifier = composed {
 }
 
 /**
- * One scratch on a brass plate: where it starts as a fraction of the plate's width and height,
- * how long it is, and how steeply it runs. Length is a real distance rather than a fraction, so a
- * wide plate gets more marks of the same size instead of longer ones.
- */
-private class BrassWear(val x: Float, val y: Float, val length: Dp, val slope: Float)
-
-/**
- * The wear on a brass plate, fixed rather than generated: a plate has to look the same every time
- * it is drawn, and a random set would reshuffle on every recomposition. Alternating entries are
- * lit and shaded, which is what makes a scratch read as a groove rather than a line, and the
- * slopes vary so they read as knocks rather than as something combed.
- */
-private val BRASS_WEAR = listOf(
-    BrassWear(0.04f, 0.30f, 13.dp, 0.5f),
-    BrassWear(0.10f, 0.74f, 8.dp, -0.3f),
-    BrassWear(0.22f, 0.20f, 11.dp, 0.2f),
-    BrassWear(0.31f, 0.55f, 6.dp, 1.1f),
-    BrassWear(0.38f, 0.68f, 15.dp, -0.15f),
-    BrassWear(0.51f, 0.34f, 9.dp, 0.7f),
-    BrassWear(0.63f, 0.78f, 12.dp, -0.5f),
-    BrassWear(0.72f, 0.42f, 7.dp, 0.9f),
-    BrassWear(0.80f, 0.24f, 14.dp, 0.25f),
-    BrassWear(0.92f, 0.64f, 9.dp, -0.8f),
-)
-
-/**
- * Patina: faint dark clouds, so the metal between the scratches is not uniformly lit. Held to the
- * shaded tone rather than the lit one, which keeps the plate's text contrast on the safe side.
- */
-private val BRASS_PATINA = listOf(
-    Triple(0.16f, 0.78f, 26.dp),
-    Triple(0.44f, 0.18f, 34.dp),
-    Triple(0.61f, 0.82f, 20.dp),
-    Triple(0.88f, 0.34f, 28.dp),
-)
-
-/**
- * A worn brass fill for a plate: `primaryContainer` through the middle, a lit bevel along the top
- * edge, a shaded foot along the bottom, and [BRASS_WEAR]'s scratches over it. Meant for something
- * already clipped to a rounded shape, like a bank header (see `SteampunkThemeStyle.BankHeader`).
+ * A three-slice brass plaque for the bank header (see `SteampunkThemeStyle.BankHeader`): two
+ * end caps (`steampunk_plaque_left`/`_right`) at their own aspect ratio, and a middle strip
+ * (`steampunk_plaque_mid`) stretched to fill whatever is left between them. The caps carry their
+ * own fastening screws and corner facets, so nothing else needs to be drawn on top.
  *
- * The middle band keeps the container colour exactly, so the contrast its `onPrimaryContainer`
- * text was chosen against does not move: the wear lives in the top and bottom eighths and in
- * marks too faint to shift a luminance ratio.
+ * Not used for `FilledButton`: a pill this short clips the caps' own screws away right where the
+ * rounding starts, so a button takes the mid strip alone, via [steampunkBrassFill].
  *
- * Drawn rather than a bitmap because the plate is as wide as its label needs, and one texture
- * would smear stretched across a tablet's header and tile visibly on a phone's.
+ * Every piece shares one scale, `size.height / <cap's native height>`, so a cap's width follows
+ * its own art rather than a guessed constant, and the mid strip lines up with the caps' full
+ * height exactly. If the caps alone would already be wider than the box (an extreme, unrealistic
+ * width), they are shrunk to share it evenly and the mid strip is skipped rather than drawn at a
+ * negative width.
  */
-fun Modifier.steampunkWornBrass(): Modifier = composed {
-    val plate = MaterialTheme.colorScheme.primaryContainer
-    val lit = lerp(plate, SteampunkAccents.brassLight, 0.8f)
-    val shaded = lerp(plate, MaterialTheme.colorScheme.surface, 0.7f)
+fun Modifier.steampunkPlaqueHeader(): Modifier = composed {
+    val left = ImageBitmap.imageResource(R.drawable.steampunk_plaque_left)
+    val mid = ImageBitmap.imageResource(R.drawable.steampunk_plaque_mid)
+    val right = ImageBitmap.imageResource(R.drawable.steampunk_plaque_right)
     drawBehind {
-        drawRect(
-            Brush.verticalGradient(
-                0f to lit,
-                0.12f to plate,
-                0.88f to plate,
-                1f to shaded,
-            ),
+        val scale = size.height / left.height
+        var leftWidth = left.width * scale
+        var rightWidth = right.width * scale
+        if (leftWidth + rightWidth > size.width) {
+            val shrink = size.width / (leftWidth + rightWidth)
+            leftWidth *= shrink
+            rightWidth *= shrink
+        }
+        drawImage(
+            image = left,
+            dstOffset = IntOffset(0, 0),
+            dstSize = IntSize(leftWidth.roundToInt(), size.height.roundToInt()),
         )
-        BRASS_PATINA.forEach { (x, y, spread) ->
-            val center = Offset(x * size.width, y * size.height)
-            val radius = spread.toPx()
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(shaded.copy(alpha = 0.35f), Color.Transparent),
-                    center = center,
-                    radius = radius,
-                ),
-                radius = radius,
-                center = center,
-            )
-        }
-        val hairline = 1.dp.toPx()
-        BRASS_WEAR.forEachIndexed { i, wear ->
-            val start = Offset(wear.x * size.width, wear.y * size.height)
-            val run = wear.length.toPx()
-            drawLine(
-                color = if (i % 2 == 0) lit.copy(alpha = 0.24f) else shaded.copy(alpha = 0.30f),
-                start = start,
-                end = Offset(start.x + run, start.y + run * wear.slope),
-                strokeWidth = hairline,
+        drawImage(
+            image = right,
+            dstOffset = IntOffset((size.width - rightWidth).roundToInt(), 0),
+            dstSize = IntSize(rightWidth.roundToInt(), size.height.roundToInt()),
+        )
+        val midWidth = size.width - leftWidth - rightWidth
+        if (midWidth > 0f) {
+            drawImage(
+                image = mid,
+                dstOffset = IntOffset(leftWidth.roundToInt(), 0),
+                dstSize = IntSize(midWidth.roundToInt(), size.height.roundToInt()),
             )
         }
     }
 }
 
 /**
- * Two screws flanking a short horizontal brass bar - left and right, vertically centred - for
- * a bank header row (see `ProgramsScreen`). Meant for something that is already clipped to a
- * rounded [SteampunkShapes] shape and coloured as a brass plate; the screws alone don't read as
- * fastened to anything without that rounding.
+ * A stretched fill of [image] - the bank header's own bordered strip (`steampunk_plaque_mid`)
+ * for `FilledButton` - with no unstretched ends of its own. The header's end caps do not survive
+ * a pill this short: they clip away right where the rounding starts, so a button takes the one
+ * stretched strip instead, whichever art it is drawn from.
+ *
+ * @param alpha dims the fill alone, so a disabled button's content can dim by its own
+ *   (different) amount without doubling up.
  */
-fun Modifier.steampunkBarScrews(): Modifier = composed {
-    val screw = ImageBitmap.imageResource(R.drawable.steampunk_screw)
-    drawWithContent {
-        drawContent()
-        val inset = 12.dp.toPx()
-        val screwSize = 10.dp.toPx()
-        val y = size.height / 2f
-        screwHead(screw, Offset(inset, y), screwSize)
-        screwHead(screw, Offset(size.width - inset, y), screwSize)
+fun Modifier.steampunkBrassFill(image: Int, alpha: Float = 1f): Modifier = composed {
+    val texture = ImageBitmap.imageResource(image)
+    drawBehind {
+        drawImage(
+            image = texture,
+            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+            alpha = alpha,
+        )
     }
 }
 
 /**
- * Two screws top and bottom - the same idea as [steampunkBarScrews] rotated 90 degrees, for a
- * tall narrow pill-shaped element like the bank fast-scroll rail (`BankIndex`). The rail is fully
+ * Two screws top and bottom, for a tall narrow pill-shaped element like the bank fast-scroll rail
+ * (`BankIndex`). The rail is fully
  * rounded (`RoundedCornerShape(percent = 50)`), so each end is a true semicircle of radius
  * `size.width / 2` - the screw sits at that semicircle's own centre, not at a fixed distance from
  * the edge, so it lands in the middle of the curve regardless of the rail's actual width.

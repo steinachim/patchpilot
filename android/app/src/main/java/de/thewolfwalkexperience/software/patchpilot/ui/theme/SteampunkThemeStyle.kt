@@ -6,12 +6,15 @@ package de.thewolfwalkexperience.software.patchpilot.ui.theme
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +47,7 @@ object SteampunkThemeStyle : ThemeStyle {
     private val dragHandleHeight = 32.dp
 
     /** `steampunk_drag_arrow`'s own width/height, so the plates are never stretched. */
-    private const val DRAG_ARROW_ASPECT = 107f / 192f
+    private const val DRAG_ARROW_ASPECT = 337f / 543f
 
     /**
      * A little over Material's 24.dp icon, which this art needs to hold its own beside the
@@ -129,17 +133,17 @@ object SteampunkThemeStyle : ThemeStyle {
 
     @Composable
     override fun BankHeader(text: String, modifier: Modifier) {
-        // A worn, screwed-down brass plate, like the preset rows below it, rather than a band
-        // - the theme's own rounding needs a real edge to sit inside, which a full-bleed
-        // background doesn't give it (see steampunkFrame's doc comment for the general rule).
+        // A three-slice brass plaque (steampunkPlaqueHeader): its own caps and screws replace
+        // the drawn fill, border and bar screws this used before, and its own faceted corners
+        // replace the clip - a rounded corner would cut into art that draws its edge itself.
+        // Height is explicit rather than left to the text, since the caps need real height to
+        // read as anything more than a sliver.
         Box(
             modifier = modifier
                 .fillMaxWidth()
+                .height(48.dp)
                 .padding(vertical = 4.dp)
-                .clip(MaterialTheme.shapes.small)
-                .steampunkWornBrass()
-                .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small)
-                .steampunkBarScrews(),
+                .steampunkPlaqueHeader(),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -150,5 +154,42 @@ object SteampunkThemeStyle : ThemeStyle {
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
+    }
+
+    /**
+     * The bank header's own bordered strip (`steampunk_plaque_mid`) rather than a flat `primary`
+     * fill - its top and bottom rails read as a fastened plate on their own; the header's end
+     * caps do not survive a pill this short (see [steampunkPlaqueHeader]'s doc comment), so a
+     * button takes the strip alone via [steampunkBrassFill].
+     *
+     * Built on `Button` itself rather than a bespoke `Surface`, so focus, ripple, minimum touch
+     * size and the disabled click-through all stay exactly Material's; only the container becomes
+     * transparent so the strip drawn behind it shows through, clipped to the same
+     * [ButtonDefaults.shape] `Button` would have used for that background anyway.
+     */
+    @Composable
+    override fun FilledButton(
+        onClick: () -> Unit,
+        modifier: Modifier,
+        enabled: Boolean,
+        content: @Composable RowScope.() -> Unit,
+    ) {
+        val shape = ButtonDefaults.shape
+        Button(
+            onClick = onClick,
+            modifier = modifier
+                .clip(shape)
+                .steampunkBrassFill(
+                    image = R.drawable.steampunk_plaque_mid,
+                    alpha = if (enabled) 1f else DISABLED_HANDLE_ALPHA,
+                ),
+            enabled = enabled,
+            shape = shape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+            ),
+            content = content,
+        )
     }
 }

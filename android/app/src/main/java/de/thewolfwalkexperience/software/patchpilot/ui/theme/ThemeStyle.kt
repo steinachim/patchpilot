@@ -5,12 +5,14 @@ package de.thewolfwalkexperience.software.patchpilot.ui.theme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -83,6 +85,19 @@ interface ThemeStyle {
     /** A bank caption row in the preset list (e.g. "Bank A"). */
     @Composable
     fun BankHeader(text: String, modifier: Modifier = Modifier)
+
+    /**
+     * A prominent, filled action - Retry, Continue anyway, and the like. Default Material's own
+     * `Button`; a theme with something to say about a filled surface (a brass plate rather than a
+     * flat token colour) draws it instead of only tinting one.
+     */
+    @Composable
+    fun FilledButton(
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier,
+        enabled: Boolean = true,
+        content: @Composable RowScope.() -> Unit,
+    )
 
     /**
      * Space to keep clear at each end of the bank rail, for decoration drawn over it: zero unless
@@ -167,6 +182,16 @@ object DefaultThemeStyle : ThemeStyle {
             )
             HorizontalDivider()
         }
+    }
+
+    @Composable
+    override fun FilledButton(
+        onClick: () -> Unit,
+        modifier: Modifier,
+        enabled: Boolean,
+        content: @Composable RowScope.() -> Unit,
+    ) {
+        Button(onClick = onClick, modifier = modifier, enabled = enabled, content = content)
     }
 }
 

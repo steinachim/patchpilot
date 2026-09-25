@@ -165,7 +165,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
             is ConnectionState.Error -> {
                 Text(stringResource(R.string.programs_error, s.message), color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
+                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
             // Retry re-asks: the permission is still not held, so the next open puts the system
             // dialog up again. Nothing else does - see ConnectionState.PermissionDenied.
@@ -177,7 +177,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                 Spacer(Modifier.height(8.dp))
                 Text(stringResource(R.string.connect_permission_denied_hint))
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
+                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
             // Not styled as an error: nothing is broken, the instrument is listening on a
             // different port, and what the user needs is the sequence that changes it, legible
@@ -201,7 +201,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                     )
                 }
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
+                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
             is ConnectionState.Connected -> {
                 Text(stringResource(R.string.connect_connected, s.instrument.identity.name))
@@ -251,7 +251,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry_search)) }
+                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry_search)) }
             }
             is ConnectionState.NothingFound -> {
                 Text(stringResource(R.string.connect_none_found))
@@ -267,7 +267,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                     }
                 }
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
+                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
             is ConnectionState.AdvisoryWarning -> {
                 // The same shape as the unknown-device gate below: the same kind of question, and
@@ -286,7 +286,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                         Text(stringResource(R.string.action_disconnect))
                     }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { viewModel.confirmAdvisory() }) {
+                    theme.FilledButton(onClick = { viewModel.confirmAdvisory() }) {
                         Text(stringResource(R.string.action_continue_anyway))
                     }
                 }
@@ -331,7 +331,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                     color = MaterialTheme.colorScheme.error,
                 )
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry_search)) }
+                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry_search)) }
             }
             is ConnectionState.UnknownDeviceWarning -> {
                 Text(stringResource(R.string.connect_unknown_title), style = MaterialTheme.typography.titleMedium)
@@ -346,7 +346,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                 Row {
                     OutlinedButton(onClick = { viewModel.cancelUnknownDeviceSelection() }) { Text(stringResource(R.string.action_cancel)) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { viewModel.confirmUnknownDevice(s.device) }) { Text(stringResource(R.string.action_continue_anyway)) }
+                    theme.FilledButton(onClick = { viewModel.confirmUnknownDevice(s.device) }) { Text(stringResource(R.string.action_continue_anyway)) }
                 }
             }
         }
