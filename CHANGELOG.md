@@ -2,6 +2,9 @@
 
 ## Next release
 
+### Fixed
+- Building the app now uses Android Gradle Plugin 9.4.0, fixing an R8 bug that made two builds of the same source produce different bytes, needed for F-Droid's reproducible-build verification.
+
 ## 1.0
 
 ### Added
