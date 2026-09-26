@@ -24,6 +24,8 @@ Install the release APK, not a debug build, on a phone, connect a real instrumen
 
 `./gradlew lintRelease` passes with warnings only and is worth running before a release; CI does not run it.
 
+If this release bumps Gradle, AGP or the build JDK, re-verify reproducibility before tagging: build twice from a clean checkout and confirm `classes.dex` matches byte-for-byte (extract it from both APKs and `cmp`), then once this version is published, `fdroid build --test <appid>:<versionCode>` against the GitHub binary should report a successful comparison. A regression here doesn't fail this build - it fails F-Droid's `Binaries:` check (see below), meaning F-Droid can no longer adopt the GitHub signature for this release.
+
 ## 3. Tag and publish on GitHub
 
 Fast-forward `main` to the release commit and push both branch and tag. The push to `main` runs the signed CI build (`android.yml`); the tag push runs `release.yml`, which builds its own signed APK and creates the GitHub Release, using the `## <version>` section of `CHANGELOG.md` as the release notes.
@@ -36,7 +38,7 @@ git push origin main v<version>
 
 ## 4. F-Droid (once listed)
 
-Nothing to do. With `UpdateCheckMode: Tags` in the fdroiddata metadata, the F-Droid bot picks up the new `v*` tag, opens a merge request with the new `versionCode`, and the build server builds it from the tag. A build failure is reported in the fdroiddata issue tracker.
+Nothing to do. With `UpdateCheckMode: Tags` in the fdroiddata metadata, the F-Droid bot picks up the new `v*` tag, opens a merge request with the new `versionCode`, and the build server builds it from the tag. The recipe has `Binaries:` and `AllowedAPKSigningKeys` set, so a successful build there also means F-Droid distributes this exact GitHub-signed APK rather than one signed with its own key - which only holds if the reproducibility check in step 2 was actually run for this release. A build failure is reported in the fdroiddata issue tracker.
 
 ## 5. Google Play (once listed)
 
