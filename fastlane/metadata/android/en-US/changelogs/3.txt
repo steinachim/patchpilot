@@ -1,0 +1,1 @@
+Build and release tooling fixes: reproducible builds (needed for F-Droid) and automatic GitHub releases on tag push. No user-facing changes.

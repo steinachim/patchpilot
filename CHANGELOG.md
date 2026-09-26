@@ -2,6 +2,8 @@
 
 ## Next release
 
+## 1.1
+
 ### Added
 - Pushing a version tag now creates its GitHub Release automatically, with the signed APK attached and release notes taken from the matching changelog section.
 
