@@ -2,6 +2,9 @@
 
 ## Next release
 
+### Added
+- Pushing a version tag now creates its GitHub Release automatically, with the signed APK attached and release notes taken from the matching changelog section.
+
 ### Fixed
 - Building the app now uses Android Gradle Plugin 9.4.0, fixing an R8 bug that made two builds of the same source produce different bytes, needed for F-Droid's reproducible-build verification.
 

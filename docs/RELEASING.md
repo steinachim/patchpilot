@@ -26,14 +26,12 @@ Install the release APK, not a debug build, on a phone, connect a real instrumen
 
 ## 3. Tag and publish on GitHub
 
-Fast-forward `main` to the release commit, tag it there, and push both; the push to `main` also runs the signed CI build.
+Fast-forward `main` to the release commit and push both branch and tag. The push to `main` runs the signed CI build (`android.yml`); the tag push runs `release.yml`, which builds its own signed APK and creates the GitHub Release, using the `## <version>` section of `CHANGELOG.md` as the release notes.
 
 ```
 git checkout main && git merge --ff-only dev
 git tag v<version>
 git push origin main v<version>
-gh release create v<version> android/app/build/outputs/apk/release/patchpilot-v<version>.apk \
-    --title v<version> --notes-file <(sed -n '/^## <version>/,/^## /p' CHANGELOG.md | sed '1d;$d')
 ```
 
 ## 4. F-Droid (once listed)
