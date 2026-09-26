@@ -55,6 +55,14 @@ android {
         versionName = "1.1"
     }
 
+    // Play's dependency-metadata block goes into the APK's signing block, unreadable outside
+    // Play; F-Droid's scanner treats any such unrecognised block as a critical finding, since
+    // that space has also been used to hide payloads. Opting out costs nothing not on Play.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     signingConfigs {
         // Only registered when local.properties actually has the four RELEASE_* keys, so
         // `assembleRelease` still works (producing an unsigned APK) for a contributor without a

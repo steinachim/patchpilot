@@ -9,6 +9,7 @@
 
 ### Fixed
 - Building the app now uses Android Gradle Plugin 9.4.0, fixing an R8 bug that made two builds of the same source produce different bytes, needed for F-Droid's reproducible-build verification.
+- The release APK no longer carries Play's dependency-metadata block, which F-Droid's scanner flags as suspicious since it's unreadable outside Play; it had no effect on the app itself.
 
 ## 1.0
 
