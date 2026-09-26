@@ -35,9 +35,9 @@ The Behringer Pro-800 and the Yamaha Motif XS each have their own protocol imple
 The app has two themes, System Default and Steampunk.
 
 <p>
-  <img src="docs/screenshots/connect.png" alt="Connecting to an instrument" width="30%">
-  <img src="docs/screenshots/presets-steampunk.png" alt="Preset browser (Steampunk theme)" width="30%">
-  <img src="docs/screenshots/presets-system.png" alt="Preset browser (System theme)" width="30%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" alt="Connecting to an instrument" width="30%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" alt="Preset browser (Steampunk theme)" width="30%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" alt="Preset browser (System theme)" width="30%">
 </p>
 
 Without an instrument, the connect screen offers a demo mode with a simulated instrument.
