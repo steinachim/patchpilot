@@ -262,9 +262,9 @@ Class-compliant USB-MIDI through Android's `MidiManager`, as for the Pro-800; no
 
 ### Identification
 
-Vendor id `0x2466` (Fractal Audio Systems), product id `0x8010`. The Mark II, and the Mark II Turbo, reportedly use the same ids, so the ids name the family rather than the model; they are listed as `launchOnUsbAttach` only, so that Android offers the app when the unit is plugged in. A port is identified by Fractal's documented firmware query `F0 00 01 74 10 08 1D F7`, which only a device of model `10` answers; the reply starts `F0 00 01 74 10 08` and carries the version (`20 06` is 32.06) and an ASCII build stamp.
+Vendor id `0x2466` (Fractal Audio Systems), product id `0x8010`. **Assumption:** the Mark II and Mark II Turbo use the same ids (reported by owners, not seen here), so the ids name the family rather than the model. They are listed as `launchOnUsbAttach` only, so that Android offers the app when the unit is plugged in. A port is identified by Fractal's documented firmware query `F0 00 01 74 10 08 1D F7`, addressed to model `10`; **assumption:** other Fractal models, which have model bytes of their own, do not answer it. The reply starts `F0 00 01 74 10 08` and carries the version (`20 06` is 32.06) and an ASCII build stamp.
 
-The model is read at connect from the reply to command `0x47`, which Axe-Edit III sends at every startup: five 14-bit values, two bytes each, low seven bits first. The fifth is the preset count, 512 on a Mark I and 1024 (`00 08`) on a Mark II. The fifth value is read as the preset count because it is 512 on the Mark I measured, whose presets run 0..511, and 1024 is the Mark II's count. The app treats exactly 1024 as a Mark II and anything else, a missing reply included, as a Mark I, so a unit it cannot classify is never offered slots it may not have. The other four values (336, 2048, 2048 and 16 on a Mark I) are not decoded. A Mark II Turbo is expected to report as a Mark II.
+The model is read at connect from the reply to command `0x47`, which Axe-Edit III sends at every startup: five 14-bit values, two bytes each, low seven bits first. The fifth is 512 on the Mark I measured, whose presets run 0..511. **Assumption:** it is the preset count, so a Mark II, which has 1,024 presets, reports 1024 (`00 08`) there, and a Mark II Turbo reports as a Mark II; no Mark II has been seen. The app treats exactly 1024 as a Mark II and anything else, a missing reply included, as a Mark I, so a unit it cannot classify is never offered slots it may not have. The other four values (336, 2048, 2048 and 16 on a Mark I) are not decoded.
 
 ### Framing
 
@@ -278,7 +278,7 @@ Text and preset data use Fractal's own packing, not the flag-byte scheme of the 
 |---|---|---|---|
 | `0x08` | Firmware version | *(none)* | Major, minor, five undecoded bytes, the build stamp. Also the discovery probe. |
 | `0x47` | Model record | *(none)* | Five 14-bit values; the fifth is the preset count. A `64 47` acknowledgement in its place is taken as no record. |
-| `0x0D` | Preset name (public) | Preset number, low 7 bits first; `7F 7F` for the loaded preset | The number (the loaded preset's own where `7F 7F` was asked) and a 32-byte name field: a C string in a fixed buffer, with stale bytes after the terminator. An empty slot reads `<EMPTY>`. |
+| `0x0D` | Preset name (public) | Preset number, low 7 bits first; `7F 7F` for the loaded preset | The number (**assumption,** from Fractal's documentation and not yet seen live: the loaded preset's own where `7F 7F` was asked) and a 32-byte name field: a C string in a fixed buffer, with stale bytes after the terminator. An empty slot reads `<EMPTY>`. |
 | `01 27` | Select | 5 zero bytes, preset number low first, 7 zero bytes | The same shape with the number zeroed. |
 | `01 28` | Rename the loaded preset | Packed: artifact, 12 reserved bytes, 32-byte space-padded name | Acknowledged. Changes only the edit buffer. |
 | `01 26` | Store | Same shape as select | Acknowledged after about 600 ms, a flash write. Writes the edit buffer into the slot. |
@@ -288,7 +288,7 @@ Text and preset data use Fractal's own packing, not the flag-byte scheme of the 
 
 ### Addressing
 
-Presets are one run of numbers, `000`..`511` on a Mark I and `0000`..`1023` on a Mark II; the instrument has no banks. The app groups them into virtual banks of 128 (`presetsPerBank` in the catalog) only so that the index rail has something to jump to; the ids carry no bank, and a virtual bank's header shows its range alone.
+Presets are one run of numbers, `000`..`511` on a Mark I (`0000`..`1023` on a Mark II, by the assumption under "Identification"); the instrument has no banks. The app groups them into virtual banks of 128 (`presetsPerBank` in the catalog) only so that the index rail has something to jump to; the ids carry no bank, and a virtual bank's header shows its range alone.
 
 ### Operations
 
@@ -312,4 +312,4 @@ A write is never re-sent: each step's acknowledgement is awaited once, and the b
 
 ### Reliability
 
-A dump read accepts nothing until the acknowledgement that echoes its own preset number, so an end marker still arriving from an earlier read is not taken for this one. It is validated as exactly 16 chunk messages of 3,082 bytes and one end message, each with a closing checksum, and is read once more after a pause if anything is missing or damaged. At about 105 bytes per millisecond a dump can arrive in thousands of small `MidiManager` callbacks, which is what the transport's receive buffer is sized for.
+A dump read accepts nothing until the acknowledgement that echoes its own preset number, so an end marker still arriving from an earlier read is not taken for this one. It is validated as exactly 16 chunk messages of 3,082 bytes and one end message, each with a closing checksum, and is read once more after a pause if anything is missing or damaged. A dump arrives at about 105 bytes per millisecond. **Assumption:** `MidiManager` may deliver it in thousands of small callbacks (one per USB-MIDI event on some platforms, not measured here), which is what the transport's receive buffer is sized for.

@@ -8,7 +8,8 @@ package de.thewolfwalkexperience.software.patchpilot.devices.axefx3
  * `docs/PROTOCOLS.md` has the wire format.
  *
  * Every message is `F0 00 01 74 10 cc … cs F7`: Fractal's manufacturer id, model `10` (the
- * Axe-Fx III, Mark I and Mark II alike), a command byte, its payload, and an XOR checksum.
+ * Axe-Fx III; assumed to be the same on a Mark II, which is untested), a command byte, its
+ * payload, and an XOR checksum.
  *
  * Deliberately absent: an encoder for preset dump chunks. A dump's end-of-transfer marker is a
  * checksum over the chunks' wire bytes, padding bits included, whose algorithm is unknown, and
@@ -75,7 +76,7 @@ object AxeFx3SysEx {
     /**
      * The 12 bytes between the artifact and the name in every rename request captured from
      * Axe-Edit III. Not decoded; replayed verbatim, which renames stored live on two different
-     * presets.
+     * presets. Assumed to be the same for every preset.
      */
     private val SET_NAME_RESERVED = byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0)
 
@@ -181,7 +182,8 @@ object AxeFx3SysEx {
 
     /**
      * The 14-bit values of a `0x47` reply, two bytes each, low seven bits first. Five on firmware
-     * 32.06 (336, 2048, 2048, 16, 512 on a Mark I); an acknowledgement carries none.
+     * 32.06 (336, 2048, 2048, 16, 512 on a Mark I); an acknowledgement carries none. The fifth is
+     * assumed to be the preset count; only the Mark I's 512 has been seen.
      */
     fun decodeCapabilities(reply: ByteArray): List<Int> {
         if (commandOf(reply) != CMD_CAPABILITIES) return emptyList()
@@ -193,8 +195,8 @@ object AxeFx3SysEx {
 
     /**
      * A fifth value of exactly 1024 is a Mark II, anything else, a missing one included, a Mark I,
-     * so a unit that cannot be classified is never offered slots it may not have. A Mark II Turbo
-     * is expected to report as a Mark II.
+     * so a unit that cannot be classified is never offered slots it may not have. Assumed, since no
+     * Mark II has been seen: a Mark II reports 1024, and a Mark II Turbo reports as a Mark II.
      */
     fun presetCountOf(capabilities: List<Int>): Int =
         if (capabilities.getOrNull(4) == PRESET_COUNT_MARK_II) PRESET_COUNT_MARK_II else PRESET_COUNT_MARK_I

@@ -28,7 +28,7 @@ private const val EMPTY_PRESET_ASSET = "axefx3_empty_preset.bin"
 
 /**
  * The typed form of the catalog's `familyConfig`. The preset count is not here: the unit reports
- * it at connect (512 on a Mark I, 1024 on a Mark II).
+ * it at connect (512 on a Mark I; 1024 assumed on a Mark II, untested).
  */
 @Serializable
 data class AxeFx3Config(

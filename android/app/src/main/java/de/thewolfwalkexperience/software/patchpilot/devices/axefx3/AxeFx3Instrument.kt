@@ -34,7 +34,8 @@ import kotlin.time.TimeSource
 private const val TAG = "AxeFx3Instrument"
 
 /**
- * The Fractal Audio Axe-Fx III (Mark I and Mark II), over class-compliant USB-MIDI SysEx.
+ * The Fractal Audio Axe-Fx III over class-compliant USB-MIDI SysEx: the Mark I as measured, and
+ * the Mark II on the assumption that it differs only in its preset count (untested).
  * Browsing, selection and the raw preset transfer live here; [AxeFx3Editor] composes the edits.
  *
  * **Every write goes through the edit buffer.** A rename or a dump write changes the loaded
@@ -60,7 +61,7 @@ class AxeFx3Instrument(
     internal val device = AxeFx3Device(exchange)
     internal val lock = Mutex()
 
-    /** Mark I until [connect] has asked; 1024 on a Mark II. */
+    /** Mark I until [connect] has asked; 1024 where the unit reports a Mark II (assumed, untested). */
     var presetCount: Int = AxeFx3SysEx.PRESET_COUNT_MARK_I
         private set
 

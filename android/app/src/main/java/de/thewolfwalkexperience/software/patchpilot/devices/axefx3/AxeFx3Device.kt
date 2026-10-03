@@ -65,8 +65,9 @@ class AxeFx3Device(private val exchange: SysExExchange) {
 
     /**
      * The number of the preset the instrument has loaded, from the reply to a name query for
-     * "the current preset". Fractal's documentation says the reply carries it; null where the
-     * reply echoes `7F 7F` instead or a number this unit does not have.
+     * "the current preset". Assumed from Fractal's documentation, not yet seen on a unit: the
+     * reply carries it. Null where the reply echoes `7F 7F` instead or a number this unit does
+     * not have, which [AxeFx3Instrument.connect] uses to tell whether the assumption holds.
      */
     suspend fun loadedPreset(presetCount: Int): Int? {
         val reply = exchange.exchange(AxeFx3SysEx.queryLoaded(), "asking which preset is loaded", NAME_TIMEOUT) {
