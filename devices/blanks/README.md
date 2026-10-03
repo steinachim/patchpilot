@@ -10,6 +10,7 @@ the instrument, or recorded from the manufacturer's own editor.
 | `motifxs_blank_normal.bin` | 1,886 | An initialized Motif XS Normal Voice, name cleared. |
 | `motifxs_blank_drum.bin` | 12,588 | The same for a Drum Voice. |
 | `axefx3_empty_preset.bin` | 49,323 | What Axe-Edit III sends to delete an Axe-Fx III preset: 17 raw SysEx messages. |
+| `subsequent37_panel_initialized.bin` | 488 | The program a Subsequent 37's own front-panel Initialize produces: one raw 488-byte payload, no SysEx framing. |
 
 ## Motif XS
 
@@ -37,3 +38,9 @@ exactly as recorded (see `docs/PROTOCOLS.md`). SHA-256
 
 Do not hand-construct a replacement for another instrument or voice kind. A blank must come
 from the instrument or its own editor, never be assembled from a specification.
+
+## Subsequent 37
+
+`subsequent37_panel_initialized.bin` is what the instrument's front-panel Initialize produces, stored to a slot and read back: the 488-byte program payload, name `Init Preset`, category byte `0x77` (none), checksum closing. The app packs it into a `05 01` write when it deletes a preset or empties the source of a move, and reads the slot back to confirm it.
+
+It is not what a slot that was never written holds. That program is also named `Init Preset` but differs at 60 byte offsets, and no write can recreate "never written". The app treats both as empty by their name alone.

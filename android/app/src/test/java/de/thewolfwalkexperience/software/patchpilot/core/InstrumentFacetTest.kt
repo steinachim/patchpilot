@@ -6,6 +6,8 @@ package de.thewolfwalkexperience.software.patchpilot.core
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
 import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.FakeAxeFx3
 import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.axeFx3
+import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.FakeSubsequent37
+import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.subsequent37
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
@@ -255,6 +257,8 @@ class InstrumentFacetTest {
             EditOp.DELETE in motifXs().editor!!.supported)
         assertTrue("an Axe-Fx III writes the editor's own empty preset",
             EditOp.DELETE in axeFx3(FakeAxeFx3()).editor.supported)
+        assertTrue("a Subsequent 37 writes the panel's own Initialize",
+            EditOp.DELETE in subsequent37(FakeSubsequent37(backgroundScope)).editor.supported)
     }
 
     // ---- Facet presence is what the UI gates on ----

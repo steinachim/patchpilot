@@ -21,6 +21,7 @@ class UnknownDevicePolicyTest {
     private val yamaha = 1177
     private val behringer = 5015
     private val fractal = 9318
+    private val moog = 9826
 
     private fun usb(id: String, family: String, vendorId: Int, productId: Int) =
         InstrumentDescriptor(
@@ -36,6 +37,7 @@ class UnknownDevicePolicyTest {
         usb("yamaha_motif_xs6", "motifxs", yamaha, 4162),
         usb("behringer_pro800", "pro800", behringer, 4703),
         usb("fractal_axefx3", "axefx3", fractal, 32784),
+        usb("moog_subsequent37", "subsequent37", moog, 4092),
     )
 
     @Test
@@ -46,14 +48,15 @@ class UnknownDevicePolicyTest {
     /**
      * The policy's rule, asserted rather than only documented.
      *
-     * Two Nord models have been verified to share one protocol; Yamaha, Behringer and Fractal
-     * contribute one instrument each, and one instrument is no evidence about a vendor.
+     * Two Nord models have been verified to share one protocol; Yamaha, Behringer, Fractal and
+     * Moog contribute one instrument each, and one instrument is no evidence about a vendor.
      */
     @Test
-    fun `a Yamaha, Behringer or Fractal device may not be`() {
+    fun `a Yamaha, Behringer, Fractal or Moog device may not be`() {
         assertFalse(UnknownDevicePolicy.allows(catalog, yamaha))
         assertFalse(UnknownDevicePolicy.allows(catalog, behringer))
         assertFalse(UnknownDevicePolicy.allows(catalog, fractal))
+        assertFalse(UnknownDevicePolicy.allows(catalog, moog))
     }
 
     @Test

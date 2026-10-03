@@ -1,0 +1,25 @@
+{
+  "family": "subsequent37",
+  "schemaVersion": 1,
+  "familyConfig": {
+    "supportedFirmwareVersions": [
+      "1.2.0"
+    ]
+  },
+  "devices": [
+    {
+      "id": "moog_subsequent37",
+      "family": "subsequent37",
+      "name": "Moog Subsequent 37",
+      "match": {
+        "type": "midiIdentity",
+        "probeHex": "f0 04 0c 32 00 00 00 00 00 00 00 00 00 00 00 00 f7",
+        "replyPrefixHex": "f0 04 0c 32 7f 7f",
+        "launchOnUsbAttach": {
+          "vendorId": 9826,
+          "productId": 4092
+        }
+      }
+    }
+  ]
+}

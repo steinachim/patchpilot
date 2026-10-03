@@ -313,3 +313,75 @@ A write is never re-sent: each step's acknowledgement is awaited once, and the b
 ### Reliability
 
 A dump read accepts nothing until the acknowledgement that echoes its own preset number, so an end marker still arriving from an earlier read is not taken for this one. It is validated as exactly 16 chunk messages of 3,082 bytes and one end message, each with a closing checksum, and is read once more after a pause if anything is missing or damaged. A dump arrives at about 105 bytes per millisecond. **Assumption:** `MidiManager` may deliver it in thousands of small callbacks (one per USB-MIDI event on some platforms, not measured here), which is what the transport's receive buffer is sized for.
+
+## Moog Subsequent 37
+
+Measured on one Subsequent 37 running firmware 1.2.0. The Sub 37 and the Subsequent 37 CV are different instruments; nothing here was run on either.
+
+### Transport
+
+Class-compliant USB-MIDI through Android's `MidiManager`, as for the Pro-800; no USB host permission is asked for. One cable in each direction. The instrument transmits at about 1,435 bytes per second whatever it sends, about half of MIDI's own rate, so the size of a reply sets how long it takes.
+
+### Identification
+
+Vendor id `0x2662`, product id `0x0FFC`, listed as `launchOnUsbAttach` only. The USB product string reads `Moog Sub 37`. **Assumption:** the Sub 37 and the Subsequent 37 CV report the same ids and string, so the USB layer cannot tell the three apart, and a Sub 37 would be probed like a Subsequent 37. A port is identified by the ping `F0 04 0C 32` + 12 × `00` + `F7`, answered `F0 04 0C 32 7F 7F F7`; it is read-only and needs nothing sent first.
+
+The firmware version is read at connect from the standard Identity Reply, which the instrument sends only to the broadcast inquiry `F0 7E 7F 06 01 F7`: manufacturer `04`, family `00 0C`, model `00 00`, software revision `00 01 02 00`, read as 1.2.0 from its last three bytes. The panel shows two versions, M and P; which of them the reply carries is unknown, since both read 1.2.0 on the unit measured.
+
+### Framing
+
+`F0 04 0C <command> … F7`: Moog's manufacturer id, then a constant `0C`. Every short request is 13 command bytes, zero-padded. A message carrying data has an 18-byte address block after its two command bytes, so its body starts at offset 23. The body is a run of 3-byte records, each one 16-bit big-endian word split 4 + 6 + 6 bits: `0x40 | d15..d12`, `d11..d6`, `d5..d0`. A record's first byte is `0x40`–`0x4F` and the other two are below `0x40`, which is how a lost byte shows.
+
+A program is 244 words, a 488-byte payload:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 24 | Name: printable ASCII, space-padded. The panel shows it as two lines of 12. |
+| 50 | 1 | Category; see below. |
+| 51 | 1 | Stored as given. A save on the panel writes `7`. |
+| 486 | 2 | Checksum: the 244 words sum to zero modulo 2^16. |
+
+The other 461 bytes are the sound and are not decoded; the app writes them back as it read them.
+
+Byte 50 is the category's position in the panel's list counted from the end: the panel lists User, Percussion, Sequence, Arp, Vox, Distorted, Evolving, Pads, Strings, Sync, Organs, Keys, Sound FX, Woodwind, Brass, Lead, Bass, Noise, Drone, Duo, Classic, Misc, and byte 50 holds Misc as `0x00` and User as `0x15`. `0x77` is uncategorised, what Initialize leaves; the panel shows it as Misc, like `0x00`. **Assumption:** only Vox (`0x11`) and Misc (`0x00`) were read off the panel; the other values follow from the panel's order and agree with every name in one 256-program library.
+
+### Messages
+
+| Command | Name | Reply |
+|---|---|---|
+| `32` | Ping, the discovery probe | `32 7F 7F` |
+| `06 04`, sent with `06 00` | Settings | `07 02`, 828 bytes: 268 words. Word 2 is the selected program, word 30 the MIDI IN CHANNEL (0–15, 16 = ALL), word 31 the OUT CHANNEL. `06 00` draws no reply of its own. A shorter reply lost bytes and is discarded. |
+| `06 01 <hi> <lo>` | Read program `hi << 7 \| lo` | Two messages of 756 bytes: `04 07` addressed `00 00`, the selected program's edit buffer, then `02 07` addressed `<hi> <lo>`, the stored program asked for. Nothing is selected. About a second at the instrument's rate. |
+| `06 03` | Read every program | `01 07`: the header, then one 796-byte block per program (its 732 bytes of records and a 64-byte separator, zero but for a final `01`), then `F7`; 203,800 bytes in about 142 s. Block *i* is program *i*. |
+| `05 01 <hi> <lo> 00×15 01` + one program | Write program | None, ever. 756 bytes. |
+| CC0 = 0, CC32 = *n* / 128, Program Change *n* % 128 | Select program *n* | `36 <cc32> <pc>`, within about 20 ms. |
+
+### Addressing
+
+Programs 0..255: `n = bank × 16 + slot`, both 0-based, displayed `B01/P01`..`B16/P16` after the panel's BANK and PRESET buttons. Every program is writable; there are no factory banks.
+
+### Operations
+
+**Listing** is one `06 03`. The reply is decoded while it arrives: each block's 732 bytes of records are checked (record markers, checksum) and shown as soon as they are in. Where the platform hands the reply over only once whole, it is decoded then, and progress is estimated from the time. Blocks from the first damaged one on are read one by one with `06 01` once the instrument has stopped sending. A program is listed as empty where its name is `Init Preset`, which is what both a never-written slot and the panel's Initialize hold; a preset saved under that name counts as empty too. The connect-time notices say so, and that a listing takes about 2½ minutes.
+
+**Selection** sends Bank Select and Program Change on the IN channel the settings name (channel 1 where it is ALL) and waits for `36`. Where none comes, the settings are read again and the selection repeated if the channel changed. **Assumption:** a selection still unacknowledged means RCV PGM CHG (MIDI MENU 1.4) is OFF; the app shows that step.
+
+Every **edit** is a read of the stored program with `06 01` and a whole-program `05 01`, so all are emulated, and none selects anything or is heard. Every write is read back with `06 01` until the slot holds exactly the bytes sent: up to three reads a second apart, since one read too soon may still show the old program. A mismatch is reported only where every read that arrived disagreed. **Assumption:** three reads and a one-second pause are enough; every write measured was confirmed by the first read.
+
+- **Rename** changes the name field and the checksum. Up to 24 printable ASCII characters; `Init Preset` is refused, since it would read as empty.
+- **Set category** changes byte 50 and the checksum.
+- **Copy** writes the source's stored bytes to an empty slot. **Move** is a copy and then the panel's Initialize written over the source, once the copy is confirmed.
+- **Swap** reads both programs before writing either and writes the first back if the second write fails.
+- **Delete** writes the program the panel's Initialize produces (`devices/blanks/subsequent37_panel_initialized.bin`, stored by the instrument and read back). A slot always holds a program.
+
+The transfer facet reads a program as its `02 07` message. It writes one taken from a `02 07`, `04 07`, `04 08` or `05 01` message or a bare payload, inside a `05 01` built by the app; a file's own bytes are never sent.
+
+### Hazards
+
+- A `05 01` is not acknowledged, validated or bounded: a wrong number lands on a real slot and a wrong payload is stored whole. The app refuses anything but 488 bytes and programs 0..255, and closes the checksum itself.
+- Never sent: the replies `01 07`, `02 07`, `04 07`, `07 02` and the export `04 08`. A file of a `04 07` sent to the instrument is stored at the selected slot, and one of all programs overwrites all 256. Also never sent: `35`, which is never answered, and `1D`, `12 48 74`, `13` and `18 7D`, whose effects are unknown; `1D` is probably a reset of the global settings.
+- While a bulk dump is being sent the instrument answers nothing else, including the discovery ping, and an interrupted dump goes on being sent to its end. Every other operation is refused while a listing runs.
+
+### Reliability
+
+A dump that lost bytes in transit still ends in `F7`, with every block after the loss shifted. Only the per-block check finds it, so nothing from the first failing block on is used, even a block that happens to pass. About one read in 200 has been seen to lose bytes; a damaged reply to `06 01` fails its checksum and is asked for again. A `02 07` is matched on its command and address together, since the `04 07` before it is addressed `00 00` whatever it holds. A channel message arriving inside the dump aborts it at the framer; the app then waits for the instrument to fall silent and reads the remaining programs one by one. **Assumption:** the instrument sends none during a dump; whether a knob turned meanwhile does is untested.

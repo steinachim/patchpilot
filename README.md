@@ -19,8 +19,9 @@ Patch Pilot is a native Android app for browsing, organizing and editing the pre
 | Yamaha Motif XS7, XS8 | as XS6 | **Assumed.** Their USB product ids are inferred from Yamaha's driver files and have not been confirmed on a unit. |
 | Fractal Audio Axe-Fx III (Mark I) | USB-MIDI (class compliant) | **Not yet run in the app.** Every operation the app uses was verified on a Mark I outside it; the app's own hardware run is pending. |
 | Fractal Audio Axe-Fx III Mark II, Mark II Turbo | as Mark I | **Assumed.** Recognized by the model record the unit sends, and listed with its 1,024 presets behind a warning; never run on one. |
+| Moog Subsequent 37 | USB-MIDI (class compliant) | **Not yet run in the app.** Every operation the app uses was verified on one unit (firmware 1.2.0) outside it; the app's own hardware run is pending. The Sub 37 and the Subsequent 37 CV are different instruments and are not supported. |
 
-"Verified on hardware" means the app has been run against that model. For the Nord models, the Pro-800 and the Axe-Fx III the firmware versions it was run with are listed in the device catalog under [devices/](devices/), and connecting with a firmware version that is not listed shows a warning but is allowed. The Motif XS reads its firmware version for display only; no version check is made for it.
+"Verified on hardware" means the app has been run against that model. For the Nord models, the Pro-800, the Axe-Fx III and the Subsequent 37 the firmware versions it was run with are listed in the device catalog under [devices/](devices/), and connecting with a firmware version that is not listed shows a warning but is allowed. The Motif XS reads its firmware version for display only; no version check is made for it.
 
 ### Other Nord instruments
 
@@ -30,7 +31,7 @@ An unrecognized Nord (Clavia USB vendor id) can be opened anyway from the connec
 
 ### Other manufacturers
 
-The Behringer Pro-800, the Yamaha Motif XS and the Fractal Audio Axe-Fx III each have their own protocol implementation, and none says anything about other instruments from the same manufacturer. A further Behringer, Yamaha or Fractal Audio instrument (an FM3 or FM9, say) needs its own implementation, verified against real hardware. Requests are welcome as issues; support depends on access to the instrument.
+The Behringer Pro-800, the Yamaha Motif XS, the Fractal Audio Axe-Fx III and the Moog Subsequent 37 each have their own protocol implementation, and none says anything about other instruments from the same manufacturer. A further Behringer, Yamaha, Fractal Audio or Moog instrument (an FM3, say, or a Sub 37) needs its own implementation, verified against real hardware. Requests are welcome as issues; support depends on access to the instrument.
 
 ## Screenshots
 
@@ -44,7 +45,7 @@ The app has two themes, System Default and Steampunk.
 
 Without an instrument, the connect screen offers a demo mode with a simulated instrument.
 
-By default the app connects straight to the first instrument it finds over USB, without waiting for the slower MIDI bus scan a Pro-800 or an Axe-Fx III would need. Settings has an "Auto-Connect to First Found Instrument" toggle to turn that off, so the connect screen always scans both buses and shows the device list instead.
+By default the app connects straight to the first instrument it finds over USB, without waiting for the slower MIDI bus scan a Pro-800, an Axe-Fx III or a Subsequent 37 would need. Settings has an "Auto-Connect to First Found Instrument" toggle to turn that off, so the connect screen always scans both buses and shows the device list instead.
 
 ## Building
 
@@ -80,7 +81,7 @@ The build reads the device catalog from `../devices` relative to `android/` (the
 
 Patch Pilot collects no data and has no network access; see [PRIVACY.md](PRIVACY.md).
 
-Patch Pilot is an independent, unofficial project. It is not affiliated with, endorsed by, or supported by Clavia DMI AB (Nord), Music Tribe / Behringer, Yamaha Corporation, or Fractal Audio Systems. Product and brand names are used solely to identify the hardware this app is compatible with.
+Patch Pilot is an independent, unofficial project. It is not affiliated with, endorsed by, or supported by Clavia DMI AB (Nord), Music Tribe / Behringer, Yamaha Corporation, Fractal Audio Systems, or Moog Music. Product and brand names are used solely to identify the hardware this app is compatible with.
 
 This software changes your instrument's internal storage, including operations that overwrite or delete presets. It is provided "AS IS", without warranty of any kind, as permitted by the license below. Use with real hardware is at your own risk.
 

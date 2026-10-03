@@ -417,7 +417,82 @@ are also what the cases below compare against.
 |---|---|---|---|---|
 | A15 | Mark II | On an Axe-Fx III Mark II or Mark II Turbo: A2, A4, then copy and delete on scratch slots above 511 | Identified as "Mark II" with 1,024 presets (`0000`–`1023`, eight virtual banks) behind the untested-model advisory; operations above 511 work. Open until a Mark II is available | — |
 
-## 7. Traceability
+## 7. Moog Subsequent 37
+
+Every wire operation the app uses was verified on one unit (firmware 1.2.0) outside the app; what
+is new here is Android's MIDI path for a 203,800-byte message, the app's own sequencing, and the
+UI. **Work on slots named `Init Preset` only**, and take a bulk dump first with the reference CLI
+(`--dump-bulk`) as the baseline the edit cases are diffed against.
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S1 | Discovery and attach | Connect fresh (cleared app data), alongside at least one other MIDI port. Then, with the app backgrounded, unplug and replug | No system USB permission prompt; found by the ping, not by port name or order; on the replug Android offers the app (`launchOnUsbAttach` 0x2662/0x0FFC) and accepting connects without a Retry | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S2 | Name and firmware | Connect | The app bar reads "Moog Subsequent 37", the connect screen firmware 1.2.0, no advisory | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S3 | Connect notices | As A3, for both notices ("Listing presets takes about 2½ minutes", "Presets named Init Preset count as empty") | Each shown once per run, hidden for good after the tick, back after Settings → Show Hidden Messages Again | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S4 | Full listing, three times | Force a fresh listing (pull to refresh) three times; time each; watch the rows; compare with the CLI's `--list-presets` | About 142 s each. **Record whether rows appear bank by bank while the MIDI button blinks** (Android delivers the dump in pieces) **or all at the end** (progress then counts down by time). 256 names match; `Init Preset` slots hidden until "Show empty slots"; category badges match the panel's CAT line, none for an uncategorised preset | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S5 | Dump integrity | During S4 and once more with `adb shell am send-trim-memory … RUNNING_CRITICAL`, read logcat (`Subsequent37Instrument`) | No "did not arrive whole" and no "Reading programs … one by one" lines. If any appear, record where the dump broke and how long the single reads took | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S6 | Panel touched mid-dump | Start a listing and turn a knob on the instrument at about 60 s | Record whether the dump survives. If not: the listing waits until the MIDI button stops blinking, then reads the remaining programs one by one, and ends complete — not a 200-second timeout | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S7 | Background and lock during a listing | Start a listing, press Home, return; repeat with the screen locked | The listing continues (`MidiManager`, no rebuild on resume) and is complete on return | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S8 | Reconnect mid-dump | Start a listing; at about 30 s force a reconnect (Settings → reconnect, or pull and replug the cable) | Record what the connect screen shows while the instrument is still sending. Once the MIDI button stops blinking, connecting works and the notice's advice holds | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S9 | Selection | Load about ten presets with IN CHANNEL (MIDI MENU 1.1) at 1, then at ALL, then at 4; reconnect between. Then set RCV PGM CHG (1.4) OFF and load one | The panel follows every time, with sound; no error. With RCV PGM CHG OFF the app shows the manual-setting steps. Then change IN CHANNEL on the panel without reconnecting and load one: it still works (the settings are read again) | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S10 | Busy during a listing | Tap a preset, open the device report, rename while a listing runs | Each refused at once with "still sending its preset list (about … left)", none waits | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S11 | Regression run | With at least two `Init Preset` slots, run the debug menu's regression test; then `--dump-bulk` and diff against the baseline | Every step passes; only the sandbox slots differ from the baseline, and they hold the panel's Initialize (not byte-identical to a never-written slot, as expected) | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S12 | Names | Rename to 24 characters with punctuation (`-_.()/!@`); try 25, `é`, `Init Preset` | The 24-character name reads back exactly and the panel shows it on two lines of 12; the other three are refused before anything is written | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S13 | Editing the selected preset | Load X on the panel; rename X in the app; look at the panel; then press SAVE on the panel to X | Record whether the panel shows the new name before reloading, and whether the panel save writes the old name back (it saves its edit buffer). Decides whether the app should reload X after editing it | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S14 | Categories | Set a scratch preset's category to User, then Percussion, then none, reading the panel's CAT line each time | The panel shows User, Percussion, then Misc. User and Percussion confirm the order from the far end of the list | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S15 | Cable pull mid-swap | Swap two scratch presets and pull the cable between the two writes | A clean failure and `DeviceLost`, no hang; after reconnecting each slot holds one of the two presets (check with `--read-preset`), and the log says whether the rollback ran | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S16 | Device report | Generate it twice | `identityFirmware` 1.2.0; `settingsWords` 268 entries; `inChannel`/`outChannel` match the panel; two `programReads` of the selected program, `programReadsIdentical` true; record `totalMs` | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| S17 | Advisory | As P9: temporarily set `supportedFirmwareVersions` to `["1.1.0"]`, rebuild and connect | The advisory names 1.2.0; "Continue anyway" connects and the banner stays. Revert | — |
+
+## 8. Traceability
 
 | Behaviour | Source | Cases |
 |---|---|---|
@@ -453,3 +528,11 @@ are also what the cases below compare against.
 | `MidiManager` receive buffer sized for a 49 KB dump | `transport/AndroidMidiTransport.kt` | A6 |
 | Axe-Fx III name limit | `devices/axefx3/AxeFx3Editor.kt` (`MAX_NAME_LENGTH`) | A9 |
 | Axe-Fx III firmware and model advisory | `devices/axefx3/AxeFx3Instrument.kt` (`advisoryText`) | A12 |
+| Subsequent 37 class-compliant, no app-level permission; found by the ping; firmware from the Identity Reply | `docs/PROTOCOLS.md` §Subsequent 37 Transport, Identification; `devices/subsequent37/Subsequent37Instrument.kt` (`connect`) | S1, S2 |
+| Subsequent 37 dump decoded while it arrives; time-based progress where it is not | `midi/SysExExchange.kt` (`pending`, `receivedBytes`), `Subsequent37Instrument.receiveDump`, `Subsequent37BulkDecoder` | S4, S5, S7 |
+| Subsequent 37 damaged or interrupted dump completed by single reads after silence | `Subsequent37Instrument.receiveDump`, `awaitQuiet`, `fillGaps` | S5, S6, S8 |
+| Subsequent 37 selection on the IN channel, settings re-read, manual-setting steps | `Subsequent37Instrument.select` | S9 |
+| Subsequent 37 operations refused during a listing | `Subsequent37Instrument.requireIdle` | S10 |
+| Subsequent 37 writes read back, three reads a second apart | `devices/subsequent37/Subsequent37Device.kt` (`writeVerified`) | S11–S15 |
+| Subsequent 37 category map (assumed beyond Vox and Misc) | `Subsequent37Program.kt` (`Subsequent37Categories`) | S14 |
+| Subsequent 37 firmware advisory | `Subsequent37Instrument.advisoryText` | S17 |

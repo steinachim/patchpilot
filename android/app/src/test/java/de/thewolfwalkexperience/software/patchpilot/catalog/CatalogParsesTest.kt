@@ -7,7 +7,10 @@ import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.AxeFx3Config
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.resolvedConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Config
+import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37Config
+import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37SysEx
 import kotlinx.serialization.json.Json
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -82,6 +85,23 @@ class CatalogParsesTest {
         assertEquals(setOf("32.06"), config.supportedFirmwareVersions)
         assertEquals(setOf(512), config.testedPresetCounts)
         assertTrue(config.restoreLoadedPresetAfterEdit)
+    }
+
+    @Test
+    fun `the Subsequent 37 catalog decodes into its family config`() {
+        val catalog = catalog("moog_subsequent37.json")
+        assertEquals("subsequent37", catalog.family)
+        val descriptor = catalog.devices.single()
+        assertEquals("subsequent37", descriptor.family)
+        assertEquals("Moog Subsequent 37", descriptor.name)
+        val match = descriptor.match as DeviceMatch.MidiIdentity
+        // The ping: read-only, and the probe bytes are exactly what Subsequent37SysEx sends.
+        assertArrayEquals(Subsequent37SysEx.ping(), match.probe)
+        assertEquals("f0 04 0c 32 7f 7f", match.replyPrefixHex)
+        assertEquals(null, match.usbHint)
+        assertEquals(UsbIds(vendorId = 0x2662, productId = 0x0FFC), match.launchOnUsbAttach)
+        val config = json.decodeFromJsonElement(Subsequent37Config.serializer(), catalog.familyConfig)
+        assertEquals(setOf("1.2.0"), config.supportedFirmwareVersions)
     }
 
     @Test
