@@ -1,6 +1,6 @@
 # Architecture
 
-Patch Pilot is a native Android app for browsing, organizing and editing presets on supported hardware synthesizers over USB. It is a thin client: there is no server and no account system. The only state persisted across launches is the theme choice and the auto-connect preference; everything else lives on the connected instrument or in memory for the life of the process.
+Patch Pilot is a native Android app for browsing, organizing and editing presets on supported hardware synthesizers over USB. It is a thin client: there is no server and no account system. The only state persisted across launches is the theme choice, the auto-connect preference and which instrument notices the user hid; everything else lives on the connected instrument or in memory for the life of the process.
 
 ## Package layout
 
@@ -28,10 +28,11 @@ The abstraction sits above the wire-message level: the UI consumes "a list of na
 
 Related types:
 
-- `SlotAddress`: a canonical 0-based `(bank, slot)` pair, with a per-family `AddressFormat` responsible for rendering and parsing that family's own id shape (`A:1:1` on a Nord, `A00` on a Pro-800, `USER 1 - A:01` on a Motif XS). The UI never parses an id string itself; `PresetSlot` carries its display id and bank label.
+- `SlotAddress`: a canonical 0-based `(bank, slot)` pair, with a per-family `AddressFormat` responsible for rendering and parsing that family's own id shape (`A:1:1` on a Nord, `A00` on a Pro-800, `USER 1 - A:01` on a Motif XS). The UI never parses an id string itself; `PresetSlot` carries its display id and bank label. `LinearAddressFormat` serves an instrument with no banks at all: ids are one run of numbers (`000`–`511`), and the app groups them into virtual banks (`BankSpec.virtual`) only so the index rail has somewhere to jump; a virtual bank's header shows its number range without the word "Bank".
 - `SlotLayout` and `BankSpec`: the instrument's addressable preset space. `BankSpec.readOnly` lives on the layout rather than on each row, so which addresses a copy may target and which rows offer an edit derive from one field.
 - `IndexUpdate` and `Flow<IndexUpdate>`: listing is a stream, not a single suspending call, because the Pro-800 and the Motif XS have no directory and must be read slot by slot to learn each preset's name. Rows appear as they arrive; one unreadable slot is reported as `IndexUpdate.Failed` and does not abort the walk. `indexWalk` in `core/` is the shared loop.
 - `InstrumentException`: a sealed hierarchy the UI branches on by type, never by message text. `BlockedByDeviceState` carries an optional remedy the app can apply after asking (a Motif XS in Performance mode ignores a voice selection; the remedy switches it to Voice mode). `NeedsManualSetting` carries the steps for a fix only the user can make at the instrument's panel (a Motif XS routing MIDI to its DIN ports instead of USB).
+- `InstrumentNotice`: something a family wants the user to know about how the app works with it, as opposed to `advisory`, which says something is wrong. `Instrument.notices` are shown in a dialog once the session is connected, once per app run, until the user ticks "Don't show this again"; `NoticePreferences` (Preferences DataStore) remembers the hidden ids, and Settings clears them.
 - `PresetTagger`: categories and favorites, shaped for both a Nord program (one category, no sub-categories, no favorites) and a Motif XS voice (two assignments of main plus sub-category, and a favorite mark that names which of them the instrument files the voice under).
 
 ## Transport and discovery

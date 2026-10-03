@@ -28,19 +28,22 @@ import de.thewolfwalkexperience.software.patchpilot.ui.theme.ThemePreferences
 import kotlinx.coroutines.launch
 
 /**
- * The theme picker, the auto-connect toggle, and the legal links. The theme picker is a radio list
- * rather than a switch, since [AppTheme] is what a third skin would extend. Both settings apply
- * immediately: they write through DataStore, which their readers collect live.
+ * The theme picker, the auto-connect toggle, bringing back hidden instrument notices, and the
+ * legal links. The theme picker is a radio list rather than a switch, since [AppTheme] is what a
+ * third skin would extend. Every setting applies immediately: each writes through DataStore,
+ * which its readers collect live.
  */
 @Composable
 fun SettingsScreen(
     themePreferences: ThemePreferences,
     connectionPreferences: ConnectionPreferences,
+    noticePreferences: NoticePreferences,
     onOpenLicenses: () -> Unit,
     onBack: () -> Unit,
 ) {
     val current by themePreferences.theme.collectAsState(initial = AppTheme.Default)
     val autoConnect by connectionPreferences.autoConnectToFirstFound.collectAsState(initial = true)
+    val hiddenNotices by noticePreferences.hidden.collectAsState(initial = emptySet())
     val scope = rememberCoroutineScope()
 
     PatchPilotScaffold(title = stringResource(R.string.settings_title), onBack = onBack) { innerPadding ->
@@ -86,6 +89,25 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .clickable {
                         scope.launch { connectionPreferences.setAutoConnectToFirstFound(!autoConnect) }
+                    },
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_show_hidden_notices)) },
+                supportingContent = {
+                    Text(
+                        stringResource(
+                            if (hiddenNotices.isEmpty()) {
+                                R.string.settings_show_hidden_notices_none
+                            } else {
+                                R.string.settings_show_hidden_notices_description
+                            },
+                        ),
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = hiddenNotices.isNotEmpty()) {
+                        scope.launch { noticePreferences.showAll() }
                     },
             )
             Text(

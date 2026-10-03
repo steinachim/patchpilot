@@ -38,6 +38,10 @@
     <string name="action_continue_anyway">Continue anyway</string>
     <string name="action_retry_search">Retry search</string>
     <string name="action_try_demo">Try demo mode</string>
+    <string name="action_ok">OK</string>
+
+    <!-- The checkbox in an instrument's notice dialog, shown when a session connects. -->
+    <string name="notice_hide_forever">Don\'t show this again</string>
 
     <!-- Content descriptions: spoken by a screen reader, never shown. -->
     <string name="cd_back">Back</string>
@@ -60,6 +64,11 @@
     <string name="settings_connection_heading">Connection</string>
     <string name="settings_auto_connect">Auto-Connect to First Found Instrument</string>
     <string name="settings_auto_connect_description">Connects automatically to the first instrument a scan finds. Turn this off to always see the device list and pick one yourself.</string>
+    <!-- Brings back the instrument notices shown on connecting that the user ticked
+         "Don't show this again" on. -->
+    <string name="settings_show_hidden_notices">Show Hidden Messages Again</string>
+    <string name="settings_show_hidden_notices_description">Messages an instrument shows on connecting, which you chose not to see again.</string>
+    <string name="settings_show_hidden_notices_none">No messages are hidden.</string>
     <string name="settings_legal_heading">Legal</string>
     <string name="settings_open_source_licenses">Open Source Licenses</string>
     <string name="licenses_title">Open Source Licenses</string>

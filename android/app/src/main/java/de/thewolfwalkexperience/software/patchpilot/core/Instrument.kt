@@ -52,6 +52,14 @@ interface Instrument {
     val advisory: String? get() = null
 
     /**
+     * Things worth knowing about how this app works with this instrument, shown when a session
+     * connects, each until the user hides it for good. Unlike [advisory], nothing is wrong: an
+     * Axe-Fx III edit loads the preset it writes, which the user should hear about once rather
+     * than in every dialog that can cause it.
+     */
+    val notices: List<InstrumentNotice> get() = emptyList()
+
+    /**
      * Whether returning to the foreground should rebuild this session - see
      * `Transport.rebuildOnResume`, which each family delegates to.
      *
@@ -83,6 +91,16 @@ data class InstrumentIdentity(
     /** Which bus this session is actually running over. */
     val bus: Bus,
     val stableKey: String,
+)
+
+/**
+ * One [Instrument.notices] entry. [id] is what a hidden notice is remembered by, so it must stay
+ * the same across releases for as long as the text means the same thing.
+ */
+data class InstrumentNotice(
+    val id: String,
+    val title: String,
+    val message: String,
 )
 
 // ---- Facets ----

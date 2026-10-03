@@ -4,24 +4,36 @@
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.R
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentNotice
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 
 /*
- * The preset screen's three question dialogs. Each is self-contained and reads no screen state
- * beyond what it is handed, which is what lets them live apart from `ProgramsScreen`.
+ * The preset screen's dialogs. Each is self-contained and reads no screen state beyond what it is
+ * handed, which is what lets them live apart from `ProgramsScreen`.
  */
 
 /**
@@ -146,6 +158,47 @@ internal fun RenameDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+/**
+ * One [de.thewolfwalkexperience.software.patchpilot.core.Instrument.notices] entry, shown when a
+ * session connects. Only acknowledged, never answered: the checkbox decides whether it comes back
+ * on the next app start, and Settings can bring a hidden one back.
+ */
+@Composable
+internal fun InstrumentNoticeDialog(
+    notice: InstrumentNotice,
+    onDismiss: (hideForever: Boolean) -> Unit,
+) {
+    var hideForever by rememberSaveable(notice.id) { mutableStateOf(false) }
+    AlertDialog(
+        // A tap outside closes it for this run only, like OK with the box unticked.
+        onDismissRequest = { onDismiss(false) },
+        title = { Text(notice.title) },
+        text = {
+            Column {
+                Text(notice.message)
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .toggleable(
+                            value = hideForever,
+                            onValueChange = { hideForever = it },
+                            role = Role.Checkbox,
+                        ),
+                ) {
+                    Checkbox(checked = hideForever, onCheckedChange = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.notice_hide_forever))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onDismiss(hideForever) }) { Text(stringResource(R.string.action_ok)) }
         },
     )
 }

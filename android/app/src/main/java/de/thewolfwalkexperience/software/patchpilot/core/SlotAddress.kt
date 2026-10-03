@@ -99,6 +99,84 @@ class FlatBankAddressFormat(private val slotDigits: Int) : AddressFormat {
     }
 }
 
+/**
+ * The Axe-Fx III rendering: one run of preset numbers, `000`-`511`, with no bank in the id,
+ * because the instrument has none. The app still groups the run into [presetsPerBank]-sized
+ * virtual banks, so the index rail has somewhere to jump to; their labels are number ranges
+ * (`000–127`), never letters. The digit count follows from [presetCount].
+ */
+class LinearAddressFormat(
+    private val presetCount: Int,
+    private val presetsPerBank: Int,
+) : AddressFormat {
+
+    init {
+        require(presetCount > 0) { "presetCount must be positive, was $presetCount" }
+        require(presetsPerBank > 0) { "presetsPerBank must be positive, was $presetsPerBank" }
+    }
+
+    private val digits = (presetCount - 1).toString().length
+
+    val bankCount: Int get() = (presetCount + presetsPerBank - 1) / presetsPerBank
+
+    /** The instrument's own preset number for [address]. Throws for one outside the run. */
+    fun numberOf(address: SlotAddress): Int {
+        require(address.slot < presetsPerBank) {
+            "slot ${address.slot} is outside a bank of $presetsPerBank"
+        }
+        val number = address.bank * presetsPerBank + address.slot
+        require(number < presetCount) { "preset $number is outside 0..${presetCount - 1}" }
+        return number
+    }
+
+    fun addressOf(number: Int): SlotAddress {
+        require(number in 0 until presetCount) { "preset $number is outside 0..${presetCount - 1}" }
+        return SlotAddress(bank = number / presetsPerBank, slot = number % presetsPerBank)
+    }
+
+    override fun format(address: SlotAddress): String = render(address.bank * presetsPerBank + address.slot)
+
+    override fun parse(id: String): SlotAddress {
+        val trimmed = id.trim()
+        require(PATTERN.matches(trimmed)) { "Invalid preset id '$id'; expected a number like '042'" }
+        val number = trimmed.toIntOrNull()
+            ?: throw IllegalArgumentException("Invalid preset id '$id'")
+        require(number in 0 until presetCount) {
+            "Invalid preset id '$id': outside 0..${presetCount - 1}"
+        }
+        return addressOf(number)
+    }
+
+    /** The range a virtual bank covers, e.g. `"000–127"`; the last bank stops at the last preset. */
+    override fun bankLabel(bank: Int): String {
+        val first = bank * presetsPerBank
+        val last = minOf(first + presetsPerBank, presetCount) - 1
+        return "${render(first)}–${render(last)}"
+    }
+
+    /** The bank's first number, which is what the index rail has room for. */
+    fun railLabel(bank: Int): String = render(bank * presetsPerBank)
+
+    /** Every virtual bank, flagged [BankSpec.virtual] so a header shows the range on its own. */
+    fun layout(): SlotLayout = SlotLayout(
+        banks = (0 until bankCount).map { bank ->
+            BankSpec(
+                label = bankLabel(bank),
+                slotCount = minOf(presetsPerBank, presetCount - bank * presetsPerBank),
+                shortLabel = railLabel(bank),
+                virtual = true,
+            )
+        },
+        format = this,
+    )
+
+    private fun render(number: Int): String = number.toString().padStart(digits, '0')
+
+    private companion object {
+        val PATTERN = Regex("""\d+""")
+    }
+}
+
 /** One bank: what to call it, and how many slots it holds. */
 data class BankSpec(
     val label: String,
@@ -116,6 +194,12 @@ data class BankSpec(
      * derive from this one field. A read-only bank is also what [PresetScope.FACTORY] lists.
      */
     val readOnly: Boolean = false,
+    /**
+     * Whether the bank is the app's own grouping of a flat numbering rather than something the
+     * instrument has. Its [label] is then a number range, and its header shows that range without
+     * calling it a bank.
+     */
+    val virtual: Boolean = false,
 )
 
 /**

@@ -7,6 +7,7 @@ import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
 
@@ -101,6 +102,76 @@ class AddressFormatTest {
         assertEquals(6, layout.slotCount)
         assertEquals(
             listOf("A00", "A01", "A02", "B00", "B01", "B02"),
+            layout.allAddresses().map { layout.format.format(it) }.toList(),
+        )
+    }
+
+    private val markI = LinearAddressFormat(presetCount = 512, presetsPerBank = 128)
+
+    @Test
+    fun `linear format renders one run of numbers with no bank in the id`() {
+        assertEquals("000", markI.format(SlotAddress(0, 0)))
+        assertEquals("007", markI.format(SlotAddress(0, 7)))
+        assertEquals("127", markI.format(SlotAddress(0, 127)))
+        assertEquals("128", markI.format(SlotAddress(1, 0)))
+        assertEquals("511", markI.format(SlotAddress(3, 127)))
+    }
+
+    @Test
+    fun `linear format round-trips every preset and maps to the wire number`() {
+        for (number in 0 until 512) {
+            val address = markI.addressOf(number)
+            assertEquals(number, markI.numberOf(address))
+            assertEquals(address, markI.parse(markI.format(address)))
+        }
+    }
+
+    @Test
+    fun `linear format accepts a number with or without leading zeros`() {
+        assertEquals(SlotAddress(0, 7), markI.parse("7"))
+        assertEquals(SlotAddress(0, 7), markI.parse("007"))
+        assertEquals(SlotAddress(1, 0), markI.parse(" 128 "))
+    }
+
+    @Test
+    fun `linear format refuses a number it does not have, a letter, or nothing`() {
+        for (id in listOf("512", "-1", "A00", "", "1.5")) {
+            assertThrows(IllegalArgumentException::class.java) { markI.parse(id) }
+        }
+        assertThrows(IllegalArgumentException::class.java) { markI.numberOf(SlotAddress(4, 0)) }
+        assertThrows(IllegalArgumentException::class.java) { markI.numberOf(SlotAddress(0, 128)) }
+    }
+
+    @Test
+    fun `linear format labels its virtual banks with number ranges`() {
+        assertEquals(listOf("000–127", "128–255", "256–383", "384–511"), (0 until 4).map(markI::bankLabel))
+        assertEquals(listOf("000", "128", "256", "384"), (0 until 4).map(markI::railLabel))
+    }
+
+    @Test
+    fun `the digit count follows the preset count`() {
+        val markII = LinearAddressFormat(presetCount = 1024, presetsPerBank = 128)
+        assertEquals("0000", markII.format(SlotAddress(0, 0)))
+        assertEquals("1023", markII.format(SlotAddress(7, 127)))
+        assertEquals("0896–1023", markII.bankLabel(7))
+        assertEquals(8, markII.layout().bankCount)
+    }
+
+    @Test
+    fun `a short last bank ends at the last preset`() {
+        val format = LinearAddressFormat(presetCount = 300, presetsPerBank = 128)
+        assertEquals("256–299", format.bankLabel(2))
+        assertEquals(listOf(128, 128, 44), format.layout().banks.map { it.slotCount })
+    }
+
+    @Test
+    fun `a linear layout is virtual banks in device order`() {
+        val layout = markI.layout()
+        assertEquals(512, layout.slotCount)
+        assertTrue(layout.banks.all { it.virtual })
+        assertEquals(layout.banks.indices.map(markI::bankLabel), layout.banks.map { it.label })
+        assertEquals(
+            (0 until 512).map { it.toString().padStart(3, '0') },
             layout.allAddresses().map { layout.format.format(it) }.toList(),
         )
     }

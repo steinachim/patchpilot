@@ -353,6 +353,7 @@ fun ProgramsScreen(
     val occupied = listing.occupied
     // Drawn in the rail instead of the full label, which does not fit at the rail's width.
     val bankRailLabels = remember(index) { viewModel.bankRailLabels() }
+    val virtualBanks = remember(index) { viewModel.virtualBankLabels() }
     // The user listing's free slots, whatever is on screen: a copy can only be written to a
     // writable slot, so the destination pool belongs to the user scope. From `listing` it would
     // be empty in the factory scope, where every row holds a voice.
@@ -662,7 +663,15 @@ fun ProgramsScreen(
                     ) { rowIndex, row ->
                         when (row) {
                             is ProgramRow.BankHeader ->
-                                theme.BankHeader(stringResource(R.string.programs_bank_header, row.bank))
+                                theme.BankHeader(
+                                    // A virtual bank's label is already a number range; calling it
+                                    // a bank would suggest the instrument has one.
+                                    if (row.bank in virtualBanks) {
+                                        row.bank
+                                    } else {
+                                        stringResource(R.string.programs_bank_header, row.bank)
+                                    },
+                                )
                             is ProgramRow.ProgramEntry -> {
                                 val program = row.item
                                 val isEmpty = program.address !in occupied
@@ -945,6 +954,11 @@ fun ProgramsScreen(
             }
         }
     }
+    }
+
+    val notice by viewModel.pendingNotice.collectAsState()
+    notice?.let { shown ->
+        InstrumentNoticeDialog(shown, onDismiss = { hide -> viewModel.dismissNotice(shown, hide) })
     }
 
     ops.pendingShare?.let { pending ->

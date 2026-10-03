@@ -2,6 +2,9 @@
 
 ## Next release
 
+### Added
+- An instrument can show a notice when it connects, with a “Don't show this again” option; Settings → “Show Hidden Messages Again” brings hidden notices back.
+
 ## 1.1
 
 ### Added

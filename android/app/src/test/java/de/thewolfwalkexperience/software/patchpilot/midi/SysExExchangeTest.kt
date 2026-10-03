@@ -118,6 +118,27 @@ class SysExExchangeTest {
         assertEquals(2, transport.sent.size)
     }
 
+    /** One chunk of a multi-message write must reach the instrument once, whatever the exchange's
+     * own retry policy: a re-send would put the chunk into the transfer twice. */
+    @Test
+    fun `a per-call retries of zero never re-sends`() = runTest {
+        var attempt = 0
+        val transport = FakeMidiTransport {
+            attempt++
+            if (attempt == 1) emptyList() else listOf(dump(5))
+        }
+        val exchange = SysExExchange(transport, backgroundScope, defaultTimeout = 50.milliseconds, retries = 1)
+
+        val thrown = try {
+            exchange.exchange(Pro800SysEx.requestDump(5), "writing chunk 1", retries = 0) { true }
+            null
+        } catch (e: InstrumentException.Timeout) {
+            e
+        }
+        assertTrue(thrown != null)
+        assertEquals(1, transport.sent.size)
+    }
+
     /**
      * A write is fire-and-forget - the proof it landed is reading the address back, not a status
      * byte - so it needs a path that does not wait for a reply, but *does* take the same lock.

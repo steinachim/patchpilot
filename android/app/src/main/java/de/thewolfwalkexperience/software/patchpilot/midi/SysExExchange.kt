@@ -59,8 +59,7 @@ class SysExExchange(
     /**
      * DROP_OLDEST, so a device that floods the bus cannot stall the collector. Sized for a whole
      * answer: [exchangeSequence] collects many messages, DROP_OLDEST discards from the front,
-     * and a Motif XS drum voice answers a documented read with 83 messages. A unit test pins
-     * the capacity.
+     * and a Motif XS drum voice answers a documented read with 83 messages.
      */
     private val messages = MutableSharedFlow<ByteArray>(
         replay = 0,
@@ -96,12 +95,14 @@ class SysExExchange(
      *
      * Retries [retries] times, since on a stream transport a single dropped message is normal.
      * Each retry starts after [drainStale], so a late reply to the previous attempt cannot
-     * satisfy this one.
+     * satisfy this one. A retry re-sends [request], so a step that must not reach the instrument
+     * twice (one chunk of a multi-message write, say) passes `retries = 0`.
      */
     suspend fun exchange(
         request: ByteArray,
         what: String,
         timeout: Duration = defaultTimeout,
+        retries: Int = this.retries,
         matches: (ByteArray) -> Boolean,
     ): ByteArray = lock.withLock {
         repeat(retries + 1) { attempt ->

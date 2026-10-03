@@ -19,6 +19,7 @@ import de.thewolfwalkexperience.software.patchpilot.cache.PresetIndexCache
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentNotice
 import de.thewolfwalkexperience.software.patchpilot.core.OccupiedSlotReason
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
@@ -192,6 +193,17 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      * scan, so a change takes effect on the next connect attempt without restarting the app. */
     val connectionPreferences = ConnectionPreferences(application)
 
+    /** Which instrument notices the user hid for good; Settings reads it to offer them back. */
+    val noticePreferences = NoticePreferences(application)
+
+    /** Notice ids already shown since the app started - see [pendingNotice]. */
+    private val noticesShownThisRun = mutableSetOf<String>()
+
+    private val _pendingNotice = MutableStateFlow<InstrumentNotice?>(null)
+
+    /** The [Instrument.notices] entry the preset screen should show now, or null. */
+    val pendingNotice: StateFlow<InstrumentNotice?> = _pendingNotice.asStateFlow()
+
     /** The device report, held here so a minutes-long read survives the screen being torn down - see [DeviceReportRunner]. */
     internal val deviceReportRunner = DeviceReportRunner(
         scope = viewModelScope,
@@ -279,6 +291,43 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             } catch (e: Exception) {
                 Log.w(TAG, "Couldn't listen for USB detach events; a physical unplug will only be noticed when the next operation fails", e)
             }
+        }
+        // Offered once the session is usable, so a notice never sits on top of the advisory gate.
+        viewModelScope.launch {
+            state.collect { s ->
+                if (s is ConnectionState.Connected) offerNotice(s.instrument) else _pendingNotice.value = null
+            }
+        }
+    }
+
+    private suspend fun offerNotice(instrument: Instrument) {
+        val hidden = try {
+            noticePreferences.hidden.first()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // An unreadable store shows a notice once more rather than never.
+            Log.w(TAG, "Couldn't read the hidden notices", e)
+            emptySet()
+        }
+        _pendingNotice.value = pendingNotice(instrument.notices, hidden, noticesShownThisRun)
+    }
+
+    /** The user closed [notice]; [hideForever] is the dialog's "Don't show this again". */
+    fun dismissNotice(notice: InstrumentNotice, hideForever: Boolean) {
+        noticesShownThisRun += notice.id
+        _pendingNotice.value = null
+        viewModelScope.launch {
+            if (hideForever) {
+                try {
+                    noticePreferences.hide(notice.id)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Couldn't remember that '${notice.id}' is hidden", e)
+                }
+            }
+            (state.value as? ConnectionState.Connected)?.let { offerNotice(it.instrument) }
         }
     }
 
@@ -1067,6 +1116,14 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      */
     fun bankRailLabels(): Map<String, String> =
         instrument?.layout?.banks?.associate { it.label to it.shortLabel } ?: emptyMap()
+
+    /**
+     * The labels of banks the app made up to split a flat numbering ([BankSpec.virtual]), whose
+     * headers show the range alone rather than "Bank 000–127". Empty while nothing is connected,
+     * as [bankRailLabels] is.
+     */
+    fun virtualBankLabels(): Set<String> =
+        instrument?.layout?.banks?.filter { it.virtual }?.map { it.label }?.toSet() ?: emptySet()
 
     override suspend fun selectProgram(slot: PresetSlot): String = instrumentMutex.withLock {
         val selector = requireFacet(current().selector, "load a preset")
