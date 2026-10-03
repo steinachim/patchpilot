@@ -6,3 +6,9 @@
 - Description body: at most 10 lines.
 - Do not add a "Co-Authored-By: Claude" (or similar) trailer.
 - Do not push changes automatically
+
+## Documentation and code comments
+- Keep the style terse as this is technical docomentation. Focus on facts not history.
+- Make sure to remove self-references (e.g. "in a previous version we wrote").
+- Don't make references to private repositories.
+- Mark assumptions clearly as such.
