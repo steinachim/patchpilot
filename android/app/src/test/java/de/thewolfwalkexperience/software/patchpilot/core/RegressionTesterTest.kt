@@ -3,6 +3,8 @@
 
 package de.thewolfwalkexperience.software.patchpilot.core
 
+import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.FakeAxeFx3
+import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.axeFx3
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
@@ -47,6 +49,36 @@ class RegressionTesterTest {
 
     private fun RegressionReport.failures(): List<RegressionResult> =
         results.filter { it.status == Status.FAIL }
+
+    /**
+     * The Axe-Fx III over its wire-level fake: every edit is a dump read and write through the
+     * edit buffer, so this is the whole write path end to end, sandbox included.
+     */
+    @Test
+    fun `an Axe-Fx III passes every test and is left as it was`() = runTest {
+        val fake = FakeAxeFx3()
+        fake.put(0, "59 Bassguy")
+        fake.put(1, "Vibrato Lux")
+        val instrument = axeFx3(fake).also { it.connect() }
+        val before = listing(instrument)
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { instrument.layout.allAddresses().toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { fail("the sandbox should have sufficed"); false },
+            refreshEdited = {},
+        ).run {}
+
+        assertEquals(emptyList<RegressionResult>(), report.failures())
+        // Only the facet it lacks is skipped: nothing that writes was left out.
+        assertEquals(
+            listOf("Offers: Categorises and favorites presets"),
+            report.results.filter { it.status == Status.SKIPPED }.map { it.name },
+        )
+        assertEquals(before, listing(instrument))
+    }
 
     /**
      * An instrument whose selector is blocked by device state until its own remedy is applied.

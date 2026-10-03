@@ -3,6 +3,7 @@
 ## Next release
 
 ### Added
+- The Fractal Audio Axe-Fx III is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted. A Mark II is recognized and lists all 1,024 presets, but has not been tested yet.
 - An instrument can show a notice when it connects, with a “Don't show this again” option; Settings → “Show Hidden Messages Again” brings hidden notices back.
 
 ## 1.1

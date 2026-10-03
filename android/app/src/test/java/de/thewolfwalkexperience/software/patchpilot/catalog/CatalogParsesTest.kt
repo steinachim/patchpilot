@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
+import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.AxeFx3Config
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.resolvedConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Config
@@ -63,6 +64,24 @@ class CatalogParsesTest {
         val config = json.decodeFromJsonElement(Pro800Config.serializer(), catalog.familyConfig)
         assertEquals(4, config.bankCount)
         assertEquals(100, config.slotsPerBank)
+    }
+
+    @Test
+    fun `the Axe-Fx III catalog decodes into its family config`() {
+        val catalog = catalog("fractal_axefx3.json")
+        assertEquals("axefx3", catalog.family)
+        val descriptor = catalog.devices.single()
+        assertEquals("axefx3", descriptor.family)
+        val match = descriptor.match as DeviceMatch.MidiIdentity
+        // The firmware query, addressed to model 10: read-only, and answered by an Axe-Fx III only.
+        assertEquals("f0 00 01 74 10 08 1d f7", match.probeHex)
+        assertEquals(null, match.usbHint)
+        assertEquals(UsbIds(vendorId = 0x2466, productId = 0x8010), match.launchOnUsbAttach)
+        val config = json.decodeFromJsonElement(AxeFx3Config.serializer(), catalog.familyConfig)
+        assertEquals(128, config.presetsPerBank)
+        assertEquals(setOf("32.06"), config.supportedFirmwareVersions)
+        assertEquals(setOf(512), config.testedPresetCounts)
+        assertTrue(config.restoreLoadedPresetAfterEdit)
     }
 
     @Test
@@ -276,11 +295,11 @@ class CatalogParsesTest {
         }
     }
 
-    /** A probe must be a read-only enquiry. Both families use a universal or documented identity
+    /** A probe must be a read-only enquiry. Every family uses a universal or documented identity
      * query for exactly the reason in `MidiDiscovery`'s class doc. */
     @Test
     fun `every MIDI probe is a single well-formed SysEx message`() {
-        for (name in listOf("behringer_pro800.json", "yamaha_motif_xs.json")) {
+        for (name in listOf("behringer_pro800.json", "yamaha_motif_xs.json", "fractal_axefx3.json")) {
             for (descriptor in catalog(name).devices) {
                 val match = descriptor.match as? DeviceMatch.MidiIdentity ?: continue
                 val probe = match.probe

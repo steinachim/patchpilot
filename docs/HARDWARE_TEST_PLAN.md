@@ -33,7 +33,7 @@ Package id: `de.thewolfwalkexperience.software.patchpilot`.
 | Force-stop (hard kill, clears saved state) | `adb shell am force-stop de.thewolfwalkexperience.software.patchpilot` | True process death **and** wipes saved instance state / task entry — equivalent to Settings → Force stop. Use for "app force-stopped mid-operation" cases; do **not** use this for cases that expect `SavedStateHandle` to restore something, since it never gets the chance |
 | Soft kill (simulates an OS memory-pressure kill) | Background first (`input keyevent KEYCODE_HOME`), then `adb shell am kill de.thewolfwalkexperience.software.patchpilot` | Only kills a *cached/background* process — confirm with `adb shell pidof <pkg>` returning nothing — and preserves the task/saved-instance-state Bundle, so a later relaunch restores via `SavedStateHandle` the way a real low-memory kill would. This is the right tool for "process death but resumable" cases (found the hard way running X10 — `am force-stop` gave a false read there) |
 | Induce memory/GC pressure | `adb shell am send-trim-memory de.thewolfwalkexperience.software.patchpilot RUNNING_CRITICAL` and/or launch a few large apps (camera, maps, browser tabs) in the background | Used to try to reproduce the Motif XS buffer-overflow path; `send-trim-memory` asks nicely and is not guaranteed to force a GC pause the way real allocation pressure does |
-| Tail logs during a test | `adb logcat --pid=$(adb shell pidof de.thewolfwalkexperience.software.patchpilot)` | Watch for the `NordDevice`, `UsbMidiBulkTransport`, `Pro800Instrument` and `MidiDiscovery` tags used in the code |
+| Tail logs during a test | `adb logcat --pid=$(adb shell pidof de.thewolfwalkexperience.software.patchpilot)` | Watch for the `NordDevice`, `UsbMidiBulkTransport`, `Pro800Instrument`, `AxeFx3Instrument`, `AxeFx3Device`, `AxeFx3Editor` and `MidiDiscovery` tags used in the code |
 | Check current battery/USB state | `adb shell dumpsys battery` | Useful when an OTG-powered instrument is draining the phone |
 
 **Cannot be done over adb-wifi — needs a hand at the hardware:**
@@ -50,8 +50,8 @@ Package id: `de.thewolfwalkexperience.software.patchpilot`.
 
 ## 2. Cross-cutting cases (Nord and Motif XS — anything on the USB host bus)
 
-These do not apply to the Pro-800, which is class-compliant USB-MIDI through `android.media.midi`
-and never shows the app's own permission dialog (`UsbConnectionManager.kt`).
+These do not apply to the Pro-800 or the Axe-Fx III, which are class-compliant USB-MIDI through
+`android.media.midi` and never show the app's own permission dialog (`UsbConnectionManager.kt`).
 
 | # | Case | Steps | Pass | Executed |
 |---|---|---|---|---|
@@ -350,7 +350,74 @@ preset recall itself is audible-only.
 > **P9 result:** ✓ 2026-09-20, Behringer Pro-800: pass — no genuinely untested-firmware unit on hand, so simulated one by temporarily editing `devices/behringer_pro800.json`'s `supportedFirmwareVersions` from `["1.4.6"]` to `["1.4.5"]`, rebuilding and redeploying (`patchpilot-debug-1386b46.apk`). Connecting showed the "Untested firmware" advisory exactly as expected — "PRO-800 reports firmware version 1.4.6, which this app has not been tested against (tested: 1.4.5)..." — with Continue anyway / Disconnect / Share device details / Try demo mode. "Continue anyway" connected successfully to the full preset list, advisory banner remained visible, "Share device details" still reachable. `devices/behringer_pro800.json` was a temporary local edit purely to trigger the test, since reverted back to `["1.4.6"]`
 
 
-## 6. Traceability
+## 6. Fractal Audio Axe-Fx III
+
+Every wire operation the app uses was verified on a Mark I (firmware 32.06) outside the app; what
+is new here is Android's MIDI path, the app's own sequencing, and the UI. **Work on scratch slots
+only** (509–511 on the test unit), and back them up first with Fractal-Bot or Axe-Edit III, which
+are also what the cases below compare against.
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A1 | Discovery and attach | Connect the Axe-Fx III fresh (cleared app data), alongside at least one other MIDI port. Then, with the app backgrounded, unplug and replug it | No system USB permission prompt; found by the firmware probe, not by port name or order; on the replug Android offers the app (`launchOnUsbAttach`) and accepting connects without a Retry | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A2 | Model and firmware | Connect, then generate the device report from the debug menu | The app bar reads "Fractal Audio Axe-Fx III Mark I", the connect screen firmware 32.06, no advisory. The report's `capabilities` are `336, 2048, 2048, 16, 512` (the first live `0x47` from any tool); note `loadedPresetQueryWorks` and `loadedPresetNumber` against what the unit's display shows | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A3 | Connect notice | Connect; dismiss the "Edits load presets" notice with OK. Force a reconnect (unplug, replug). Then tick "Don't show this again", force-stop and relaunch. Then Settings → Show Hidden Messages Again, and reconnect | Shown once per app run, not again after the replug; hidden for good after the tick, across the relaunch; back after the Settings item, which then reads "No messages are hidden". The text matches A2's `loadedPresetQueryWorks` ("loads the preset that was loaded before" only if true) | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A4 | Full listing | Time a full listing from connect; compare with Axe-Edit III's preset list | All 512 names match; `<EMPTY>` slots show as empty (hidden until "Show empty slots"); ids `000`–`511` with no bank letter; the rail reads `000`/`128`/`256`/`384` and jumps there; headers read `000–127` etc. without "Bank" | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A5 | Selection | Load about ten presets from the list, listening each time | Display and sound change every time; no "reports … as loaded" error | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A6 | Dump integrity over Android MIDI | Generate the device report three times; once more with `adb shell am send-trim-memory … RUNNING_CRITICAL` and large apps in the background | Every `dumpReads` entry has 17 messages of lengths 3082 and 11, and `dumpReadsIdentical` is true; record the chunk intervals. A damaged read shows as a retry in the log (`AxeFx3Device`), never as a failure | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A7 | Regression run | With at least two empty slots, run the debug menu's regression test; afterwards check every slot it touched in Axe-Edit III against the backup | Every step passes; the report names the scratch slots it used; all other slots are unchanged and the scratch slots are empty again | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A8 | Restoring the loaded preset | Load X on the unit. In the app: rename another preset; copy another preset; move X to an empty slot; swap X with another preset; delete X (all on scratch slots) | After each edit the unit is back on X, at X's new number after the move and the swap, and stays on the emptied slot after the delete. If A2 found the loaded-preset query unanswered, nothing is restored and the notice says so | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A9 | Name length and characters | Rename to a 31-character name and to one with punctuation (`-_.()/!`); in Axe-Edit III, give a scratch slot a 32-character name and refresh the app's listing | The app's renames read back exactly. If the 32-character name lists whole in the app, raise `AxeFx3Editor.MAX_NAME_LENGTH` to 32 | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A10 | Reading a preset with unsaved changes | Load X, change a parameter on the unit without saving, then copy X to an empty slot in the app | Record whether the copy carries the change (a read returns the edit buffer) or not (it returns the stored preset), and that X's change is lost afterwards, as the notice says | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A11 | Cable pull mid-write | Start a copy onto a scratch slot and pull the cable during the transfer | A clean failure and `DeviceLost`, no hang; after reconnecting, the scratch slot holds either its old content or the copy, never something else (check in Axe-Edit III) | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A12 | Advisories | As P9: temporarily set `supportedFirmwareVersions` to `["31.00"]`, then separately `testedPresetCounts` to `[1024]`, rebuild and connect | Each raises the advisory with its own sentence; "Continue anyway" connects and the banner stays. Revert both | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A13 | Background and lock during a listing | Start a listing, press Home, return; repeat with the screen locked | The listing continues in the background (`MidiManager`, no rebuild on resume) and is complete on return | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A14 | Phone audio while connected (information only) | Play audio on the phone while the Axe-Fx III is connected | Record whether Android routes it to the unit's USB audio interface; nothing in the app depends on it | — |
+
+| # | Case | Steps | Pass | Executed |
+|---|---|---|---|---|
+| A15 | Mark II | On an Axe-Fx III Mark II or Mark II Turbo: A2, A4, then copy and delete on scratch slots above 511 | Identified as "Mark II" with 1,024 presets (`0000`–`1023`, eight virtual banks) behind the untested-model advisory; operations above 511 work. Open until a Mark II is available | — |
+
+## 7. Traceability
 
 | Behaviour | Source | Cases |
 |---|---|---|
@@ -378,3 +445,11 @@ preset recall itself is audible-only.
 | Pro-800 select() timing, audible-only confirmation | `devices/pro800/Pro800Instrument.kt` (`select`), `docs/PROTOCOLS.md` §Pro-800 Operations | P3–P5 |
 | Pro-800 spliced-reply retry | `docs/PROTOCOLS.md` §Pro-800 Reliability | P6 |
 | Pro-800 firmware advisory | `devices/pro800/Pro800Instrument.kt` (`validateFirmware`) | P9 |
+| Axe-Fx III class-compliant, no app-level permission; found by its firmware query | `docs/PROTOCOLS.md` §Axe-Fx III Transport, Identification | A1 |
+| Axe-Fx III model and preset count from the `0x47` record; layout built at connect | `devices/axefx3/AxeFx3Instrument.kt` (`connect`), `core/SlotAddress.kt` (`LinearAddressFormat`) | A2, A4, A15 |
+| Connect-time instrument notices, hidden for good, shown again from Settings | `core/Instrument.kt` (`notices`), `ui/InstrumentNotices.kt`, `ui/SettingsScreen.kt` | A3 |
+| Axe-Fx III edits load the target; the loaded preset is restored | `devices/axefx3/AxeFx3Instrument.kt` (`operation`) | A8, A10 |
+| Axe-Fx III dumps replayed verbatim, every step's status checked, no re-send, uncancellable transfer | `devices/axefx3/AxeFx3Device.kt`, `AxeFx3Instrument.writeUnit`, `midi/SysExExchange.kt` (per-call `retries`) | A6, A7, A11 |
+| `MidiManager` receive buffer sized for a 49 KB dump | `transport/AndroidMidiTransport.kt` | A6 |
+| Axe-Fx III name limit | `devices/axefx3/AxeFx3Editor.kt` (`MAX_NAME_LENGTH`) | A9 |
+| Axe-Fx III firmware and model advisory | `devices/axefx3/AxeFx3Instrument.kt` (`advisoryText`) | A12 |

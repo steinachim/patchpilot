@@ -279,8 +279,9 @@ interface PresetEditor {
 /**
  * Reads and writes a preset's own data blob - backup and restore.
  *
- * Only the Pro-800 implements it: there a dump is the listing operation, so its browser is built
- * on [read]. The other families return null until an item-data read/write path is implemented.
+ * The Pro-800 and the Axe-Fx III implement it, and build their edits on it: a dump is the only
+ * way either has to move a preset. The other families return null until an item-data read/write
+ * path is implemented.
  */
 interface PresetTransfer {
     suspend fun read(address: SlotAddress): ByteArray

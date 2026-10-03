@@ -251,3 +251,65 @@ Sub-categories: Yamaha documents the main category byte and refers to a category
 The instrument sends no unsolicited SysEx apart from Active Sensing on cable 0. A bulk dump acknowledgement means the message was well-formed and accepted, not that anything reached flash; only the commit or the footer does that. Dumps dropped or truncated on the bus are ordinary rather than exceptional (the transport buffers deep enough to ride out a garbage-collection pause of about 150 ms at the instrument's transfer rate), so every read is retried twice and matched on well-formedness.
 
 Yamaha's documentation for the Motif XS: <https://usa.yamaha.com/products/contents/music_production/downloads/manuals/index.html?l=en&c=music_production&k=Motif+XS>
+
+## Fractal Audio Axe-Fx III
+
+Measured on a Mark I (512 presets) running firmware 32.06. Nothing has been run on a Mark II yet.
+
+### Transport
+
+Class-compliant USB-MIDI through Android's `MidiManager`, as for the Pro-800; no USB host permission is asked for. The instrument is a composite device whose other interfaces are USB Audio Class 2.0.
+
+### Identification
+
+Vendor id `0x2466` (Fractal Audio Systems), product id `0x8010`. The Mark II, and the Mark II Turbo, reportedly use the same ids, so the ids name the family rather than the model; they are listed as `launchOnUsbAttach` only, so that Android offers the app when the unit is plugged in. A port is identified by Fractal's documented firmware query `F0 00 01 74 10 08 1D F7`, which only a device of model `10` answers; the reply starts `F0 00 01 74 10 08` and carries the version (`20 06` is 32.06) and an ASCII build stamp.
+
+The model is read at connect from the reply to command `0x47`, which Axe-Edit III sends at every startup: five 14-bit values, two bytes each, low seven bits first. The fifth is the preset count, 512 on a Mark I and 1024 (`00 08`) on a Mark II. The fifth value is read as the preset count because it is 512 on the Mark I measured, whose presets run 0..511, and 1024 is the Mark II's count. The app treats exactly 1024 as a Mark II and anything else, a missing reply included, as a Mark I, so a unit it cannot classify is never offered slots it may not have. The other four values (336, 2048, 2048 and 16 on a Mark I) are not decoded. A Mark II Turbo is expected to report as a Mark II.
+
+### Framing
+
+`F0 00 01 74 10 cc … cs F7`: the 3-byte Fractal manufacturer id, model `10`, a command byte, its payload, then a checksum: the XOR of every byte from `F0` through the last payload byte, masked to 7 bits.
+
+Text and preset data use Fractal's own packing, not the flag-byte scheme of the Yamaha family: the low seven bits of every wire byte form one bitstream, most significant bit first, which is cut into 8-bit bytes, a final partial byte being padding. The command byte and sub-function are inside the packed region of such a message, so building one means packing a fixed 2-byte artifact (`02 A0` for a rename) followed by the payload, never the command bytes themselves.
+
+### Messages
+
+| Command | Name | Payload | Reply |
+|---|---|---|---|
+| `0x08` | Firmware version | *(none)* | Major, minor, five undecoded bytes, the build stamp. Also the discovery probe. |
+| `0x47` | Model record | *(none)* | Five 14-bit values; the fifth is the preset count. A `64 47` acknowledgement in its place is taken as no record. |
+| `0x0D` | Preset name (public) | Preset number, low 7 bits first; `7F 7F` for the loaded preset | The number (the loaded preset's own where `7F 7F` was asked) and a 32-byte name field: a C string in a fixed buffer, with stale bytes after the terminator. An empty slot reads `<EMPTY>`. |
+| `01 27` | Select | 5 zero bytes, preset number low first, 7 zero bytes | The same shape with the number zeroed. |
+| `01 28` | Rename the loaded preset | Packed: artifact, 12 reserved bytes, 32-byte space-padded name | Acknowledged. Changes only the edit buffer. |
+| `01 26` | Store | Same shape as select | Acknowledged after about 600 ms, a flash write. Writes the edit buffer into the slot. |
+| `0x03` | Read a preset | Preset number **high** 7 bits first, then `00` | `77 hi lo 00 00 01`, 16 packed chunks `78 00 …` of 3,082 bytes each (2,688 data bytes), then `79 a b c`. |
+| `0x77` / `0x78` / `0x79` | Write the edit buffer | Begin `7F 7F 00 00 01`, the 16 chunks, the end marker | Each answered `64 <step> <status>`; status `00` is success. |
+| `F0 00 01 74 7F 00 7A F7` | Who is there | *(model `7F` addresses any Fractal device)* | `64 00 00` from model `10`. Sent only by the device report. |
+
+### Addressing
+
+Presets are one run of numbers, `000`..`511` on a Mark I and `0000`..`1023` on a Mark II; the instrument has no banks. The app groups them into virtual banks of 128 (`presetsPerBank` in the catalog) only so that the index rail has something to jump to; the ids carry no bank, and a virtual bank's header shows its range alone.
+
+### Operations
+
+Listing is one `0x0D` per preset, each answered within about a millisecond, matched on the echoed number.
+
+Selection is `01 27`. Where the instrument answers `0x0D 7F 7F` with a number (checked once at connect), a selection is confirmed by asking which preset is loaded.
+
+**Every write goes through the edit buffer.** A rename or a dump write changes the loaded preset only, and `01 26 N` then writes it to slot N, so writing a preset means loading it first, which the user hears and which discards unsaved panel edits to whatever was loaded. The app says so once per run when a session connects, and, where the loaded-preset query works, loads the previously loaded preset again after each edit (following it to its new slot after a move or swap).
+
+- **Rename** is the instrument's own: select, `01 28`, store, then a `0x0D` read-back.
+- **Copy** reads the source dump, selects the destination, writes the dump, stores it and reads it back; the read-back must match the written data apart from decoded bytes 0, 1 and 5..8, which every store rewrites.
+- **Move** is a copy and then a delete of the source. **Swap** reads both dumps before writing either, and writes the first slot back if the second write fails. An empty side is moved as the empty slot's own dump, which the instrument stores as empty.
+- **Delete** writes the dump Axe-Edit III writes to delete a preset (`devices/blanks/axefx3_empty_preset.bin`, recorded from the editor), and stores it. The instrument takes it as an erase: the slot then reads `<EMPTY>`, while some of its old data stays in place.
+
+A write is never re-sent: each step's acknowledgement is awaited once, and the begin-to-store sequence runs to completion even when the operation is cancelled, since stopping between chunks would leave the loaded preset's edit buffer half-written. A failed transfer selects the target again, which reloads its stored preset, and sends no store.
+
+### Hazards
+
+- **A dump is replayed, never rebuilt.** The end marker `79 a b c` is a checksum over the chunks' wire bytes, padding bits included, and its algorithm is unknown. Those padding bits are not always zero, so a decoded and re-encoded dump differs on the wire; the instrument then answers the end with status `0x13` and stores nothing, while still acknowledging every step and the store that follows. The app keeps dumps as the raw messages and checks every acknowledgement's status. It cannot write an edited preset or build an empty one, which is why the delete payload is shipped.
+- `0x28` carries no preset number: it renames whatever is loaded.
+
+### Reliability
+
+A dump read accepts nothing until the acknowledgement that echoes its own preset number, so an end marker still arriving from an earlier read is not taken for this one. It is validated as exactly 16 chunk messages of 3,082 bytes and one end message, each with a closing checksum, and is read once more after a pause if anything is missing or damaged. At about 105 bytes per millisecond a dump can arrive in thousands of small `MidiManager` callbacks, which is what the transport's receive buffer is sized for.

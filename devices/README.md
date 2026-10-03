@@ -7,16 +7,17 @@ The per-instrument catalogs the app is built from. One file per instrument famil
 | `nord_devices.json` | every supported Nord model | its own native shape, described by `nord_devices.schema.json` |
 | `behringer_pro800.json` | the Behringer Pro-800 | the generic `FamilyCatalog` shape |
 | `yamaha_motif_xs.json` | the Yamaha Motif XS6, XS7 and XS8 | the generic `FamilyCatalog` shape |
+| `fractal_axefx3.json` | the Fractal Audio Axe-Fx III, Mark I and Mark II | the generic `FamilyCatalog` shape |
 | `motifxs_factory_voices.json` | the Motif XS's 1,217 factory voice names and category assignments | its own shape (bank → slot → name and categories) |
-| `blanks/*.bin` | the payloads the Motif XS family writes over a slot to erase it | raw SysEx payloads; see `blanks/README.md` |
+| `blanks/*.bin` | what the Motif XS and Axe-Fx III families write over a slot to erase it | raw SysEx; see `blanks/README.md` |
 
 `nord_devices.schema.json` is a JSON Schema for `nord_devices.json` and can be used with any schema validator or editor plugin.
 
 ## How the app uses this directory
 
-The `syncDeviceCatalog` Gradle task copies every `*.json` file except the schemas, plus `blanks/*.bin`, into `android/app/src/main/assets/` before every build; that directory is generated and gitignored, so never edit it by hand. Each family loads its own asset (`NordFamily.kt`, `Pro800Family.kt`, `MotifXsFamily.kt`), and the unit tests decode the real files from this directory (`CatalogParsesTest` for the Pro-800 and Motif XS catalogs, `NordCatalogTaggerTest` and `MotifXsFactoryVoicesTest` for the other two), so a malformed catalog fails the unit tests rather than only the connect screen on a phone.
+The `syncDeviceCatalog` Gradle task copies every `*.json` file except the schemas, plus `blanks/*.bin`, into `android/app/src/main/assets/` before every build; that directory is generated and gitignored, so never edit it by hand. Each family loads its own asset (`NordFamily.kt`, `Pro800Family.kt`, `MotifXsFamily.kt`, `AxeFx3Family.kt`), and the unit tests decode the real files from this directory (`CatalogParsesTest` for the Pro-800, Motif XS and Axe-Fx III catalogs, `NordCatalogTaggerTest` and `MotifXsFactoryVoicesTest` for the other two), so a malformed catalog fails the unit tests rather than only the connect screen on a phone.
 
-The `generateUsbDeviceFilter` task generates `android/app/src/main/res/xml/device_filter.xml` from the USB vendor/product ids in these files. Android reads that file to launch the app when a matching USB device is attached, before any app code runs, so it cannot be loaded from an asset. Unlike the assets, the generated file is committed, so a fresh checkout resolves the manifest's reference to it before the first build; the task overwrites it on every build, and a catalog change shows up as a diff in it. A USB-matched device (every Nord, the Motif XS) contributes an entry by itself; one found through `MidiManager` (the Pro-800) contributes one only through its `launchOnUsbAttach` ids, since Android would otherwise never offer the app when it is plugged in.
+The `generateUsbDeviceFilter` task generates `android/app/src/main/res/xml/device_filter.xml` from the USB vendor/product ids in these files. Android reads that file to launch the app when a matching USB device is attached, before any app code runs, so it cannot be loaded from an asset. Unlike the assets, the generated file is committed, so a fresh checkout resolves the manifest's reference to it before the first build; the task overwrites it on every build, and a catalog change shows up as a diff in it. A USB-matched device (every Nord, the Motif XS) contributes an entry by itself; one found through `MidiManager` (the Pro-800, the Axe-Fx III) contributes one only through its `launchOnUsbAttach` ids, since Android would otherwise never offer the app when it is plugged in.
 
 ## Match types
 
@@ -29,9 +30,10 @@ The Nord file is in its own shape and every entry is a `usb` match on Clavia's v
 
 ## What is measured and what is transcribed
 
-Everything in `nord_devices.json`, `behringer_pro800.json` and `yamaha_motif_xs.json` was read off an instrument or from its behaviour on the wire, with these exceptions:
+Everything in `nord_devices.json`, `behringer_pro800.json`, `yamaha_motif_xs.json` and `fractal_axefx3.json` was read off an instrument or from its behaviour on the wire, with these exceptions:
 
 - The Motif XS7 and XS8 product ids (`0x1043`, `0x1044`) are inferred from Yamaha's driver files and have not been confirmed on a unit; see `docs/PROTOCOLS.md`.
+- The Axe-Fx III Mark II is expected to share the Mark I's USB ids, by report, and to differ only in the preset count its model record carries. No Mark II has been seen; it is recognised and connects behind a warning.
 - `programCategoryIds` and the category name tables in `nord_devices.json` cannot be read off the wire, which only carries numeric ids; they have to be established from the names the instrument itself displays for each id.
 
 `motifxs_factory_voices.json` is transcribed rather than measured: its names and categories come from Yamaha's published Motif XS Data List (the spreadsheet edition, revision B0, at <https://usa.yamaha.com/files/download/other_assets/7/1198647/motifxs_en_dl_b0.zip> and <https://usa.yamaha.com/files/download/other_assets/4/1198324/motifxs_en_dl2_b0.zip>; the PDF edition, revision C0, at <https://usa.yamaha.com/files/download/other_assets/4/335014/motifxs_en_dl_c0.pdf>; both listed on Yamaha's Motif XS downloads page), except the two drum banks' categories, which were read off an instrument because the drum voice list publishes none. The file's own `source` field carries the same references. The eleven read-only banks never change and reading them over MIDI would take several minutes (extrapolated from the measured per-voice times), so the browser's Factory listing names them from this file and issues no round trips. The file holds display text the app never transmits, so `blanks/README.md`'s rule about wire payloads does not apply: a wrong entry is a wrong label, not a malformed write. The browser says where the names came from, the hidden debug screen can read one bank off a real instrument and diff it against this file, and `MotifXsFactoryVoicesTest` pins its bank labels and slot counts against `yamaha_motif_xs.json`.
@@ -50,4 +52,4 @@ The device report the app shares (from the debug menu, or from the preset screen
 
 ## Adding an instrument of another family
 
-The Pro-800 and Motif XS files each describe one protocol implementation. A new instrument that speaks one of those protocols is a new object in that file's `devices` array (for the Motif XS, with its own `banks` table if its memory map differs from the shared one in `familyConfig`). A new protocol needs a new package under `android/app/src/main/java/.../devices/`, a new catalog file here, and an entry in `InstrumentRegistry`; see `docs/ARCHITECTURE.md`.
+The Pro-800, Motif XS and Axe-Fx III files each describe one protocol implementation. A new instrument that speaks one of those protocols is a new object in that file's `devices` array (for the Motif XS, with its own `banks` table if its memory map differs from the shared one in `familyConfig`). A new protocol needs a new package under `android/app/src/main/java/.../devices/`, a new catalog file here, and an entry in `InstrumentRegistry`; see `docs/ARCHITECTURE.md`.

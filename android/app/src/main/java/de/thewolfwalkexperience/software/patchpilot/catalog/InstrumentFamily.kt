@@ -42,6 +42,7 @@ object InstrumentRegistry {
             de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFamily,
             de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Family,
             de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsFamily,
+            de.thewolfwalkexperience.software.patchpilot.devices.axefx3.AxeFx3Family,
         )
     }
 

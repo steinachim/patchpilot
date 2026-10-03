@@ -4,6 +4,8 @@
 package de.thewolfwalkexperience.software.patchpilot.core
 
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
+import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.AxeFx3Editor
+import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.AxeFx3SysEx
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsVoice
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800ProgramFields
 import org.junit.Assert.assertEquals
@@ -40,6 +42,8 @@ class NameLengthTest {
     fun `the declared limits match what each format actually stores`() {
         assertEquals("a Motif XS voice name field is 20 bytes", 20, MotifXsVoice.NAME_LENGTH)
         assertEquals("a Pro-800 program name field is 16 bytes", 16, Pro800ProgramFields.NAME_LENGTH)
+        assertEquals("an Axe-Fx III name field is 32 bytes", 32, AxeFx3SysEx.NAME_FIELD_LENGTH)
+        assertEquals("one is kept for the terminator until 32 is tested", 31, AxeFx3Editor.MAX_NAME_LENGTH)
     }
 
     /**
