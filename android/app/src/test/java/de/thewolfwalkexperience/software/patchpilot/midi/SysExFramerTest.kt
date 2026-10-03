@@ -100,6 +100,34 @@ class SysExFramerTest {
         assertArrayEquals(message, framer.feed(message).single())
     }
 
+    /** A slow message is read while it arrives: what is pending, from any offset, and nothing once it ends. */
+    @Test
+    fun `pendingFrom shows the message still arriving`() {
+        val framer = SysExFramer()
+        assertEquals(0, framer.pendingFrom(0).size)
+        framer.feed(message.copyOfRange(0, 4))
+        assertArrayEquals(message.copyOfRange(0, 4), framer.pendingFrom(0))
+        assertArrayEquals(message.copyOfRange(2, 4), framer.pendingFrom(2))
+        assertEquals(0, framer.pendingFrom(4).size)
+        framer.feed(message.copyOfRange(4, 6))
+        assertArrayEquals(message.copyOfRange(4, 6), framer.pendingFrom(4))
+        framer.feed(message.copyOfRange(6, message.size))
+        assertEquals("a completed message is no longer pending", 0, framer.pendingFrom(0).size)
+    }
+
+    @Test
+    fun `messageStarts counts every F0, so a reader sees an abandoned message replaced`() {
+        val framer = SysExFramer()
+        framer.feed(byteArrayOf(0xF0.toByte(), 0x01, 0x02))
+        assertEquals(1, framer.messageStarts)
+        framer.feed(message)
+        assertEquals(2, framer.messageStarts)
+        // An abort by a status byte starts nothing.
+        framer.feed(byteArrayOf(0xF0.toByte(), 0x01, 0xB0.toByte(), 0x07, 0x64))
+        assertEquals(3, framer.messageStarts)
+        assertEquals(0, framer.pendingFrom(0).size)
+    }
+
     @Test
     fun `reset discards a partial message so a stale reply cannot complete the next one`() {
         val framer = SysExFramer()

@@ -7,7 +7,8 @@ package de.thewolfwalkexperience.software.patchpilot.midi
  * Reassembles complete SysEx messages out of a MIDI byte stream that respects no message
  * boundaries: one `F0 ... F7` message may span any number of reads and split at any byte.
  *
- * Not thread-safe: [SysExExchange] owns one of these and feeds it from a single collector.
+ * Not thread-safe: [SysExExchange] owns one of these, feeds it from a single collector and
+ * synchronises on it for [pendingFrom].
  */
 class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) {
 
@@ -17,6 +18,29 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
     /** Messages that were dropped for being over-long - a symptom worth surfacing, not hiding. */
     var droppedMessages: Int = 0
         private set
+
+    /**
+     * How many messages have started, one per `F0`. A reader of [pendingFrom] compares it across
+     * calls: a change means the message it was following was abandoned and another began, so its
+     * offsets no longer apply.
+     */
+    var messageStarts: Long = 0
+        private set
+
+    /** How many bytes of the message still being assembled have arrived; 0 where none is. */
+    val pendingSize: Int get() = if (inMessage) buffer.size else 0
+
+    /**
+     * The message still being assembled, from [offset] to what has arrived so far, `F0` included
+     * at offset 0. Empty where no message is in progress or nothing past [offset] has arrived.
+     *
+     * For a message slow enough to be read while it arrives: a 200 KB dump at 1.4 KB/s. Copies only
+     * the bytes from [offset], so a reader that advances its offset copies each byte once.
+     */
+    fun pendingFrom(offset: Int): ByteArray {
+        if (!inMessage || offset >= buffer.size) return ByteArray(0)
+        return ByteArray(buffer.size - offset) { buffer[offset + it] }
+    }
 
     /**
      * Feeds raw inbound bytes and returns whatever complete SysEx messages they completed.
@@ -38,6 +62,7 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
                     // new one rather than the truncated old one.
                     buffer.clear()
                     inMessage = true
+                    messageStarts++
                     buffer.add(byte)
                 }
 

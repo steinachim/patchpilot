@@ -5,8 +5,10 @@ package de.thewolfwalkexperience.software.patchpilot.midi
 
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800SysEx
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -179,6 +181,43 @@ class SysExExchangeTest {
 
         assertArrayEquals(ack, reply)
         assertEquals(messages.size, transport.sent.size)
+    }
+
+    /**
+     * A reply that takes minutes can be read while the exchange still waits for it: [pending]
+     * shows what has arrived, and [receivedBytes] counts everything, SysEx or not.
+     */
+    @Test
+    fun `a slow reply can be read while the exchange still waits for it`() = runTest {
+        val whole = dump(5, payload = ByteArray(40) { it.toByte() })
+        val transport = FakeMidiTransport { emptyList() }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val waiting = async {
+            exchange.exchange(Pro800SysEx.requestDump(5), "reading 5", timeout = 10.seconds) {
+                Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_DUMP
+            }
+        }
+        runCurrent()
+        transport.inject(byteArrayOf(0xB0.toByte(), 0x07, 0x64)) // a CC between messages
+        transport.inject(whole.copyOfRange(0, 20))
+        runCurrent()
+
+        val first = exchange.pending(0)
+        assertArrayEquals(whole.copyOfRange(0, 20), first.bytes)
+        assertEquals(20, first.size)
+        assertEquals(23L, exchange.receivedBytes)
+        assertEquals(0, exchange.pending(20).bytes.size)
+
+        transport.inject(whole.copyOfRange(20, 30))
+        runCurrent()
+        val second = exchange.pending(20)
+        assertEquals("the same message", first.start, second.start)
+        assertArrayEquals(whole.copyOfRange(20, 30), second.bytes)
+
+        transport.inject(whole.copyOfRange(30, whole.size))
+        assertArrayEquals(whole, waiting.await())
+        assertEquals(0, exchange.pending(0).size)
     }
 
     /**

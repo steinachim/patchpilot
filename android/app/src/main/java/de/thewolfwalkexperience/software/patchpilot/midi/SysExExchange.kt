@@ -67,13 +67,44 @@ class SysExExchange(
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
+    /** Written by the collector alone; read from any coroutine. */
+    @Volatile
+    private var received = 0L
+
+    /**
+     * Every byte [transport] has delivered, SysEx or not. Next to [pending], it tells a reader
+     * waiting on a slow message whether the device is sending something else (bytes arrive while
+     * nothing is pending) or nothing at all.
+     */
+    val receivedBytes: Long get() = received
+
+    /** The message still being assembled, as [pending] reports it. */
+    class Pending(
+        /** [SysExFramer.messageStarts] at the time of the call: a change means a new message. */
+        val start: Long,
+        /** How much of it has arrived; 0 where no message is in progress. */
+        val size: Int,
+        /** Its bytes from the offset asked for to [size]. */
+        val bytes: ByteArray,
+    )
+
+    /**
+     * What has arrived of the message still being assembled, from [offset] on - for a reply
+     * slow enough to be decoded while it arrives, whose [exchange] is still waiting. A family
+     * reads from the offset it has consumed, so each byte is copied once.
+     */
+    fun pending(offset: Int): Pending = synchronized(framer) {
+        Pending(framer.messageStarts, framer.pendingSize, framer.pendingFrom(offset))
+    }
 
     init {
         // UNDISPATCHED so the collector subscribes to [transport] during construction; the
         // transport's flow has replay = 0 too.
         collector = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             transport.incoming.collect { chunk ->
-                framer.feed(chunk).forEach {
+                received += chunk.size
+                // Synchronised against [pending]; nothing in feed suspends.
+                synchronized(framer) { framer.feed(chunk) }.forEach {
                     // A message arriving with no exchange in flight - a fire-and-forget write's
                     // status reply - is otherwise unobservable. Quiet during a scan, where every
                     // dump has a subscriber.
