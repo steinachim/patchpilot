@@ -18,6 +18,7 @@ import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 
 private const val TAG = "PresetListings"
@@ -83,6 +85,12 @@ internal class PresetListings(
     // started mid-scan interleaves with it and each reply is matched on its own echoed address.
     private val indexJobs = mutableMapOf<PresetScope, Job>()
     private var indexGeneration = 0
+
+    /**
+     * Parent of every listing job. A cancelled job stays among its children until its cleanup has
+     * run, which [indexJobs] forgets at once - see [cancelAndJoin].
+     */
+    private val listingJobs = SupervisorJob(scope.coroutineContext[Job])
 
     /** Which instrument [listingsByScope] describes, so a *different* one still triggers a fresh scan. */
     private var indexedInstrument: String? = null
@@ -164,7 +172,7 @@ internal class PresetListings(
         // number, and a refresh of one would look like the screen's own refresh landing.
         val generation = ++indexGeneration
         updateIndex(scope) { PresetIndexState(generation = generation) }
-        indexJobs[scope] = this.scope.launch {
+        indexJobs[scope] = this.scope.launch(listingJobs) {
             try {
                 browser().index(scope).collect { update -> updateIndex(scope) { it.plus(update) } }
             } catch (e: CancellationException) {
@@ -190,6 +198,19 @@ internal class PresetListings(
         indexJobs.values.forEach { it.cancel() }
         indexJobs.clear()
         indexedInstrument = null
+    }
+
+    /**
+     * [cancel], then waits until every listing has finished its cleanup, including one cancelled
+     * earlier (a scope switch, a pause): a Nord's listing sends its category unlock from a
+     * `NonCancellable` section, which fails if the connection is closed under it and leaves the
+     * category lock set. A listing started during the wait is stopped too.
+     */
+    suspend fun cancelAndJoin() {
+        do {
+            cancel()
+            listingJobs.children.toList().joinAll()
+        } while (listingJobs.children.any())
     }
 
     /**

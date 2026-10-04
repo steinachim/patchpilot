@@ -6,6 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
+import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
 import de.thewolfwalkexperience.software.patchpilot.discovery.Candidate
 import de.thewolfwalkexperience.software.patchpilot.discovery.DeviceDiscovery
@@ -14,15 +15,20 @@ import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.usb.AttachedUsbDevice
 import de.thewolfwalkexperience.software.patchpilot.usb.UsbHost
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.job
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -94,17 +100,19 @@ class ConnectionCoordinatorTest {
         discovery: DeviceDiscovery,
         autoConnect: Boolean = true,
         events: MutableList<String> = mutableListOf(),
+        create: () -> Instrument = { DemoInstrument() },
+        onSessionEnding: suspend () -> Unit = { events += "ending" },
     ) = ConnectionCoordinator(
         scope = scope,
         usb = usb,
         discoveries = listOf(discovery),
         catalog = { listOf(nordStage) },
-        create = { _, _ -> DemoInstrument() },
+        create = { _, _ -> create() },
         createForUnknown = { _, _, _ -> DemoInstrument() },
         autoConnect = { autoConnect },
         strings = StringResolver { id, _ -> "string $id" },
         onSessionStarted = { events += "started" },
-        onSessionEnding = { events += "ending" },
+        onSessionEnding = onSessionEnding,
         onDeviceLost = { events += "lost" },
     ).also { it.start() }
 
@@ -165,6 +173,51 @@ class ConnectionCoordinatorTest {
         assertEquals(null, coordinator.instrument)
         // The cache is dropped while the handle it is keyed on still exists.
         assertEquals(listOf("started", "lost", "ending"), events)
+    }
+
+    /**
+     * The listing's cleanup - on a Nord, the unlock that ends a category selection - goes out
+     * before the connection is closed, on a teardown and on [ConnectionCoordinator.release].
+     */
+    @Test
+    fun `the connection is closed only once the listing has stopped`() = runSession { session ->
+        val events = mutableListOf<String>()
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate)) { FakeTransport() },
+            create = { closeRecorded(events) },
+            onSessionEnding = {
+                delay(1_000)
+                events += "listing stopped"
+            },
+        )
+        coordinator.connect()
+        advanceUntilIdle()
+        coordinator.disconnect()
+        advanceUntilIdle()
+        assertEquals(listOf("listing stopped", "closed"), events)
+
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            events.clear()
+            coordinator.connect()
+            advanceUntilIdle()
+            coordinator.release()
+            advanceUntilIdle()
+            assertEquals(listOf("listing stopped", "closed"), events)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    private fun closeRecorded(events: MutableList<String>): Instrument {
+        val demo = DemoInstrument()
+        return object : Instrument by demo {
+            override fun close() {
+                events += "closed"
+            }
+        }
     }
 
     @Test

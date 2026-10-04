@@ -46,7 +46,8 @@ private const val TAG = "ConnectionCoordinator"
  * @param createForUnknown builds an instrument on the protocol of the family
  *   [UnknownDevicePolicy.familyFor] named, for a device the catalog does not list.
  * @param onSessionStarted a session became usable: start its listing.
- * @param onSessionEnding a session is about to be closed: stop whatever reads from it.
+ * @param onSessionEnding a session is about to be closed: stop whatever reads from it, and return
+ *   once that has finished its cleanup. Runs under the operation mutex, right before the close.
  * @param onDeviceLost the connected device was unplugged. Runs before the teardown, which clears
  *   the [deviceHandle] a cache key is built from.
  */
@@ -60,7 +61,7 @@ internal class ConnectionCoordinator(
     private val autoConnect: suspend () -> Boolean,
     private val strings: StringResolver,
     private val onSessionStarted: () -> Unit = {},
-    private val onSessionEnding: () -> Unit = {},
+    private val onSessionEnding: suspend () -> Unit = {},
     private val onDeviceLost: () -> Unit = {},
     private val demo: () -> Instrument = { DemoInstrument() },
 ) {
@@ -109,7 +110,7 @@ internal class ConnectionCoordinator(
      * the write and the re-read that confirms it.
      *
      * The index scan is not routed through this: [onSessionEnding] cancels it instead, rather than
-     * making a resume wait out a 93-second Motif XS listing.
+     * making a resume wait out a 93-second Motif XS listing, and waits only for its cleanup.
      */
     private val instrumentMutex = Mutex()
 
@@ -567,35 +568,31 @@ internal class ConnectionCoordinator(
      * **Never under an edit still in flight.** The owner's scope is cancelled before this runs,
      * but a write's `NonCancellable` section (a Motif XS block sequence, its write-plus-commit)
      * keeps going, holding the operation mutex until it is done; closing the transport under it
-     * would fail the write part way - the one thing those sections exist to prevent. So the
-     * close is taken through the same mutex: at once when it is free, otherwise from a
-     * coroutine of its own that waits for the edit to let go. Nothing here sends protocol
-     * messages; every operation cleans up whatever lock it caused before returning.
+     * would fail the write part way - the one thing those sections exist to prevent. A
+     * cancelled listing's cleanup (a Nord's category unlock) is in the same position. So the
+     * close runs from a coroutine of its own, through the same mutex and after [onSessionEnding]:
+     * at once where nothing is in flight, otherwise once the edit and the cleanup are done.
+     * Nothing here sends protocol messages; every operation cleans up whatever lock it caused.
      */
     fun release() {
         val target = instrument ?: return
         instrument = null
-        if (instrumentMutex.tryLock()) {
-            try {
-                closeQuietly(target)
-            } finally {
-                instrumentMutex.unlock()
-            }
-            return
-        }
-        Log.i(TAG, "An edit is still in flight; the connection is released once it completes")
         CoroutineScope(Dispatchers.Main.immediate).launch {
-            instrumentMutex.withLock { closeQuietly(target) }
+            instrumentMutex.withLock {
+                onSessionEnding()
+                closeQuietly(target)
+            }
         }
     }
 
     private suspend fun teardownCurrentInstrument() {
-        // Stop the listing before closing what it reads from: a scan runs in the owner's scope,
-        // so it would otherwise outlive this call and fail every remaining slot against a shut
-        // handle.
-        onSessionEnding()
         // Waits for an edit, report or regression run in flight - see [instrumentMutex].
         instrumentMutex.withLock {
+            // Stop the listing and let its cleanup finish before closing what it reads from: a
+            // scan runs in the owner's scope, so it would otherwise fail every remaining slot
+            // against a shut handle, and a Nord's would leave its category lock set. Inside the
+            // mutex rather than before it, so a listing started while an edit finished is stopped too.
+            onSessionEnding()
             closeQuietly(instrument)
             instrument = null
             connectedPhysicalKey = null

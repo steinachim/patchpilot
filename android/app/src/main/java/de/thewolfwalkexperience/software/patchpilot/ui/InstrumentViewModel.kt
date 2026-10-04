@@ -72,7 +72,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             autoConnect = { preferences.autoConnectToFirstFound.first() },
             strings = strings,
             onSessionStarted = { listings.start() },
-            onSessionEnding = { listings.cancel() },
+            onSessionEnding = { listings.cancelAndJoin() },
             onDeviceLost = { listings.invalidateUserCache() },
         )
     }
