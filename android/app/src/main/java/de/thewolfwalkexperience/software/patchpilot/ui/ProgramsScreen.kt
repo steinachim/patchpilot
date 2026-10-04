@@ -393,8 +393,9 @@ fun ProgramsScreen(
 
                 // The theme's own indicator, the same one ConnectScreen shows while it opens a
                 // device, and centred like the empty states below - this Column has no horizontal
-                // alignment of its own.
-                index.slots.isEmpty() && index.loading -> ConnectingWait()
+                // alignment of its own. No label during a refresh: the session is up, and the
+                // spinning refresh button already says what is running.
+                index.slots.isEmpty() && index.loading -> ConnectingWait(showLabel = !isRefreshing)
 
                 else -> ProgramListBody(
                     listing = listing,
@@ -529,16 +530,19 @@ private class DebugTapCounter {
 /**
  * The wait shown in place of the list: the theme's own indicator over "Connecting…", as
  * ConnectScreen shows while it searches. Used for the first read after a connect and for the
- * reconnect dip a resume goes through, which are the same wait from the user's side.
+ * reconnect dip a resume goes through, which are the same wait from the user's side; without
+ * [showLabel] for a refresh, which re-reads over a session that is already up.
  */
 @Composable
-private fun ConnectingWait() {
+private fun ConnectingWait(showLabel: Boolean = true) {
     val theme = LocalThemeStyle.current
     CenteredMessage {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             theme.ProgressIndicator()
-            Spacer(Modifier.height(8.dp))
-            Text(stringResource(R.string.programs_reconnecting))
+            if (showLabel) {
+                Spacer(Modifier.height(8.dp))
+                Text(stringResource(R.string.programs_reconnecting))
+            }
         }
     }
 }
