@@ -117,15 +117,20 @@ fun PatchPilotApp(
         entry.lifecycle.withResumed { returnToConnect() }
     }
 
+    // Hands ConnectScreen off to the preset list once a session is up. Waits for RESUMED for the
+    // same reason: an instrument plugged in while the phone is locked connects while ConnectScreen
+    // is not resumed, and a dropped navigate is never re-run.
+    LaunchedEffect(session, currentEntry) {
+        val entry = currentEntry ?: return@LaunchedEffect
+        if (entry.destination.route != ROUTE_CONNECT || session !is ConnectionState.Connected) return@LaunchedEffect
+        entry.lifecycle.withResumed {
+            guardedNavigate(ROUTE_PROGRAMS) { popUpTo(ROUTE_CONNECT) { inclusive = true } }
+        }
+    }
+
     NavHost(navController = navController, startDestination = ROUTE_CONNECT, modifier = modifier) {
         composable(ROUTE_CONNECT) {
-            ConnectScreen(
-                viewModel,
-                onConnected = {
-                    guardedNavigate(ROUTE_PROGRAMS) { popUpTo(ROUTE_CONNECT) { inclusive = true } }
-                },
-                onOpenSettings = { guardedNavigate(ROUTE_SETTINGS) },
-            )
+            ConnectScreen(viewModel, onOpenSettings = { guardedNavigate(ROUTE_SETTINGS) })
         }
         composable(ROUTE_PROGRAMS) {
             ProgramsScreen(

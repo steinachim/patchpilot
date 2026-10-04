@@ -45,7 +45,7 @@ import de.thewolfwalkexperience.software.patchpilot.ui.theme.BarAction
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 
 @Composable
-fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpenSettings: () -> Unit) {
+fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
     val state by viewModel.state.collectAsState()
     val theme = LocalThemeStyle.current
 
@@ -66,9 +66,6 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
 
     LaunchedEffect(Unit) {
         if (state is ConnectionState.Disconnected) viewModel.connection.connect()
-    }
-    LaunchedEffect(state) {
-        if (state is ConnectionState.Connected) onConnected()
     }
 
     Box(

@@ -18,6 +18,7 @@
 - On Android 8 to 12L, other apps can no longer send Patch Pilot fake USB permission answers or unplug notices.
 - Spaces before or after a new preset name are now removed before it is sent, so renaming a Behringer Pro-800 preset with them no longer fails.
 - TalkBack reads Settings → “Auto-Connect to First Found Instrument” as a single switch.
+- Plugging an instrument in while the phone is locked now opens its preset list once unlocked, instead of stopping at “Connected to …”.
 
 ## 1.1
 
