@@ -91,7 +91,9 @@ class NordCancellationTest {
         job.join()
 
         assertTrue(
-            "cancelling a connect must stay a cancellation, but it surfaced as ${caught?.let { it::class.simpleName }}: ${caught?.message}",
+            "cancelling a connect must stay a cancellation, but it surfaced as ${caught?.let {
+                it::class.simpleName
+            }}: ${caught?.message}",
             caught is CancellationException,
         )
     }

@@ -76,7 +76,8 @@ class AxeFx3SysExTest {
     /** A fifth value of exactly 1024. The Mark II reply is built from the Mark I one. */
     @Test
     fun `a fifth value of 1024 is a Mark II, and anything else a Mark I`() {
-        val markII = FakeAxeFx3.message(AxeFx3SysEx.CMD_CAPABILITIES, 0x50, 0x02, 0x00, 0x10, 0x00, 0x10, 0x10, 0x00, 0x00, 0x08)
+        val markII =
+            FakeAxeFx3.message(AxeFx3SysEx.CMD_CAPABILITIES, 0x50, 0x02, 0x00, 0x10, 0x00, 0x10, 0x10, 0x00, 0x00, 0x08)
         assertEquals(1024, AxeFx3SysEx.presetCountOf(AxeFx3SysEx.decodeCapabilities(markII)))
         assertEquals(512, AxeFx3SysEx.presetCountOf(emptyList()))
         assertEquals(512, AxeFx3SysEx.presetCountOf(listOf(336, 2048, 2048, 16, 2048)))

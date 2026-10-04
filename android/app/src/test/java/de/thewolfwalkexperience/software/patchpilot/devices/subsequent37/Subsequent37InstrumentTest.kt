@@ -66,7 +66,9 @@ class Subsequent37InstrumentTest {
 
     @Test
     fun `an untested firmware raises the advisory, and an unreadable one does not`() = runTest {
-        val untested = subsequent37(FakeSubsequent37(backgroundScope), Subsequent37Config(setOf("1.1.0"))).apply { connect() }
+        val untested = subsequent37(FakeSubsequent37(backgroundScope), Subsequent37Config(setOf("1.1.0"))).apply {
+            connect()
+        }
         assertTrue(untested.advisory!!.contains("firmware version 1.2.0"))
 
         val silent = subsequent37(FakeSubsequent37(backgroundScope).apply { identityReply = null }).apply { connect() }
@@ -129,7 +131,10 @@ class Subsequent37InstrumentTest {
     @Test
     fun `a damaged dump keeps what came before the damage and reads the rest one by one`() = runTest {
         val fake = FakeSubsequent37(backgroundScope).apply {
-            damageDump = { dump -> dump.copyOf().also { it[23 + 5 * 796 + 100] = (it[23 + 5 * 796 + 100].toInt() xor 1).toByte() } }
+            damageDump =
+                { dump ->
+                    dump.copyOf().also { it[23 + 5 * 796 + 100] = (it[23 + 5 * 796 + 100].toInt() xor 1).toByte() }
+                }
         }
         val instrument = subsequent37(fake).apply { connect() }
         val updates = instrument.index().toList()
@@ -165,7 +170,9 @@ class Subsequent37InstrumentTest {
         val firstRead = fake.requests.indexOfFirst { Subsequent37SysEx.isCommand(it, 0x06, 0x01) }
         assertTrue(fake.requestTimes[firstRead] >= fake.dumpEndedAt!!)
         // The programs whose blocks had arrived before the abort came from the dump; the rest were read.
-        val reads = fake.requests.filter { Subsequent37SysEx.isCommand(it, 0x06, 0x01) }.map { Subsequent37SysEx.addressOf(it)!! }
+        val reads = fake.requests.filter {
+            Subsequent37SysEx.isCommand(it, 0x06, 0x01)
+        }.map { Subsequent37SysEx.addressOf(it)!! }
         assertTrue("reading from ${reads.first()}", reads.first() in 55..62)
         assertEquals((reads.first() until 256).toList(), reads)
     }

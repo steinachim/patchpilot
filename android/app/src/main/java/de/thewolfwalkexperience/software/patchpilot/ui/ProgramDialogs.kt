@@ -150,7 +150,9 @@ internal fun RenameDialog(
         text = {
             OutlinedTextField(
                 value = text,
-                onValueChange = { typed -> onTextChange(if (maxNameLength != null) typed.take(maxNameLength) else typed) },
+                onValueChange = { typed ->
+                    onTextChange(if (maxNameLength != null) typed.take(maxNameLength) else typed)
+                },
                 label = { Text(stringResource(R.string.programs_new_name)) },
                 isError = problem != null,
                 supportingText = when {

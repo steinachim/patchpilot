@@ -15,7 +15,9 @@ import org.junit.Test
 class NordMessageTest {
 
     private fun hex(s: String): ByteArray =
-        ByteArray(s.length / 2) { i -> ((Character.digit(s[i * 2], 16) shl 4) + Character.digit(s[i * 2 + 1], 16)).toByte() }
+        ByteArray(s.length / 2) { i ->
+            ((Character.digit(s[i * 2], 16) shl 4) + Character.digit(s[i * 2 + 1], 16)).toByte()
+        }
 
     // Bare PROTOCOL_CTRL/PROTOCOL_VERSION_CTRL/DEVICE_INFO_QUERY request
     @Test

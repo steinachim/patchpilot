@@ -54,7 +54,10 @@ object Subsequent37Family : InstrumentFamily {
             ?: error("A Subsequent 37 speaks MIDI SysEx, not ${transport::class.simpleName}.")
         // Resolved before the exchange starts its collector, so a catalog or asset fault cannot
         // leave a collector running on a transport nobody owns.
-        val config = catalog.format.decodeFromJsonElement(Subsequent37Config.serializer(), catalog.load(context).familyConfig)
+        val config = catalog.format.decodeFromJsonElement(
+            Subsequent37Config.serializer(),
+            catalog.load(context).familyConfig,
+        )
         val blank = Subsequent37Program(context.assets.open(BLANK_ASSET).use { it.readBytes() })
         check(blank.checksumCloses && blank.isEmpty) { "$BLANK_ASSET is not an Init Preset with a closing checksum." }
         val scope = transportScope(descriptor.name)

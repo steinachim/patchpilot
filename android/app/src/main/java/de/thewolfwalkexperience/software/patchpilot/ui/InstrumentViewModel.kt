@@ -254,7 +254,10 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      * Duplicates [source] into the empty slot [destination]. Only [destination] needs re-reading,
      * and the name in the message is the instrument's: a Nord appends a disambiguating suffix.
      */
-    override suspend fun copyProgram(source: PresetSlot, destination: PresetSlot): String = connection.exclusive { instrument ->
+    override suspend fun copyProgram(
+        source: PresetSlot,
+        destination: PresetSlot,
+    ): String = connection.exclusive { instrument ->
         val copiedName = requireFacet(instrument.editor, "copy presets")
             .copyProgram(source.address, destination.address)
         listings.refreshEdited(destination.address)

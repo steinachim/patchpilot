@@ -72,7 +72,10 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `connect rejects unsupported firmware version`() = runTest {
-        val device = NordFixtures.device(ReplayTransport(emptyList(), firmwareVersion = 999), NordFixtures.GRAND_PROFILE)
+        val device = NordFixtures.device(
+            ReplayTransport(emptyList(), firmwareVersion = 999),
+            NordFixtures.GRAND_PROFILE,
+        )
         try {
             device.connect()
             fail("expected IllegalStateException")
@@ -477,7 +480,10 @@ class NordDeviceProtocolTest {
     fun `an unknown device parses a real root list with nothing declared`() {
         // The case detection helps most: nothing declared, no guesses, still correct. No profile
         // declares a trailer length any more, so this is the only way it can work at all.
-        val device = NordFixtures.device(ReplayTransport(emptyList()), DeviceProfile.unknown("Nord Something", 0x0FFC, 0x00FF))
+        val device = NordFixtures.device(
+            ReplayTransport(emptyList()),
+            DeviceProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
+        )
         val categories = device.parseRootCategoryList(parseMessage(NordFixtures.STAGE2EX_ROOT_LIST_RESPONSE).payload)
         assertEquals(10, categories.size)
         assertEquals("Program", categories[6])
@@ -708,7 +714,14 @@ class NordDeviceProtocolTest {
         val perBank = listOf(5, 5, 9, 2, 1, 3) // the real distribution: 21 in A-D, 4 beyond
         val responses = mutableListOf<Pair<Int, ByteArray>>(
             3 to childListPayload(
-                listOf("Grand" to 15, "Upright" to 15, "EPiano1" to 15, "EPiano2" to 15, "Clavinet" to 15, "Harps" to 15),
+                listOf(
+                    "Grand" to 15,
+                    "Upright" to 15,
+                    "EPiano1" to 15,
+                    "EPiano2" to 15,
+                    "Clavinet" to 15,
+                    "Harps" to 15,
+                ),
             ),
             5 to ByteArray(0), // SELECT_CATEGORY
             9 to (uint32BE(0) + uint32BE(perBank.sum())), // count = 25

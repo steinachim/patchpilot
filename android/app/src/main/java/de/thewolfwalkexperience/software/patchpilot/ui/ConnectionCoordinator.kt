@@ -133,7 +133,11 @@ internal class ConnectionCoordinator(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "Couldn't listen for USB detach events; a physical unplug will only be noticed when the next operation fails", e)
+                Log.w(
+                    TAG,
+                    "Couldn't listen for USB detach events; a physical unplug will only be noticed when the next operation fails",
+                    e,
+                )
             }
         }
     }

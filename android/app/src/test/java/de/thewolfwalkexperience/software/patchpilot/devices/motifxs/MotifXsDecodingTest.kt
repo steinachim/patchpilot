@@ -102,8 +102,14 @@ class MotifXsDecodingTest {
     @Test
     fun `a name ends where its repeat says it does`() {
         assertEquals("TWE2 Stranger", MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.overshootVoice)))
-        assertEquals("TWE2 Addicted", MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.secondOvershootVoice)))
-        assertEquals("TWE2 Dreadnought 2.0", MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.longNameVoice)))
+        assertEquals(
+            "TWE2 Addicted",
+            MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.secondOvershootVoice)),
+        )
+        assertEquals(
+            "TWE2 Dreadnought 2.0",
+            MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.longNameVoice)),
+        )
     }
 
     // `TWE2 Growing Pains` is why no "strip a trailing letter" rule is used: its `s` is genuine,
@@ -166,7 +172,10 @@ class MotifXsDecodingTest {
 
     @Test
     fun `a genuine trailing letter is not stripped`() {
-        assertEquals("TWE2 Growing Pains", MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.genuineTrailingLetterVoice)))
+        assertEquals(
+            "TWE2 Growing Pains",
+            MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.genuineTrailingLetterVoice)),
+        )
     }
 
     /** 20 is an observation the trailer rule yields, not a bound fed into it. */
@@ -185,12 +194,18 @@ class MotifXsDecodingTest {
     @Test
     fun `a narrower figure pair moves where the name starts`() {
         val short = MotifXsSysEx.dumpPayload(MotifXsFixtures.shortPrefixVoice)
-        assertEquals(7, MotifXsVoice.nameStart(MotifXsVoice.unpack(short.copyOfRange(MotifXsVoice.PACKED_OFFSET, short.size))))
+        assertEquals(
+            7,
+            MotifXsVoice.nameStart(MotifXsVoice.unpack(short.copyOfRange(MotifXsVoice.PACKED_OFFSET, short.size))),
+        )
         assertEquals("TWE2 Ashes", MotifXsVoice.nameOf(short))
         assertNotEquals("WE2 Ashes", MotifXsVoice.nameOf(short))
 
         val zero = MotifXsSysEx.dumpPayload(MotifXsFixtures.zeroPrefixVoice)
-        assertEquals(4, MotifXsVoice.nameStart(MotifXsVoice.unpack(zero.copyOfRange(MotifXsVoice.PACKED_OFFSET, zero.size))))
+        assertEquals(
+            4,
+            MotifXsVoice.nameStart(MotifXsVoice.unpack(zero.copyOfRange(MotifXsVoice.PACKED_OFFSET, zero.size))),
+        )
         assertEquals("TWE2 Capital Of Low", MotifXsVoice.nameOf(zero))
     }
 

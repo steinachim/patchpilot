@@ -292,7 +292,8 @@ class Subsequent37Instrument(
     ): IndexUpdate.Progress {
         val total = Subsequent37SysEx.PROGRAM_COUNT
         if (following) {
-            val left = ((Subsequent37SysEx.FULL_BULK_DUMP_BYTES - decoder.received).coerceAtLeast(0) * 1000L / BYTES_PER_SECOND).milliseconds
+            val bytesLeft = (Subsequent37SysEx.FULL_BULK_DUMP_BYTES - decoder.received).coerceAtLeast(0)
+            val left = (bytesLeft * 1000L / BYTES_PER_SECOND).milliseconds
             listingTimeLeft = left
             return IndexUpdate.Progress(decoder.decoded, total, "Reading presets, ${timeLeftText(left)}")
         }
@@ -375,7 +376,9 @@ class Subsequent37Instrument(
             val channel = settings?.selectionChannel ?: 0
             if (trySelect(channel, number, displayId)) return@operation
             val fresh = queryOrNull(TAG) { device.settings() }?.also { settings = it }
-            if (fresh != null && fresh.selectionChannel != channel && trySelect(fresh.selectionChannel, number, displayId)) {
+            if (fresh != null && fresh.selectionChannel != channel &&
+                trySelect(fresh.selectionChannel, number, displayId)
+            ) {
                 return@operation
             }
             // Assumption: silence here means RCV PGM CHG is off; the instrument says nothing.

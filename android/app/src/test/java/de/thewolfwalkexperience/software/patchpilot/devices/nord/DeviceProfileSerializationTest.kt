@@ -45,7 +45,10 @@ class DeviceProfileSerializationTest {
     @Test
     fun `programCategoryIds defaults to null, matching a real catalog entry`() {
         val encoded = json.encodeToString(profile)
-        assertTrue("expected \"programCategoryIds\": null in $encoded", encoded.contains("\"programCategoryIds\": null"))
+        assertTrue(
+            "expected \"programCategoryIds\": null in $encoded",
+            encoded.contains("\"programCategoryIds\": null"),
+        )
     }
 
     @Test

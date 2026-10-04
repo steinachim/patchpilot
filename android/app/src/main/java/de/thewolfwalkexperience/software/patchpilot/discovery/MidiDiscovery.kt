@@ -92,7 +92,9 @@ class MidiDiscovery(private val ports: MidiPorts) : DeviceDiscovery {
                 // Subscribed before the send, as SysExExchange does: the flow has no replay.
                 val answered = async(start = CoroutineStart.UNDISPATCHED) {
                     transport.incoming
-                        .mapNotNull { chunk -> framer.feed(chunk).firstOrNull { answersProbe(it, match.probe, prefix) } }
+                        .mapNotNull { chunk ->
+                            framer.feed(chunk).firstOrNull { answersProbe(it, match.probe, prefix) }
+                        }
                         .first()
                 }
                 transport.send(match.probe)

@@ -170,8 +170,12 @@ class NordFailureMappingTest {
 
     /** What a detached device looks like to the protocol layer: every transfer fails at once. */
     private class FailingTransport : de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport {
-        override fun bulkWrite(data: ByteArray) = throw IllegalStateException("USB bulk write failed: sent -1 of ${data.size} bytes")
-        override fun bulkRead(bufferSize: Int): ByteArray = throw IllegalStateException("USB bulk read failed (result=-1)")
+        override fun bulkWrite(
+            data: ByteArray,
+        ) = throw IllegalStateException("USB bulk write failed: sent -1 of ${data.size} bytes")
+        override fun bulkRead(
+            bufferSize: Int,
+        ): ByteArray = throw IllegalStateException("USB bulk read failed (result=-1)")
         override fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int): ByteArray =
             throw IllegalStateException("USB control transfer failed")
         override fun close() = Unit

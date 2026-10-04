@@ -53,7 +53,11 @@ class AxeFx3Device(private val exchange: SysExExchange) {
 
     /** Preset [number]'s raw 32-byte name field, matched on the number its reply echoes. */
     suspend fun nameField(number: Int): ByteArray {
-        val reply = exchange.exchange(AxeFx3SysEx.queryName(number), "reading the name of preset $number", NAME_TIMEOUT) {
+        val reply = exchange.exchange(
+            AxeFx3SysEx.queryName(number),
+            "reading the name of preset $number",
+            NAME_TIMEOUT,
+        ) {
             AxeFx3SysEx.nameReplyNumber(it) == number
         }
         return AxeFx3SysEx.nameField(reply)

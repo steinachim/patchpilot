@@ -75,7 +75,13 @@ object InstrumentRegistry {
         family(descriptor.family).create(context, descriptor, transport)
 
     /** [InstrumentFamily.createForUnknown] of the family [UnknownDevicePolicy.familyFor] names. */
-    fun createForUnknown(familyId: String, transport: UsbBulkTransport, name: String, vendorId: Int, productId: Int): Instrument =
+    fun createForUnknown(
+        familyId: String,
+        transport: UsbBulkTransport,
+        name: String,
+        vendorId: Int,
+        productId: Int,
+    ): Instrument =
         family(familyId).createForUnknown(transport, name, vendorId, productId)
             ?: error("The '$familyId' family does not open unrecognised devices.")
 }

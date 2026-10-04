@@ -66,7 +66,8 @@ class Subsequent37Program(payload: ByteArray) {
     /** This program filed under [value], checksum closed; byte 51 and all else unchanged. */
     fun withCategory(value: Int): Subsequent37Program {
         require(Subsequent37Categories.isStorable(value)) { "Category value $value is not one the Subsequent 37 has." }
-        return Subsequent37Program(Subsequent37SysEx.withChecksum(bytes.copyOf().also { it[CATEGORY_OFFSET] = value.toByte() }))
+        val filed = bytes.copyOf().also { it[CATEGORY_OFFSET] = value.toByte() }
+        return Subsequent37Program(Subsequent37SysEx.withChecksum(filed))
     }
 
     /** Whether both hold the same 488 bytes. */
@@ -182,7 +183,8 @@ class Subsequent37BulkDecoder {
         (total - Subsequent37SysEx.BODY_OFFSET - 1) % Subsequent37SysEx.BULK_STRIDE != 0 ->
             "the reply is $total bytes, which is not a whole number of programs"
 
-        decoded < Subsequent37SysEx.PROGRAM_COUNT -> "the reply holds $decoded programs, not ${Subsequent37SysEx.PROGRAM_COUNT}"
+        decoded < Subsequent37SysEx.PROGRAM_COUNT ->
+            "the reply holds $decoded programs, not ${Subsequent37SysEx.PROGRAM_COUNT}"
 
         else -> null
     }

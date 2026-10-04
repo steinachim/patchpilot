@@ -72,7 +72,9 @@ class AxeFx3DumpImage private constructor(
                 )
             }
             validate(messages)?.let { throw InstrumentException.ProtocolDesync("The preset arrived damaged: $it") }
-            val raw = java.io.ByteArrayOutputStream(DUMP_CHUNK_COUNT * DUMP_CHUNK_MESSAGE_BYTES + DUMP_END_MESSAGE_BYTES)
+            val raw = java.io.ByteArrayOutputStream(
+                DUMP_CHUNK_COUNT * DUMP_CHUNK_MESSAGE_BYTES + DUMP_END_MESSAGE_BYTES,
+            )
             messages.forEach { raw.write(it) }
             return AxeFx3DumpImage(raw.toByteArray(), messages.dropLast(1), messages.last())
         }

@@ -68,7 +68,12 @@ class Subsequent37Device(
     suspend fun readStoredMessage(number: Int): ByteArray =
         attempt(READ_ATTEMPTS, "reading program $number") {
             settingsReply()
-            exchange.exchange(Subsequent37SysEx.readProgram(number), "reading program $number", READ_TIMEOUT, retries = 0) {
+            exchange.exchange(
+                Subsequent37SysEx.readProgram(number),
+                "reading program $number",
+                READ_TIMEOUT,
+                retries = 0,
+            ) {
                 Subsequent37SysEx.isStoredProgramReply(it, number) && Subsequent37SysEx.programOf(it) != null
             }
         }
@@ -134,7 +139,12 @@ class Subsequent37Device(
      * once: a repeat sent while the first is still arriving would only start another one after it.
      */
     suspend fun bulkDump(): ByteArray =
-        exchange.exchange(Subsequent37SysEx.bulkDumpRequest(), "sending its preset list", BULK_DUMP_TIMEOUT, retries = 0) {
+        exchange.exchange(
+            Subsequent37SysEx.bulkDumpRequest(),
+            "sending its preset list",
+            BULK_DUMP_TIMEOUT,
+            retries = 0,
+        ) {
             Subsequent37SysEx.isBulkDumpReply(it)
         }
 

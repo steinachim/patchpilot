@@ -58,7 +58,12 @@ object NordFamily : InstrumentFamily {
      * A Clavia device the catalog does not list, on [DeviceProfile.unknown]'s guessed bounds;
      * [NordInstrument.connect] replaces them with the ones the device reports.
      */
-    override fun createForUnknown(transport: UsbBulkTransport, name: String, vendorId: Int, productId: Int): Instrument =
+    override fun createForUnknown(
+        transport: UsbBulkTransport,
+        name: String,
+        vendorId: Int,
+        productId: Int,
+    ): Instrument =
         NordInstrument(NordDevice(transport, DeviceProfile.unknown(name, vendorId, productId)))
 
     /** The profile [toDescriptor] stashed, read back with no field mapping. */

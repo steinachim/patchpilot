@@ -130,7 +130,11 @@ class FakeAxeFx3(
             AxeFx3SysEx.CMD_DUMP_CHUNK -> {
                 val chunks = receiving ?: return emptyList()
                 chunks += request
-                if (silentChunk == chunks.size) emptyList() else listOf(stepAck(AxeFx3SysEx.CMD_DUMP_CHUNK, chunkStatus(chunks.size)))
+                if (silentChunk == chunks.size) {
+                    emptyList()
+                } else {
+                    listOf(stepAck(AxeFx3SysEx.CMD_DUMP_CHUNK, chunkStatus(chunks.size)))
+                }
             }
 
             AxeFx3SysEx.CMD_DUMP_END -> listOf(stepAck(AxeFx3SysEx.CMD_DUMP_END, endOfWrite(request)))
@@ -142,7 +146,11 @@ class FakeAxeFx3(
     private fun nameReply(lo: Int, hi: Int): List<ByteArray> {
         if (lo == 0x7F && hi == 0x7F) {
             if (loadedQuerySilent) return emptyList()
-            val echo = if (loadedQueryEchoesNumber) intArrayOf(selected and 0x7F, selected shr 7) else intArrayOf(0x7F, 0x7F)
+            val echo = if (loadedQueryEchoesNumber) {
+                intArrayOf(selected and 0x7F, selected shr 7)
+            } else {
+                intArrayOf(0x7F, 0x7F)
+            }
             return listOf(message(AxeFx3SysEx.CMD_QUERY_NAME, *echo, *nameField(editBuffer.name)))
         }
         val number = lo or (hi shl 7)
@@ -155,7 +163,11 @@ class FakeAxeFx3(
         val text = (name ?: AxeFx3SysEx.EMPTY_NAME).toByteArray(Charsets.US_ASCII)
         val field = IntArray(AxeFx3SysEx.NAME_FIELD_LENGTH)
         text.forEachIndexed { i, b -> field[i] = b.toInt() }
-        if (text.size + 1 < field.size) "p Wolfwalk".forEachIndexed { i, c -> if (text.size + 1 + i < field.size) field[text.size + 1 + i] = c.code }
+        if (text.size + 1 < field.size) {
+            "p Wolfwalk".forEachIndexed { i, c ->
+                if (text.size + 1 + i < field.size) field[text.size + 1 + i] = c.code
+            }
+        }
         return field
     }
 
@@ -193,9 +205,13 @@ class FakeAxeFx3(
         val fault = readFault?.takeIf { readFaultCount > 0 }
         if (fault != null) readFaultCount--
         when (fault) {
-            ReadFault.BAD_CHECKSUM -> messages[3] = messages[3].copyOf().also { it[it.size - 2] = (it[it.size - 2].toInt() xor 0x01).toByte() }
+            ReadFault.BAD_CHECKSUM -> messages[3] =
+                messages[3].copyOf().also { it[it.size - 2] = (it[it.size - 2].toInt() xor 0x01).toByte() }
+
             ReadFault.MISSING_CHUNK -> messages.removeAt(5)
+
             ReadFault.NO_END -> messages.removeAt(messages.lastIndex)
+
             null -> Unit
         }
         val ack = message(AxeFx3SysEx.CMD_DUMP_BEGIN, number shr 7, number and 0x7F, 0, 0, 1)
@@ -220,7 +236,9 @@ class FakeAxeFx3(
      * fill data is not what the slot ends up holding.
      */
     private fun stored(buffer: Slot): Slot {
-        if (buffer.image.contentEquals(AxeFx3Fixtures.EMPTY_PRESET_IMAGE)) return Slot(null, AxeFx3Fixtures.NEVER_USED_IMAGE)
+        if (buffer.image.contentEquals(AxeFx3Fixtures.EMPTY_PRESET_IMAGE)) {
+            return Slot(null, AxeFx3Fixtures.NEVER_USED_IMAGE)
+        }
         // Wire byte 8 of chunk 0's packed region carries dense bits 56-62: decoded byte 5.
         val image = mutate(buffer.image, chunk = 0, at = 5 + 8)
         known[key(image)] = buffer.name
@@ -236,7 +254,12 @@ class FakeAxeFx3(
          * last wire byte, which any decode-and-re-encode would lose.
          */
         fun presetImage(seed: Int): ByteArray {
-            var image = mutate(AxeFx3Fixtures.NEVER_USED_IMAGE, chunk = 1 + seed % 14, at = 100 + seed / 14 % 2000, xor = 1 + seed % 0x3F)
+            var image = mutate(
+                AxeFx3Fixtures.NEVER_USED_IMAGE,
+                chunk = 1 + seed % 14,
+                at = 100 + seed / 14 % 2000,
+                xor = 1 + seed % 0x3F,
+            )
             image = setPaddingBits(image)
             return image
         }
@@ -300,7 +323,9 @@ class FakeAxeFx3(
         /** Fractal's bitstream, written out independently of the code under test. */
         private fun unpack(wire: ByteArray): ByteArray {
             val bits = wire.flatMap { b -> (6 downTo 0).map { (b.toInt() shr it) and 1 } }
-            return ByteArray(bits.size / 8) { i -> (0 until 8).fold(0) { acc, j -> (acc shl 1) or bits[i * 8 + j] }.toByte() }
+            return ByteArray(bits.size / 8) { i ->
+                (0 until 8).fold(0) { acc, j -> (acc shl 1) or bits[i * 8 + j] }.toByte()
+            }
         }
     }
 }

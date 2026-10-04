@@ -78,7 +78,10 @@ class Subsequent37ProgramTest {
 
     // ---- The bulk-dump decoder ----
 
-    private fun decodeIn(pieces: Int, dump: ByteArray = Subsequent37Fixtures.BULK_DUMP): Pair<List<Subsequent37Program>, Subsequent37BulkDecoder> {
+    private fun decodeIn(
+        pieces: Int,
+        dump: ByteArray = Subsequent37Fixtures.BULK_DUMP,
+    ): Pair<List<Subsequent37Program>, Subsequent37BulkDecoder> {
         val decoder = Subsequent37BulkDecoder()
         val out = mutableListOf<Subsequent37Program>()
         var at = 0

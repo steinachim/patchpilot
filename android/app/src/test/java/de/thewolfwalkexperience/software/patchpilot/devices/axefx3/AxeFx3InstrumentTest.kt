@@ -66,7 +66,9 @@ class AxeFx3InstrumentTest {
 
     @Test
     fun `an untested firmware raises the advisory, and an unreadable one does not`() = runTest {
-        val untested = axeFx3(FakeAxeFx3(), AxeFx3Config(supportedFirmwareVersions = setOf("31.00"))).apply { connect() }
+        val untested = axeFx3(FakeAxeFx3(), AxeFx3Config(supportedFirmwareVersions = setOf("31.00"))).apply {
+            connect()
+        }
         assertTrue(untested.advisory!!.contains("firmware version 32.06"))
 
         val silent = axeFx3(FakeAxeFx3().apply { firmwareReply = null }).apply { connect() }

@@ -102,7 +102,7 @@ class AxeFx3EditorTest {
     }
 
     @Test
-    fun `copy reads the source, writes and stores the destination, reads it back, and loads the old preset again`() = runTest {
+    fun `copy reads the source, writes and stores the copy, reads it back, and reloads the old preset`() = runTest {
         val fake = FakeAxeFx3()
         fake.put(1, "Lead")
         val instrument = connected(fake)
@@ -126,7 +126,7 @@ class AxeFx3EditorTest {
     }
 
     @Test
-    fun `copying onto itself, from an empty slot or onto an occupied one is refused before anything is selected`() = runTest {
+    fun `a copy onto itself, from an empty slot or onto an occupied one is refused before any select`() = runTest {
         val fake = FakeAxeFx3()
         fake.put(1, "Lead")
         fake.put(2, "Pad")
@@ -238,7 +238,8 @@ class AxeFx3EditorTest {
         assertEquals(AxeFx3SysEx.EMPTY_NAME, fake.nameAt(9))
         assertTrue(
             fake.requests.windowed(16).any { window ->
-                window.zip(AxeFx3DumpImage.parse(AxeFx3Fixtures.EMPTY_PRESET_IMAGE).chunks).all { (a, b) -> a.contentEquals(b) }
+                window.zip(AxeFx3DumpImage.parse(AxeFx3Fixtures.EMPTY_PRESET_IMAGE).chunks)
+                    .all { (a, b) -> a.contentEquals(b) }
             },
         )
 

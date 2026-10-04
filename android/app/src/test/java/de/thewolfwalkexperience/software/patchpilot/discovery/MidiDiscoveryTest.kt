@@ -58,7 +58,12 @@ class MidiDiscoveryTest {
         id = id,
         family = id,
         name = id,
-        match = DeviceMatch.MidiIdentity(probeHex = probe, replyPrefixHex = prefix, usbHint = usbHint, portIndex = portIndex),
+        match = DeviceMatch.MidiIdentity(
+            probeHex = probe,
+            replyPrefixHex = prefix,
+            usbHint = usbHint,
+            portIndex = portIndex,
+        ),
     )
 
     // As devices/behringer_pro800.json and devices/fractal_axefx3.json declare them.
@@ -130,15 +135,32 @@ class MidiDiscoveryTest {
     fun `a port that cannot be opened is skipped and the scan goes on`() = runTest {
         val broken = FakePort("Busy")
         val working = FakePort("PRO 800")
-        val ports = FakePorts(listOf(broken, working)) { port, _ -> if (port === broken) null else answering(pro800Reply) }
+        val ports = FakePorts(listOf(broken, working)) { port, _ ->
+            if (port ===
+                broken
+            ) {
+                null
+            } else {
+                answering(pro800Reply)
+            }
+        }
 
         assertSame(working, MidiDiscovery(ports).scan(listOf(pro800)).single().handle)
     }
 
     @Test
     fun `each descriptor is probed on its own port, and opened on it again`() = runTest {
-        val onSecondPort = descriptor("second", "f0 00 20 32 00 01 24 00 06 f7", "f0 00 20 32 00 01 24 00 07", portIndex = 1)
-        val ports = FakePorts(listOf(FakePort("Interface"))) { _, index -> if (index == 1) answering(pro800Reply) else answering() }
+        val onSecondPort =
+            descriptor("second", "f0 00 20 32 00 01 24 00 06 f7", "f0 00 20 32 00 01 24 00 07", portIndex = 1)
+        val ports = FakePorts(listOf(FakePort("Interface"))) { _, index ->
+            if (index ==
+                1
+            ) {
+                answering(pro800Reply)
+            } else {
+                answering()
+            }
+        }
         val discovery = MidiDiscovery(ports)
 
         val candidate = discovery.scan(listOf(onSecondPort)).single()
@@ -160,7 +182,8 @@ class MidiDiscoveryTest {
 
     @Test
     fun `a catalog with no MIDI instruments opens nothing`() = runTest {
-        val usbOnly = InstrumentDescriptor(id = "nord", family = "nord", name = "Nord", match = DeviceMatch.Usb(0x0FFC, 0x21))
+        val usbOnly =
+            InstrumentDescriptor(id = "nord", family = "nord", name = "Nord", match = DeviceMatch.Usb(0x0FFC, 0x21))
         val ports = FakePorts(listOf(FakePort("PRO 800"))) { _, _ -> answering(pro800Reply) }
         assertTrue(MidiDiscovery(ports).scan(listOf(usbOnly)).isEmpty())
         assertTrue(ports.opened.isEmpty())

@@ -49,7 +49,9 @@ object Subsequent37AddressFormat : AddressFormat {
 
     /** Sixteen banks of sixteen; the index rail shows the bank number alone. */
     val layout: SlotLayout = SlotLayout(
-        banks = (0 until BANKS).map { BankSpec(label = bankLabel(it), slotCount = SLOTS_PER_BANK, shortLabel = "${it + 1}") },
+        banks = (0 until BANKS).map {
+            BankSpec(label = bankLabel(it), slotCount = SLOTS_PER_BANK, shortLabel = "${it + 1}")
+        },
         format = this,
     )
 

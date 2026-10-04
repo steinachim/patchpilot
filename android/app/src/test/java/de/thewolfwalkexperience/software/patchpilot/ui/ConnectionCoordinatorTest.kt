@@ -160,7 +160,8 @@ class ConnectionCoordinatorTest {
         val usb = FakeUsbHost()
         val transport = FakeTransport()
         val events = mutableListOf<String>()
-        val coordinator = coordinator(session, usb, FakeDiscovery(listOf(stageCandidate)) { transport }, events = events)
+        val coordinator =
+            coordinator(session, usb, FakeDiscovery(listOf(stageCandidate)) { transport }, events = events)
 
         coordinator.connect()
         advanceUntilIdle()
@@ -238,7 +239,8 @@ class ConnectionCoordinatorTest {
     fun `unplugging a listed device drops its picker row`() = runSession { session ->
         val other = FakeDevice("usb:1234:1", vendorId = 0x1234, label = "Keyboard")
         val usb = FakeUsbHost(attached = listOf(other))
-        val coordinator = coordinator(session, usb, FakeDiscovery(listOf(stageCandidate)) { FakeTransport() }, autoConnect = false)
+        val coordinator =
+            coordinator(session, usb, FakeDiscovery(listOf(stageCandidate)) { FakeTransport() }, autoConnect = false)
 
         coordinator.connect()
         advanceUntilIdle()

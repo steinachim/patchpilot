@@ -19,8 +19,14 @@ class Subsequent37SysExTest {
     @Test
     fun `the short requests are 13 command bytes, as the reference sends them`() {
         assertArrayEquals(hex("f0 04 0c 32 00 00 00 00 00 00 00 00 00 00 00 00 f7"), Subsequent37SysEx.ping())
-        assertArrayEquals(hex("f0 04 0c 06 03 00 00 00 00 00 00 00 00 00 00 00 f7"), Subsequent37SysEx.bulkDumpRequest())
-        assertArrayEquals(hex("f0 04 0c 06 04 00 00 00 00 00 00 00 00 00 00 00 f7"), Subsequent37SysEx.settingsRequest())
+        assertArrayEquals(
+            hex("f0 04 0c 06 03 00 00 00 00 00 00 00 00 00 00 00 f7"),
+            Subsequent37SysEx.bulkDumpRequest(),
+        )
+        assertArrayEquals(
+            hex("f0 04 0c 06 04 00 00 00 00 00 00 00 00 00 00 00 f7"),
+            Subsequent37SysEx.settingsRequest(),
+        )
         assertArrayEquals(hex("f0 04 0c 06 00 00 00 00 00 00 00 00 00 00 00 00 f7"), Subsequent37SysEx.settingsPair())
         assertArrayEquals(hex("f0 04 0c 06 01 00 01 00 00 00 00 00 00 00 00 00 f7"), Subsequent37SysEx.readProgram(1))
         assertArrayEquals(hex("f0 04 0c 06 01 01 7f 00 00 00 00 00 00 00 00 00 f7"), Subsequent37SysEx.readProgram(255))
@@ -31,7 +37,13 @@ class Subsequent37SysExTest {
     @Test
     fun `a write is addressed with the program number split into 7-bit halves`() {
         val payload = Subsequent37Fixtures.unpackBlock(0)
-        for ((number, address) in listOf(0 to "00 00", 143 to "01 0f", 144 to "01 10", 153 to "01 19", 255 to "01 7f")) {
+        for ((number, address) in listOf(
+            0 to "00 00",
+            143 to "01 0f",
+            144 to "01 10",
+            153 to "01 19",
+            255 to "01 7f",
+        )) {
             val message = Subsequent37SysEx.writeProgram(number, payload)
             assertArrayEquals(
                 "program $number",
@@ -80,7 +92,10 @@ class Subsequent37SysExTest {
     fun `a single-program message yields its program only whole and with a closing checksum`() {
         val stored = Subsequent37Fixtures.READ_P001[1]
         assertArrayEquals(Subsequent37Fixtures.unpackBlock(1), Subsequent37SysEx.programOf(stored))
-        assertArrayEquals(Subsequent37Fixtures.unpackBlock(0), Subsequent37SysEx.programOf(Subsequent37Fixtures.WRITE_RENAME_BACK))
+        assertArrayEquals(
+            Subsequent37Fixtures.unpackBlock(0),
+            Subsequent37SysEx.programOf(Subsequent37Fixtures.WRITE_RENAME_BACK),
+        )
         assertNull(Subsequent37SysEx.programOf(stored.copyOfRange(0, 755)))
         val flipped = stored.copyOf().also { it[100] = (it[100].toInt() xor 0x01).toByte() }
         assertNull(Subsequent37SysEx.programOf(flipped))

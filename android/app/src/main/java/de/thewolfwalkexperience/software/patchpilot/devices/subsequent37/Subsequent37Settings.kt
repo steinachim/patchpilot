@@ -41,9 +41,14 @@ class Subsequent37Settings private constructor(val words: List<Int>) {
         /** The settings in a whole `07 02` reply, or null for anything else, a short reply included. */
         fun parse(message: ByteArray): Subsequent37Settings? {
             if (!Subsequent37SysEx.isSettingsReply(message)) return null
-            val body = Subsequent37SysEx.unpack(message, Subsequent37SysEx.BODY_OFFSET, Subsequent37SysEx.SETTINGS_WORDS) ?: return null
+            val body =
+                Subsequent37SysEx.unpack(message, Subsequent37SysEx.BODY_OFFSET, Subsequent37SysEx.SETTINGS_WORDS)
+                    ?: return null
             return Subsequent37Settings(
-                List(Subsequent37SysEx.SETTINGS_WORDS) { ((body[it * 2].toInt() and 0xFF) shl 8) or (body[it * 2 + 1].toInt() and 0xFF) },
+                List(Subsequent37SysEx.SETTINGS_WORDS) {
+                    ((body[it * 2].toInt() and 0xFF) shl 8) or
+                        (body[it * 2 + 1].toInt() and 0xFF)
+                },
             )
         }
     }

@@ -279,7 +279,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         ) {
             throw UnsupportedProtocolVersionException(
                 "$name reports file-transfer protocol version $fileTransfer, outside the " +
-                    "$MIN_FILE_TRANSFER_VERSION-$MAX_KNOWN_FILE_TRANSFER_VERSION range this app accepts. Refusing to continue: every response layout this app " +
+                    "$MIN_FILE_TRANSFER_VERSION-$MAX_KNOWN_FILE_TRANSFER_VERSION range this app accepts. " +
+                    "Refusing to continue: every response layout this app " +
                     "knows was decoded from that range, and a protocol revision outside it can " +
                     "differ in ways nothing here would detect - including on the writes that " +
                     "move, rename and delete presets.",
@@ -722,7 +723,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 }
 
                 val itemIndex = nextVal
-                val itemPayload = fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(bank) + uint32BE(itemIndex)).payload
+                val itemPayload = fileTransfer(
+                    FileTransferSubOp.FETCH_ITEM,
+                    uint32BE(bank) + uint32BE(itemIndex),
+                ).payload
                 items += itemPayload
                 prevItem = itemIndex
                 itemsInBank++

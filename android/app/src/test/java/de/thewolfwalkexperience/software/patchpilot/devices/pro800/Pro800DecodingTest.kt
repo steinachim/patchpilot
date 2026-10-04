@@ -336,7 +336,10 @@ class Pro800DecodingTest {
             ok[9],
             failure[9],
         )
-        assertTrue("they differ at offset 10", ok[Pro800SysEx.STATUS_CODE_INDEX] != failure[Pro800SysEx.STATUS_CODE_INDEX])
+        assertTrue(
+            "they differ at offset 10",
+            ok[Pro800SysEx.STATUS_CODE_INDEX] != failure[Pro800SysEx.STATUS_CODE_INDEX],
+        )
     }
 
     /** Anything that is not a status reply has no status code - a dump must not look like one. */

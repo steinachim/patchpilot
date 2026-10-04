@@ -169,7 +169,10 @@ class AxeFx3Instrument(
         layout = format.layout()
         loadedQueryWorks = loadedPresetOrNull() != null
         advisory = advisoryText()
-        Log.i(TAG, "${identity.name}, firmware $firmware, $presetCount presets, loaded-preset query works: $loadedQueryWorks")
+        Log.i(
+            TAG,
+            "${identity.name}, firmware $firmware, $presetCount presets, loaded-preset query works: $loadedQueryWorks",
+        )
     }
 
     /**
