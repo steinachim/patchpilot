@@ -4,30 +4,20 @@
 package de.thewolfwalkexperience.software.patchpilot.discovery
 
 import android.content.Context
-import android.hardware.usb.UsbDevice
-import android.media.midi.MidiDevice
-import android.media.midi.MidiDeviceInfo
-import android.media.midi.MidiManager
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
+import de.thewolfwalkexperience.software.patchpilot.catalog.UsbIds
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
-import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer
-import de.thewolfwalkexperience.software.patchpilot.transport.AndroidMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "MidiDiscovery"
@@ -37,58 +27,49 @@ private const val TAG = "MidiDiscovery"
  * identity (they vary by OS, hub and other apps); a descriptor's `usbHint` narrows which ports are
  * probed but never decides. Every probe is read-only and idempotent - see
  * [DeviceMatch.MidiIdentity].
+ *
+ * The bus comes in as [MidiPorts], so the probing runs in a unit test against fake ports.
  */
-class MidiDiscovery(private val context: Context) : DeviceDiscovery {
+class MidiDiscovery(private val ports: MidiPorts) : DeviceDiscovery {
+
+    constructor(context: Context) : this(AndroidMidiPorts(context))
 
     override val bus = Bus.MIDI
 
-    private val midiManager: MidiManager? =
-        context.getSystemService(Context.MIDI_SERVICE) as? MidiManager
-
-    private val handler = Handler(Looper.getMainLooper())
-
     override suspend fun scan(catalog: List<InstrumentDescriptor>): List<Candidate> {
-        val manager = midiManager ?: return emptyList()
         val midiDescriptors = catalog.filter { it.match is DeviceMatch.MidiIdentity }
         if (midiDescriptors.isEmpty()) return emptyList()
 
-        @Suppress("DEPRECATION") // getDevicesForTransport is API 33+; minSdk here is 26.
-        val ports = manager.devices.orEmpty()
-
-        return ports.mapNotNull { info ->
+        return ports.list().mapNotNull { port ->
             // Probing costs a device open, so narrow first where a hint lets us.
             val plausible = midiDescriptors.filter { descriptor ->
-                val match = descriptor.match as DeviceMatch.MidiIdentity
-                match.usbHint == null || info.matchesUsb(match.usbHint)
+                val hint = (descriptor.match as DeviceMatch.MidiIdentity).usbHint
+                hint == null || port.usbIds == UsbIds(hint.vendorId, hint.productId)
             }
             if (plausible.isEmpty()) return@mapNotNull null
 
-            val identified = identify(manager, info, plausible) ?: return@mapNotNull null
+            val identified = identify(port, plausible) ?: return@mapNotNull null
             Candidate(
                 descriptor = identified,
                 displayName = identified.name,
                 bus = bus,
-                physicalKey = info.physicalKey(),
-                handle = info,
+                physicalKey = port.physicalKey,
+                handle = port,
             )
         }
     }
 
     /** Asks each plausible descriptor's probe on the port it names and returns the first that
      * answers as expected. Closes every port it opens. */
-    private suspend fun identify(
-        manager: MidiManager,
-        info: MidiDeviceInfo,
-        plausible: List<InstrumentDescriptor>,
-    ): InstrumentDescriptor? {
+    private suspend fun identify(port: MidiPort, plausible: List<InstrumentDescriptor>): InstrumentDescriptor? {
         val byPort = plausible.groupBy { (it.match as DeviceMatch.MidiIdentity).portIndex }
         for ((portIndex, descriptors) in byPort) {
             val transport = try {
-                openTransport(manager, info, portIndex)
+                ports.open(port, portIndex)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "Couldn't open ${info.label()} port $portIndex to identify it", e)
+                Log.w(TAG, "Couldn't open ${port.label} port $portIndex to identify it", e)
                 continue
             }
             try {
@@ -122,67 +103,13 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
     }
 
     override suspend fun open(candidate: Candidate): Transport {
-        val manager = midiManager ?: error("This phone has no MIDI support.")
-        val info = candidate.handle as? MidiDeviceInfo
-            ?: error("Not a MIDI candidate: ${candidate.displayName}")
+        val port = candidate.handle as? MidiPort ?: error("Not a MIDI candidate: ${candidate.displayName}")
         // The same port the descriptor was identified on.
-        val portIndex = (candidate.descriptor.match as? DeviceMatch.MidiIdentity)?.portIndex ?: FIRST_PORT
-        return openTransport(manager, info, portIndex)
+        val portIndex = (candidate.descriptor.match as? DeviceMatch.MidiIdentity)?.portIndex ?: 0
+        return ports.open(port, portIndex)
     }
-
-    private suspend fun openTransport(
-        manager: MidiManager,
-        info: MidiDeviceInfo,
-        portIndex: Int,
-    ): MidiTransport {
-        val device = openDevice(manager, info)
-        // Where the device has fewer ports than the catalog expects, fall back to the first: the
-        // wrong port answers nothing, which is visible, while refusing to open leaves no session.
-        val inPorts = info.inputPortCount
-        val outPorts = info.outputPortCount
-        val port = if (portIndex < minOf(inPorts, outPorts)) {
-            portIndex
-        } else {
-            Log.w(TAG, "${info.label()} has $inPorts/$outPorts ports; falling back from $portIndex to 0")
-            FIRST_PORT
-        }
-        val inputPort = device.openInputPort(port)
-            ?: run {
-                device.close()
-                error("${info.label()} has no input port $port to send on.")
-            }
-        val outputPort = device.openOutputPort(port)
-            ?: run {
-                inputPort.close()
-                device.close()
-                error("${info.label()} has no output port $port to listen on.")
-            }
-        return AndroidMidiTransport(device, inputPort, outputPort)
-    }
-
-    /**
-     * A device the framework refuses to open is reported as an exception so the caller can skip
-     * the port. A device that arrives after the caller was cancelled is closed here.
-     */
-    private suspend fun openDevice(manager: MidiManager, info: MidiDeviceInfo): MidiDevice =
-        suspendCancellableCoroutine { continuation ->
-            manager.openDevice(
-                info,
-                { device ->
-                    if (device == null) {
-                        continuation.resumeWithException(IllegalStateException("Couldn't open ${info.label()}."))
-                    } else {
-                        continuation.resume(device) { _, opened, _ -> opened.close() }
-                    }
-                },
-                handler,
-            )
-        }
 
     private companion object {
-        /** The port to fall back to when a descriptor names one the device does not have. */
-        const val FIRST_PORT = 0
-
         /** Long enough for a device that is slow to answer, short enough that a port which is not
          * an instrument at all does not stall the connect screen. */
         const val PROBE_TIMEOUT_MS = 600L
@@ -201,24 +128,3 @@ internal fun answersProbe(message: ByteArray, probe: ByteArray, prefix: ByteArra
 /** Prefix comparison on raw bytes. */
 private fun ByteArray.startsWith(prefix: ByteArray): Boolean =
     size >= prefix.size && prefix.indices.all { this[it] == prefix[it] }
-
-/** The `UsbDevice` behind a MIDI port, where the platform exposes one. `Bundle.get` is
- * deprecated from API 33; minSdk is 26. */
-@Suppress("DEPRECATION")
-private fun MidiDeviceInfo.usbDevice(): UsbDevice? =
-    properties?.get(MidiDeviceInfo.PROPERTY_USB_DEVICE) as? UsbDevice
-
-/** The physical device behind a MIDI port, spelled exactly as [UsbDevice.physicalKey] spells it
- * so the two buses deduplicate. */
-private fun MidiDeviceInfo.physicalKey(): String = usbDevice()?.physicalKey() ?: "midi:$id"
-
-private fun MidiDeviceInfo.matchesUsb(hint: DeviceMatch.Usb): Boolean {
-    val usb = usbDevice() ?: return false
-    return usb.vendorId == hint.vendorId && usb.productId == hint.productId
-}
-
-private fun MidiDeviceInfo.label(): String {
-    val name = properties?.getString(MidiDeviceInfo.PROPERTY_NAME)
-        ?: properties?.getString(MidiDeviceInfo.PROPERTY_PRODUCT)
-    return sanitizeDeviceText(name) ?: "MIDI device $id"
-}

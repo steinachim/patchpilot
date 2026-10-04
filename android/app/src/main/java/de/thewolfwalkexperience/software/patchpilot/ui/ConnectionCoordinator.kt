@@ -4,7 +4,6 @@
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import android.hardware.usb.UsbDevice
-import android.media.midi.MidiDeviceInfo
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
@@ -16,6 +15,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
 import de.thewolfwalkexperience.software.patchpilot.discovery.Candidate
 import de.thewolfwalkexperience.software.patchpilot.discovery.DeviceDiscovery
+import de.thewolfwalkexperience.software.patchpilot.discovery.MidiPort
 import de.thewolfwalkexperience.software.patchpilot.discovery.mergeCandidates
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
@@ -621,6 +621,6 @@ private fun PickerEntry.physicalKey(): String = when (this) {
 /** The handle the platform assigned this device when it enumerated - see `CacheKey.physicalDevice`. */
 private fun Candidate.deviceHandle(): String = when (val h = handle) {
     is UsbDevice -> "usb:${h.deviceName}"
-    is MidiDeviceInfo -> "midi:${h.id}"
+    is MidiPort -> h.handle
     else -> "handle:${System.identityHashCode(h)}"
 }
