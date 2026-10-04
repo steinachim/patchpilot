@@ -3,6 +3,8 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.axefx3
 
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
@@ -67,7 +69,7 @@ class AxeFx3InstrumentTest {
         assertTrue(untested.advisory!!.contains("firmware version 32.06"))
 
         val silent = axeFx3(FakeAxeFx3().apply { firmwareReply = null }).apply { connect() }
-        assertEquals(AxeFx3Instrument.UNKNOWN_FIRMWARE, silent.identity.firmwareVersion)
+        assertEquals(UNKNOWN_FIRMWARE, silent.identity.firmwareVersion)
         assertNull(silent.advisory)
     }
 
@@ -86,7 +88,7 @@ class AxeFx3InstrumentTest {
         assertEquals((0 until 512).map { it.toString().padStart(3, '0') }, slots.map { it.displayId })
 
         assertEquals(PresetSlot(SlotAddress(0, 0), "000", "000–127", "59 Bassguy"), slots[0])
-        assertEquals(PresetSlot(SlotAddress(1, 2), "130", "128–255", AxeFx3Instrument.UNNAMED), slots[130])
+        assertEquals(PresetSlot(SlotAddress(1, 2), "130", "128–255", UNNAMED_PRESET), slots[130])
         assertNull(slots[131].name)
         assertEquals(instrument.layout.banks.map { it.label }, slots.map { it.bankLabel }.distinct())
     }

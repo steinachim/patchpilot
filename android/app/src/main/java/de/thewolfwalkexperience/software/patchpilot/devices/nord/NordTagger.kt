@@ -6,6 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.FavoriteModel
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
@@ -81,14 +82,13 @@ internal class NordTagger(
     }
 
     override suspend fun setFavorite(address: SlotAddress, under: Set<Int>): Unit =
-        throw UnsupportedOperationException("A Nord has no favorites.")
+        throw InstrumentException.NotSupported("mark a favorite")
 
     /** The raw wire id stored at [address], or null where the slot is empty or carries none. */
     private suspend fun categoryIdAt(address: SlotAddress): Int? {
-        val displayId = device.formatPresetId(address.bank, address.slot)
         val items = device.collectItemNames(
             device.fetchCategoryItems(device.getProgramCategoryIndex()),
         )
-        return items.firstOrNull { it.presetId == displayId }?.categoryId
+        return items.firstOrNull { it.bank == address.bank && it.item == address.slot }?.categoryId
     }
 }

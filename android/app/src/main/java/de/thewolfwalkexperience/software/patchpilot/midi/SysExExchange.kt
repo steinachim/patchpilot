@@ -6,7 +6,9 @@ package de.thewolfwalkexperience.software.patchpilot.midi
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.BuildConfig
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
@@ -163,7 +165,7 @@ class SysExExchange(
                             }
                         }
                     }
-                    transport.send(request)
+                    sendOrLost(request, what)
                     awaited.await()
                 }
             }
@@ -197,7 +199,7 @@ class SysExExchange(
                         done(message)
                     }
                 }
-                transport.send(request)
+                sendOrLost(request, what)
                 awaited.await()
             }
         }
@@ -244,7 +246,7 @@ class SysExExchange(
                 // `delay(gap)` is a cancellation point on every iteration - see the doc above.
                 withContext(NonCancellable) {
                     messages.forEachIndexed { index, message ->
-                        transport.send(message)
+                        sendOrLost(message, what)
                         if (gap > Duration.ZERO && index < messages.size - 1) delay(gap)
                     }
                 }
@@ -260,7 +262,23 @@ class SysExExchange(
      * lock, so it lands between two dumps of a running scan rather than inside one.
      */
     suspend fun tell(request: ByteArray) = lock.withLock {
-        transport.send(request)
+        sendOrLost(request, "sending a message")
+    }
+
+    /**
+     * [MidiTransport.send], with a failed send raised as [InstrumentException.TransportLost], as
+     * the Nord's own mapping does for its transport.
+     */
+    private suspend fun sendOrLost(message: ByteArray, what: String) {
+        try {
+            transport.send(message)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: InstrumentException) {
+            throw e
+        } catch (e: Exception) {
+            throw InstrumentException.TransportLost(e.message ?: "The connection failed while $what", e)
+        }
     }
 
     /**
@@ -268,7 +286,7 @@ class SysExExchange(
      * closed stays claimed, and the next scan cannot open the device to probe it.
      */
     fun close() {
-        // The whole scope, not just [collector]: on a USB-backed session the reader loop inside
+        // The whole scope, not just the collector: on a USB-backed session the reader loop inside
         // UsbMidiBulkTransport is the scope's other child.
         scope.cancel()
         transport.close()
@@ -295,4 +313,4 @@ class SysExExchange(
 private const val PREFIX_BYTES = 12
 
 private fun ByteArray.prefixHex(): String =
-    take(PREFIX_BYTES).joinToString(" ") { "%02x".format(it) } + if (size > PREFIX_BYTES) " ..." else ""
+    copyOf(minOf(size, PREFIX_BYTES)).toHex(" ") + if (size > PREFIX_BYTES) " ..." else ""

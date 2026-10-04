@@ -129,6 +129,8 @@ internal fun BlockedOperationDialog(
  * @param maxNameLength null where the instrument declares no limit. Where it does, the field is
  *   capped as the user types rather than validated afterwards, since the instrument accepts an
  *   over-long name and quietly stores its first characters.
+ * @param nameProblem why a name cannot be stored, or null - asked of the trimmed text, which is
+ *   what a rename sends. Shown in place of the counter, and Rename stays off while there is one.
  */
 @Composable
 internal fun RenameDialog(
@@ -136,9 +138,12 @@ internal fun RenameDialog(
     text: String,
     onTextChange: (String) -> Unit,
     maxNameLength: Int?,
+    nameProblem: (String) -> String?,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // Not asked of a blank field: an empty box is not yet a mistake, and Rename is off anyway.
+    val problem = if (text.isBlank()) null else nameProblem(text.trim())
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.programs_rename_title, target.displayId)) },
@@ -147,14 +152,19 @@ internal fun RenameDialog(
                 value = text,
                 onValueChange = { typed -> onTextChange(if (maxNameLength != null) typed.take(maxNameLength) else typed) },
                 label = { Text(stringResource(R.string.programs_new_name)) },
-                supportingText = maxNameLength?.let {
-                    { Text(stringResource(R.string.programs_name_counter, text.length, it)) }
+                isError = problem != null,
+                supportingText = when {
+                    problem != null -> { { Text(problem) } }
+                    maxNameLength != null -> {
+                        { Text(stringResource(R.string.programs_name_counter, text.length, maxNameLength)) }
+                    }
+                    else -> null
                 },
                 singleLine = true,
             )
         },
         confirmButton = {
-            TextButton(enabled = text.isNotBlank(), onClick = onConfirm) {
+            TextButton(enabled = text.isNotBlank() && problem == null, onClick = onConfirm) {
                 Text(stringResource(R.string.action_rename))
             }
         },

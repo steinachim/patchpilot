@@ -7,11 +7,16 @@
 - The Moog Subsequent 37 is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted, and their categories shown and set. Reading its preset list takes about 2½ minutes, the instrument's own transfer time.
 - An instrument can show a notice when it connects, with a “Don't show this again” option; Settings → “Show Hidden Messages Again” brings hidden notices back.
 
+### Changed
+- The rename dialog says why a name can't be stored (characters outside plain ASCII, or a name the instrument reserves) and only enables Rename for a name that can, before anything is sent.
+
 ### Fixed
 - Unplugging an instrument that had failed to open no longer interrupts a session started afterwards, such as demo mode.
 - Yamaha Motif XS edits only accept voice data from the slot they read, so a late reply to an earlier request can no longer be written to the wrong slot.
 - The preset list no longer uses CPU while idle; the refresh icon only animates while a refresh runs.
 - On Android 8 to 12L, other apps can no longer send Patch Pilot fake USB permission answers or unplug notices.
+- Spaces before or after a new preset name are now removed before it is sent, so renaming a Behringer Pro-800 preset with them no longer fails.
+- TalkBack reads Settings → “Auto-Connect to First Found Instrument” as a single switch.
 
 ## 1.1
 

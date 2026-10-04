@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -77,19 +78,17 @@ fun SettingsScreen(
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_auto_connect)) },
                 supportingContent = { Text(stringResource(R.string.settings_auto_connect_description)) },
-                trailingContent = {
-                    Switch(
-                        checked = autoConnect,
-                        onCheckedChange = { enabled ->
-                            scope.launch { connectionPreferences.setAutoConnectToFirstFound(enabled) }
-                        },
-                    )
-                },
+                // onCheckedChange = null leaves the click to the row, so TalkBack reads one switch.
+                trailingContent = { Switch(checked = autoConnect, onCheckedChange = null) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        scope.launch { connectionPreferences.setAutoConnectToFirstFound(!autoConnect) }
-                    },
+                    .toggleable(
+                        value = autoConnect,
+                        onValueChange = { enabled ->
+                            scope.launch { connectionPreferences.setAutoConnectToFirstFound(enabled) }
+                        },
+                        role = Role.Switch,
+                    ),
             )
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_show_hidden_notices)) },

@@ -207,10 +207,15 @@ internal class ProgramsController(
         }
     }
 
+    /**
+     * Sends the name trimmed at both ends: a family reads its names back trimmed, so a stored
+     * leading or trailing space would fail the read-back that confirms the rename.
+     */
     fun onRenameConfirmed(slot: PresetSlot, newName: String) {
         renameTarget = null
+        val name = newName.trim()
         runEdit(strings.get(R.string.programs_busy_renaming, slot.displayId)) {
-            viewModel.renameProgram(slot, newName)
+            viewModel.renameProgram(slot, name)
         }
     }
 

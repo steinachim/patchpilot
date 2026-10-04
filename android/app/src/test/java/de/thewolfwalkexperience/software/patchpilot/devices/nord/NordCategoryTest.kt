@@ -62,7 +62,7 @@ class NordCategoryTest {
     @Test
     fun `collectItemNames carries the category alongside the name`() {
         val item = device.collectItemNames(listOf(record(NordFixtures.NGP_RECORD_RESPONSE))).single()
-        assertEquals("A:1:1", item.presetId)
+        assertEquals(0 to 0, item.bank to item.item)
         assertEquals("White Grand", item.name)
         assertEquals(21, item.categoryId)
     }

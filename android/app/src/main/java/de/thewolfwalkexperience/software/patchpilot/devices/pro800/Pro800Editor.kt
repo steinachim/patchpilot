@@ -12,6 +12,8 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -63,12 +65,7 @@ class Pro800Editor(
     // ---- Operations ----
 
     override suspend fun rename(address: SlotAddress, newName: String) {
-        require(newName.isNotBlank()) { "A preset name must not be blank." }
-        require(newName.all { it.code in 0x20..0x7E }) { "A preset name must be plain ASCII." }
-        require(newName.length <= Pro800ProgramFields.NAME_LENGTH) {
-            "A preset name can be at most ${Pro800ProgramFields.NAME_LENGTH} characters; " +
-                "'$newName' is ${newName.length}."
-        }
+        nameProblem(newName)?.let { throw IllegalArgumentException(it) }
 
         val before = readProgram(address)
         if (before.isEmpty) throw InstrumentException.NotSupported("rename an empty slot")
@@ -101,7 +98,7 @@ class Pro800Editor(
      * Duplicates a preset into an empty slot, leaving the source where it is. Writes the
      * destination and nothing else, so it needs no rollback and no undo entry. The returned name
      * is the source's, verbatim: the instrument stores exactly the bytes it is sent, and two
-     * presets may share a name. An unnamed preset reports [Pro800Instrument.UNNAMED], as the
+     * presets may share a name. An unnamed preset reports [UNNAMED_PRESET], as the
      * browser does for the same record.
      */
     override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String {
@@ -117,7 +114,7 @@ class Pro800Editor(
         }
 
         writeVerified(dst, source, expectName = source.name)
-        return source.name ?: Pro800Instrument.UNNAMED
+        return source.name ?: UNNAMED_PRESET
     }
 
     /** Two writes, with the first undone if the second fails: once `a` holds `b`'s contents, `a`'s are only in memory. */
@@ -229,7 +226,7 @@ class Pro800Editor(
         val start = Pro800ProgramFields.NAME_DENSE_OFFSET
         if (program.dense.size <= start) return "(record ends before the name field)"
         val end = minOf(Pro800ProgramFields.NAME_DENSE_END, program.dense.size)
-        return program.dense.copyOfRange(start, end).joinToString(" ") { "%02x".format(it) }
+        return program.dense.copyOfRange(start, end).toHex(" ")
     }
 
     private suspend fun readProgram(address: SlotAddress) =
@@ -244,11 +241,9 @@ class Pro800Editor(
     }
 
     /** The pause the reference implementation leaves between writes, taken here before reading back. */
-    private suspend fun settle() = delay(WRITE_SETTLE_MS)
+    private suspend fun settle() = delay(Pro800SysEx.WRITE_SETTLE_MS)
 
     private companion object {
-        const val WRITE_SETTLE_MS = 20L
-
         /** A few kilobytes at ~200 bytes per preset. */
         const val UNDO_DEPTH = 32
     }

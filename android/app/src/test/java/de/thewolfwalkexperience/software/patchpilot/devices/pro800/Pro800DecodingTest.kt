@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Fixtures.bytes
@@ -237,7 +238,7 @@ class Pro800DecodingTest {
         assertEquals("RandomTest", slots[0].name)
         assertEquals("RandomTest 109L", slots[1].name)
         assertEquals("Rand", slots[2].name)
-        assertEquals(Pro800Instrument.UNNAMED, slots[3].name)
+        assertEquals(UNNAMED_PRESET, slots[3].name)
         assertNull(slots[4].name)
 
         // And selection moves the pointer in the real captured settings block. The capture was

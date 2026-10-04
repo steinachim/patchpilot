@@ -34,7 +34,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
@@ -56,27 +55,14 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
     // would let it be supported. The instrument is already connected here, since the advisory is
     // raised after the handshake.
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
-    // Read in the ViewModel and shared as soon as it is done, as on ProgramsScreen: the read is
-    // minutes on a Nord and must not restart on rotation.
-    val reportRunner = viewModel.deviceReportRunner
-    val reportState by reportRunner.state.collectAsState()
-    val reportError by reportRunner.error.collectAsState()
-    var pendingReportStem by rememberSaveable { mutableStateOf<String?>(null) }
     // Said rather than swallowed: a read the cable interrupted lands in the same Done as a whole
     // one, and the report is shared the moment it is read. Kept until the next read.
     var incompleteReads by rememberSaveable { mutableStateOf(0) }
-    val context = LocalContext.current
-    val reportShareTitle = stringResource(R.string.programs_share_report)
-    val jsonSuffix = stringResource(R.string.programs_json_suffix)
-    val readingLabel = stringResource(R.string.share_reading_device)
-    LaunchedEffect(reportState, pendingReportStem) {
-        val stem = pendingReportStem ?: return@LaunchedEffect
-        val done = reportState as? DeviceReportState.Done ?: return@LaunchedEffect
-        pendingReportStem = null
-        incompleteReads = done.failures.size
-        reportRunner.dismiss()
-        shareTextReport(context, "$stem$jsonSuffix", done.json, JSON_MIME_TYPE, reportShareTitle)
-    }
+    val reportShare = rememberDeviceReportShare(
+        viewModel,
+        onStarted = { incompleteReads = 0 },
+        onShared = { _, failedReads -> incompleteReads = failedReads },
+    )
 
     LaunchedEffect(Unit) {
         if (state is ConnectionState.Disconnected) viewModel.connect()
@@ -292,25 +278,13 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                 }
                 if (viewModel.hasReport) {
                     TextButton(
-                        onClick = {
-                            pendingShare = PendingShare(
-                                title = reportShareTitle,
-                                description = viewModel.reportDescription,
-                                suffix = jsonSuffix,
-                                initialStem = viewModel.suggestedReportFilename(),
-                                onConfirm = { stem ->
-                                    pendingReportStem = stem
-                                    incompleteReads = 0
-                                    reportRunner.start(readingLabel)
-                                },
-                            )
-                        },
-                        enabled = reportState !is DeviceReportState.Running,
+                        onClick = { pendingShare = reportShare.dialog() },
+                        enabled = !reportShare.running,
                     ) {
-                        Text((reportState as? DeviceReportState.Running)?.step ?: reportShareTitle)
+                        Text(reportShare.label)
                     }
                 }
-                reportError?.let {
+                reportShare.error?.let {
                     Text(it, color = MaterialTheme.colorScheme.error)
                 }
                 if (incompleteReads > 0) {

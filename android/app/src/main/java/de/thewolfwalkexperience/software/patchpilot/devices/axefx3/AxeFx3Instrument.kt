@@ -21,6 +21,11 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
+import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+import de.thewolfwalkexperience.software.patchpilot.core.UNTESTED_ADVISORY_CLOSING
+import de.thewolfwalkexperience.software.patchpilot.core.queryOrNull
+import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareWarning
 import de.thewolfwalkexperience.software.patchpilot.core.indexWalk
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CancellationException
@@ -145,8 +150,8 @@ class AxeFx3Instrument(
     }
 
     private suspend fun connectLocked() {
-        firmware = runProbe { AxeFx3SysEx.decodeFirmware(device.firmwareReply())?.version } ?: UNKNOWN_FIRMWARE
-        capabilities = runProbe { AxeFx3SysEx.decodeCapabilities(device.capabilitiesReply()) }.orEmpty()
+        firmware = queryOrNull(TAG) { AxeFx3SysEx.decodeFirmware(device.firmwareReply())?.version } ?: UNKNOWN_FIRMWARE
+        capabilities = queryOrNull(TAG) { AxeFx3SysEx.decodeCapabilities(device.capabilitiesReply()) }.orEmpty()
         presetCount = AxeFx3SysEx.presetCountOf(capabilities)
         model = if (presetCount == AxeFx3SysEx.PRESET_COUNT_MARK_II) "Mark II" else "Mark I"
         format = LinearAddressFormat(presetCount, config.presetsPerBank)
@@ -165,10 +170,7 @@ class AxeFx3Instrument(
         val warnings = buildList {
             val supported = config.supportedFirmwareVersions
             if (supported.isNotEmpty() && firmware != UNKNOWN_FIRMWARE && firmware !in supported) {
-                add(
-                    "${identity.name} reports firmware version $firmware, which this app has not " +
-                        "been tested against (tested: ${supported.sorted().joinToString(", ")}).",
-                )
+                add(untestedFirmwareWarning(identity.name, firmware, supported.sorted()))
             }
             if (config.testedPresetCounts.isNotEmpty() && presetCount !in config.testedPresetCounts) {
                 add(
@@ -180,12 +182,7 @@ class AxeFx3Instrument(
             }
         }
         if (warnings.isEmpty()) return null
-        return (
-            warnings + "The app might still work, but it is not guaranteed that presets will be " +
-                "read or written correctly. Please consider sending in a device report, so " +
-                "support can be confirmed in future."
-            ).joinToString(" ")
-            .also { Log.w(TAG, it) }
+        return (warnings + UNTESTED_ADVISORY_CLOSING).joinToString(" ").also { Log.w(TAG, it) }
     }
 
     /** Releases the MIDI port - see [SysExExchange.close]. */
@@ -217,10 +214,10 @@ class AxeFx3Instrument(
         name = displayName(device.name(numberOf(address))),
     )
 
-    /** A name as a row shows it: null for an empty slot, [UNNAMED] for a preset without one. */
+    /** A name as a row shows it: null for an empty slot, [UNNAMED_PRESET] for a preset without one. */
     internal fun displayName(name: String): String? = when {
         name == AxeFx3SysEx.EMPTY_NAME -> null
-        name.isBlank() -> UNNAMED
+        name.isBlank() -> UNNAMED_PRESET
         else -> name
     }
 
@@ -337,7 +334,7 @@ class AxeFx3Instrument(
         }
     }
 
-    internal suspend fun loadedPresetOrNull(): Int? = runProbe { device.loadedPreset(presetCount) }
+    internal suspend fun loadedPresetOrNull(): Int? = queryOrNull(TAG) { device.loadedPreset(presetCount) }
 
     /** A select whose failure is logged rather than thrown, for restores and clean-up. */
     private suspend fun selectQuietly(number: Int) {
@@ -350,24 +347,8 @@ class AxeFx3Instrument(
         }
     }
 
-    /** A query whose failure leaves a default rather than ending the session or the edit. */
-    private suspend fun <T> runProbe(block: suspend () -> T?): T? = try {
-        block()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Log.w(TAG, "Query failed: ${e.message}")
-        null
-    }
-
     companion object {
         const val FAMILY = "axefx3"
-
-        /** Shown for a preset that exists but carries no name. */
-        const val UNNAMED = "(unnamed)"
-
-        /** What [identity] reports when the firmware query went unanswered. */
-        const val UNKNOWN_FIRMWARE = "unknown"
 
         /** The id a hidden "edits load presets" notice is remembered by. */
         const val EDITS_LOAD_PRESETS_NOTICE = "axefx3.edits_load_presets"

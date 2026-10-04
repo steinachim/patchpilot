@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
@@ -204,7 +205,7 @@ class Pro800InstrumentTest {
         val slots = updates.filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }
         assertEquals("every slot is still reported", 10, slots.size)
         // It stops before the name field, so it has no name to show - but it is kept.
-        assertEquals(Pro800Instrument.UNNAMED, slots.single { it.address == SlotAddress(0, 0) }.name)
+        assertEquals(UNNAMED_PRESET, slots.single { it.address == SlotAddress(0, 0) }.name)
         assertEquals("the short record was confirmed by a second read", 2, reads)
     }
 

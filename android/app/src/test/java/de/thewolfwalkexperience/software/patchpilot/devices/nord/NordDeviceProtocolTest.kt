@@ -511,24 +511,8 @@ class NordDeviceProtocolTest {
 
         val named = device.collectItemNames(listOf(payload))
         assertEquals(1, named.size)
-        assertEquals("A:1:1", named[0].presetId)
+        assertEquals(0 to 0, named[0].bank to named[0].item)
         assertEquals("White Grand", named[0].name)
-    }
-
-    // ---- Preset id parsing ----
-
-    @Test
-    fun `parsePresetId and formatPresetId round-trip`() {
-        val device = NordFixtures.device(ReplayTransport(emptyList()), NordFixtures.GRAND_PROFILE)
-        val bankItem = device.parsePresetId("B:2:2")
-        assertEquals(NordDevice.BankItem(1, 6), bankItem)
-        assertEquals("B:2:2", device.formatPresetId(bankItem.bank, bankItem.item))
-    }
-
-    @Test
-    fun `parsePresetId rejects out-of-range bank`() {
-        val device = NordFixtures.device(ReplayTransport(emptyList()), NordFixtures.GRAND_PROFILE)
-        assertThrows(IllegalArgumentException::class.java) { device.parsePresetId("Z:1:1") }
     }
 
     // ---- fetchCategoryItems cursor walk ----

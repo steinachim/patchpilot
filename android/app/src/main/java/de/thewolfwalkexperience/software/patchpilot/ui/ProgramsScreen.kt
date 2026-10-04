@@ -67,8 +67,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -195,28 +193,13 @@ fun ProgramsScreen(
     var showEmptySlots by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
 
-    // Read in the ViewModel, so a rotation mid-read costs nothing (see DeviceReportRunner). The
-    // stem the user typed is saved, so the share still happens if the screen was recreated.
-    val reportRunner = viewModel.deviceReportRunner
-    val reportState by reportRunner.state.collectAsState()
-    val reportError by reportRunner.error.collectAsState()
-    var pendingReportStem by rememberSaveable { mutableStateOf<String?>(null) }
-    val context = LocalContext.current
-    val shareReportTitle = stringResource(R.string.programs_share_report)
-    val jsonSuffix = stringResource(R.string.programs_json_suffix)
-    val readingLabel = stringResource(R.string.share_reading_device)
-    LaunchedEffect(reportState, pendingReportStem) {
-        val stem = pendingReportStem ?: return@LaunchedEffect
-        val done = reportState as? DeviceReportState.Done ?: return@LaunchedEffect
-        pendingReportStem = null
-        reportRunner.dismiss()
-        val shared = shareTextReport(context, "$stem$jsonSuffix", done.json, JSON_MIME_TYPE, shareReportTitle)
-        if (done.isComplete) {
-            ops.statusMessage = resources.getString(R.string.programs_shared_as, shared)
+    val reportShare = rememberDeviceReportShare(viewModel) { sharedAs, failedReads ->
+        if (failedReads == 0) {
+            ops.statusMessage = resources.getString(R.string.programs_shared_as, sharedAs)
         } else {
             // Through the failure channel, which does not time out: the report is shared all the
             // same, but whoever sent it needs to know, and a confirmation that fades would not say.
-            ops.operationError = resources.getString(R.string.report_shared_incomplete, done.failures.size)
+            ops.operationError = resources.getString(R.string.report_shared_incomplete, failedReads)
         }
     }
     val debugTaps = remember { DebugTapCounter() }
@@ -277,15 +260,15 @@ fun ProgramsScreen(
     // state is uncertain ("the instrument did not confirm the commit"), and a message saying
     // somebody's data may be in an unknown state must not disappear on a timer. One tap on the
     // dismiss action clears it.
-    LaunchedEffect(ops.operationError, reportError) {
-        val message = ops.operationError ?: reportError ?: return@LaunchedEffect
+    LaunchedEffect(ops.operationError, reportShare.error) {
+        val message = ops.operationError ?: reportShare.error ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(
             message = message,
             withDismissAction = true,
             duration = SnackbarDuration.Indefinite,
         )
         ops.operationError = null
-        reportRunner.clearError()
+        reportShare.clearError()
     }
 
     // Rows render as they arrive rather than behind a spinner, on an instrument whose index costs
@@ -938,26 +921,13 @@ fun ProgramsScreen(
         // read off it. For a known instrument the report lives in the debug menu instead.
         if (hasReport && (isUnknownDevice || advisory != null)) {
             TextButton(
-                onClick = {
-                    ops.pendingShare = PendingShare(
-                        title = shareReportTitle,
-                        // Supplied by the instrument's own reporter, since the families read
-                        // different things.
-                        description = viewModel.reportDescription,
-                        suffix = jsonSuffix,
-                        initialStem = viewModel.suggestedReportFilename(),
-                        onConfirm = { stem ->
-                            pendingReportStem = stem
-                            reportRunner.start(readingLabel)
-                        },
-                    )
-                },
+                onClick = { ops.pendingShare = reportShare.dialog() },
                 // Off while a report or a listing is running: the report walks every item, and
                 // two long reads would share one serialized bus.
-                enabled = reportState !is DeviceReportState.Running && editsEnabled,
+                enabled = !reportShare.running && editsEnabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text((reportState as? DeviceReportState.Running)?.step ?: shareReportTitle)
+                Text(reportShare.label)
             }
         }
     }
@@ -996,6 +966,7 @@ fun ProgramsScreen(
             text = ops.renameText,
             onTextChange = { ops.renameText = it },
             maxNameLength = maxNameLength,
+            nameProblem = viewModel::presetNameProblem,
             onConfirm = { ops.onRenameConfirmed(target, ops.renameText) },
             onDismiss = { ops.renameTarget = null },
         )

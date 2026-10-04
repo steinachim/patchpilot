@@ -20,9 +20,12 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
+import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+import de.thewolfwalkexperience.software.patchpilot.core.queryOrNull
 import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
+import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareAdvisory
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
@@ -78,7 +81,7 @@ class Pro800Instrument(
     /** A Pro-800 preset has no category and no favorite mark. */
     override val tagger: PresetTagger? = null
 
-    override val report: DeviceReporter = Pro800Reporter(exchange, layout) {
+    override val report: DeviceReporter = Pro800Reporter(exchange, layout, ::programNumberOf) {
         Pro800ReportIdentity(deviceName, firmware, descriptorId)
     }
 
@@ -107,11 +110,7 @@ class Pro800Instrument(
             return
         }
         // Warn, do not refuse - see Instrument.advisory.
-        val warning = "$deviceName reports firmware version $firmware, which this app has not " +
-            "been tested against (tested: ${supported.sorted().joinToString(", ")}). The app " +
-            "might still work, but it is not guaranteed that presets will be read or written " +
-            "correctly. Please consider sending in a device report, so support for this firmware " +
-            "can be added in future."
+        val warning = untestedFirmwareAdvisory(deviceName, firmware, supported.sorted())
         advisory = warning
         Log.w(TAG, warning)
     }
@@ -135,7 +134,7 @@ class Pro800Instrument(
     /** Releases the MIDI port - see [SysExExchange.close]. */
     override fun close() = exchange.close()
 
-    private suspend fun queryDeviceName(): String? = runProbe {
+    private suspend fun queryDeviceName(): String? = queryOrNull(TAG) {
         val reply = exchange.exchange(
             Pro800SysEx.request(Pro800SysEx.TYPE_DEVICE_NAME),
             what = "asking the instrument its name",
@@ -143,21 +142,12 @@ class Pro800Instrument(
         Pro800SysEx.deviceName(reply)
     }
 
-    private suspend fun queryFirmware(): String? = runProbe {
+    private suspend fun queryFirmware(): String? = queryOrNull(TAG) {
         val reply = exchange.exchange(
             Pro800SysEx.requestFirmware(),
             what = "reading the firmware version",
         ) { Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_FIRMWARE_REPLY }
         Pro800SysEx.firmwareVersion(reply)
-    }
-
-    /** A failed identity probe must not stop a session: the presets are what the user came for. */
-    private suspend fun <T> runProbe(block: suspend () -> T?): T? = try {
-        block()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        null
     }
 
     // ---- PresetBrowser ----
@@ -187,7 +177,7 @@ class Pro800Instrument(
             // An unnamed preset is still a preset: null means the slot is empty.
             name = when {
                 program.isEmpty -> null
-                else -> program.name ?: UNNAMED
+                else -> program.name ?: UNNAMED_PRESET
             },
             badges = emptyList(),
         )
@@ -222,7 +212,7 @@ class Pro800Instrument(
         val settings = Pro800Settings.withSelection(readSettings(), programNumber, address.bank)
         // Fire-and-forget, as every write here: the read-back below is the proof.
         exchange.tell(Pro800SysEx.writeSettings(settings))
-        delay(WRITE_SETTLE_MS)
+        delay(Pro800SysEx.WRITE_SETTLE_MS)
 
         var waited = 0L
         while (true) {
@@ -335,17 +325,8 @@ class Pro800Instrument(
     companion object {
         const val FAMILY = "pro800"
 
-        /** Shown for a preset that exists but carries no name. */
-        const val UNNAMED = "(unnamed)"
-
-        /** What [identity] reports when the firmware query went unanswered. */
-        const val UNKNOWN_FIRMWARE = "unknown"
-
         /** Emitting every 25 dumps keeps the list filling without a recomposition per round trip. */
         private const val BATCH_SIZE = 25
-
-        /** The pause the reference implementation leaves after a write; `Pro800Editor` uses the same. */
-        private const val WRITE_SETTLE_MS = 20L
 
         private const val SELECT_POLL_INTERVAL_MS = 200L
 

@@ -46,7 +46,7 @@ class DemoUsbTransportTest {
             .toSet()
 
         val actual = device.collectItemNames(device.fetchCategoryItems(programIndex))
-            .map { it.presetId to it.name }
+            .map { device.formatPresetId(it.bank, it.item) to it.name }
             .toSet()
 
         assertEquals(expected, actual)
@@ -78,7 +78,7 @@ class DemoUsbTransportTest {
 
         val programIndex = device.getProgramCategoryIndex()
         val names = device.collectItemNames(device.fetchCategoryItems(programIndex))
-        assertTrue(names.any { it.presetId == device.formatPresetId(0, 0) && it.name == "Renamed Patch" })
+        assertTrue(names.any { it.bank == 0 && it.item == 0 && it.name == "Renamed Patch" })
     }
 
     @Test
@@ -90,8 +90,8 @@ class DemoUsbTransportTest {
 
         val programIndex = device.getProgramCategoryIndex()
         val names = device.collectItemNames(device.fetchCategoryItems(programIndex))
-        assertTrue(names.none { it.presetId == device.formatPresetId(0, 0) })
-        assertTrue(names.any { it.presetId == device.formatPresetId(3, 24) && it.name == "Init Program" })
+        assertTrue(names.none { it.bank == 0 && it.item == 0 })
+        assertTrue(names.any { it.bank == 3 && it.item == 24 && it.name == "Init Program" })
     }
 
     @Test
@@ -102,9 +102,10 @@ class DemoUsbTransportTest {
         device.swapPrograms(0, 0, 0, 1)
 
         val programIndex = device.getProgramCategoryIndex()
-        val names = device.collectItemNames(device.fetchCategoryItems(programIndex)).associate { it.presetId to it.name }
-        assertEquals("Warm Pad", names[device.formatPresetId(0, 0)])
-        assertEquals("Init Program", names[device.formatPresetId(0, 1)])
+        val names = device.collectItemNames(device.fetchCategoryItems(programIndex))
+            .associate { (it.bank to it.item) to it.name }
+        assertEquals("Warm Pad", names[0 to 0])
+        assertEquals("Init Program", names[0 to 1])
     }
 
 }

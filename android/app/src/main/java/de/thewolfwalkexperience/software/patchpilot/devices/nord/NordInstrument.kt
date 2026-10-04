@@ -4,11 +4,9 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.util.Log
-import de.thewolfwalkexperience.software.patchpilot.core.AddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
-import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
@@ -22,6 +20,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
+import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import kotlinx.coroutines.CancellationException
@@ -30,15 +29,11 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.util.Locale
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 
 private const val TAG = "NordInstrument"
-
-/** The report writer's Json. encodeDefaults, so a catalog entry spells out every field the recipient has to fill in. */
-private val REPORT_JSON = Json { prettyPrint = true; encodeDefaults = true }
 
 /**
  * Presents a [NordDevice] as an [Instrument]: an adapter with no protocol logic, converting
@@ -70,11 +65,8 @@ class NordInstrument(
         get() = SlotLayout.uniform(
             bankCount = device.maxBankLetter - 'A' + 1,
             slotsPerBank = device.maxGroup * device.slotsPerGroup,
-            format = addressFormat(),
+            format = device.addressFormat(),
         )
-
-    private fun addressFormat(): AddressFormat =
-        GroupedBankAddressFormat(groupsPerBank = device.maxGroup, slotsPerGroup = device.slotsPerGroup)
 
     override val identity: InstrumentIdentity
         get() = InstrumentIdentity(
@@ -136,17 +128,17 @@ class NordInstrument(
         val items = exclusive("re-reading a preset") {
             device.collectItemNames(device.fetchCategoryItems(device.getProgramCategoryIndex()))
         }
-        val displayId = device.formatPresetId(address.bank, address.slot)
-        return items.firstOrNull { it.presetId == displayId }?.toPresetSlot()
+        return items.firstOrNull { it.bank == address.bank && it.item == address.slot }?.toPresetSlot()
             ?: emptySlot(address)
     }
 
     private fun NordDevice.NamedItem.toPresetSlot(): PresetSlot {
-        val parsed = device.parsePresetId(presetId)
+        val address = SlotAddress(bank, item)
+        val format = device.addressFormat()
         return PresetSlot(
-            address = SlotAddress(parsed.bank, parsed.item),
-            displayId = presetId,
-            bankLabel = addressFormat().bankLabel(parsed.bank),
+            address = address,
+            displayId = format.format(address),
+            bankLabel = format.bankLabel(bank),
             name = name,
             // Empty for an id this model does not name, which its own display shows as `No Cat`.
             badges = listOfNotNull(categoryId?.let { categories?.nameOf(it) }),
@@ -156,7 +148,7 @@ class NordInstrument(
     private fun emptySlot(address: SlotAddress) = PresetSlot(
         address = address,
         displayId = device.formatPresetId(address.bank, address.slot),
-        bankLabel = addressFormat().bankLabel(address.bank),
+        bankLabel = device.addressFormat().bankLabel(address.bank),
         name = null,
     )
 
@@ -180,8 +172,11 @@ class NordInstrument(
      */
     override val maxNameLength: Int get() = device.profile.maxProgramNameLen
 
-    override suspend fun rename(address: SlotAddress, newName: String) =
+    /** The name is checked outside [exclusive], whose failure mapping would read the refusal as an unparseable reply. */
+    override suspend fun rename(address: SlotAddress, newName: String) {
+        nameProblem(newName)?.let { throw IllegalArgumentException(it) }
         exclusive("rename a preset") { device.renamePreset(address.bank, address.slot, newName) }
+    }
 
     override suspend fun move(from: SlotAddress, to: SlotAddress) =
         exclusive("move a preset") { device.moveProgram(from.bank, from.slot, to.bank, to.slot) }

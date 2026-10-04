@@ -23,6 +23,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import de.thewolfwalkexperience.software.patchpilot.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import androidx.compose.runtime.getValue
@@ -35,9 +37,10 @@ import androidx.compose.runtime.setValue
  *
  * [filename] carries its own extension and is sanitised here rather than by each caller, since it
  * reaches the filesystem and one caller takes it from a text field. The sanitised name is
- * returned, so a caller can say what was written.
+ * returned, so a caller can say what was written. Suspends while the file is written, which
+ * happens off the main thread; the chooser starts from the caller's.
  */
-fun shareTextReport(
+suspend fun shareTextReport(
     context: Context,
     filename: String,
     content: String,
@@ -51,12 +54,14 @@ fun shareTextReport(
     // report names the user's presets and a device report carries firmware and protocol hex, so
     // keeping only the file being shared is the smaller footprint. It also narrows what
     // file_paths.xml has to expose.
-    val dir = File(context.cacheDir, SHARE_DIR).apply {
-        deleteRecursively()
-        mkdirs()
+    val uri = withContext(Dispatchers.IO) {
+        val dir = File(context.cacheDir, SHARE_DIR).apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val file = File(dir, safeName).apply { writeText(content) }
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
-    val file = File(dir, safeName).apply { writeText(content) }
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = mimeType
         putExtra(Intent.EXTRA_STREAM, uri)

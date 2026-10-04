@@ -46,9 +46,8 @@ class AddressFormatTest {
     }
 
     /**
-     * The formatter is a lift of two `NordDevice` methods, so it has to agree with them exactly -
-     * otherwise an id shown by the browser would not be the id the protocol layer resolves. This
-     * is the test that would have caught a transcription slip in the group arithmetic.
+     * `NordDevice` names its items through this format, built from its profile; the ids it logs
+     * and reports have to be the ones the browser shows, and each has to parse back to its address.
      */
     @Test
     fun `grouped format agrees with NordDevice for every address it can hold`() {
@@ -61,8 +60,7 @@ class AddressFormatTest {
             for (item in 0 until 25) {
                 val fromDevice = device.formatPresetId(bank, item)
                 assertEquals(fromDevice, format.format(SlotAddress(bank, item)))
-                val parsed = device.parsePresetId(fromDevice)
-                assertEquals(SlotAddress(parsed.bank, parsed.item), format.parse(fromDevice))
+                assertEquals(SlotAddress(bank, item), format.parse(fromDevice))
             }
         }
     }

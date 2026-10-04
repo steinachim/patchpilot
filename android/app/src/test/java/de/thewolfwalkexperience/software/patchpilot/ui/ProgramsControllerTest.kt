@@ -163,6 +163,16 @@ class ProgramsControllerTest {
         assertNull("a dialog left standing over an edit hides the progress line", controller.deleteTarget)
     }
 
+    /** Every family reads its names back trimmed, so an untrimmed name would fail its own read-back. */
+    @Test
+    fun `rename sends the name trimmed at both ends`() = runTest {
+        val (controller, ops) = controller()
+        controller.onRenameConfirmed(slot(0, 1), "  New Name  ")
+        testScheduler.advanceUntilIdle()
+
+        assertEquals("rename(${slot(0, 1).displayId},New Name)", ops.calls.single())
+    }
+
     @Test
     fun `rename dismisses its dialog before the work starts`() = runTest {
         val (controller, _) = controller()

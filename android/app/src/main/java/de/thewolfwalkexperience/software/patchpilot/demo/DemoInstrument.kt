@@ -9,6 +9,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
@@ -99,7 +100,10 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
     /** A limit, so the rename field behaves here as it does against a real instrument. 16, matching the Nord shape this mirrors. */
     override val maxNameLength = MAX_NAME_LENGTH
 
-    override suspend fun rename(address: SlotAddress, newName: String) = library.rename(address, newName)
+    override suspend fun rename(address: SlotAddress, newName: String) {
+        nameProblem(newName)?.let { throw IllegalArgumentException(it) }
+        library.rename(address, newName)
+    }
     override suspend fun move(from: SlotAddress, to: SlotAddress) = library.move(from, to)
     override suspend fun swap(a: SlotAddress, b: SlotAddress) = library.swap(a, b)
     override suspend fun delete(address: SlotAddress) = library.delete(address)
@@ -137,7 +141,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
         }
 
         override suspend fun setFavorite(address: SlotAddress, under: Set<Int>): Unit =
-            throw UnsupportedOperationException("Demo mode has no favorites.")
+            throw InstrumentException.NotSupported("mark a favorite")
     }
 
     // ---- DeviceReporter ----

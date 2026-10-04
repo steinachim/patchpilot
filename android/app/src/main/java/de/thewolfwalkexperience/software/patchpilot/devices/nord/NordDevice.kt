@@ -4,6 +4,9 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.util.Log
+import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressFormat
+import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareAdvisory
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -182,9 +185,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         QUERY_CONTENT_VERSION(61), // query content version (61/62); reply is 4 zero bytes
     }
 
-    data class BankItem(val bank: Int, val item: Int)
-    /** [categoryId] is null for a record carrying no program category - see [parseItemCategory]. */
-    data class NamedItem(val presetId: String, val name: String, val categoryId: Int? = null)
+    /**
+     * One listed item: where it is, by the (bank, item) pair the wire uses, and what it is called.
+     * [categoryId] is null for a record carrying no program category - see [parseItemCategory].
+     */
+    data class NamedItem(val bank: Int, val item: Int, val name: String, val categoryId: Int? = null)
 
     /**
      * Reads the firmware version, raises [firmwareAdvisory] if it is not in
@@ -288,14 +293,12 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     private fun validateFirmwareVersion() {
         // An empty set (DeviceProfile.unknown) skips the check.
         if (supportedFirmwareVersions.isNotEmpty() && firmwareVersion !in supportedFirmwareVersions) {
-            val supported = supportedFirmwareVersions.sorted().joinToString(", ") { formatFirmwareVersion(it) }
             // Warn, do not refuse - see Instrument.advisory.
-            val advisory =
-                "$name reports firmware version ${formatFirmwareVersion(firmwareVersion)}, which " +
-                    "this app has not been tested against (tested: $supported). The app might " +
-                    "still work, but it is not guaranteed that programs will be read or written " +
-                    "correctly. Please consider sending in a device report, so support for this " +
-                    "firmware can be added in future."
+            val advisory = untestedFirmwareAdvisory(
+                name,
+                formatFirmwareVersion(firmwareVersion),
+                supportedFirmwareVersions.sorted().map { formatFirmwareVersion(it) },
+            )
             firmwareAdvisory = advisory
             Log.w(TAG, advisory)
         }
@@ -571,7 +574,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         require(nameLen in 0..MAX_ITEM_NAME_LEN && ItemRecord.NAME_START + nameLen <= payload.size) {
             "implausible item name length $nameLen in a ${payload.size}-byte record"
         }
-        return sanitizeDeviceText(String(payload, ItemRecord.NAME_START, nameLen, Charsets.US_ASCII))
+        return printableAscii(String(payload, ItemRecord.NAME_START, nameLen, Charsets.US_ASCII))
     }
 
     /**
@@ -594,13 +597,13 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * replaces anything above 0x7F, but NUL, CR and LF would pass through into the browser, the
      * report JSON and logcat. Strips rather than rejects, so one odd byte does not fail a listing.
      */
-    private fun sanitizeDeviceText(raw: String): String =
+    private fun printableAscii(raw: String): String =
         raw.filter { it.code in 0x20..0x7E }
 
     fun collectItemNames(itemPayloads: List<ByteArray>): List<NamedItem> = itemPayloads.map { payload ->
         val bank = readUInt32BE(payload, ItemRecord.BANK)
         val item = readUInt32BE(payload, ItemRecord.ITEM)
-        NamedItem(formatPresetId(bank, item), parseItemName(payload), parseItemCategory(payload))
+        NamedItem(bank, item, parseItemName(payload), parseItemCategory(payload))
     }
 
     /**
@@ -723,46 +726,14 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     }
 
     /**
-     * Parses a preset id like "A:1:1" (bank letter, then group and slot,
-     * both 1-based, leading zeros accepted) into a (bank, item) pair as
-     * used by sub-opcode 30/32/47.
+     * How this instrument's ids read, e.g. `A:1:1`, from the bounds in force. Built per call,
+     * since [applyDerivedBankLayout] can replace them.
      */
-    fun parsePresetId(presetId: String): BankItem {
-        val m = PRESET_ID_RE.matchEntire(presetId.trim())
-            ?: throw IllegalArgumentException(
-                "Invalid preset id '$presetId'; expected format like 'A:1:1' (bank letter " +
-                    "A-$maxBankLetter, group 1-$maxGroup, slot 1-$slotsPerGroup)",
-            )
-        val (bankLetterStr, groupStr, slotStr) = m.destructured
-        val bankLetter = bankLetterStr.uppercase()[0]
-        val group = groupStr.toInt()
-        val slot = slotStr.toInt()
-        if (bankLetter > maxBankLetter) {
-            throw IllegalArgumentException(
-                "Invalid preset id '$presetId': bank '$bankLetter' is beyond the $name's last bank, '$maxBankLetter'",
-            )
-        }
-        if (group !in 1..maxGroup) {
-            throw IllegalArgumentException(
-                "Invalid preset id '$presetId': group $group is beyond the $name's last group, $maxGroup",
-            )
-        }
-        if (slot !in 1..slotsPerGroup) {
-            throw IllegalArgumentException(
-                "Invalid preset id '$presetId': slot $slot is beyond the $name's last slot, $slotsPerGroup",
-            )
-        }
-        val bank = bankLetter - 'A'
-        val item = (group - 1) * slotsPerGroup + (slot - 1)
-        return BankItem(bank, item)
-    }
+    fun addressFormat(): GroupedBankAddressFormat =
+        GroupedBankAddressFormat(groupsPerBank = maxGroup, slotsPerGroup = slotsPerGroup)
 
-    fun formatPresetId(bank: Int, item: Int): String {
-        val bankLetter = 'A' + bank
-        val group = item / slotsPerGroup
-        val slot = item % slotsPerGroup
-        return "$bankLetter:${group + 1}:${slot + 1}"
-    }
+    /** Item [item] of bank [bank] as the instrument's own panel names it, e.g. `A:1:1`. */
+    fun formatPresetId(bank: Int, item: Int): String = addressFormat().format(SlotAddress(bank, item))
 
     /** Loads a preset: sub-opcode 47/48 inside the `Program` category lock. The reply echoes (status, bank, item). */
     suspend fun selectPreset(bank: Int, item: Int) {
@@ -779,7 +750,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     suspend fun renamePreset(bank: Int, item: Int, newName: String) {
         require(newName.isNotBlank()) { "New preset name must not be blank" }
-        require(newName.all { it.code in 0..127 }) { "New preset name '$newName' must be ASCII" }
+        require(newName.all { it.code in 0x20..0x7E }) { "New preset name '$newName' must be printable ASCII" }
         val nameBytes = newName.toByteArray(Charsets.US_ASCII)
 
         withProgramCategory {
@@ -1390,8 +1361,6 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             }
             return off == payload.size
         }
-
-        private val PRESET_ID_RE = Regex("^([A-Za-z]):(\\d+):(\\d+)$")
 
         /**
          * Reads a big-endian u32, checking the buffer is long enough first, so a short reply is a

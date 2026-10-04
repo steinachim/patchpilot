@@ -6,15 +6,12 @@ package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
+import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlin.time.TimeSource
-
-/** The report writer's Json. encodeDefaults, so the report spells out every field. */
-private val REPORT_JSON = Json { prettyPrint = true; encodeDefaults = true }
 
 /**
  * Everything the app can read off a Subsequent 37 in a few seconds without changing anything on
@@ -86,15 +83,15 @@ class Subsequent37Reporter(
         val start = timeSource.markNow()
         val message = device.readStoredMessage(number)
         val total = start.elapsedNow().inWholeMilliseconds
-        val payload = Subsequent37SysEx.programOf(message)!!
+        val program = Subsequent37Program(Subsequent37SysEx.programOf(message)!!)
         return TimedRead(
             raw = message,
             summary = Subsequent37ProgramReadReport(
                 program = number,
                 totalMs = total,
                 messageBytes = message.size,
-                category = payload[50].toInt() and 0xFF,
-                byte51 = payload[51].toInt() and 0xFF,
+                category = program.category,
+                byte51 = program.byte51,
             ),
         )
     }

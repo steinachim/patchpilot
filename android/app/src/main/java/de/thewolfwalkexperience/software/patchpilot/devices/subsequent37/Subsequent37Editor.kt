@@ -8,6 +8,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -42,14 +43,18 @@ class Subsequent37Editor(private val instrument: Subsequent37Instrument) : Prese
 
     override fun isEmulated(op: EditOp): Boolean = true
 
-    override suspend fun rename(address: SlotAddress, newName: String) {
-        val name = newName.trimEnd()
-        require(name.isNotBlank()) { "A preset name must not be blank." }
-        Subsequent37Program.requireStorableName(name)
-        require(name != Subsequent37Program.EMPTY_NAME) {
+    /** The shared rule, plus the name this app reads as an empty slot. */
+    override fun nameProblem(name: String): String? =
+        super.nameProblem(name) ?: if (name.trimEnd() == Subsequent37Program.EMPTY_NAME) {
             "'${Subsequent37Program.EMPTY_NAME}' is how the Subsequent 37 marks an empty slot, so " +
                 "a preset of that name would be taken for one."
+        } else {
+            null
         }
+
+    override suspend fun rename(address: SlotAddress, newName: String) {
+        val name = newName.trimEnd()
+        nameProblem(name)?.let { throw IllegalArgumentException(it) }
         val number = instrument.numberOf(address)
         instrument.operation {
             val current = requireOccupied(number, "rename")
@@ -67,7 +72,7 @@ class Subsequent37Editor(private val instrument: Subsequent37Instrument) : Prese
             val source = requireOccupied(from, "copy")
             requireEmpty(to, "copy onto an occupied slot")
             device.writeVerified(to, source, instrument.displayIdOf(to))
-            source.name.ifEmpty { Subsequent37Instrument.UNNAMED }
+            source.name.ifEmpty { UNNAMED_PRESET }
         }
     }
 

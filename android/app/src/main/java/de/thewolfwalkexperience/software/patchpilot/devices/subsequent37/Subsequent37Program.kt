@@ -49,6 +49,9 @@ class Subsequent37Program(payload: ByteArray) {
     /** Byte 50: a [Subsequent37Categories] value, or [Subsequent37Categories.UNSET]. */
     val category: Int get() = bytes[CATEGORY_OFFSET].toInt() and 0xFF
 
+    /** Byte 51, as stored and not decoded; the panel's own save writes `7`. */
+    val byte51: Int get() = bytes[BYTE_51_OFFSET].toInt() and 0xFF
+
     val checksumCloses: Boolean get() = Subsequent37SysEx.checksumCloses(bytes)
 
     /** This program renamed [newName], checksum closed; every other byte unchanged. */
@@ -71,6 +74,7 @@ class Subsequent37Program(payload: ByteArray) {
         const val NAME_LENGTH = 24
         const val EMPTY_NAME = "Init Preset"
         private const val CATEGORY_OFFSET = 50
+        private const val BYTE_51_OFFSET = 51
         private val PRINTABLE = 0x20..0x7E
 
         /**

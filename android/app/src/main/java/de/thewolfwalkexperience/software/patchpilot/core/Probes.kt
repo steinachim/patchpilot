@@ -41,5 +41,16 @@ class Probes {
     }
 }
 
-/** Lowercase hex, the form every raw field in a device report uses. */
-fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+/**
+ * Runs one query whose failure leaves a default rather than ending the session or the edit - the
+ * identity and settings queries a family makes at connect time. Logged under [tag], since the
+ * fallback is otherwise silent. Not `runCatching`, which would swallow [CancellationException].
+ */
+suspend fun <T> queryOrNull(tag: String, block: suspend () -> T?): T? = try {
+    block()
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Exception) {
+    Log.w(tag, "Query failed: ${e.message}")
+    null
+}

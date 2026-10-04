@@ -6,6 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.FavoriteModel
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
@@ -92,10 +93,10 @@ internal class MotifXsTagger(
         val stored = MotifXsVoice.categoriesOf(instrument.readVoicePayload(address)).orEmpty()
             .map { figure -> figure?.let { MotifXsCategories.refOf(it, taxonomy) } }
         val storedPadded = List(ASSIGNMENTS) { stored.getOrNull(it) }
-        check(storedPadded == wanted) {
-            "set the categories of ${instrument.describe(address)} but they read back as " +
-                storedPadded.joinToString { it?.let(taxonomy::label) ?: "none" }
-        }
+        if (storedPadded != wanted) throw InstrumentException.ProtocolDesync(
+            "Set the categories of ${instrument.describe(address)} but they read back as " +
+                storedPadded.joinToString { it?.let(taxonomy::label) ?: "none" } + ".",
+        )
         invalidate(address.bank)
     }
 

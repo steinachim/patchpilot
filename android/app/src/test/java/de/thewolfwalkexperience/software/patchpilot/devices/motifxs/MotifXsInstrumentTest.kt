@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
+import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
@@ -700,7 +701,7 @@ class MotifXsInstrumentTest {
     fun `an unanswered identity inquiry alone still connects`() = runTest {
         val (motif, _) = instrument(backgroundScope, mode = MotifXsMode.VOICE, answersIdentity = false)
         motif.connect()
-        assertEquals(MotifXsInstrument.UNKNOWN_FIRMWARE, motif.identity.firmwareVersion)
+        assertEquals(UNKNOWN_FIRMWARE, motif.identity.firmwareVersion)
     }
 
     // ---- Mode gating ----

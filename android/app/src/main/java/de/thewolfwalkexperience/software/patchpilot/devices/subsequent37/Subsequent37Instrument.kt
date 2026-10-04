@@ -20,6 +20,10 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
+import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+import de.thewolfwalkexperience.software.patchpilot.core.queryOrNull
+import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareAdvisory
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -139,8 +143,8 @@ class Subsequent37Instrument(
      */
     override suspend fun connect() {
         lock.withLock {
-            firmware = runProbe { Subsequent37SysEx.decodeFirmware(device.identityReply()) } ?: UNKNOWN_FIRMWARE
-            settings = runProbe { device.settings() }
+            firmware = queryOrNull(TAG) { Subsequent37SysEx.decodeFirmware(device.identityReply()) } ?: UNKNOWN_FIRMWARE
+            settings = queryOrNull(TAG) { device.settings() }
             advisory = advisoryText()
             Log.i(TAG, "$catalogName, firmware $firmware, IN channel ${settings?.inChannelLabel ?: "unknown"}")
         }
@@ -150,13 +154,7 @@ class Subsequent37Instrument(
     private fun advisoryText(): String? {
         val supported = config.supportedFirmwareVersions
         if (supported.isEmpty() || firmware == UNKNOWN_FIRMWARE || firmware in supported) return null
-        return (
-            "$catalogName reports firmware version $firmware, which this app has not been " +
-                "tested against (tested: ${supported.sorted().joinToString(", ")}). The app " +
-                "might still work, but it is not guaranteed that presets will be read or " +
-                "written correctly. Please consider sending in a device report, so support can " +
-                "be confirmed in future."
-            ).also { Log.w(TAG, it) }
+        return untestedFirmwareAdvisory(catalogName, firmware, supported.sorted()).also { Log.w(TAG, it) }
     }
 
     /** Releases the MIDI port - see [SysExExchange.close]. */
@@ -359,7 +357,7 @@ class Subsequent37Instrument(
         operation {
             val channel = settings?.selectionChannel ?: 0
             if (trySelect(channel, number, displayId)) return@operation
-            val fresh = runProbe { device.settings() }?.also { settings = it }
+            val fresh = queryOrNull(TAG) { device.settings() }?.also { settings = it }
             if (fresh != null && fresh.selectionChannel != channel && trySelect(fresh.selectionChannel, number, displayId)) {
                 return@operation
             }
@@ -427,7 +425,7 @@ class Subsequent37Instrument(
             bankLabel = layout.banks[address.bank].label,
             name = when {
                 program.isEmpty -> null
-                program.name.isEmpty() -> UNNAMED
+                program.name.isEmpty() -> UNNAMED_PRESET
                 else -> program.name
             },
             badges = listOfNotNull(Subsequent37Categories.nameOf(program.category)),
@@ -453,24 +451,8 @@ class Subsequent37Instrument(
         )
     }
 
-    /** A query whose failure leaves a default rather than ending the session. */
-    private suspend fun <T> runProbe(block: suspend () -> T?): T? = try {
-        block()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Log.w(TAG, "Query failed: ${e.message}")
-        null
-    }
-
     companion object {
         const val FAMILY = "subsequent37"
-
-        /** Shown for a preset whose name is all spaces. */
-        const val UNNAMED = "(unnamed)"
-
-        /** What [identity] reports when the Identity Request went unanswered. */
-        const val UNKNOWN_FIRMWARE = "unknown"
 
         const val SLOW_LISTING_NOTICE = "subsequent37.slow_listing"
         const val INIT_PRESET_NOTICE = "subsequent37.init_preset_is_empty"

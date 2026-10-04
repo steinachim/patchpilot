@@ -113,11 +113,11 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     }
     val saveJsonLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(JSON_MIME_TYPE)) { uri ->
-            onSaveResult(uri) { (reportRunner.state.value as? DeviceReportState.Done)?.json }
+            onSaveResult(uri) { (reportRunner.state.value as? RunState.Done)?.result?.json }
         }
     val saveTextLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(TEXT_MIME_TYPE)) { uri ->
-            onSaveResult(uri) { (runner.state.value as? RegressionRunState.Done)?.report?.asText() }
+            onSaveResult(uri) { (runner.state.value as? RunState.Done)?.result?.report?.asText() }
         }
 
     // The factory-name check: which bank the result belongs to, whether a read is running, and
@@ -149,7 +149,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     // Back out of a report - either kind - to the debug menu, not out of the debug screen: the
     // reports render inside this screen rather than on routes of their own, so a finished report
     // is a state of it, and back clears that state. Only from the menu itself does back leave.
-    val atMenu = run !is RegressionRunState.Done && reportState !is DeviceReportState.Done
+    val atMenu = run !is RunState.Done && reportState !is RunState.Done
     // Clears both; only one is ever set, since each report hides the button that starts the other.
     fun backToMenu() {
         runner.dismissReport()
@@ -167,7 +167,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     //
     // The device report read is not held like this: it writes nothing and carries on in the
     // ViewModel, so coming back finds the result waiting.
-    val running = run is RegressionRunState.Running
+    val running = run is RunState.Running
     BackHandler(enabled = running) {
         // Empty: refusing the gesture is the behaviour, and the step line says what is running.
     }
@@ -189,13 +189,15 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
             }
             val state = run
-            val report = reportState
+            val reportRun = reportState
+            val report = (reportRun as? RunState.Done)?.result
+            val finished = (state as? RunState.Done)?.result
             when {
                 // At most one of the first four holds at a time, since each replaces the menu and
                 // with it the buttons that start the others. The device report is read on demand
                 // and then held, the same shape as the regression run: one "Generate" whose result
                 // offers Share and Save.
-                report is DeviceReportState.Done -> DeviceReportReadyView(
+                report != null -> DeviceReportReadyView(
                     sizeBytes = report.json.toByteArray().size,
                     failures = report.failures,
                     onShare = {
@@ -206,43 +208,47 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             initialStem = report.stem,
                             // From the held report: the read is the slow part this view keeps.
                             onConfirm = { stem ->
-                                shareTextReport(
-                                    context = context,
-                                    filename = "$stem$jsonSuffix",
-                                    content = report.json,
-                                    mimeType = JSON_MIME_TYPE,
-                                    chooserTitle = reportShareTitle,
-                                )
+                                scope.launch {
+                                    shareTextReport(
+                                        context = context,
+                                        filename = "$stem$jsonSuffix",
+                                        content = report.json,
+                                        mimeType = JSON_MIME_TYPE,
+                                        chooserTitle = reportShareTitle,
+                                    )
+                                }
                             },
                         )
                     },
                     onSave = { saveJsonLauncher.launch(report.stem + jsonSuffix) },
                     onBackToMenu = ::backToMenu,
                 )
-                report is DeviceReportState.Running ->
-                    RunningView(stringResource(R.string.debug_report_running), report.step)
-                state is RegressionRunState.Running ->
+                reportRun is RunState.Running ->
+                    RunningView(stringResource(R.string.debug_report_running), reportRun.step)
+                state is RunState.Running ->
                     RunningView(stringResource(R.string.debug_regression_running), state.step)
-                state is RegressionRunState.Done -> RegressionReportView(
-                    report = state.report,
+                finished != null -> RegressionReportView(
+                    report = finished.report,
                     onShare = {
                         pendingShare = PendingShare(
                             title = regressionShareTitle,
-                            description = state.report.summary,
+                            description = finished.report.summary,
                             suffix = txtSuffix,
-                            initialStem = "${state.stem}_capabilities",
+                            initialStem = "${finished.stem}_capabilities",
                             onConfirm = { stem ->
-                                shareTextReport(
-                                    context = context,
-                                    filename = "$stem.txt",
-                                    content = state.report.asText(),
-                                    mimeType = TEXT_MIME_TYPE,
-                                    chooserTitle = regressionShareTitle,
-                                )
+                                scope.launch {
+                                    shareTextReport(
+                                        context = context,
+                                        filename = "$stem$txtSuffix",
+                                        content = finished.report.asText(),
+                                        mimeType = TEXT_MIME_TYPE,
+                                        chooserTitle = regressionShareTitle,
+                                    )
+                                }
                             },
                         )
                     },
-                    onSave = { saveTextLauncher.launch("${state.stem}_capabilities$txtSuffix") },
+                    onSave = { saveTextLauncher.launch("${finished.stem}_capabilities$txtSuffix") },
                     onBackToMenu = ::backToMenu,
                 )
                 else -> {

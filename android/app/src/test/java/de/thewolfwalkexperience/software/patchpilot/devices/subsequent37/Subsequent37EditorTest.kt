@@ -9,6 +9,8 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -54,10 +56,11 @@ class Subsequent37EditorTest {
         val fake = FakeSubsequent37(backgroundScope)
         val editor = connected(fake).editor
         val empty = Subsequent37Fixtures.emptyPrograms(1).single()
-        refused { editor.rename(address(1), "x".repeat(25)) }
-        refused { editor.rename(address(1), "Café") }
-        refused { editor.rename(address(1), "   ") }
-        refused { editor.rename(address(1), "Init Preset") }
+        for (name in listOf("x".repeat(25), "Café", "   ", "Init Preset")) {
+            assertNotNull("the rename dialog refuses '$name' too", editor.nameProblem(name))
+            refused { editor.rename(address(1), name) }
+        }
+        assertNull(editor.nameProblem("Preset 002"))
         refused { editor.rename(address(empty), "Something") }
         assertTrue(fake.writes.isEmpty())
         // Renaming to the name it already has writes nothing.

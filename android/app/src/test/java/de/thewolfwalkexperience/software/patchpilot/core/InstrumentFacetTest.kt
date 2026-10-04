@@ -213,7 +213,7 @@ class InstrumentFacetTest {
         try {
             editor.copyProgram(SlotAddress(0, 0), SlotAddress(0, 1))
             throw AssertionError("copy is undeclared but ran anyway")
-        } catch (expected: UnsupportedOperationException) {
+        } catch (expected: InstrumentException.NotSupported) {
             // exactly what an undeclared op should do
         }
     }

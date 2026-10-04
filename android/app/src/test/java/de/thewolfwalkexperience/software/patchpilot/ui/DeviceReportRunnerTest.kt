@@ -38,7 +38,7 @@ class DeviceReportRunnerTest {
         advanceUntilIdle()
 
         val restored = runner(this, saved, DeviceReportResult("unused", emptyMap())).state.value
-        val done = restored as DeviceReportState.Done
+        val done = (restored as RunState.Done).result
         assertFalse(done.isComplete)
         assertEquals("{}", done.json)
         assertEquals("nord_grand", done.stem)
@@ -57,7 +57,7 @@ class DeviceReportRunnerTest {
         runner(this, saved, DeviceReportResult("{}", emptyMap())).start("starting")
         advanceUntilIdle()
 
-        val done = runner(this, saved, DeviceReportResult("unused", emptyMap())).state.value as DeviceReportState.Done
+        val done = (runner(this, saved, DeviceReportResult("unused", emptyMap())).state.value as RunState.Done).result
         assertTrue(done.isComplete)
         assertEquals(emptyList<String>(), done.failures)
     }

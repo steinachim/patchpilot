@@ -46,7 +46,6 @@ import de.thewolfwalkexperience.software.patchpilot.devices.nord.DeviceProfile
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
 import de.thewolfwalkexperience.software.patchpilot.usb.UsbConnectionManager
-import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.usb.displayLabel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -515,11 +514,29 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         val built = closingOnFailure(transport::close) {
             InstrumentRegistry.create(getApplication(), candidate.descriptor, transport)
         }
-        closingOnFailure({ closeQuietly(built) }) { built.connect() }
+        connectAndPublish(built, candidate.physicalKey, candidate.deviceHandle())
+    }
+
+    /**
+     * Connects [built] and makes it the session - the tail every connect path shares. A failure
+     * before it becomes the session closes it, so a MIDI port or USB interface is never left
+     * claimed by a session that does not exist. [afterConnect] runs once connected and before
+     * publishing, under the same guarantee.
+     */
+    private suspend fun <I : Instrument> connectAndPublish(
+        built: I,
+        physicalKey: String?,
+        deviceHandle: String?,
+        afterConnect: suspend (I) -> Unit = {},
+    ) {
+        closingOnFailure({ closeQuietly(built) }) {
+            built.connect()
+            afterConnect(built)
+        }
         instrumentMutex.withLock {
             instrument = built
-            connectedPhysicalKey = candidate.physicalKey
-            connectedDeviceHandle = candidate.deviceHandle()
+            connectedPhysicalKey = physicalKey
+            connectedDeviceHandle = deviceHandle
         }
         _state.value = connectedOrAdvisory(built)
         startIndex()
@@ -598,11 +615,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             offerUnknownDeviceOrFail()
             return
         }
-        connectAndFinish(remembered, remembered.displayLabel()) { transport ->
-            val profile =
-                DeviceProfile.unknown(remembered.displayLabel(), remembered.vendorId, remembered.productId)
-            NordInstrument(NordDevice(transport, profile))
-        }
+        connectUnknownDevice(remembered)
     }
 
     /** No supported instrument was found: offers a device picker if anything else is attached, otherwise "nothing found". */
@@ -620,25 +633,27 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     /** User picked a device from [ConnectionState.DeviceSelection] - show the "unsupported, at
      * your own risk" warning before touching it. */
     fun selectUnknownDevice(usbDevice: UsbDevice) {
-        if (usbDevice.vendorId !in unknownCapableVendorIds()) {
-            _state.value = ConnectionState.DeviceSelection(
-                entries = pickerEntries(emptyList()),
-                message = "${usbDevice.displayLabel()} is not a Clavia device, so there is no " +
-                    "protocol to try on it. Only an unrecognised Nord can be opened this way - " +
-                    "everything else the app supports is matched by its exact USB ids.",
-            )
-            return
-        }
+        val refusal = "${usbDevice.displayLabel()} is not a Clavia device, so there is no protocol " +
+            "to try on it. Only an unrecognised Nord can be opened this way - everything else the " +
+            "app supports is matched by its exact USB ids."
+        if (!mayGuessAt(usbDevice, refusal)) return
         _state.value = ConnectionState.UnknownDeviceWarning(usbDevice)
     }
 
     /**
-     * Vendor ids for which guessing at an unrecognised device is defensible - see
-     * [UnknownDevicePolicy], which is where the rule lives. Read from the catalog, so adding a
-     * Nord model needs no change here; fails closed on an unreadable catalog.
+     * Whether [usbDevice] may be opened on a guess - see [UnknownDevicePolicy], which is where the
+     * rule lives. Where not, returns the user to the picker with [refusal] as the reason. Its
+     * vendor ids are read from the catalog, so adding a Nord model needs no change here; fails
+     * closed on an unreadable catalog.
      */
-    private fun unknownCapableVendorIds(): Set<Int> =
-        UnknownDevicePolicy.vendorIdsAllowingAGuess(InstrumentRegistry.allDescriptors(getApplication()))
+    private fun mayGuessAt(usbDevice: UsbDevice, refusal: String): Boolean {
+        val allowed = UnknownDevicePolicy.vendorIdsAllowingAGuess(
+            InstrumentRegistry.allDescriptors(getApplication()),
+        )
+        if (usbDevice.vendorId in allowed) return true
+        _state.value = ConnectionState.DeviceSelection(entries = pickerEntries(emptyList()), message = refusal)
+        return false
+    }
 
     /** Backs out of [ConnectionState.UnknownDeviceWarning] back to the device picker (or the
      * plain error state, if USB devices were unplugged in the meantime). */
@@ -653,32 +668,17 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     fun confirmUnknownDevice(usbDevice: UsbDevice) {
         // Checked again here: this is the call that claims the interface and starts sending a
         // vendor protocol, whatever route got here.
-        if (usbDevice.vendorId !in unknownCapableVendorIds()) {
-            _state.value = ConnectionState.DeviceSelection(
-                entries = pickerEntries(emptyList()),
-                message = "${usbDevice.displayLabel()} cannot be opened this way.",
-            )
-            return
-        }
-        launchConnect {
-            connectAndFinish(usbDevice, usbDevice.displayLabel()) { transport ->
-                val profile = DeviceProfile.unknown(usbDevice.displayLabel(), usbDevice.vendorId, usbDevice.productId)
-                NordInstrument(NordDevice(transport, profile))
-            }
-        }
+        if (!mayGuessAt(usbDevice, "${usbDevice.displayLabel()} cannot be opened this way.")) return
+        launchConnect { connectUnknownDevice(usbDevice) }
     }
 
     /**
-     * The permission -> open -> connect tail for a device opened on a guess against the Nord
-     * protocol: [confirmUnknownDevice] and [reconnectRememberedUnknownDeviceOrOffer]. A catalog
-     * match goes through [connectCandidate] instead. [displayName] names the device on the
-     * connect screen and in the log.
+     * Opens a device the catalog does not know as a Nord, on [DeviceProfile.unknown]: the path for
+     * [confirmUnknownDevice] and [reconnectRememberedUnknownDeviceOrOffer]. A catalog match goes
+     * through [connectCandidate] instead.
      */
-    private suspend fun connectAndFinish(
-        usbDevice: UsbDevice,
-        displayName: String,
-        factory: (UsbBulkTransport) -> NordInstrument,
-    ) {
+    private suspend fun connectUnknownDevice(usbDevice: UsbDevice) {
+        val displayName = usbDevice.displayLabel()
         val transport = whileOpening(usbDevice.physicalKey()) {
             _state.value = ConnectionState.Opening(displayName, Bus.USB)
             if (!connectionManager.requestPermission(usbDevice)) {
@@ -687,26 +687,20 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             }
             connectionManager.openTransport(usbDevice)
         }
-        val built = closingOnFailure(transport::close) { factory(transport) }
-        closingOnFailure({ closeQuietly(built) }) {
-            built.connect()
-            // An unrecognized device starts on DeviceProfile.unknown()'s generous guessed bounds;
-            // its own Program category announces the real ones. Best-effort, since a device with
-            // no Program category is exactly what this path exists to survive.
-            built.applyDerivedBankLayoutIfUnknown(displayName)
+        val built = closingOnFailure(transport::close) {
+            val profile = DeviceProfile.unknown(displayName, usbDevice.vendorId, usbDevice.productId)
+            NordInstrument(NordDevice(transport, profile))
         }
-        instrumentMutex.withLock {
-            instrument = built
-            connectedPhysicalKey = usbDevice.physicalKey()
-            connectedDeviceHandle = usbDevice.deviceHandle()
+        // It starts on DeviceProfile.unknown()'s generous guessed bounds; its own Program category
+        // announces the real ones.
+        connectAndPublish(built, usbDevice.physicalKey(), usbDevice.deviceHandle()) {
+            it.deriveBankLayoutBestEffort(displayName)
         }
         lastConfirmedUnknownDevice = usbDevice
-        _state.value = connectedOrAdvisory(built)
-        startIndex()
     }
 
-    private suspend fun NordInstrument.applyDerivedBankLayoutIfUnknown(displayName: String) {
-        if (identity.descriptorId != DeviceProfile.UNKNOWN_ID) return
+    /** Best-effort, since a device with no Program category is exactly what the unknown-device path exists to survive. */
+    private suspend fun NordInstrument.deriveBankLayoutBestEffort(displayName: String) {
         try {
             deriveBankLayout()
         } catch (e: CancellationException) {
@@ -723,15 +717,8 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      */
     fun connectDemo() {
         launchConnect(failureMessage = str(R.string.connect_failed_demo)) {
-            val demo = DemoInstrument()
-            demo.connect()
-            instrumentMutex.withLock {
-                instrument = demo
-                connectedPhysicalKey = null
-                connectedDeviceHandle = null
-            }
-            _state.value = ConnectionState.Connected(demo)
-            startIndex()
+            // No bus and no device handle: nothing to detach, and nothing for the cache to key on.
+            connectAndPublish(DemoInstrument(), physicalKey = null, deviceHandle = null)
         }
     }
 
@@ -1364,6 +1351,9 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      * used to cap the rename field rather than letting the instrument truncate silently. */
     val maxPresetNameLength: Int?
         get() = connected()?.editor?.maxNameLength
+
+    /** Why [name] cannot be stored on the connected instrument, or null - see `PresetEditor.nameProblem`. */
+    fun presetNameProblem(name: String): String? = connected()?.editor?.nameProblem(name)
 
     /** Whether tapping a preset can load it: a family may browse and nothing else, and the row should not be clickable there. */
     val canSelect: Boolean get() = connected()?.selector != null

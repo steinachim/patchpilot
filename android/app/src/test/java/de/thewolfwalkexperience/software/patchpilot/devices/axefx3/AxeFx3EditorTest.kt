@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.axefx3
 
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
@@ -12,6 +13,8 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -70,8 +73,10 @@ class AxeFx3EditorTest {
         val instrument = connected(fake)
         val start = fake.requests.size
         for (name in listOf("", "   ", "Café", "x".repeat(32), "<EMPTY>")) {
+            assertNotNull("the rename dialog refuses '$name' too", instrument.editor.nameProblem(name))
             thrownBy<IllegalArgumentException> { instrument.editor.rename(at(10), name) }
         }
+        assertNull(instrument.editor.nameProblem("New Name"))
         assertEquals(start, fake.requests.size)
         assertEquals("Old", fake.nameAt(10))
     }
@@ -117,7 +122,7 @@ class AxeFx3EditorTest {
     fun `an unnamed preset is copied under the name the browser gives it`() = runTest {
         val fake = FakeAxeFx3()
         fake.put(1, "")
-        assertEquals(AxeFx3Instrument.UNNAMED, connected(fake).editor.copyProgram(at(1), at(2)))
+        assertEquals(UNNAMED_PRESET, connected(fake).editor.copyProgram(at(1), at(2)))
     }
 
     @Test

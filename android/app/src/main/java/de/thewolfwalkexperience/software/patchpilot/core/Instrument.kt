@@ -256,6 +256,14 @@ interface PresetEditor {
      */
     val maxNameLength: Int? get() = null
 
+    /**
+     * Why [name] cannot be stored as a preset name, or null where it can. The rename dialog asks
+     * as the user types, so a name the instrument would refuse or change is caught before anything
+     * is sent; [rename] checks again for itself. The default is [printableAsciiNameProblem]; a
+     * family with a further rule, such as a name it reserves for an empty slot, adds it.
+     */
+    fun nameProblem(name: String): String? = printableAsciiNameProblem(name, maxNameLength)
+
     /** True where [op] is composed host-side from reads and writes rather than being one call. */
     fun isEmulated(op: EditOp): Boolean
 
@@ -273,7 +281,28 @@ interface PresetEditor {
      * [EditOp.COPY] and overrides this; one that does not inherits the refusal.
      */
     suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String =
-        throw UnsupportedOperationException("This instrument cannot copy a preset.")
+        throw InstrumentException.NotSupported("copy a preset")
+}
+
+/**
+ * The name rule every family shares: not blank, only printable ASCII (`0x20`-`0x7E`, the range
+ * every family's name field stores and reads back unchanged), and no longer than [maxLength] where
+ * one is known.
+ */
+fun printableAsciiNameProblem(name: String, maxLength: Int?): String? {
+    if (name.isBlank()) return "A preset name cannot be blank."
+    name.firstOrNull { it.code !in 0x20..0x7E }?.let { char ->
+        return if (char.isISOControl()) {
+            "A preset name cannot hold control characters."
+        } else {
+            "\u201c$char\u201d cannot be stored: a preset name can hold only plain ASCII letters, " +
+                "digits, spaces and punctuation."
+        }
+    }
+    if (maxLength != null && name.length > maxLength) {
+        return "A preset name can be at most $maxLength characters."
+    }
+    return null
 }
 
 /**

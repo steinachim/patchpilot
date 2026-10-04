@@ -39,6 +39,25 @@ class SysExExchangeTest {
         assertArrayEquals(Pro800SysEx.requestDump(7), transport.sent.single())
     }
 
+    /** A send the transport could not complete is a lost connection, whichever family asked. */
+    @Test
+    fun `a failed send is raised as a lost connection with its cause`() = runTest {
+        val transport = FakeMidiTransport { error("USB bulk write failed: sent -1 of 9 bytes") }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val failure = runCatching {
+            exchange.exchange(Pro800SysEx.requestDump(7), "reading 7") { true }
+        }.exceptionOrNull()
+        assertTrue(failure is InstrumentException.TransportLost)
+        assertEquals("USB bulk write failed: sent -1 of 9 bytes", failure!!.message)
+        // Searched along the chain: coroutine stack-trace recovery may rethrow a copy whose
+        // cause is the original.
+        assertTrue(generateSequence(failure) { it.cause }.any { it is IllegalStateException })
+
+        val told = runCatching { exchange.tell(Pro800SysEx.requestDump(7)) }.exceptionOrNull()
+        assertTrue(told is InstrumentException.TransportLost)
+    }
+
     /** A reply delivered in pieces is exactly what a real port does; the framer underneath has to
      * make that invisible here. */
     @Test

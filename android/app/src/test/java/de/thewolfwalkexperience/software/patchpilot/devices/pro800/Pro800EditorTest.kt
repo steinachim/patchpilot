@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
@@ -132,7 +133,7 @@ class Pro800EditorTest {
         val pro800 = instrument(fake, backgroundScope)
         val name = pro800.editor!!.copyProgram(a(2), b(3))
 
-        assertEquals(Pro800Instrument.UNNAMED, name)
+        assertEquals(UNNAMED_PRESET, name)
         assertEquals(
             "the browser and the copy must agree on what to call it",
             name,

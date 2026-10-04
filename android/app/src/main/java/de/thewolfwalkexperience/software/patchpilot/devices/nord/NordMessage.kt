@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
+import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -55,7 +56,7 @@ fun buildMessage(
  */
 fun parseMessage(data: ByteArray): NordMessage {
     require(data.size >= MESSAGE_HEADER_LEN + MESSAGE_CRC_LEN) {
-        "message too short (${data.size} bytes): ${data.joinToString("") { "%02x".format(it) }}"
+        "message too short (${data.size} bytes): ${data.toHex()}"
     }
     val buf = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN)
     val totalLen = buf.int

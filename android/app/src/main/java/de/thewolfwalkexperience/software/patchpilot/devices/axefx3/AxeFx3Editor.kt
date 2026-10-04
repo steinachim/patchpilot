@@ -8,6 +8,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -36,17 +37,18 @@ class AxeFx3Editor(private val instrument: AxeFx3Instrument) : PresetEditor {
 
     override fun isEmulated(op: EditOp): Boolean = op != EditOp.RENAME
 
-    override suspend fun rename(address: SlotAddress, newName: String) {
-        val name = newName.trimEnd()
-        require(name.isNotBlank()) { "A preset name must not be blank." }
-        require(name.all { it.code in 0x20..0x7E }) { "A preset name must be plain ASCII." }
-        require(name.length <= MAX_NAME_LENGTH) {
-            "A preset name can be at most $MAX_NAME_LENGTH characters; '$name' is ${name.length}."
-        }
-        require(name != AxeFx3SysEx.EMPTY_NAME) {
+    /** The shared rule, plus the name the instrument reports for an empty slot. */
+    override fun nameProblem(name: String): String? =
+        super.nameProblem(name) ?: if (name.trimEnd() == AxeFx3SysEx.EMPTY_NAME) {
             "'${AxeFx3SysEx.EMPTY_NAME}' is how the Axe-Fx III marks an empty slot, so a preset " +
                 "of that name would be taken for one."
+        } else {
+            null
         }
+
+    override suspend fun rename(address: SlotAddress, newName: String) {
+        val name = newName.trimEnd()
+        nameProblem(name)?.let { throw IllegalArgumentException(it) }
         val number = instrument.numberOf(address)
         instrument.operation {
             val current = device.name(number)
@@ -87,7 +89,7 @@ class AxeFx3Editor(private val instrument: AxeFx3Instrument) : PresetEditor {
                         "but the copy reports the name '$stored' rather than '$name'.",
                 )
             }
-            instrument.displayName(stored) ?: AxeFx3Instrument.UNNAMED
+            instrument.displayName(stored) ?: UNNAMED_PRESET
         }
     }
 

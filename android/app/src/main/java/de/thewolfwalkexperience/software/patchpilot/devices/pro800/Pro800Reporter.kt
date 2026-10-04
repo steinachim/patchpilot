@@ -7,15 +7,13 @@ import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
+import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
+import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-
-/** The report writer's Json. encodeDefaults, so the report spells out every field. */
-private val REPORT_JSON = Json { prettyPrint = true; encodeDefaults = true }
 
 /**
  * Everything the app can read off a Pro-800 without changing anything on it, as JSON: the
@@ -26,6 +24,8 @@ private val REPORT_JSON = Json { prettyPrint = true; encodeDefaults = true }
 class Pro800Reporter(
     private val exchange: SysExExchange,
     private val layout: SlotLayout,
+    /** The instrument's own program number for an address - see `Pro800Instrument`. */
+    private val programNumberOf: (SlotAddress) -> Int,
     private val identity: () -> Pro800ReportIdentity,
 ) : DeviceReporter {
 
@@ -70,7 +70,7 @@ class Pro800Reporter(
 
         for (address in layout.allAddresses()) {
             val displayId = layout.format.format(address)
-            val programNumber = address.bank * (total / layout.bankCount) + address.slot
+            val programNumber = programNumberOf(address)
             val message = probes.probe("dump[$displayId]", ByteArray(0)) {
                 exchangeRaw(Pro800SysEx.requestDump(programNumber), "dump $displayId") { reply ->
                     Pro800SysEx.isEmptyReply(reply) ||

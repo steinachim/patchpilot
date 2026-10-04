@@ -9,6 +9,12 @@ package de.thewolfwalkexperience.software.patchpilot.core
  *
  * The distinction that matters to a screen is "would retrying help?": [Timeout] and
  * [TransportLost] may, [NotSupported] and [DeviceRejected] will not.
+ *
+ * The convention every family follows: anything the instrument or the link causes is one of
+ * these, with the underlying exception kept as its cause. A bad argument from the caller is an
+ * [IllegalArgumentException] and is never mapped to one of these. A failed send becomes
+ * [TransportLost] where the link is wrapped: `mapNordFailure` for the Nord, `SysExExchange` for
+ * the MIDI families.
  */
 sealed class InstrumentException(message: String, cause: Throwable? = null) :
     Exception(message, cause) {
@@ -16,9 +22,14 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
     /** The instrument, or this app's support for it, has no such operation. */
     class NotSupported(what: String) : InstrumentException("This instrument cannot $what.")
 
-    /** No reply arrived in time. */
-    class Timeout(what: String, cause: Throwable? = null) :
-        InstrumentException("The instrument did not answer while $what.", cause)
+    /**
+     * No reply arrived in time.
+     *
+     * @param explanation what the silence means, where the family knows - shown instead of the
+     *   bare sentence, as [DeviceRejected]'s is.
+     */
+    class Timeout(what: String, cause: Throwable? = null, explanation: String? = null) :
+        InstrumentException(explanation ?: "The instrument did not answer while $what.", cause)
 
     /**
      * The instrument answered, and said no. [status] is its own code, verbatim.

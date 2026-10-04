@@ -94,6 +94,12 @@ object Pro800SysEx {
      */
     const val TYPE_SET_NAME = 0x50
 
+    /**
+     * The pause the reference implementation leaves after a write, before the instrument is asked
+     * anything else.
+     */
+    const val WRITE_SETTLE_MS = 20L
+
     /** Programs occupy 0..399; the settings block lives at 510 (`7E 03` as LSB/MSB) and never appears in a browsable index. */
     const val PROGRAM_COUNT = 400
     const val SETTINGS_ADDRESS = 510

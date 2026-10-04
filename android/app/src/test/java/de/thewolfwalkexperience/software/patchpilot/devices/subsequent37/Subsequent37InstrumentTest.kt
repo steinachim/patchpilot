@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
 
+import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
 import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
@@ -69,7 +70,7 @@ class Subsequent37InstrumentTest {
         assertTrue(untested.advisory!!.contains("firmware version 1.2.0"))
 
         val silent = subsequent37(FakeSubsequent37(backgroundScope).apply { identityReply = null }).apply { connect() }
-        assertEquals(Subsequent37Instrument.UNKNOWN_FIRMWARE, silent.identity.firmwareVersion)
+        assertEquals(UNKNOWN_FIRMWARE, silent.identity.firmwareVersion)
         assertNull(silent.advisory)
     }
 

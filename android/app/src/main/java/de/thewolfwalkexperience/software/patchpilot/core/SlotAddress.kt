@@ -35,8 +35,8 @@ interface AddressFormat {
 /**
  * The Nord rendering: `bank:group:slot`, all 1-based in display form except the bank, which is a
  * letter. A bank's slots are presented as [groupsPerBank] groups of [slotsPerGroup], matching the
- * instrument's own front-panel group/slot buttons. The same rendering as
- * `NordDevice.formatPresetId`/`parsePresetId`, without needing a connected device.
+ * instrument's own front-panel group/slot buttons. `NordDevice` renders its ids through this
+ * too, built from its profile's bounds.
  */
 class GroupedBankAddressFormat(
     private val groupsPerBank: Int,

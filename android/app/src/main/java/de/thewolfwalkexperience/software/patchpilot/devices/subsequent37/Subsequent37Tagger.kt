@@ -60,5 +60,5 @@ class Subsequent37Tagger(private val instrument: Subsequent37Instrument) : Prese
     }
 
     override suspend fun setFavorite(address: SlotAddress, under: Set<Int>): Unit =
-        throw UnsupportedOperationException("A Subsequent 37 has no favorites.")
+        throw InstrumentException.NotSupported("mark a favorite")
 }

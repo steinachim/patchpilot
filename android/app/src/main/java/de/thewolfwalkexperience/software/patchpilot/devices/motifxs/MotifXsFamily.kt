@@ -80,7 +80,10 @@ data class MotifXsBank(
      * separating them, and an unrecognised pair is ignored rather than refused.
      */
     val selectMsb: Int = MotifXsSysEx.BANK_MSB,
-)
+) {
+    /** What the app calls this bank: [displayLabel], or [label] where the catalog gives none. */
+    val shownLabel: String get() = displayLabel.ifEmpty { label }
+}
 
 /**
  * The per-model configuration for this family. The bank table is catalog data, so a model that
