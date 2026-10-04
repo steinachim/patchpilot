@@ -411,16 +411,23 @@ fun ProgramsScreen(
                 onClick = ::startRefresh,
                 enabled = (index.complete || index.error != null) && ops.busy == null,
             ) {
-                val rotation by rememberInfiniteTransition(label = "refresh-spin").animateFloat(
-                    initialValue = 0f,
-                    targetValue = 360f,
-                    animationSpec = infiniteRepeatable(animation = tween(900, easing = LinearEasing)),
-                    label = "angle",
-                )
+                // Composed only while refreshing: an infinite transition keeps the frame clock
+                // ticking for as long as it is in the composition, whether or not its value is
+                // read.
+                val rotation = if (isRefreshing) {
+                    rememberInfiniteTransition(label = "refresh-spin").animateFloat(
+                        initialValue = 0f,
+                        targetValue = 360f,
+                        animationSpec = infiniteRepeatable(animation = tween(900, easing = LinearEasing)),
+                        label = "angle",
+                    )
+                } else {
+                    null
+                }
                 theme.ActionIcon(
                     BarAction.Refresh,
                     contentDescription = stringResource(R.string.cd_refresh),
-                    modifier = Modifier.graphicsLayer { rotationZ = if (isRefreshing) rotation else 0f },
+                    modifier = Modifier.graphicsLayer { rotationZ = rotation?.value ?: 0f },
                 )
             }
             IconButton(onClick = onOpenSettings) {

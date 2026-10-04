@@ -32,6 +32,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onStart
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
@@ -106,7 +107,7 @@ class MotifXsInstrument(
 
     override val editor: PresetEditor = MotifXsEditor()
 
-    // Not implemented for this instrument; see the class doc.
+    // Neither is implemented for this instrument: no raw voice transfer, no device report.
     override val transfer: PresetTransfer? = null
     override val report: DeviceReporter? = null
 
@@ -192,7 +193,7 @@ class MotifXsInstrument(
 
         override val maxNameLength = MotifXsVoice.NAME_LENGTH
 
-        /** Both are composed host-side, so a failure can leave the instrument part-way. */
+        /** All five are composed host-side, so a failure can leave the instrument part-way. */
         override fun isEmulated(op: EditOp) = true
 
         /**
@@ -532,19 +533,44 @@ class MotifXsInstrument(
         return MotifXsSysEx.bulkDump(config.deviceNumber, hi, mid, lo, payload)
     }
 
+    /**
+     * One voice's `0C` dump payload: what the browser lists and what every edit reads before it
+     * writes the bytes back.
+     *
+     * Matched on the echoed address, not merely the type: a dump takes 160 ms and a drum voice a
+     * second, so a late reply to a previous request would otherwise put one voice's name on
+     * another's row, or have an edit write the wrong voice and its read-back confirm it.
+     * Well-formedness is part of the match too, so a truncated dump is retried rather than
+     * accepted.
+     */
     internal suspend fun readVoicePayload(address: SlotAddress): ByteArray {
         val bank = config.banks[address.bank]
-        val reply = exchange.exchange(
-            request = MotifXsSysEx.requestDump(
-                config.deviceNumber, bank.addressHi, bank.addressMid, address.slot,
-            ),
-            what = "reading ${layout.format.format(address)}",
-            timeout = VOICE_TIMEOUT,
-            // Well-formedness is part of the match, so a truncated dump is retried rather than
-            // accepted (see readSlot). These bytes are written straight back to the instrument.
-        ) { m ->
-            MotifXsSysEx.typeOf(m) == MotifXsSysEx.TYPE_BULK_DUMP &&
-                MotifXsSysEx.isWellFormedBulkDump(m)
+        val where = layout.format.format(address)
+        // Set by the matcher when a reply arrived but was malformed, so exhausting the retries
+        // reports "arrived damaged" rather than the silence a bare timeout would claim.
+        var damaged = false
+        val reply = try {
+            exchange.exchange(
+                MotifXsSysEx.requestDump(config.deviceNumber, bank.addressHi, bank.addressMid, address.slot),
+                what = "reading voice $where",
+                timeout = VOICE_TIMEOUT,
+            ) { message ->
+                MotifXsSysEx.typeOf(message) == MotifXsSysEx.TYPE_BULK_DUMP &&
+                    MotifXsSysEx.addressOf(message) ==
+                    Triple(bank.addressHi, bank.addressMid, address.slot) &&
+                    MotifXsSysEx.isWellFormedBulkDump(message).also { intact ->
+                        if (!intact) damaged = true
+                    }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (damaged) {
+                throw IllegalStateException(
+                    "voice $where arrived damaged (bad length or checksum) on every attempt", e
+                )
+            }
+            throw e
         }
         return MotifXsSysEx.dumpPayload(reply)
     }
@@ -836,14 +862,15 @@ class MotifXsInstrument(
      * 416 user voices ~93 s in total, at the 12,468 B/s the instrument paces its USB output at.
      */
     override fun index(scope: PresetScope): Flow<IndexUpdate> {
-        // A listing is the app's "re-read the instrument" gesture, and the favorite marks are
-        // what a player can change behind its back from the front panel.
-        (tagger as? MotifXsTagger)?.invalidate()
-        return when (scope) {
+        val listing = when (scope) {
             PresetScope.USER -> indexUser()
             PresetScope.FACTORY -> indexFactory()
             PresetScope.FAVORITES -> indexFavorites()
         }
+        // A listing is the app's "re-read the instrument" gesture, and the favorite marks are
+        // what a player can change behind its back from the front panel. On collection rather
+        // than here, since a caller may build a flow it never collects.
+        return listing.onStart { (tagger as? MotifXsTagger)?.invalidate() }
     }
 
     private fun indexUser(): Flow<IndexUpdate> = indexWalk(
@@ -937,8 +964,8 @@ class MotifXsInstrument(
                 // The exchange's own default, not [VOICE_TIMEOUT]: this is the smallest message
                 // on the wire, at most 128 bytes.
             ) { message ->
-                // Matched on the echoed address and on well-formedness, for the reasons readSlot
-                // gives.
+                // Matched on the echoed address and on well-formedness, for the reasons
+                // readVoicePayload gives.
                 MotifXsSysEx.typeOf(message) == MotifXsSysEx.TYPE_BULK_DUMP &&
                     MotifXsSysEx.addressOf(message) ==
                     Triple(MotifXsSysEx.FAVORITES_ADDRESS_HI, spec.addressMid, 0) &&
@@ -974,38 +1001,7 @@ class MotifXsInstrument(
 
     private suspend fun readSlot(address: SlotAddress, displayId: String): PresetSlot {
         val bank = config.banks[address.bank]
-        // Set by the matcher when a reply arrived but was malformed, so exhausting the retries
-        // reports "arrived damaged" rather than the silence a bare timeout would claim.
-        var damaged = false
-        val reply = try {
-            exchange.exchange(
-            MotifXsSysEx.requestDump(config.deviceNumber, bank.addressHi, bank.addressMid, address.slot),
-            what = "reading voice $displayId",
-            timeout = VOICE_TIMEOUT,
-        ) { message ->
-            // Matched on the echoed address, not merely the type: a dump takes 160 ms and a drum
-            // voice a second, so a late reply to a previous request would put one voice's name on
-            // another's row. Well-formedness is part of the match too, so a truncated dump is
-            // retried rather than accepted as the reply.
-            MotifXsSysEx.typeOf(message) == MotifXsSysEx.TYPE_BULK_DUMP &&
-                MotifXsSysEx.addressOf(message) ==
-                Triple(bank.addressHi, bank.addressMid, address.slot) &&
-                MotifXsSysEx.isWellFormedBulkDump(message).also { intact ->
-                    if (!intact) damaged = true
-                }
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (damaged) {
-                throw IllegalStateException(
-                    "voice $displayId arrived damaged (bad length or checksum) on every attempt", e
-                )
-            }
-            throw e
-        }
-
-        val payload = MotifXsSysEx.dumpPayload(reply)
+        val payload = readVoicePayload(address)
         return PresetSlot(
             address = address,
             displayId = displayId,

@@ -38,7 +38,7 @@ private const val TAG = "SysExExchange"
  * arriving with no subscriber is gone and the exchange would wait out its whole timeout.
  *
  * @param scope the collector's lifetime. Ownership passes to this object: [close] cancels the
- *   whole scope, since both families construct one solely to hand it here.
+ *   whole scope, since every family constructs one solely to hand it here.
  */
 class SysExExchange(
     private val transport: MidiTransport,
@@ -52,9 +52,6 @@ class SysExExchange(
      * .core.Instrument.rebuildOnResume], which is what actually consults it. */
     val rebuildOnResume: Boolean get() = transport.rebuildOnResume
     private val lock = Mutex()
-
-    /** The collector draining [transport]; cancelled by [close] so the session actually ends. */
-    private var collector: kotlinx.coroutines.Job? = null
 
     /**
      * DROP_OLDEST, so a device that floods the bus cannot stall the collector. Sized for a whole
@@ -99,12 +96,20 @@ class SysExExchange(
 
     init {
         // UNDISPATCHED so the collector subscribes to [transport] during construction; the
-        // transport's flow has replay = 0 too.
-        collector = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+        // transport's flow has replay = 0 too. [close] ends it by cancelling the scope.
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
             transport.incoming.collect { chunk ->
                 received += chunk.size
                 // Synchronised against [pending]; nothing in feed suspends.
-                synchronized(framer) { framer.feed(chunk) }.forEach {
+                val (completed, dropped) = synchronized(framer) {
+                    val droppedBefore = framer.droppedMessages
+                    framer.feed(chunk) to framer.droppedMessages - droppedBefore
+                }
+                if (dropped > 0) {
+                    Log.w(TAG, "dropped $dropped over-long SysEx message(s), " +
+                        "${framer.droppedMessages} this session")
+                }
+                completed.forEach {
                     // A message arriving with no exchange in flight - a fire-and-forget write's
                     // status reply - is otherwise unobservable. Quiet during a scan, where every
                     // dump has a subscriber.
@@ -141,8 +146,9 @@ class SysExExchange(
                 Log.w(TAG, "retrying '$what' (attempt ${attempt + 1})")
                 drainStale()
             }
-            // No framer.reset() here: the collector coroutine feeds the framer, so a reset from
-            // this one would race its buffer, and SysEx is self-delimiting anyway.
+            // The framer is not cleared between attempts: the collector coroutine feeds it, so
+            // clearing it from this one would race its buffer, and SysEx is self-delimiting
+            // anyway.
             val reply = withTimeoutOrNull(timeout) {
                 coroutineScope {
                     // Subscribed before the send - see the class doc.

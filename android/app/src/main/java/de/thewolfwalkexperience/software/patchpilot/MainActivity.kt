@@ -6,7 +6,6 @@ package de.thewolfwalkexperience.software.patchpilot
 import android.content.Intent
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -24,6 +23,7 @@ import de.thewolfwalkexperience.software.patchpilot.ui.InstrumentViewModel
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.PatchPilotTheme
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.ThemePreferences
+import de.thewolfwalkexperience.software.patchpilot.usb.usbDevice
 
 private const val TAG = "MainActivity"
 
@@ -51,8 +51,8 @@ class MainActivity : ComponentActivity() {
             // stack across a theme switch.
             val navController = rememberNavController()
             // Nothing until the stored theme arrives, which is a frame or more after onCreate:
-            // painting the default theme in the meantime was a visible flash of the wrong one on
-            // a Steampunk install. The launch background covers the gap instead (themes.xml).
+            // painting the default theme in the meantime would flash the wrong one on a
+            // Steampunk install. The launch background covers the gap instead (themes.xml).
             val appTheme by themePreferences.theme.collectAsState(initial = null)
             appTheme?.let { chosen ->
                 PatchPilotTheme(appTheme = chosen) {
@@ -103,12 +103,5 @@ class MainActivity : ComponentActivity() {
 }
 
 /** The device a USB_DEVICE_ATTACHED intent is about, or null for any other intent. */
-private fun Intent.attachedUsbDevice(): UsbDevice? {
-    if (action != UsbManager.ACTION_USB_DEVICE_ATTACHED) return null
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-    } else {
-        @Suppress("DEPRECATION")
-        getParcelableExtra(UsbManager.EXTRA_DEVICE)
-    }
-}
+private fun Intent.attachedUsbDevice(): UsbDevice? =
+    if (action == UsbManager.ACTION_USB_DEVICE_ATTACHED) usbDevice() else null

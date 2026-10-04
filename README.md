@@ -21,7 +21,7 @@ Patch Pilot is a native Android app for browsing, organizing and editing the pre
 | Fractal Audio Axe-Fx III Mark II, Mark II Turbo | as Mark I | **Assumed.** Recognized by the model record the unit sends, and listed with its 1,024 presets behind a warning; never run on one. |
 | Moog Subsequent 37 | USB-MIDI (class compliant) | **Not yet run in the app.** Every operation the app uses was verified on one unit (firmware 1.2.0) outside it; the app's own hardware run is pending. The Sub 37 and the Subsequent 37 CV are different instruments and are not supported. |
 
-"Verified on hardware" means the app has been run against that model. For the Nord models, the Pro-800, the Axe-Fx III and the Subsequent 37 the firmware versions it was run with are listed in the device catalog under [devices/](devices/), and connecting with a firmware version that is not listed shows a warning but is allowed. The Motif XS reads its firmware version for display only; no version check is made for it.
+"Verified on hardware" means the app has been run against that model. The device catalog under [devices/](devices/) lists the firmware versions the app was run with for the Nord models and the Pro-800, and the firmware versions the protocol was verified on for the Axe-Fx III and the Subsequent 37. Connecting with a firmware version that is not listed shows a warning but is allowed. The Motif XS reads its firmware version for display only; no version check is made for it.
 
 ### Other Nord instruments
 

@@ -63,15 +63,15 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
             }
             if (plausible.isEmpty()) return@mapNotNull null
 
-            val identified = identify(manager, info, plausible)
+            val identified = identify(manager, info, plausible) ?: return@mapNotNull null
             Candidate(
                 descriptor = identified,
-                displayName = identified?.name ?: info.label(),
+                displayName = identified.name,
                 bus = bus,
                 physicalKey = info.physicalKey(),
                 handle = info,
             )
-        }.filter { it.descriptor != null }
+        }
     }
 
     /** Asks each plausible descriptor's probe on the port it names and returns the first that
@@ -126,7 +126,7 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
         val info = candidate.handle as? MidiDeviceInfo
             ?: error("Not a MIDI candidate: ${candidate.displayName}")
         // The same port the descriptor was identified on.
-        val portIndex = (candidate.descriptor?.match as? DeviceMatch.MidiIdentity)?.portIndex ?: 0
+        val portIndex = (candidate.descriptor.match as? DeviceMatch.MidiIdentity)?.portIndex ?: FIRST_PORT
         return openTransport(manager, info, portIndex)
     }
 

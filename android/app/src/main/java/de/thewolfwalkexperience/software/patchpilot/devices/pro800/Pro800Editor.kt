@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import de.thewolfwalkexperience.software.patchpilot.BuildConfig
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
@@ -47,6 +48,8 @@ class Pro800Editor(
      * rollback itself fails, the only copy of the overwritten preset is here.
      */
     private val _undoBuffer = ArrayDeque<UndoEntry>()
+
+    @VisibleForTesting
     val undoBuffer: List<UndoEntry> get() = _undoBuffer.toList()
 
     data class UndoEntry(val address: SlotAddress, val displayId: String, val blob: ByteArray) {
@@ -209,11 +212,12 @@ class Pro800Editor(
                 writeOrEmpty(address, original)
                 Log.w(TAG, "Rolled ${layout.format.format(address)} back after: ${becauseOf.message}")
             } catch (e: Exception) {
-                // The one path that can lose data; the original bytes are still in the undo buffer.
+                // The one path that can lose data: the original bytes are then held only in
+                // [undoBuffer], in memory, and nothing in the app reads them back.
                 Log.e(
                     TAG,
-                    "Could not roll ${layout.format.format(address)} back after a failed edit. " +
-                        "Its previous contents are still in this session's undo buffer.",
+                    "Could not roll ${layout.format.format(address)} back after a failed edit; " +
+                        "its previous contents are no longer on the instrument.",
                     e,
                 )
             }

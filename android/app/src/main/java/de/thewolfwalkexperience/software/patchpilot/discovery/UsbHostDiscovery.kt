@@ -44,14 +44,9 @@ class UsbHostDiscovery(private val connectionManager: UsbConnectionManager) : De
         if (!connectionManager.requestPermission(device)) {
             throw SecurityException("USB permission was denied for ${device.displayLabel()}.")
         }
-        // Null on the "unrecognized, continue at your own risk" path, where the default endpoints
-        // are the only guess available.
-        val match = candidate.descriptor?.match as? DeviceMatch.Usb
-        return if (match == null) {
-            connectionManager.openTransport(device)
-        } else {
-            connectionManager.openTransport(device, match.endpointOut, match.endpointIn)
-        }
+        val match = candidate.descriptor.match as? DeviceMatch.Usb
+            ?: error("Not a USB-matched instrument: ${candidate.displayName}")
+        return connectionManager.openTransport(device, match.endpointOut, match.endpointIn)
     }
 }
 

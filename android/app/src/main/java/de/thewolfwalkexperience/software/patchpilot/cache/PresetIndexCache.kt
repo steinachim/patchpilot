@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.cache
 
+import androidx.annotation.VisibleForTesting
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
@@ -106,7 +107,8 @@ class PresetIndexCache {
         Unit
     }
 
-    /** Whether [key] has a cached index. Used by the tests. */
+    /** Whether [key] has a cached index. */
+    @VisibleForTesting
     fun holds(key: CacheKey): Boolean = synchronized(lock) { entries.containsKey(key) }
 
     private companion object {

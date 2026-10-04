@@ -120,8 +120,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     val supportedFirmwareVersions: Set<Int> get() = profile.supportedFirmwareVersions
 
     /**
-     * The file-transfer protocol version, as read from the instrument by [connect]. `internal`
-     * so tests can drive individual operations without running [connect].
+     * The file-transfer protocol version, as read from the instrument by [connect]; null before
+     * that, which the parse paths tolerate. `internal` so tests can drive individual operations
+     * without running [connect].
      */
     internal var detectedProtocolVersionFileTransfer: Int? = null
 
@@ -131,10 +132,6 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     private var uiProtocolUsable = true
     private var uiProtocolWarned = false
-
-    /** The version if known, for the parse paths, which must not throw before [connect] has run. */
-    private val protocolVersionFileTransferOrNull: Int?
-        get() = detectedProtocolVersionFileTransfer
 
     /** The protocol version every content-database request below carries in its header. */
     val protocolVersionFileTransfer: Int
@@ -161,8 +158,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
     /**
      * ROOT_CATEGORY_LIST and GET_CATEGORY_CHILD need no prerequisites. SELECT_CATEGORY locks the
-     * instrument's panel, and only UNLOCK_CATEGORY_SELECTION releases it. RESET is kept for
-     * reference and never sent.
+     * instrument's panel, and only UNLOCK_CATEGORY_SELECTION releases it. GET_DEPENDENCY,
+     * ENABLE_INVALIDATION, RESET and QUERY_CONTENT_VERSION are kept for reference and never sent.
      */
     enum class FileTransferSubOp(val code: Int) {
         ROOT_CATEGORY_LIST(0), // get root category list (0/1)
@@ -487,7 +484,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * length did not fit.
      */
     fun rootCategoryTrailerLen(payload: ByteArray): Int? {
-        val version = protocolVersionFileTransferOrNull
+        val version = detectedProtocolVersionFileTransfer
         val expected = rootCategoryTrailerLenForVersion(version)
         if (expected != null && rootCategoryListFits(payload, expected)) return expected
         val detected = detectRootCategoryTrailerLen(payload)
@@ -509,12 +506,12 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     fun itemContentId(payload: ByteArray): Int? {
         val contentId = parseItemContentId(payload)
-        val expected = itemRecordHasContentId(protocolVersionFileTransferOrNull)
+        val expected = itemRecordHasContentId(detectedProtocolVersionFileTransfer)
         if (expected != null && expected != (contentId != null)) {
             Log.w(
                 TAG,
                 "$name reports file-transfer protocol version " +
-                    "$protocolVersionFileTransferOrNull, so its item records " +
+                    "$detectedProtocolVersionFileTransfer, so its item records " +
                     (if (expected) "should" else "should not") + " carry a content id, " +
                     "but this ${payload.size}-byte record " +
                     (if (expected) "has none." else "has one."),

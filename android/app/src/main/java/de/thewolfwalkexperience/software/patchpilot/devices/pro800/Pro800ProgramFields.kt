@@ -11,9 +11,6 @@ data class Pro800Field(
     val name: String,
     val denseOffset: Int,
     val byteCount: Int,
-    val signed: Boolean = false,
-    /** Fields the older preset versions do not carry at all (110 and 111 added their own). */
-    val minPresetVersion: Int = 0,
 )
 
 /**
@@ -27,8 +24,9 @@ object Pro800ProgramFields {
     /** Raw offset 5: the record's own format version. 110 and 111 add fields; older ones lack them. */
     val VERSION = field("version", rawOffset = 5, byteCount = 1)
 
-    /** Raw offsets 1..4: a storage code the instrument writes; used only to tell a written slot
-     * from an uninitialized one. */
+    /** Raw offsets 1..4: a storage code the instrument writes. Not read: an empty slot is told by
+     * its empty reply ([Pro800Program.isEmpty]). Listed so [validate] checks the version byte does
+     * not overlap it. */
     val STORAGE_CODE = field("storageCode", rawOffset = 1, byteCount = 4)
 
     /**
@@ -57,8 +55,8 @@ object Pro800ProgramFields {
         else -> NAME_DENSE_END // the name is the last field
     }
 
-    private fun field(name: String, rawOffset: Int, byteCount: Int, signed: Boolean = false, minPresetVersion: Int = 0) =
-        Pro800Field(name, Pro800ProgramCodec.denseIndexOf(rawOffset), byteCount, signed, minPresetVersion)
+    private fun field(name: String, rawOffset: Int, byteCount: Int) =
+        Pro800Field(name, Pro800ProgramCodec.denseIndexOf(rawOffset), byteCount)
 
     /** Self-checks on the ported offset table, run once when [Pro800Program] is first used. */
     fun validate() {

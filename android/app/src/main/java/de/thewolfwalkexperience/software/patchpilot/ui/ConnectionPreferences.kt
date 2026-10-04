@@ -17,8 +17,8 @@ private val AUTO_CONNECT_KEY = booleanPreferencesKey("auto_connect_to_first_foun
  * Persists whether [InstrumentViewModel.performConnect] should connect straight to the first
  * instrument a scan finds, or always stop at [ConnectionState.DeviceSelection] so the user picks.
  *
- * Defaults to true - most people have exactly one instrument attached, and this is what every
- * scan already did before the picker gained a way to be shown for a single device too.
+ * Defaults to true: most people have exactly one instrument attached, and the picker would only
+ * ask them to choose it.
  */
 class ConnectionPreferences(private val context: Context) {
     val autoConnectToFirstFound: Flow<Boolean> = context.connectionDataStore.data.map { prefs ->

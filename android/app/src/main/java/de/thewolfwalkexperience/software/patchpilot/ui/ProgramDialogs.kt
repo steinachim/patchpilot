@@ -38,8 +38,8 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 
 /**
  * The one operation on the preset screen that asks first: move and swap leave the data somewhere
- * (see `runRelocation`), while a delete has nowhere for the preset to have gone, and on two of
- * the three families nothing in this app can put it back.
+ * (see `runRelocation`), while a delete has nowhere for the preset to have gone, and nothing in
+ * this app can put it back.
  *
  * @param emulated true where the family composes the erase from a write rather than issuing one
  *   command, which decides which effect sentence is shown.
@@ -65,10 +65,12 @@ internal fun DeleteConfirmationDialog(
                 Text(
                     stringResource(
                         if (emulated) {
-                            // Pro-800, Motif XS: an initialised preset is written over the slot.
+                            // Every family but the Nord: an empty or initialised preset is
+                            // written over the slot.
                             R.string.programs_delete_effect_emulated
                         } else {
-                            // Nord: sub-opcode 20/21, space is only reclaimable, not freed.
+                            // Nord, and demo mode, which mirrors one: sub-opcode 20/21, space
+                            // is only reclaimable, not freed.
                             R.string.programs_delete_effect_native
                         },
                     ),

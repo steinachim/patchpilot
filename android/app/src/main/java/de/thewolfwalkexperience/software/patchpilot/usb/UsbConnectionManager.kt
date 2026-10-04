@@ -13,6 +13,8 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Build
+import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import de.thewolfwalkexperience.software.patchpilot.transport.AndroidUsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import kotlinx.coroutines.channels.awaitClose
@@ -41,13 +43,9 @@ class UsbConnectionManager(private val context: Context) {
     /**
      * Asks the user for permission to open [device], unless it is already granted.
      *
-     * The result is read from [UsbManager.hasPermission], not from the broadcast's extras: below
-     * API 33 a dynamically registered receiver is exported, so any app could send
-     * `ACTION_USB_PERMISSION` with a spoofed `EXTRA_PERMISSION_GRANTED`. (A broadcast permission
-     * on the receiver does not help, since the system fires the `PendingIntent` under this app's
-     * own uid, and a package holds only the permissions it requests.) A spoofed broadcast can at
-     * worst resume this with "denied" while the real dialog is still up, after which a retry
-     * finds the permission granted.
+     * The answer's receiver is registered not-exported (see [registerNotExported]). The result is
+     * read from [UsbManager.hasPermission] all the same, not from the broadcast's
+     * `EXTRA_PERMISSION_GRANTED`, so it never rests on what a broadcast claims.
      */
     suspend fun requestPermission(device: UsbDevice): Boolean {
         if (usbManager.hasPermission(device)) return true
@@ -80,14 +78,7 @@ class UsbConnectionManager(private val context: Context) {
                     if (cont.isActive) cont.resume(usbManager.hasPermission(device))
                 }
             }
-            val filter = IntentFilter(ACTION_USB_PERMISSION)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                // No RECEIVER_NOT_EXPORTED overload below API 33 - see the method's doc.
-                @Suppress("UnspecifiedRegisterReceiverFlag")
-                context.registerReceiver(receiver, filter)
-            }
+            registerNotExported(receiver, IntentFilter(ACTION_USB_PERMISSION))
             cont.invokeOnCancellation { receiver.unregister() }
 
             usbManager.requestPermission(device, pendingIntent)
@@ -110,8 +101,8 @@ class UsbConnectionManager(private val context: Context) {
 
     /**
      * Emits every USB device Android reports as physically detached while collected. The caller
-     * compares the device against the one its session uses; like [requestPermission]'s receiver
-     * this one is exported below API 33, so a spoofed detach costs at most a reconnect.
+     * compares the device against the one its session uses. Registered not-exported, like
+     * [requestPermission]'s receiver; the detach is a protected broadcast only the system sends.
      */
     fun deviceDetachEvents(): Flow<UsbDevice> = callbackFlow {
         val receiver = object : BroadcastReceiver() {
@@ -120,25 +111,30 @@ class UsbConnectionManager(private val context: Context) {
                 intent.usbDevice()?.let { trySend(it) }
             }
         }
-        val filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            context.registerReceiver(receiver, filter)
-        }
+        registerNotExported(receiver, IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED))
         awaitClose { context.unregisterReceiver(receiver) }
+    }
+
+    /**
+     * Registers [receiver] so that no other app can send to it. From API 33 the platform enforces
+     * that itself. Below it, `ContextCompat` guards the receiver with a signature permission only
+     * this app holds (`DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, merged in from androidx.core).
+     *
+     * Both broadcasts this class waits for still arrive there. The permission answer comes from a
+     * `PendingIntent` this app created, which is sent under this app's uid and so holds the
+     * permission; the detach comes from the system, whose uid passes every permission check.
+     * Checked on API 26 and API 32 emulators: a broadcast through this app's own `PendingIntent`
+     * arrives, one from another app (the adb shell) does not, and a privileged sender's detach
+     * arrives, with root standing in for the system.
+     */
+    private fun registerNotExported(receiver: BroadcastReceiver, filter: IntentFilter) {
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 }
 
-/** The [UsbDevice] a USB broadcast is about, or null where it carries none. */
-private fun Intent.usbDevice(): UsbDevice? =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-    } else {
-        @Suppress("DEPRECATION")
-        getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
-    }
+/** The [UsbDevice] a USB broadcast or attach intent is about, or null where it carries none. */
+internal fun Intent.usbDevice(): UsbDevice? =
+    IntentCompat.getParcelableExtra(this, UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
 
 /** Human-readable label for a [UsbDevice] of unknown make, sanitized because it lands next to the
  * "continue at your own risk" gate. `productName` is not guaranteed by the USB spec. */

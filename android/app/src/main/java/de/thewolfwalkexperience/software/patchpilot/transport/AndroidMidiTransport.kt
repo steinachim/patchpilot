@@ -31,12 +31,15 @@ class AndroidMidiTransport(
      * DROP_OLDEST rather than suspending: this is fed from [MidiReceiver.onSend], a platform
      * callback that must return promptly.
      *
-     * Sized for the largest reply any family reads, an Axe-Fx III preset dump: 49 KB at about
-     * 105 bytes per millisecond. Assumed, not measured on this path: a platform that hands over
-     * one USB-MIDI event (three data bytes) per callback makes that ~16,000 elements, so a 150 ms
-     * collector stall (as measured on the Motif XS path) is a backlog of about 5,000. Dropping any
-     * of them corrupts the dump; the family's validation catches that, but only by reading the
-     * whole preset again. The buffer grows only as far as a real backlog takes it.
+     * Sized for the fastest large reply any family reads, an Axe-Fx III preset dump: 49 KB at
+     * about 105 bytes per millisecond. Assumed, not measured on this path: a platform that hands
+     * over one USB-MIDI event (three data bytes) per callback makes that ~16,000 elements, so a
+     * 150 ms collector stall (as measured on the Motif XS path) is a backlog of about 5,000.
+     * Dropping any of them corrupts the dump; the family's validation catches that, but only by
+     * reading the whole preset again. The buffer grows only as far as a real backlog takes it.
+     *
+     * The Subsequent 37's 203,800-byte dump is larger, but at about 1.4 bytes per millisecond it
+     * builds a far smaller backlog.
      */
     private val _incoming = MutableSharedFlow<ByteArray>(
         replay = 0,

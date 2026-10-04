@@ -262,10 +262,8 @@ fun Modifier.steampunkRowPanel(dragged: Boolean, dropTarget: Boolean): Modifier 
  * searching for or opening an instrument, and while the preset screen waits for its first rows.
  *
  * Two rendered bitmaps rather than a drawing - a dial (`steampunk_compass_plate`) and a needle
- * (`steampunk_compass_needle`) - because that is how the app icon got its look. A flat disc with
- * a two-pixel ring and a stroke for a needle read as a line icon next to it, and a redraw with
- * gradients and hairlines was closer but still visibly a drawing. (A pressure gauge in the same
- * technique came between; the compass replaced it as the better fit for "looking for".)
+ * (`steampunk_compass_needle`) - matching the rendered app icon, beside which a vector drawing
+ * reads as a line icon. A compass, because the wait it stands for is a search.
  *
  * The two assets are authored to one scale, which is what keeps this composable short: the
  * needle is drawn with the same scale factor as the plate, and the plate is padded so that the

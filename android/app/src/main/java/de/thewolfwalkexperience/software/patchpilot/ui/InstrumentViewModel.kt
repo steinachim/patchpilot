@@ -252,9 +252,9 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
 
 
     /**
-     * The physical key of whatever device a connect attempt is mid-flight on, or null. Set before
-     * entering [ConnectionState.Opening] and cleared on every way out, so [handleUsbDetach] can
-     * fail an attempt whose device is unplugged before it finishes.
+     * The physical key of whatever device a connect attempt is opening, or null. Held only for
+     * the open step, by [whileOpening], so [handleUsbDetach] can fail an attempt whose device is
+     * unplugged before it finishes.
      */
     private var openingPhysicalKey: String? = null
 
@@ -479,15 +479,13 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
 
         val usbDiscovery = discoveries.first { it.bus == Bus.USB }
         val usbCandidates = usbDiscovery.scan(catalog)
-        val usbKnown = usbCandidates.filter { it.descriptor != null }
-        if (autoConnect && !forcePicker && usbKnown.isNotEmpty()) {
-            connectCandidate(usbKnown.first())
+        if (autoConnect && !forcePicker && usbCandidates.isNotEmpty()) {
+            connectCandidate(usbCandidates.first())
             return
         }
 
         val otherScans = discoveries.filterNot { it.bus == Bus.USB }.map { it.scan(catalog) }
-        val candidates = mergeCandidates(listOf(usbCandidates) + otherScans)
-        val known = candidates.filter { it.descriptor != null }
+        val known = mergeCandidates(listOf(usbCandidates) + otherScans)
         when {
             // Nothing recognised: reconnect a device already accepted through the "at your own
             // risk" gate this session if it is still attached, otherwise offer whatever else is
@@ -505,19 +503,17 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
 
     /** Opens a recognized candidate on whichever bus found it and builds its family's instrument. */
     private suspend fun connectCandidate(candidate: Candidate) {
-        val descriptor = requireNotNull(candidate.descriptor) { "candidate is not a known instrument" }
-        openingPhysicalKey = candidate.physicalKey
-        _state.value = ConnectionState.Opening(candidate.displayName, candidate.bus)
-        val transport = try {
-            discoveryFor(candidate).open(candidate)
-        } catch (e: SecurityException) {
-            openingPhysicalKey = null
-            _state.value = ConnectionState.PermissionDenied(candidate.displayName)
-            return
+        val transport = whileOpening(candidate.physicalKey) {
+            _state.value = ConnectionState.Opening(candidate.displayName, candidate.bus)
+            try {
+                discoveryFor(candidate).open(candidate)
+            } catch (e: SecurityException) {
+                _state.value = ConnectionState.PermissionDenied(candidate.displayName)
+                return
+            }
         }
-        openingPhysicalKey = null
         val built = closingOnFailure(transport::close) {
-            InstrumentRegistry.create(getApplication(), descriptor, transport)
+            InstrumentRegistry.create(getApplication(), candidate.descriptor, transport)
         }
         closingOnFailure({ closeQuietly(built) }) { built.connect() }
         instrumentMutex.withLock {
@@ -527,6 +523,21 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         }
         _state.value = connectedOrAdvisory(built)
         startIndex()
+    }
+
+    /**
+     * Runs the open step of a connect attempt with [key] as [openingPhysicalKey], and clears it
+     * however [block] ends - opened, refused, failed or cancelled - unless [handleUsbDetach] has
+     * already. A key left behind would make a later unplug of that device fail whatever session
+     * is current by then.
+     */
+    private inline fun <T> whileOpening(key: String, block: () -> T): T {
+        openingPhysicalKey = key
+        try {
+            return block()
+        } finally {
+            if (openingPhysicalKey == key) openingPhysicalKey = null
+        }
     }
 
     /**
@@ -657,23 +668,25 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         }
     }
 
-    /** Shared permission -> open -> connect tail for both [connect] and [confirmUnknownDevice] -
-     * [displayName] is only used for the USB-permission-denied error message. */
+    /**
+     * The permission -> open -> connect tail for a device opened on a guess against the Nord
+     * protocol: [confirmUnknownDevice] and [reconnectRememberedUnknownDeviceOrOffer]. A catalog
+     * match goes through [connectCandidate] instead. [displayName] names the device on the
+     * connect screen and in the log.
+     */
     private suspend fun connectAndFinish(
         usbDevice: UsbDevice,
         displayName: String,
         factory: (UsbBulkTransport) -> NordInstrument,
     ) {
-        openingPhysicalKey = usbDevice.physicalKey()
-        _state.value = ConnectionState.Opening(displayName, Bus.USB)
-        if (!connectionManager.requestPermission(usbDevice)) {
-            openingPhysicalKey = null
-            _state.value = ConnectionState.PermissionDenied(displayName)
-            return
+        val transport = whileOpening(usbDevice.physicalKey()) {
+            _state.value = ConnectionState.Opening(displayName, Bus.USB)
+            if (!connectionManager.requestPermission(usbDevice)) {
+                _state.value = ConnectionState.PermissionDenied(displayName)
+                return
+            }
+            connectionManager.openTransport(usbDevice)
         }
-        openingPhysicalKey = null
-
-        val transport = connectionManager.openTransport(usbDevice)
         val built = closingOnFailure(transport::close) { factory(transport) }
         closingOnFailure({ closeQuietly(built) }) {
             built.connect()
@@ -873,7 +886,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     // ---- Actions, each routed through a facet ----
 
     /** The program index as it arrives: a raw [Flow], since on a Pro-800 it is 400 sequential dumps. */
-    fun programIndex(scope: PresetScope): Flow<IndexUpdate> = browser().index(scope)
+    private fun programIndex(scope: PresetScope): Flow<IndexUpdate> = browser().index(scope)
 
     /**
      * The connected instrument's browser, wrapped so a listing can come from memory. Built per
@@ -1219,9 +1232,9 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
 
     /**
      * Erases one preset - destructive and not undoable from this app. The confirmation lives in
-     * the screen. How much is destroyed varies by family: a Nord empties the slot with one
-     * command and can reclaim it until its own cleanup runs, while a Pro-800 and a Motif XS
-     * overwrite it with an initialised preset.
+     * the screen. How it is erased varies by family: a Nord empties the slot with one command,
+     * while every other family writes an empty or initialised preset over it
+     * (`PresetEditor.isEmulated(EditOp.DELETE)`).
      */
     override suspend fun deleteProgram(slot: PresetSlot): String = instrumentMutex.withLock {
         requireFacet(current().editor, "delete presets").delete(slot.address)

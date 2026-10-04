@@ -162,11 +162,11 @@ sealed interface IndexUpdate {
 
 /**
  * The sequential read-every-slot walk, for the families that have no directory to read instead
- * (Pro-800, Motif XS). Rows are emitted as they arrive, one unreadable slot costs only itself,
- * and the final partial batch is always flushed.
+ * (Pro-800, Motif XS, Axe-Fx III). Rows are emitted as they arrive, one unreadable slot costs only
+ * itself, and the final partial batch is always flushed.
  *
  * @param batchSize per family: 25 slots on a Pro-800, 8 on a Motif XS, whose reads are an order
- *   of magnitude larger.
+ *   of magnitude larger, and 32 on an Axe-Fx III, whose name queries take about a millisecond.
  * @param onFailure lets a family log the cause; the emitted [IndexUpdate.Failed] carries only a
  *   reason string.
  * @param addresses walked in order; [total] is stated separately so a [Sequence] need not be
@@ -279,9 +279,10 @@ interface PresetEditor {
 /**
  * Reads and writes a preset's own data blob - backup and restore.
  *
- * The Pro-800 and the Axe-Fx III implement it, and build their edits on it: a dump is the only
- * way either has to move a preset. The other families return null until an item-data read/write
- * path is implemented.
+ * The Pro-800, the Axe-Fx III and the Subsequent 37 implement it: a whole-preset read and write
+ * is the only way any of them has to move a preset. The Pro-800's editor is built on this facet;
+ * the other two compose their edits from the same device operations directly. The Nord and the
+ * Motif XS return null until an item-data read/write path is implemented.
  */
 interface PresetTransfer {
     suspend fun read(address: SlotAddress): ByteArray

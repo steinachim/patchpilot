@@ -7,6 +7,12 @@
 - The Moog Subsequent 37 is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted, and their categories shown and set. Reading its preset list takes about 2½ minutes, the instrument's own transfer time.
 - An instrument can show a notice when it connects, with a “Don't show this again” option; Settings → “Show Hidden Messages Again” brings hidden notices back.
 
+### Fixed
+- Unplugging an instrument that had failed to open no longer interrupts a session started afterwards, such as demo mode.
+- Yamaha Motif XS edits only accept voice data from the slot they read, so a late reply to an earlier request can no longer be written to the wrong slot.
+- The preset list no longer uses CPU while idle; the refresh icon only animates while a refresh runs.
+- On Android 8 to 12L, other apps can no longer send Patch Pilot fake USB permission answers or unplug notices.
+
 ## 1.1
 
 ### Added

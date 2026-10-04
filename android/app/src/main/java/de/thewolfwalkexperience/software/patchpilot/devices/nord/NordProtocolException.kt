@@ -14,8 +14,8 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
  * ("USB bulk write failed") maps to. The two differ in what a retry can do: a lost link may come
  * back, a protocol mismatch will not.
  *
- * Still an [IllegalStateException], so a caller that does not care about the distinction - the
- * device report's probes, the protocol tests - handles it as before.
+ * An [IllegalStateException] all the same, so a caller that does not care about the distinction
+ * - the device report's probes, the protocol tests - can treat it as any other failure.
  */
 class NordProtocolException(detail: String, cause: Throwable? = null) :
     IllegalStateException(detail, cause)

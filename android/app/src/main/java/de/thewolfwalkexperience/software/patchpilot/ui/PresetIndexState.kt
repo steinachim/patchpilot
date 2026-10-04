@@ -25,7 +25,7 @@ data class PresetIndexState(
      * completion land in one recomposition, so a `LaunchedEffect` keyed on `complete` never sees
      * its key change.
      */
-    val generation: Any? = null,
+    val generation: Int? = null,
 ) {
     val loading: Boolean get() = !complete && error == null
 

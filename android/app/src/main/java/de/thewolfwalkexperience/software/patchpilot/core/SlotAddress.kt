@@ -225,7 +225,11 @@ data class SlotLayout(
     val slotCount: Int get() = banks.sumOf { it.slotCount }
 
     companion object {
-        /** [bankCount] identical banks of [slotsPerBank], the shape every instrument so far has. */
+        /**
+         * [bankCount] identical banks of [slotsPerBank]: a Nord, a Pro-800, demo mode. A Motif
+         * XS's banks differ in size and an Axe-Fx III's last virtual bank can be short, so those
+         * build their [BankSpec]s directly.
+         */
         fun uniform(bankCount: Int, slotsPerBank: Int, format: AddressFormat): SlotLayout =
             SlotLayout(
                 banks = (0 until bankCount).map { BankSpec(format.bankLabel(it), slotsPerBank) },

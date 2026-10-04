@@ -213,7 +213,7 @@
 
     <!--
       What a delete actually does, which differs by family: a Nord empties the slot with one
-      command, while a Pro-800 and a Motif XS overwrite it with an initialised preset.
+      command, while every other family overwrites it with an empty or initialised preset.
     -->
     <string name="programs_delete_effect_emulated">The preset is overwritten with an empty one. This app cannot undo it.</string>
     <string name="programs_delete_effect_native">The instrument empties the slot. This app cannot undo it.</string>

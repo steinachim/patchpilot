@@ -10,12 +10,11 @@ import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 
 private const val TAG = "InstrumentRegistry"
 
-
 /**
  * Everything the app needs to know about one instrument family: which devices it covers, and how
  * to build an [Instrument] once one of them is open. The whole extension point: a new family adds
  * an implementation of this and a catalog file, and an entry in [InstrumentRegistry], which is a
- * compile-time map rather than a plugin system (see docs/ARCHITECTURE.md, "Catalog and adding a
+ * compile-time list rather than a plugin system (see docs/ARCHITECTURE.md, "Catalog and adding a
  * device family").
  */
 interface InstrumentFamily {

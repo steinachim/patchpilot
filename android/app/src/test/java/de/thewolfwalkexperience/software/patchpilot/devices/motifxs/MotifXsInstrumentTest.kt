@@ -566,6 +566,29 @@ class MotifXsInstrumentTest {
         assertTrue(named.all { it.name == "TWE2 Wolf Walk" })
     }
 
+    /**
+     * The same rule for the read every edit is built on, where it matters more: its bytes are
+     * written back to the instrument, so accepting another slot's dump would copy, move or swap
+     * the wrong voice, and the read-back would then confirm it.
+     */
+    @Test
+    fun `the read an edit writes back refuses a reply for a different address`() = runTest {
+        val transport = FakeMidiTransport { request ->
+            val address = MotifXsSysEx.addressOf(request) ?: return@FakeMidiTransport emptyList()
+            // Always answers with slot 0's dump, whatever was asked for.
+            listOf(dumpAt(MotifXsFixtures.namedVoice, address.first, address.second, 0))
+        }
+        val motif = MotifXsInstrument(
+            SysExExchange(transport, backgroundScope, defaultTimeout = 20.milliseconds, retries = 0),
+            config,
+            testBlanks,
+        )
+
+        assertEquals("TWE2 Wolf Walk", MotifXsVoice.nameOf(motif.readVoicePayload(SlotAddress(0, 0))))
+        val refusal = runCatching { motif.readVoicePayload(SlotAddress(0, 2)) }.exceptionOrNull()
+        assertTrue("expected a timeout, got $refusal", refusal is InstrumentException.Timeout)
+    }
+
     /** A damaged dump costs its own voice and nothing else - a large scan is likely to hit at
      * least one corrupted dump along the way, so a walk that gives up on the first one would
      * never finish. */

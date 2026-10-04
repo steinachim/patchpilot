@@ -3,6 +3,8 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
+import androidx.annotation.VisibleForTesting
+
 /**
  * The Pro-800's 7-bit-safe encoding. SysEx cannot carry a byte above `0x7F`, so Behringer inserts
  * an overflow byte at every position that is a multiple of 8; bit *n* of that byte is the
@@ -62,6 +64,7 @@ object Pro800ProgramCodec {
     }
 
     /** How many dense bytes an encoded buffer of [encodedSize] holds. */
+    @VisibleForTesting
     fun denseSizeOf(encodedSize: Int): Int = encodedSize - (encodedSize + GROUP - 1) / GROUP
 
     /**
@@ -112,6 +115,8 @@ object Pro800ProgramCodec {
         return value
     }
 
+    /** [byteCount] little-endian bytes of [value] at [denseOffset]; the inverse of [readValue]. */
+    @VisibleForTesting
     fun writeValue(dense: ByteArray, denseOffset: Int, byteCount: Int, value: Int) {
         require(denseOffset >= 0 && denseOffset + byteCount <= dense.size) {
             "value at $denseOffset..${denseOffset + byteCount - 1} runs past a ${dense.size}-byte record"

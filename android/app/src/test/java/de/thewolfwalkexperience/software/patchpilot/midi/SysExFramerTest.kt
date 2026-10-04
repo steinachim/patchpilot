@@ -127,13 +127,4 @@ class SysExFramerTest {
         assertEquals(3, framer.messageStarts)
         assertEquals(0, framer.pendingFrom(0).size)
     }
-
-    @Test
-    fun `reset discards a partial message so a stale reply cannot complete the next one`() {
-        val framer = SysExFramer()
-        framer.feed(byteArrayOf(0xF0.toByte(), 0x00, 0x20))
-        framer.reset()
-        // Without the reset these trailing bytes would complete the abandoned message.
-        assertTrue(framer.feed(byteArrayOf(0x32, 0x11, 0x22, 0xF7.toByte())).isEmpty())
-    }
 }

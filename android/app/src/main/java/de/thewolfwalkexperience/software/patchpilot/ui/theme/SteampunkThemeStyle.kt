@@ -90,8 +90,9 @@ object SteampunkThemeStyle : ThemeStyle {
      * Clear of the cap screws [steampunkVerticalScrews] draws.
      *
      * The screw sits at the centre of each semicircular end cap - `railWidth / 2`, so 24.dp in -
-     * and is 10.dp across, hence 29.dp. Stated rather than derived because the
-     * rail's width is the screen's to choose, and a theme that guessed it would be wrong quietly.
+     * and is 10.dp across, so it ends 29.dp in; 30.dp leaves a dp of clearance. Stated rather
+     * than derived because the rail's width is the screen's to choose, and a theme that guessed it
+     * would be wrong quietly.
      */
     override val railEndInset = 30.dp
 
@@ -133,9 +134,9 @@ object SteampunkThemeStyle : ThemeStyle {
 
     @Composable
     override fun BankHeader(text: String, modifier: Modifier) {
-        // A three-slice brass plaque (steampunkPlaqueHeader): its own caps and screws replace
-        // the drawn fill, border and bar screws this used before, and its own faceted corners
-        // replace the clip - a rounded corner would cut into art that draws its edge itself.
+        // A three-slice brass plaque (steampunkPlaqueHeader) whose caps carry their own screws
+        // and faceted corners, so nothing is drawn over it and nothing clips it - a rounded
+        // corner would cut into art that draws its edge itself.
         // Height is explicit rather than left to the text, since the caps need real height to
         // read as anything more than a sliver.
         Box(

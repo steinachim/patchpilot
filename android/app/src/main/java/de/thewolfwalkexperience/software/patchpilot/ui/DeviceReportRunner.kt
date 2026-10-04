@@ -42,7 +42,9 @@ internal sealed interface DeviceReportState {
  * ViewModel, since a Nord report walks every item and takes minutes, and a read tied to a
  * composition would be cancelled by a rotation. The read only queries, so cancelling changes
  * nothing on the instrument; it is the minutes that are worth keeping. A finished report survives
- * process death through [savedState], and is bounded well within what a Bundle carries.
+ * process death through [savedState]. **Assumption, not measured:** the largest report, a
+ * Nord's at tens of kilobytes, stays well within the ~1 MB Binder limit the whole saved state
+ * shares.
  *
  * Three screens use it: the debug menu holds the result and offers Share and Save, while the
  * preset and connect screens share it straight away and then [dismiss] it.
