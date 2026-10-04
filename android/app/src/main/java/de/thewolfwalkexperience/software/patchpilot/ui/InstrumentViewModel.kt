@@ -33,6 +33,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentRegistry
 import de.thewolfwalkexperience.software.patchpilot.catalog.UnknownDevicePolicy
+import de.thewolfwalkexperience.software.patchpilot.catalog.supportedModelLines
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
 import de.thewolfwalkexperience.software.patchpilot.discovery.Candidate
 import de.thewolfwalkexperience.software.patchpilot.discovery.physicalKey
@@ -144,7 +145,11 @@ sealed class ConnectionState {
     ) : ConnectionState()
     data class Connected(val instrument: Instrument) : ConnectionState()
 
-    /** Nothing is attached at all. [supportedNames] is read from the catalog, so a new supported model needs no screen change. */
+    /**
+     * Nothing is attached at all. [supportedNames] is read from the catalog, so a new supported
+     * model needs no screen change; it holds one line per model, variants joined (see
+     * [supportedModelLines]).
+     */
     data class NothingFound(val supportedNames: List<String>) : ConnectionState()
 
     /**
@@ -594,7 +599,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         val allDevices = connectionManager.findAllDevices()
         if (allDevices.isEmpty()) {
             // Every instrument the app can recognize, on both buses, since both were scanned.
-            val names = InstrumentRegistry.allDescriptors(getApplication()).map { it.name }.sorted()
+            val names = supportedModelLines(InstrumentRegistry.allDescriptors(getApplication()))
             _state.value = ConnectionState.NothingFound(names)
         } else {
             _state.value = ConnectionState.DeviceSelection(pickerEntries(emptyList()))

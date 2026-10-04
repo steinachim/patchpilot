@@ -45,6 +45,11 @@
           "type": "string",
           "description": "Human-readable name shown to the user, e.g. 'Nord Grand'."
         },
+        "variant": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "The trailing part of 'name' that tells this model from its siblings, e.g. '2 EX' for 'Nord Stage 2 EX'. Optional. Models whose names differ only in it share one line of the connect screen's supported-instrument list ('Nord Stage 2 EX / 4')."
+        },
         "vendorId": { "type": "integer", "minimum": 0, "maximum": 65535, "description": "USB idVendor, decimal (e.g. 4092 for 0x0FFC)." },
         "productId": { "type": "integer", "minimum": 0, "maximum": 65535, "description": "USB idProduct, decimal." },
         "maxBankLetter": {

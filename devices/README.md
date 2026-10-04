@@ -29,6 +29,10 @@ A device entry's `match` decides which bus finds it and how:
 
 The Nord file is in its own shape and every entry is a `usb` match on Clavia's vendor id `0x0FFC`.
 
+## Display names
+
+`name` is the full model name, shown wherever the instrument is named. The optional `variant`, in both catalog shapes, is the trailing part of `name` that tells a model from its siblings (`"name": "Yamaha Motif XS6", "variant": "6"`). Models of one family whose names differ only in their variant share one line of the connect screen's supported-instrument list: `Yamaha Motif XS6 / 7 / 8`. A model without a `variant` keeps a line of its own, so a new sibling joins a group only if it and the existing model both carry one. `SupportedModelsTest` checks that every `variant` ends its `name`.
+
 ## What is measured and what is transcribed
 
 Everything in `nord_devices.json`, `behringer_pro800.json`, `yamaha_motif_xs.json`, `fractal_axefx3.json` and `moog_subsequent37.json` was read off an instrument or from its behaviour on the wire, with these exceptions:

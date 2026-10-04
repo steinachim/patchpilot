@@ -16,6 +16,8 @@ import kotlinx.serialization.Serializable
 data class DeviceProfile(
     val id: String,
     val name: String,
+    /** The trailing part of [name] that tells this model from its siblings, e.g. "2 EX"; see [InstrumentDescriptor.variant]. */
+    val variant: String? = null,
     val vendorId: Int,
     val productId: Int,
     val maxBankLetter: Char,

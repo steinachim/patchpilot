@@ -18,6 +18,12 @@ data class InstrumentDescriptor(
     /** The factory key - "nord", "pro800". */
     val family: String,
     val name: String,
+    /**
+     * The trailing part of [name] that tells this model from its siblings in the same family -
+     * "6" for a Motif XS6, "2 EX" for a Nord Stage 2 EX. Read only to put siblings on one line
+     * of the supported-instrument list; see [supportedModelLines].
+     */
+    val variant: String? = null,
     val match: DeviceMatch,
     /** Everything only this family understands, decoded by its own factory. */
     val familyConfig: JsonObject = JsonObject(emptyMap()),

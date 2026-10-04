@@ -35,6 +35,7 @@ object NordFamily : InstrumentFamily {
         id = id,
         family = NordInstrument.FAMILY,
         name = name,
+        variant = variant,
         match = DeviceMatch.Usb(vendorId, productId),
         familyConfig = catalog.format.encodeToJsonElement(this).jsonObject,
     )

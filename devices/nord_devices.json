@@ -78,6 +78,7 @@
     {
       "id": "nord_stage_2ex",
       "name": "Nord Stage 2 EX",
+      "variant": "2 EX",
       "vendorId": 4092,
       "productId": 33,
       "maxBankLetter": "D",
@@ -173,6 +174,7 @@
     {
       "id": "nord_stage_4",
       "name": "Nord Stage 4",
+      "variant": "4",
       "vendorId": 4092,
       "productId": 46,
       "maxBankLetter": "H",

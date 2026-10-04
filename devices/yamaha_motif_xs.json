@@ -314,6 +314,7 @@
       "id": "yamaha_motif_xs6",
       "family": "motifxs",
       "name": "Yamaha Motif XS6",
+      "variant": "6",
       "match": {
         "type": "usb",
         "vendorId": 1177,
@@ -327,6 +328,7 @@
       "id": "yamaha_motif_xs7",
       "family": "motifxs",
       "name": "Yamaha Motif XS7",
+      "variant": "7",
       "match": {
         "type": "usb",
         "vendorId": 1177,
@@ -340,6 +342,7 @@
       "id": "yamaha_motif_xs8",
       "family": "motifxs",
       "name": "Yamaha Motif XS8",
+      "variant": "8",
       "match": {
         "type": "usb",
         "vendorId": 1177,
