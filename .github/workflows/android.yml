@@ -65,6 +65,11 @@ jobs:
             echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
           } > local.properties
 
+      # ktlint, with the settings in android/build.gradle.kts. `./gradlew spotlessApply` fixes
+      # what it reports.
+      - name: Formatting
+        run: ./gradlew spotlessCheck
+
       - name: Unit tests
         run: ./gradlew testDebugUnitTest
 
@@ -73,12 +78,19 @@ jobs:
       - name: Build release APK and bundle
         run: ./gradlew assembleRelease bundleRelease
 
-      - name: Upload test reports
+      # Errors fail the run; warnings do not, so a newer dependency release or the yearly
+      # target-API bump never breaks a build on its own.
+      - name: Lint
+        run: ./gradlew lintRelease
+
+      - name: Upload test and lint reports
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-reports
-          path: android/app/build/reports/tests/
+          name: reports
+          path: |
+            android/app/build/reports/tests/
+            android/app/build/reports/lint-results-release.html
           if-no-files-found: ignore
 
       - name: Upload signed release

@@ -63,11 +63,13 @@ cd android
 ./gradlew testDebugUnitTest
 ```
 
+Formatting is ktlint through Spotless: `./gradlew spotlessCheck` reports, `./gradlew spotlessApply` fixes. The settings are in `android/build.gradle.kts`, repeated in `android/.editorconfig` for editors.
+
 The build reads the device catalog from `../devices` relative to `android/` (the JSON descriptors and the binary blanks under `devices/blanks/`) and copies it into the app's assets; it also generates the USB device filter from the catalog's USB ids. Keep `devices/` and `android/` as siblings.
 
 ### Continuous integration
 
-[GitHub Actions](.github/workflows/android.yml) runs the unit tests and `assembleRelease bundleRelease` on every pull request and on every push to `main`. Pushes to other branches without a pull request do not trigger a build. On `main` the release APK and bundle are signed with the release key held in repository secrets (see [RELEASING.md](docs/RELEASING.md#signing)) and attached to the run as an artifact for 30 days. Pull-request builds are unsigned.
+[GitHub Actions](.github/workflows/android.yml) checks formatting, runs the unit tests, `assembleRelease bundleRelease` and `lintRelease` on every pull request and on every push to `main`. Pushes to other branches without a pull request do not trigger a build. On `main` the release APK and bundle are signed with the release key held in repository secrets (see [RELEASING.md](docs/RELEASING.md#signing)) and attached to the run as an artifact for 30 days. Pull-request builds are unsigned.
 
 ## Documentation
 

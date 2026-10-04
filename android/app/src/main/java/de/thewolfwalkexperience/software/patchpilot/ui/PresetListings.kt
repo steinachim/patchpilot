@@ -50,19 +50,19 @@ internal class PresetListings(
     private val deviceHandle: () -> String?,
     private val strings: StringResolver,
 ) {
-    private val _indexes = MutableStateFlow<Map<PresetScope, PresetIndexState>>(emptyMap())
+    private val listingsByScope = MutableStateFlow<Map<PresetScope, PresetIndexState>>(emptyMap())
 
-    private val _scope = MutableStateFlow(PresetScope.USER)
+    private val _browseScope = MutableStateFlow(PresetScope.USER)
 
     /** Which listing the browser shows. */
-    val browseScope: StateFlow<PresetScope> = _scope.asStateFlow()
+    val browseScope: StateFlow<PresetScope> = _browseScope.asStateFlow()
 
     /**
      * The listing for whichever scope is selected. `Eagerly` rather than `WhileSubscribed`: the
      * scan driving it outlives the composition, so a state that reset itself when the screen went
      * away would undo that.
      */
-    val index: StateFlow<PresetIndexState> = combine(_scope, _indexes) { scope, byScope ->
+    val index: StateFlow<PresetIndexState> = combine(_browseScope, listingsByScope) { scope, byScope ->
         byScope[scope] ?: PresetIndexState()
     }.stateIn(scope, SharingStarted.Eagerly, PresetIndexState())
 
@@ -71,12 +71,12 @@ internal class PresetListings(
      * since "can this factory voice be copied, and to where?" is asked while another scope is
      * displayed and a plain read would be answered once.
      */
-    val userIndex: StateFlow<PresetIndexState> = _indexes
+    val userIndex: StateFlow<PresetIndexState> = listingsByScope
         .map { it[PresetScope.USER] ?: PresetIndexState() }
         .stateIn(scope, SharingStarted.Eagerly, PresetIndexState())
 
     /** The listing of [scope] as it stands, or null where none has started. */
-    fun listing(scope: PresetScope): PresetIndexState? = _indexes.value[scope]
+    fun listing(scope: PresetScope): PresetIndexState? = listingsByScope.value[scope]
 
     // One job per scope, so switching never throws a 93-second user scan away. Two listings at
     // once is safe: `SysExExchange` serialises one request/reply at a time, so a favorites read
@@ -84,7 +84,7 @@ internal class PresetListings(
     private val indexJobs = mutableMapOf<PresetScope, Job>()
     private var indexGeneration = 0
 
-    /** Which instrument [_indexes] describes, so a *different* one still triggers a fresh scan. */
+    /** Which instrument [listingsByScope] describes, so a *different* one still triggers a fresh scan. */
     private var indexedInstrument: String? = null
 
     /**
@@ -104,19 +104,19 @@ internal class PresetListings(
     private val indexCache = PresetIndexCache()
 
     private fun updateIndex(scope: PresetScope, transform: (PresetIndexState) -> PresetIndexState) {
-        _indexes.update { byScope ->
+        listingsByScope.update { byScope ->
             byScope + (scope to transform(byScope[scope] ?: PresetIndexState()))
         }
     }
 
     /** True where [scope]'s listing has finished or failed, so re-running it would buy nothing. */
     private fun isSettled(scope: PresetScope): Boolean =
-        _indexes.value[scope]?.let { it.complete || it.error != null } == true
+        listingsByScope.value[scope]?.let { it.complete || it.error != null } == true
 
     /** Switches which listing the browser shows, starting it if it has not been read yet; a finished scope costs nothing. */
     fun setScope(scope: PresetScope) {
-        if (_scope.value == scope) return
-        _scope.value = scope
+        if (_browseScope.value == scope) return
+        _browseScope.value = scope
         val key = instrument()?.identity?.stableKey ?: return
         if (isSettled(scope) || indexJobs[scope]?.isActive == true) return
         launchIndex(key, scope)
@@ -132,11 +132,11 @@ internal class PresetListings(
         // A different instrument invalidates all three listings and returns the browser to the
         // user presets. Keyed on the instrument rather than the session, which a resume rebuilds.
         if (key != lastBrowsedInstrument) {
-            _indexes.value = emptyMap()
-            _scope.value = PresetScope.USER
+            listingsByScope.value = emptyMap()
+            _browseScope.value = PresetScope.USER
         }
         lastBrowsedInstrument = key
-        val scope = _scope.value
+        val scope = _browseScope.value
         if (key == indexedInstrument && (indexJobs[scope]?.isActive == true || isSettled(scope))) return
         launchIndex(key, scope)
     }
@@ -144,7 +144,7 @@ internal class PresetListings(
     /** Re-collects the current listing, keeping the cache: [refreshEdited] has already written the changed addresses through. */
     fun reload(): Int? {
         val key = instrument()?.identity?.stableKey ?: return null
-        return launchIndex(key, _scope.value)
+        return launchIndex(key, _browseScope.value)
     }
 
     /**
@@ -199,7 +199,7 @@ internal class PresetListings(
      * time the user listing is shown.
      */
     fun invalidate() {
-        if (_scope.value != PresetScope.USER) return
+        if (_browseScope.value != PresetScope.USER) return
         invalidateUserCache()
     }
 
@@ -227,7 +227,7 @@ internal class PresetListings(
         for (address in addresses) {
             try {
                 val slot = browser.refresh(address)
-                _indexes.update { byScope -> byScope.mapValues { (_, state) -> state.replacing(slot) } }
+                listingsByScope.update { byScope -> byScope.mapValues { (_, state) -> state.replacing(slot) } }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -245,7 +245,7 @@ internal class PresetListings(
      */
     fun dropFavorites() {
         indexJobs.remove(PresetScope.FAVORITES)?.cancel()
-        _indexes.update { it - PresetScope.FAVORITES }
+        listingsByScope.update { it - PresetScope.FAVORITES }
     }
 
     /**
@@ -256,7 +256,7 @@ internal class PresetListings(
      */
     suspend fun occupiedSlots(): Set<SlotAddress> {
         indexJobs[PresetScope.USER]?.join()
-        val slots = _indexes.value[PresetScope.USER]?.takeIf { it.complete }?.slots
+        val slots = listingsByScope.value[PresetScope.USER]?.takeIf { it.complete }?.slots
             ?: browser().index()
                 .filterIsInstance<IndexUpdate.Slots>()
                 .toList()

@@ -58,7 +58,6 @@ class ProgramRowsTest {
         assertTrue(entries(listing).none { it.isEmpty })
     }
 
-    /** A Nord lists only what it holds, so showing empties means *adding* placeholder rows. */
     /**
      * Deleting the last preset in a bank re-reads that address as an empty slot, so the listing
      * still mentions the bank; the rail must not offer a bank the list has no header for.
@@ -73,6 +72,7 @@ class ProgramRowsTest {
         assertEquals(listOf("A", "B"), shown.bankLabels)
     }
 
+    /** A Nord lists only what it holds, so showing empties means *adding* placeholder rows. */
     @Test
     fun `checking the box fills in the gaps a sparse listing leaves`() {
         val listing = buildProgramListing(nordReported, allSlots(), true, false, "")

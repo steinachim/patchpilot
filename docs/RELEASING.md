@@ -22,7 +22,7 @@ Outputs: `app/build/outputs/apk/release/patchpilot-v<version>.apk`, signed with 
 
 Install the release APK, not a debug build, on a phone, connect a real instrument and run the regression test from the debug menu (five taps on the instrument name). R8 runs only for release builds, so a missing keep rule shows up only there.
 
-`./gradlew lintRelease` passes with warnings only and is worth running before a release; CI does not run it.
+CI also runs `./gradlew spotlessCheck` and `./gradlew lintRelease`; lint passes with warnings only, and an error fails the run.
 
 If this release bumps Gradle, AGP or the build JDK, re-verify reproducibility before tagging: build twice from a clean checkout and confirm `classes.dex` matches byte-for-byte (extract it from both APKs and `cmp`), then once this version is published, `fdroid build --test <appid>:<versionCode>` against the GitHub binary should report a successful comparison. A regression here doesn't fail this build - it fails F-Droid's `Binaries:` check (see below), meaning F-Droid can no longer adopt the GitHub signature for this release.
 
