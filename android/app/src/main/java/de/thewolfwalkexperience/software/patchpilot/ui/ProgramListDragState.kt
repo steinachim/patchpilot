@@ -4,7 +4,6 @@
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -27,7 +26,7 @@ import kotlinx.coroutines.delay
  */
 @Stable
 internal class ProgramListDragState(
-    private val listState: LazyListState,
+    private val list: DragListViewport,
     private val autoScrollThresholdPx: Float,
     private val autoScrollMaxSpeedPx: Float,
     /** Left-edge band that counts as "touched the drag handle": the glyph plus the row's padding, clear of the headline text. */
@@ -56,8 +55,8 @@ internal class ProgramListDragState(
      * Resolves a y position to the row under it, falling back to the nearest visible row where y
      * is beyond the composed range, so a drop target stays available for the whole drag.
      */
-    private fun hitRowInfo(y: Float): LazyListItemInfo? {
-        val items = listState.layoutInfo.visibleItemsInfo
+    private fun hitRowInfo(y: Float): RowSpan? {
+        val items = list.visibleRows
         if (items.isEmpty()) return null
         return items.firstOrNull { y >= it.offset && y < it.offset + it.size }
             ?: if (y < items.first().offset) items.first() else items.last()
@@ -102,7 +101,7 @@ internal class ProgramListDragState(
      */
     suspend fun autoScroll(canDrop: (rowIndex: Int) -> Boolean) {
         while (true) {
-            val viewportBottom = listState.layoutInfo.viewportEndOffset.toFloat()
+            val viewportBottom = list.viewportEnd.toFloat()
             val overflowBottom = pointerY - (viewportBottom - autoScrollThresholdPx)
             val overflowTop = autoScrollThresholdPx - pointerY
             val scrollAmount = when {
@@ -114,7 +113,7 @@ internal class ProgramListDragState(
 
                 else -> 0f
             }
-            if (scrollAmount != 0f && listState.scrollBy(scrollAmount) != 0f) {
+            if (scrollAmount != 0f && list.scrollBy(scrollAmount) != 0f) {
                 hitRowInfo(pointerY)?.let { if (canDrop(it.index)) dropTargetIndex = it.index }
             }
             delay(AUTO_SCROLL_TICK_MS)
@@ -135,8 +134,36 @@ internal fun rememberProgramListDragState(listState: LazyListState): ProgramList
     val maxSpeed = with(density) { 24.dp.toPx() }
     val handleZone = with(density) { 56.dp.toPx() }
     return remember(listState, threshold, maxSpeed, handleZone) {
-        ProgramListDragState(listState, threshold, maxSpeed, handleZone)
+        ProgramListDragState(LazyListViewport(listState), threshold, maxSpeed, handleZone)
     }
+}
+
+/** One laid-out row: its index among the list's items, and its top and height in the list's own pixels. */
+internal data class RowSpan(val index: Int, val offset: Int, val size: Int)
+
+/**
+ * What a drag needs of the list it runs over: [LazyListViewport] in the app, a fake in a test,
+ * since a [LazyListState] only has rows once a real list has been laid out.
+ */
+internal interface DragListViewport {
+    /** The rows laid out now, in order. */
+    val visibleRows: List<RowSpan>
+
+    /** Where the viewport ends, in the same coordinates as [RowSpan.offset]. */
+    val viewportEnd: Int
+
+    /** Scrolls by [px], returning how far the list actually moved. */
+    suspend fun scrollBy(px: Float): Float
+}
+
+/** [DragListViewport] over the list's own [LazyListState]. */
+internal class LazyListViewport(private val state: LazyListState) : DragListViewport {
+    override val visibleRows: List<RowSpan>
+        get() = state.layoutInfo.visibleItemsInfo.map { RowSpan(it.index, it.offset, it.size) }
+
+    override val viewportEnd: Int get() = state.layoutInfo.viewportEndOffset
+
+    override suspend fun scrollBy(px: Float): Float = state.scrollBy(px)
 }
 
 /** One frame at 60 Hz - how often the auto-scroll loop re-evaluates while dragging. */
