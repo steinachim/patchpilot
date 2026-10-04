@@ -219,6 +219,7 @@ class Subsequent37Instrument(
         suspend fun emit(programs: List<Subsequent37Program>) {
             if (programs.isEmpty()) return
             val first = decoder.decoded - programs.size
+            programs.forEachIndexed { i, program -> device.noteRead(first + i, program) }
             send(IndexUpdate.Slots(programs.mapIndexed { i, program -> slotOf(first + i, program) }))
         }
 

@@ -15,10 +15,11 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 /**
  * A Subsequent 37 preset's category: byte 50 of the program ([Subsequent37Categories]), one
  * assignment, no sub-categories, no favorites. Unassigned is a stored state of its own (`0x77`,
- * what Initialize leaves), which the panel shows as `Misc` like the real category 0.
+ * what Initialize leaves), which the panel shows as `Misc` like the real category 0: it is read as
+ * no category, and not offered when setting one, since it would read back on the panel as `Misc`.
  *
- * Read and written like every edit: the stored program read with `06 01`, byte 50 changed, the
- * whole program written back and read again.
+ * Written like every edit: the stored program read with `06 01`, byte 50 changed, the whole
+ * program written back and read again.
  */
 class Subsequent37Tagger(private val instrument: Subsequent37Instrument) : PresetTagger {
 
@@ -32,16 +33,21 @@ class Subsequent37Tagger(private val instrument: Subsequent37Instrument) : Prese
 
     override val favorites: FavoriteModel? = null
 
-    override val allowsUnassigned: Boolean = true
+    /** False: see the class doc. A `null` still stores `0x77`, which the dialog only sends for a preset that already holds it. */
+    override val allowsUnassigned: Boolean = false
 
     override fun canSetCategories(address: SlotAddress): Boolean = true
 
     override fun canSetFavorite(address: SlotAddress): Boolean = false
 
-    /** Null for an unassigned preset, and for a byte-50 value with no category. */
+    /**
+     * Null for an unassigned preset, and for a byte-50 value with no category. From the program
+     * last read at [address] where there is one (see [Subsequent37Device.lastRead]), so the dialog
+     * opens at once with what the list shows; read now otherwise.
+     */
     override suspend fun read(address: SlotAddress): PresetTags {
         val number = instrument.numberOf(address)
-        val program = instrument.operation { device.readProgram(number) }
+        val program = device.lastRead(number) ?: instrument.operation { device.readProgram(number) }
         return PresetTags(listOf(Subsequent37Categories.panelIndexOf(program.category)?.let { CategoryRef(it) }))
     }
 

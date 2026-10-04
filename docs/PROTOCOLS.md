@@ -371,7 +371,7 @@ Programs 0..255: `n = bank × 16 + slot`, both 0-based, displayed `B01/P01`..`B1
 Every **edit** is a read of the stored program with `06 01` and a whole-program `05 01`, so all are emulated, and none selects anything or is heard. Every write is read back with `06 01` until the slot holds exactly the bytes sent: up to three reads a second apart, since one read too soon may still show the old program. A mismatch is reported only where every read that arrived disagreed. **Assumption:** three reads and a one-second pause are enough; every write measured was confirmed by the first read.
 
 - **Rename** changes the name field and the checksum. Up to 24 printable ASCII characters; `Init Preset` is refused, since it would read as empty.
-- **Set category** changes byte 50 and the checksum.
+- **Set category** changes byte 50 and the checksum. Uncategorised (`0x77`) is read but not offered, since the panel shows it as Misc. The dialog opens on the category last read for that slot, usually the listing's; the write reads the slot again first.
 - **Copy** writes the source's stored bytes to an empty slot. **Move** is a copy and then the panel's Initialize written over the source, once the copy is confirmed.
 - **Swap** reads both programs before writing either and writes the first back if the second write fails.
 - **Delete** writes the program the panel's Initialize produces (`devices/blanks/subsequent37_panel_initialized.bin`, stored by the instrument and read back). A slot always holds a program.

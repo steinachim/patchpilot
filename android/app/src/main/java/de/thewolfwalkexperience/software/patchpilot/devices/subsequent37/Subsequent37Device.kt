@@ -8,6 +8,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -73,7 +74,22 @@ class Subsequent37Device(
         }
 
     suspend fun readProgram(number: Int): Subsequent37Program =
-        Subsequent37Program(Subsequent37SysEx.programOf(readStoredMessage(number))!!)
+        Subsequent37Program(Subsequent37SysEx.programOf(readStoredMessage(number))!!).also { lastRead[number] = it }
+
+    /**
+     * The program last read at each number this session - from the dump, a read, or a write's
+     * read-back - so a question about what a slot holds can be answered without the second or
+     * two a read takes. A change made on the panel since is not in it: nothing that writes relies
+     * on it, since every edit reads the slot again first.
+     */
+    private val lastRead = ConcurrentHashMap<Int, Subsequent37Program>()
+
+    fun lastRead(number: Int): Subsequent37Program? = lastRead[number]
+
+    /** Records a program that arrived some other way than [readProgram] - the bulk dump's. */
+    fun noteRead(number: Int, program: Subsequent37Program) {
+        lastRead[number] = program
+    }
 
     /**
      * Writes [program] to [number] and reads it back until the slot holds exactly the bytes

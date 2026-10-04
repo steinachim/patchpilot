@@ -41,7 +41,7 @@ class Subsequent37InstrumentTest {
         assertEquals((0 until 256).map { Subsequent37AddressFormat.addressOf(it) }, slots.map { it.address })
         assertEquals(Subsequent37Fixtures.EMPTY_COUNT, slots.count { it.isEmpty })
         assertEquals("B01/P01", slots[0].displayId)
-        assertEquals("Bank 1", slots[0].bankLabel)
+        assertEquals("1", slots[0].bankLabel)
         assertEquals("Preset 000", slots[0].name)
         assertEquals(listOf("Evolving"), slots[0].badges)
         assertEquals(listOf("Sync"), slots[1].badges)
@@ -180,7 +180,8 @@ class Subsequent37InstrumentTest {
             { instrument.select(SlotAddress(0, 1)) },
             { instrument.refresh(SlotAddress(0, 1)) },
             { instrument.editor.rename(SlotAddress(0, 1), "New") },
-            { instrument.tagger.read(SlotAddress(0, 1)) },
+            // Program 255 has not arrived yet, so its category would have to be read.
+            { instrument.tagger.read(SlotAddress(15, 15)) },
             { instrument.read(SlotAddress(0, 1)) },
             { instrument.report.buildReport() },
         )
@@ -192,6 +193,11 @@ class Subsequent37InstrumentTest {
                 assertTrue(expected.message!!.contains("still sending its preset list (about"))
             }
         }
+        // One the dump has delivered is answered from it, with nothing sent.
+        val sent = fake.requests.size
+        instrument.tagger.read(SlotAddress(0, 1))
+        assertEquals(sent, fake.requests.size)
+
         listing.join()
         instrument.select(SlotAddress(0, 1))
         assertEquals(1, fake.selected)

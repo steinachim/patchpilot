@@ -5,8 +5,10 @@ package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
 
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -25,7 +27,8 @@ class Subsequent37TaggerTest {
         assertTrue(tagger.taxonomy.isFlat)
         assertEquals(1, tagger.assignmentCount)
         assertNull(tagger.favorites)
-        assertTrue(tagger.allowsUnassigned)
+        // Unassigned shows as Misc on the panel, so the dialog does not offer it.
+        assertFalse(tagger.allowsUnassigned)
     }
 
     @Test
@@ -36,6 +39,19 @@ class Subsequent37TaggerTest {
         assertEquals(listOf(CategoryRef(sync)), tagger.read(address(1)).categories)
         val empty = Subsequent37Fixtures.emptyPrograms(1).single()
         assertEquals(listOf<CategoryRef?>(null), tagger.read(address(empty)).categories)
+    }
+
+    /** The dialog opens on what the listing read rather than waiting a second or two for a read. */
+    @Test
+    fun `after a listing, a category is answered without asking the instrument`() = runTest {
+        val fake = FakeSubsequent37(backgroundScope)
+        val instrument = subsequent37(fake).apply { connect() }
+        instrument.index().toList()
+        val requests = fake.requests.size
+
+        val sync = Subsequent37Categories.PANEL_ORDER.indexOf("Sync")
+        assertEquals(listOf(CategoryRef(sync)), instrument.tagger.read(address(1)).categories)
+        assertEquals(requests, fake.requests.size)
     }
 
     @Test

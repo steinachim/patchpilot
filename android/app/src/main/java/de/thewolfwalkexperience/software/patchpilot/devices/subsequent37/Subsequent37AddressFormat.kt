@@ -31,7 +31,8 @@ object Subsequent37AddressFormat : AddressFormat {
         return address
     }
 
-    override fun bankLabel(bank: Int): String = "Bank ${bank + 1}"
+    /** The number alone, as the panel's BANK buttons show it; the list's header adds the word. */
+    override fun bankLabel(bank: Int): String = "${bank + 1}"
 
     /** The instrument's program number for [address], 0..255. */
     fun numberOf(address: SlotAddress): Int {

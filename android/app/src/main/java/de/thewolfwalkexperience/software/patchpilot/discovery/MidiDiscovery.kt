@@ -111,7 +111,7 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
                 // Subscribed before the send, as SysExExchange does: the flow has no replay.
                 val answered = async(start = CoroutineStart.UNDISPATCHED) {
                     transport.incoming
-                        .mapNotNull { chunk -> framer.feed(chunk).firstOrNull { it.startsWith(prefix) } }
+                        .mapNotNull { chunk -> framer.feed(chunk).firstOrNull { answersProbe(it, match.probe, prefix) } }
                         .first()
                 }
                 transport.send(match.probe)
@@ -182,8 +182,16 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
     }
 }
 
-/** Prefix comparison on raw bytes - the reply must *begin* with what the catalog declares,
- * since the interesting part (an ASCII name) follows it. */
+/**
+ * Whether [message] answers [probe]: it begins with what the catalog declares as the reply, since
+ * the interesting part (an ASCII name) follows that prefix, and it is not the probe itself. A
+ * virtual or loopback port sends back whatever it is sent, and an Axe-Fx III's reply prefix is the
+ * first six bytes of its own probe, so an echo would otherwise identify every such port as one.
+ */
+internal fun answersProbe(message: ByteArray, probe: ByteArray, prefix: ByteArray): Boolean =
+    message.startsWith(prefix) && !message.contentEquals(probe)
+
+/** Prefix comparison on raw bytes. */
 private fun ByteArray.startsWith(prefix: ByteArray): Boolean =
     size >= prefix.size && prefix.indices.all { this[it] == prefix[it] }
 
