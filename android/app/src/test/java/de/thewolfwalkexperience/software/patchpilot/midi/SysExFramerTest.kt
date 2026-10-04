@@ -115,6 +115,27 @@ class SysExFramerTest {
         assertEquals("a completed message is no longer pending", 0, framer.pendingFrom(0).size)
     }
 
+    /**
+     * A Subsequent 37 bulk dump's size, fed in the 1 KB pieces a port delivers: the buffer grows
+     * many times over, and a short message after it comes out whole.
+     */
+    @Test
+    fun `a 203,800-byte message is assembled whole and read while it arrives`() {
+        val big = byteArrayOf(0xF0.toByte()) + ByteArray(203_798) { (it % 0x80).toByte() } +
+            byteArrayOf(0xF7.toByte())
+        val framer = SysExFramer(maxMessageBytes = 256 * 1024)
+        val completed = mutableListOf<ByteArray>()
+        var offset = 0
+        big.asList().chunked(1024).forEach { piece ->
+            completed += framer.feed(piece.toByteArray())
+            val pending = framer.pendingFrom(offset)
+            assertArrayEquals(big.copyOfRange(offset, offset + pending.size), pending)
+            offset += pending.size
+        }
+        assertArrayEquals(big, completed.single())
+        assertArrayEquals(message, framer.feed(message).single())
+    }
+
     @Test
     fun `messageStarts counts every F0, so a reader sees an abandoned message replaced`() {
         val framer = SysExFramer()

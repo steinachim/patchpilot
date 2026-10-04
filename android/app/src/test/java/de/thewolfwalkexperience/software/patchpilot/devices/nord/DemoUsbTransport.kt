@@ -189,19 +189,25 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
     /** Sub-opcode 30/31: the name field NordDevice.parseItemName reads always sits at a
      * fixed offset (32/36), regardless of the record's content tag - so this only needs to fill
      * that much, unlike a real item record's other fields (data size, content id), which nothing
-     * here reads (calibration is short-circuited by [itemCountReply]'s unitCode=0). */
+     * here reads (calibration is short-circuited by [itemCountReply]'s unitCode=0).
+     *
+     * An empty slot answers status 1 with the previous record's bytes after it, name included,
+     * as a Stage 2 EX does - so a reader that skips the status shows a stale name. */
     private fun fetchItemReply(payload: ByteArray): ByteArray {
         val bank = readU32(payload, 0)
         val item = readU32(payload, 4)
         val name = catalog.itemsInCategory(selectedCategoryIndex)[DemoCatalog.Slot(bank, item)]
-            ?: error("DemoUsbTransport: fetch for an unoccupied slot ($bank, $item)")
+            ?: return u32(1) + lastRecord.copyOfRange(4, lastRecord.size)
         val nameBytes = name.toByteArray(Charsets.US_ASCII)
         val record = ByteArray(36)
         u32(bank).copyInto(record, 4)
         u32(item).copyInto(record, 8)
         u32(nameBytes.size).copyInto(record, 32)
-        return record + nameBytes
+        return (record + nameBytes).also { lastRecord = it }
     }
+
+    /** The last record [fetchItemReply] served, whose bytes an empty slot's reply carries. */
+    private var lastRecord = ByteArray(36)
 
     /** Sub-opcode 32/33: the bank/item cursor. [prevItem] is -1 (0xFFFFFFFF) before the
      * first call in a bank - the walk asks for the smallest occupied item strictly greater than

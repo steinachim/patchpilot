@@ -317,13 +317,15 @@ fun ProgramsScreen(
     }
     val programs = index.slots
 
+    // Built from the layout, once per session and scope rather than on every listing update: a
+    // session is published with its layout settled. Up to 1,633 rows.
+    val scopeSlots = remember(session, browseScope) { viewModel.allSlots(browseScope) }
     // Everything the list needs, derived in one pure pass - see [buildProgramListing], which
-    // holds the occupancy rules and is testable without Compose. `browseScope` is a key even
-    // though it is not an argument, since `viewModel.allSlots(scope)` is a plain call.
-    val listing = remember(programs, showEmptySlots, searchText, ops.picking, browseScope) {
+    // holds the occupancy rules and is testable without Compose.
+    val listing = remember(programs, showEmptySlots, searchText, ops.picking, scopeSlots) {
         buildProgramListing(
             reported = programs,
-            allSlots = viewModel.allSlots(browseScope),
+            allSlots = scopeSlots,
             // Only the user listing has empty slots to show, and hiding the checkbox in the other
             // two does not reset it: left ticked, it would render the favorites listing empty,
             // since that scope has no address space.
@@ -335,15 +337,14 @@ fun ProgramsScreen(
     val visibleRows = listing.rows
     val occupied = listing.occupied
     // Drawn in the rail instead of the full label, which does not fit at the rail's width.
-    val bankRailLabels = remember(index) { viewModel.bankRailLabels() }
-    val virtualBanks = remember(index) { viewModel.virtualBankLabels() }
+    val bankRailLabels = remember(session) { viewModel.bankRailLabels() }
+    val virtualBanks = remember(session) { viewModel.virtualBankLabels() }
     // The user listing's free slots, whatever is on screen: a copy can only be written to a
     // writable slot, so the destination pool belongs to the user scope. From `listing` it would
     // be empty in the factory scope, where every row holds a voice.
     val userIndex by viewModel.userIndex.collectAsState()
-    val copyDestinations = remember(userIndex, session) {
-        freeSlots(userIndex.slots, viewModel.allSlots(PresetScope.USER))
-    }
+    val userSlots = remember(session) { viewModel.allSlots(PresetScope.USER) }
+    val copyDestinations = remember(userIndex, userSlots) { freeSlots(userIndex.slots, userSlots) }
     // Hidden rather than disabled where there is nowhere to copy to. Gated on the user listing
     // being complete rather than on `editsEnabled`, which describes whichever listing is
     // displayed - and the factory one completes the moment it is opened, before the destinations

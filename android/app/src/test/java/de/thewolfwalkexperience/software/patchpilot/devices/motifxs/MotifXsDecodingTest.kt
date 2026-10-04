@@ -282,6 +282,16 @@ class MotifXsDecodingTest {
         assertEquals(0xC2.toByte(), dense[1])
     }
 
+    /** Every length of last group, from none to a full seven, sized and filled exactly. */
+    @Test
+    fun `unpack inverts packing at every length`() {
+        val random = kotlin.random.Random(20261004)
+        for (length in 0..40) {
+            val dense = ByteArray(length) { random.nextInt(256).toByte() }
+            assertArrayEquals("length $length", dense, MotifXsVoice.unpack(packMsb(dense)))
+        }
+    }
+
     @Test
     fun `a damaged dump is rejected rather than decoded`() {
         val corrupted = MotifXsFixtures.namedVoice.copyOf()

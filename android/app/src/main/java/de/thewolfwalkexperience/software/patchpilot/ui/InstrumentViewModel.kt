@@ -1331,15 +1331,22 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         mismatches
     }
 
-    /** Which addresses hold a preset, through the same cached browser the preset screen uses. */
-    private suspend fun occupiedSlots(): Set<SlotAddress> =
-        browser().index()
-            .filterIsInstance<IndexUpdate.Slots>()
-            .toList()
-            .flatMap { it.slots }
-            .filterNot { it.isEmpty }
-            .map { it.address }
-            .toSet()
+    /**
+     * Which addresses hold a preset. A user listing still running is waited for and read:
+     * collecting the browser beside it would start a second full read behind the first, about
+     * 142 s on a Subsequent 37. Otherwise the browser is collected, from the cache where a
+     * finished listing left one.
+     */
+    private suspend fun occupiedSlots(): Set<SlotAddress> {
+        indexJobs[PresetScope.USER]?.join()
+        val slots = _indexes.value[PresetScope.USER]?.takeIf { it.complete }?.slots
+            ?: browser().index()
+                .filterIsInstance<IndexUpdate.Slots>()
+                .toList()
+                .flatMap { it.slots }
+        return slots.filterNot { it.isEmpty }.map { it.address }.toSet()
+    }
+
     /** Which edit operations the connected instrument offers at all - drives the drag handle and
      * the Rename button. */
     val supportedEdits: Set<EditOp> get() = connected()?.editor?.supported ?: emptySet()

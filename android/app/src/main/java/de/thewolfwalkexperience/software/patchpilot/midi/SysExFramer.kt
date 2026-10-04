@@ -12,7 +12,9 @@ package de.thewolfwalkexperience.software.patchpilot.midi
  */
 class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) {
 
-    private var buffer = ArrayList<Byte>(256)
+    /** The message being assembled is `buffer[0 until size]`; the array only grows. */
+    private var buffer = ByteArray(INITIAL_CAPACITY)
+    private var size = 0
     private var inMessage = false
 
     /** Messages that were dropped for being over-long - a symptom worth surfacing, not hiding;
@@ -29,7 +31,7 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
         private set
 
     /** How many bytes of the message still being assembled have arrived; 0 where none is. */
-    val pendingSize: Int get() = if (inMessage) buffer.size else 0
+    val pendingSize: Int get() = if (inMessage) size else 0
 
     /**
      * The message still being assembled, from [offset] to what has arrived so far, `F0` included
@@ -39,8 +41,8 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
      * the bytes from [offset], so a reader that advances its offset copies each byte once.
      */
     fun pendingFrom(offset: Int): ByteArray {
-        if (!inMessage || offset >= buffer.size) return ByteArray(0)
-        return ByteArray(buffer.size - offset) { buffer[offset + it] }
+        if (!inMessage || offset >= size) return ByteArray(0)
+        return buffer.copyOfRange(offset, size)
     }
 
     /**
@@ -61,40 +63,45 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
                 value == SYSEX_START -> {
                     // A second F0 before an F7 means the first message was abandoned. Keep the
                     // new one rather than the truncated old one.
-                    buffer.clear()
+                    size = 0
                     inMessage = true
                     messageStarts++
-                    buffer.add(byte)
+                    append(byte)
                 }
 
                 !inMessage -> Unit // channel-voice traffic between messages is not ours
 
                 value == SYSEX_END -> {
-                    buffer.add(byte)
-                    completed += buffer.toByteArray()
-                    buffer.clear()
+                    append(byte)
+                    completed += buffer.copyOf(size)
+                    size = 0
                     inMessage = false
                 }
 
                 // Any other status byte aborts the message: a device that never sends F7 must
                 // not have its fragment delivered as a whole message.
                 value >= 0x80 -> {
-                    buffer.clear()
+                    size = 0
                     inMessage = false
                 }
 
                 else -> {
-                    buffer.add(byte)
+                    append(byte)
                     // Bounds a device that never terminates; resync at the next F0.
-                    if (buffer.size > maxMessageBytes) {
+                    if (size > maxMessageBytes) {
                         droppedMessages++
-                        buffer.clear()
+                        size = 0
                         inMessage = false
                     }
                 }
             }
         }
         return completed
+    }
+
+    private fun append(byte: Byte) {
+        if (size == buffer.size) buffer = buffer.copyOf(buffer.size * 2)
+        buffer[size++] = byte
     }
 
     companion object {
@@ -104,5 +111,7 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
         /** Generous for a Pro-800 program dump (210 bytes); the Motif XS, Axe-Fx III and
          * Subsequent 37 families pass their own. Not a protocol limit. */
         const val DEFAULT_MAX_MESSAGE_BYTES = 4096
+
+        private const val INITIAL_CAPACITY = 256
     }
 }

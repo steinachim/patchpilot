@@ -211,13 +211,10 @@ class NordTaggerTest {
                 52 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
                 48 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
                 7 to ByteArray(0),
-                // The read-back verification walks the program list, which re-asks for the
-                // category index first - getProgramCategoryIndex() queries every time.
+                // The read-back fetches the slot by address, which re-asks for the category
+                // index first - getProgramCategoryIndex() queries every time.
                 1 to rootList(), // ROOT_CATEGORY_LIST
-                3 to childList(banks = 1), // GET_CATEGORY_CHILD, bounds the walk
                 5 to ByteArray(0), // SELECT_CATEGORY
-                9 to (uint32BE(0) + uint32BE(1)), // GET_ITEM_COUNT -> one item
-                33 to (uint32BE(0) + uint32BE(0) + uint32BE(0)), // CURSOR_NEXT_ITEM -> item 0
                 31 to itemRecord(bank = 0, item = 0, categoryId = 21, name = "White Grand"),
                 7 to ByteArray(0), // UNLOCK_CATEGORY_SELECTION
             ),
@@ -229,20 +226,6 @@ class NordTaggerTest {
             it.subOp == NordDevice.FileTransferSubOp.SET_CATEGORY.code
         }
         assertEquals(21, readUInt32BE(sent.payload, 8))
-    }
-
-    /**
-     * A sub-opcode 2/3 reply listing [banks] banks of 25 slots - what bounds the item walk.
-     *
-     * `status(4) | categoryIndex(4) | childCount(1) | [ nameLen(4) | name | capacity(4) ]*`
-     */
-    private fun childList(banks: Int): ByteArray {
-        var out = uint32BE(0) + uint32BE(1) + byteArrayOf(banks.toByte())
-        repeat(banks) {
-            val name = "Bank".toByteArray(Charsets.US_ASCII)
-            out += uint32BE(name.size) + name + uint32BE(25)
-        }
-        return out
     }
 
     /**

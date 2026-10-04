@@ -34,6 +34,8 @@ private object StatusEcho {
 
 /** The sub-opcode 30/31 reply: an item's metadata record, not its data. */
 private object ItemRecord {
+    /** 0 for a record; otherwise the rest is the previous reply's bytes, name included. */
+    const val STATUS = 0
     const val BANK = 4
     const val ITEM = 8
 
@@ -726,6 +728,38 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     }
 
     /**
+     * The program at ([bank], [item]), or null where the slot is empty: one 30/31 fetch at its
+     * address inside the `Program` lock, rather than a walk of the whole category. Status 0 is the
+     * record and [STATUS_NOT_FOUND] an empty slot; an edit shows in the next fetch, a slot it
+     * vacated included (measured on a Stage 2 EX, firmware 3.00). The status is read first, since
+     * an empty slot's reply carries the previous record's bytes.
+     *
+     * Any other status falls back to the walk, which answers the same question on every model:
+     * the Grand's answers to a fetch by address are unmeasured.
+     */
+    suspend fun readProgram(bank: Int, item: Int): NamedItem? {
+        val record = withProgramCategory {
+            fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(bank) + uint32BE(item)).payload
+        }
+        val status = if (record.size >= ItemRecord.ITEM + 4) readUInt32BE(record, ItemRecord.STATUS) else null
+        when (status) {
+            0 -> {
+                val read = collectItemNames(listOf(record)).single()
+                if (read.bank != bank || read.item != item) {
+                    throw NordProtocolException(
+                        "Fetched ($bank, $item) but the record is for (${read.bank}, ${read.item})",
+                    )
+                }
+                return read
+            }
+            STATUS_NOT_FOUND -> return null
+        }
+        Log.w(TAG, "fetch of ($bank, $item) answered status $status; walking the program list instead")
+        return collectItemNames(fetchCategoryItems(getProgramCategoryIndex()))
+            .firstOrNull { it.bank == bank && it.item == item }
+    }
+
+    /**
      * How this instrument's ids read, e.g. `A:1:1`, from the bounds in force. Built per call,
      * since [applyDerivedBankLayout] can replace them.
      */
@@ -1244,8 +1278,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         private const val FIRMWARE_CTRL_BREQUEST = 4
         private const val FIRMWARE_CTRL_WLENGTH = 2
 
-        /** The instrument's "file exists" status, answered by a copy onto an occupied slot. The only status code the protocol names. */
+        /** The instrument's "file exists" status, answered by a copy onto an occupied slot. */
         const val STATUS_FILE_EXISTS = 4
+
+        /** "Not found": a fetch of an empty slot inside the area - see [readProgram]. */
+        const val STATUS_NOT_FOUND = 1
 
         // Upper bounds for detectRootCategoryTrailerLen's search, far above anything real
         // (trailers are 28-29 bytes, the longest known category name 17), so a corrupt payload

@@ -120,17 +120,11 @@ class NordInstrument(
         emit(IndexUpdate.Complete)
     }
 
-    /**
-     * Re-reads one slot by walking the program list, because the per-item fetch needs a category
-     * selection this adapter does not hold open. One walk, only after an edit.
-     */
-    override suspend fun refresh(address: SlotAddress): PresetSlot {
-        val items = exclusive("re-reading a preset") {
-            device.collectItemNames(device.fetchCategoryItems(device.getProgramCategoryIndex()))
-        }
-        return items.firstOrNull { it.bank == address.bank && it.item == address.slot }?.toPresetSlot()
+    /** Re-reads one slot by its address - see [NordDevice.readProgram]. */
+    override suspend fun refresh(address: SlotAddress): PresetSlot =
+        exclusive("re-reading a preset") { device.readProgram(address.bank, address.slot) }
+            ?.toPresetSlot()
             ?: emptySlot(address)
-    }
 
     private fun NordDevice.NamedItem.toPresetSlot(): PresetSlot {
         val address = SlotAddress(bank, item)

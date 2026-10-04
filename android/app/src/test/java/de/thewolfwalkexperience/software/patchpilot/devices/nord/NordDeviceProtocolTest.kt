@@ -7,7 +7,9 @@ import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.he
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -513,6 +515,89 @@ class NordDeviceProtocolTest {
         assertEquals(1, named.size)
         assertEquals(0 to 0, named[0].bank to named[0].item)
         assertEquals("White Grand", named[0].name)
+    }
+
+    // ---- readProgram: one slot by address ----
+
+    private val programRootList get() =
+        buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+
+    @Test
+    fun `readProgram fetches the slot by address inside the Program lock`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList, // ROOT_CATEGORY_LIST (via getProgramCategoryIndex)
+                5 to ByteArray(0), // SELECT_CATEGORY
+                31 to itemRecordPayload(bank = 1, item = 11, name = "Upright"), // FETCH_ITEM
+                7 to ByteArray(0), // UNLOCK_CATEGORY_SELECTION
+            ),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        val read = device.readProgram(bank = 1, item = 11)
+
+        assertEquals("Upright", read?.name)
+        val fetch = transport.sentRequests.single { it.subOp == NordDevice.FileTransferSubOp.FETCH_ITEM.code }
+        assertArrayEquals(uint32BE(1) + uint32BE(11), fetch.payload)
+        assertTrue(
+            "no cursor walk",
+            transport.sentRequests.none { it.subOp == NordDevice.FileTransferSubOp.CURSOR_NEXT_ITEM.code },
+        )
+    }
+
+    /** What a Stage 2 EX answers for an empty slot: status 1, then the previous record's bytes. */
+    @Test
+    fun `readProgram reads status 1 as empty and ignores the stale name after it`() = runTest {
+        val stale = itemRecordPayload(bank = 0, item = 0, name = "White Grand")
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList,
+                5 to ByteArray(0),
+                31 to (uint32BE(NordDevice.STATUS_NOT_FOUND) + stale.copyOfRange(4, stale.size)),
+                7 to ByteArray(0),
+            ),
+        )
+        assertNull(NordFixtures.device(transport, NordFixtures.GRAND_PROFILE).readProgram(bank = 1, item = 47))
+    }
+
+    @Test
+    fun `readProgram walks the program list when the fetch answers any other status`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList,
+                5 to ByteArray(0),
+                31 to (uint32BE(3) + ByteArray(32)), // FETCH_ITEM -> status 3
+                7 to ByteArray(0),
+                // The walk:
+                1 to programRootList,
+                3 to childListPayload(listOf("Bank 1" to 25)),
+                5 to ByteArray(0),
+                9 to (uint32BE(0) + uint32BE(1)),
+                33 to (uint32BE(0) + uint32BE(0) + uint32BE(4)), // CURSOR_NEXT_ITEM -> item 4
+                31 to itemRecordPayload(bank = 0, item = 4, name = "Rhodes"),
+                7 to ByteArray(0),
+            ),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        assertEquals("Rhodes", device.readProgram(bank = 0, item = 4)?.name)
+    }
+
+    @Test
+    fun `readProgram refuses a record for another slot, after unlocking`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList,
+                5 to ByteArray(0),
+                31 to itemRecordPayload(bank = 0, item = 1, name = "Wrong Slot"),
+                7 to ByteArray(0),
+            ),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        val failure = runCatching { device.readProgram(bank = 0, item = 0) }.exceptionOrNull()
+        assertTrue(failure is NordProtocolException)
+        assertEquals(NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code, transport.sentRequests.last().subOp)
     }
 
     // ---- fetchCategoryItems cursor walk ----

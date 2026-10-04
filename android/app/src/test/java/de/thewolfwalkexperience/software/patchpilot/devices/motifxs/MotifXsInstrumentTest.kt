@@ -1485,7 +1485,7 @@ private fun syntheticVoicePayload(name: String): ByteArray {
 }
 
 /** The inverse of [MotifXsVoice.unpack]: one high-bit byte carrying the next seven. */
-private fun packMsb(dense: ByteArray): ByteArray {
+internal fun packMsb(dense: ByteArray): ByteArray {
     val out = ArrayList<Byte>(dense.size * 8 / 7 + 8)
     var i = 0
     while (i < dense.size) {

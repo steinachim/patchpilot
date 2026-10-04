@@ -14,19 +14,21 @@ object MotifXsVoice {
      * eight. Unpacked once into a dense array, so field offsets are plain indices.
      */
     fun unpack(packed: ByteArray): ByteArray {
-        val out = ArrayList<Byte>(packed.size)
+        // Seven values per full group; a short last group holds one fewer than its length.
+        val out = ByteArray(packed.size / 8 * 7 + maxOf(0, packed.size % 8 - 1))
+        var o = 0
         var i = 0
         while (i < packed.size) {
             val msb = packed[i].toInt()
             var j = 0
             while (j < 7 && i + 1 + j < packed.size) {
                 val b = packed[i + 1 + j].toInt() and 0x7F
-                out.add((b or (if (msb and (1 shl j) != 0) 0x80 else 0)).toByte())
+                out[o++] = (b or (if (msb and (1 shl j) != 0) 0x80 else 0)).toByte()
                 j++
             }
             i += 8
         }
-        return out.toByteArray()
+        return out
     }
 
     /** Where the packed region starts inside a dump's payload: two bytes in. What those two bytes are is not decoded. */
@@ -73,9 +75,15 @@ object MotifXsVoice {
      * says. An empty slot presents as no name, which is the only emptiness signal available,
      * since every address answers a request.
      */
-    fun nameOf(dumpPayload: ByteArray): String? {
-        if (dumpPayload.size <= PACKED_OFFSET) return null
-        val dense = unpack(dumpPayload.copyOfRange(PACKED_OFFSET, dumpPayload.size))
+    fun nameOf(dumpPayload: ByteArray): String? = denseOf(dumpPayload)?.let(::nameIn)
+
+    /** A dump payload's packed region, unpacked; null where the payload carries none. */
+    fun denseOf(dumpPayload: ByteArray): ByteArray? =
+        if (dumpPayload.size <= PACKED_OFFSET) null
+        else unpack(dumpPayload.copyOfRange(PACKED_OFFSET, dumpPayload.size))
+
+    /** [nameOf] on an already-unpacked stream, so a caller that has one need not unpack twice. */
+    fun nameIn(dense: ByteArray): String? {
         val start = nameStart(dense) ?: return null
         var run = 0
         while (run < NAME_SCAN_LIMIT && start + run < dense.size &&
@@ -133,10 +141,7 @@ object MotifXsVoice {
      * Read-only: the figures are variable width, so a category is written through the documented
      * path (`MotifXsInstrument.editCommonBlock`) instead.
      */
-    fun categoriesOf(dumpPayload: ByteArray): List<Int?>? {
-        if (dumpPayload.size <= PACKED_OFFSET) return null
-        return figuresOf(unpack(dumpPayload.copyOfRange(PACKED_OFFSET, dumpPayload.size)))
-    }
+    fun categoriesOf(dumpPayload: ByteArray): List<Int?>? = denseOf(dumpPayload)?.let(::figuresOf)
 
     /** [categoriesOf] on an already-unpacked stream, so a caller that has one need not unpack twice. */
     fun figuresOf(dense: ByteArray): List<Int?>? {

@@ -1020,17 +1020,18 @@ class MotifXsInstrument(
 
     private suspend fun readSlot(address: SlotAddress, displayId: String): PresetSlot {
         val bank = config.banks[address.bank]
-        val payload = readVoicePayload(address)
+        // Unpacked once for both the name and the categories.
+        val dense = MotifXsVoice.denseOf(readVoicePayload(address))
         return PresetSlot(
             address = address,
             displayId = displayId,
             // The display label, matching what SlotLayout's BankSpec carries: the browser groups
             // by this string, so a disagreement gives every bank two headers.
             bankLabel = bank.shownLabel,
-            name = MotifXsVoice.nameOf(payload),
+            name = dense?.let(MotifXsVoice::nameIn),
             // The categories sit in front of the name in the bytes this dump already carried -
             // see [MotifXsVoice.categoriesOf].
-            badges = categoryBadges(MotifXsVoice.categoriesOf(payload)),
+            badges = categoryBadges(dense?.let(MotifXsVoice::figuresOf)),
         )
     }
 

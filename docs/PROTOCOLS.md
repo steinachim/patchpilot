@@ -55,7 +55,7 @@ Presets are addressed as `(bank, item)` pairs within named root categories. All 
 | 24/25 | Move program | `srcBank`, `srcItem`, `dstBank`, `dstItem` | `status` plus the echoed request. The destination must be empty. |
 | 26/27 | Swap programs | `srcBank`, `srcItem`, `dstBank`, `dstItem` | `status` only. Both positions must be occupied; an empty one answers status 1. |
 | 28/29 | Set name | `bank`, `item`, name length, ASCII name | `status`, echoed `bank`, echoed `item`. An oversized name is accepted with status 0 and silently truncated to the instrument's stored maximum (16 characters on every model measured). |
-| 30/31 | Fetch item | `bank`, `item` | The item's metadata record (below), not its program data. |
+| 30/31 | Fetch item | `bank`, `item` | The item's metadata record (below), not its program data. An empty slot answers status 1, and an address past the area status 3, each with the previous record's bytes after it, name included: the status is read first. |
 | 32/33 | Cursor next item | `bank`, previous item index (`-1` to start), direction `0` | A "bank exhausted" flag at offset 0 and the next item index at offset 8; walks a category one item at a time. |
 | 47/48 | Select preset | `bank`, `item` | `status` plus echoed `bank`/`item`. Loads the preset. Sent inside the category lock it also refreshes the instrument's display after a write; see "Operations". |
 | 51/52 | Set category | `bank`, `item`, `categoryId` | `status` plus echoed `bank`/`item`. Writes the category tag alone and leaves the name untouched. Every id 0..31 is accepted and stored; one the instrument cannot name displays as `No Cat`. |
@@ -88,9 +88,11 @@ Every preset operation runs inside a category lock: `SELECT_CATEGORY` for the `P
 
 Listing walks the `Program` category with the cursor and fetches each item's record. The bank count for the walk is the category's own child count (2/3), not the program bank letters: a Nord Stage 2 EX addresses programs in four banks while giving `Piano` six children. A category that reports itself exhausted having yielded nothing ends the walk unless a non-zero item count says more is to come.
 
+Re-reading one slot after an edit fetches it by address (30/31 inside the lock) instead of walking: status 0 is the record and 1 an empty slot. Measured on a Nord Stage 2 EX, including slots a copy, swap, rename, delete or move had just changed; each agreed with a fresh walk. Any other status falls back to the walk, since the Nord Grand's answers to a fetch by address are unmeasured.
+
 After a rename, move, swap or category change the app re-selects the affected slot(s) with 47/48 while still inside the lock. On a Nord Stage 2 EX none of those writes refreshes the panel on its own, and a 47/48 sent outside the lock does nothing there; on a Nord Grand a 47/48 outside the lock changes the active preset. Every reply carrying `(status, bank, item)` is checked on all three: a non-zero status is a refusal, and an echo naming a different slot means the instrument acted on the wrong one.
 
-A delete frees no space until the instrument's own reclaim runs: the units move from `used` to `reclaimable`.
+A delete in a block-counted area (samples) frees no space until the instrument's own reclaim runs: the units move from `used` to `reclaimable`. The program areas are counted in bytes (Nord Stage 2 EX) or in slots (Nord Grand), and a deleted program's space returns to `free` at once.
 
 ### Reliability
 

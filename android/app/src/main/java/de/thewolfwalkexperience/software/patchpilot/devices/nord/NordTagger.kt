@@ -43,7 +43,7 @@ internal class NordTagger(
     override fun canSetFavorite(address: SlotAddress): Boolean = false
 
     /**
-     * The category stored at [address]: one program-list walk, as [NordInstrument.refresh] pays.
+     * The category stored at [address], read by address as [NordInstrument.refresh] reads.
      * Null where the program carries an id this instrument does not name (`No Cat` on its display).
      */
     override suspend fun read(address: SlotAddress): PresetTags = deviceLock.withLock {
@@ -85,10 +85,6 @@ internal class NordTagger(
         throw InstrumentException.NotSupported("mark a favorite")
 
     /** The raw wire id stored at [address], or null where the slot is empty or carries none. */
-    private suspend fun categoryIdAt(address: SlotAddress): Int? {
-        val items = device.collectItemNames(
-            device.fetchCategoryItems(device.getProgramCategoryIndex()),
-        )
-        return items.firstOrNull { it.bank == address.bank && it.item == address.slot }?.categoryId
-    }
+    private suspend fun categoryIdAt(address: SlotAddress): Int? =
+        device.readProgram(address.bank, address.slot)?.categoryId
 }
