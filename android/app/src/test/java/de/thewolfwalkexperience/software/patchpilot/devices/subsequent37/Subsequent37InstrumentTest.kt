@@ -74,6 +74,23 @@ class Subsequent37InstrumentTest {
         assertNull(silent.advisory)
     }
 
+    /** An instrument that answers neither question is not offered as a session, since nothing else would answer either. */
+    @Test
+    fun `an instrument that answers neither the identity nor the settings request is refused`() = runTest {
+        val silent = subsequent37(
+            FakeSubsequent37(backgroundScope).apply {
+                identityReply = null
+                settingsReply = null
+            },
+        )
+        try {
+            silent.connect()
+            fail("a silent instrument was connected")
+        } catch (expected: InstrumentException.Timeout) {
+            assertTrue(expected.message!!.contains("answered neither"))
+        }
+    }
+
     /** The point of following the dump: rows appear while it is still arriving, not after 142 seconds. */
     @Test
     fun `the listing shows programs while the dump still arrives`() = runTest {

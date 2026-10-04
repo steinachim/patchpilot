@@ -9,6 +9,9 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -319,6 +322,26 @@ class Pro800EditorTest {
 
         assertTrue(fake.isEmptyAt(0))
         assertEquals("Organ I", fake.nameAt(3))
+    }
+
+    /** Cancelled after its first write, a swap still finishes: stopping there would leave one preset in two slots. */
+    @Test
+    fun `a cancelled swap finishes rather than stopping half done`() = runTest {
+        val fake = fake()
+        val pro800 = instrument(fake, backgroundScope)
+        val swap = launch { pro800.editor!!.swap(a(0), a(1)) }
+        while (fake.writeLog.isEmpty()) {
+            runCurrent()
+            advanceTimeBy(10)
+        }
+        swap.cancel()
+        // Joined rather than run to idle: the replies arrive through the exchange's collector in
+        // backgroundScope, which advanceUntilIdle does not wait for.
+        swap.join()
+
+        assertTrue(swap.isCancelled)
+        assertEquals("Strings", fake.nameAt(0))
+        assertEquals("Organ I", fake.nameAt(1))
     }
 
     /**

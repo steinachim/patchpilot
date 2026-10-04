@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.axefx3
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
@@ -71,6 +72,23 @@ class AxeFx3InstrumentTest {
         val silent = axeFx3(FakeAxeFx3().apply { firmwareReply = null }).apply { connect() }
         assertEquals(UNKNOWN_FIRMWARE, silent.identity.firmwareVersion)
         assertNull(silent.advisory)
+    }
+
+    /** A port that answers neither question is not offered as a session, since nothing else would answer either. */
+    @Test
+    fun `an instrument that answers neither the firmware nor the capabilities query is refused`() = runTest {
+        val silent = axeFx3(
+            FakeAxeFx3().apply {
+                firmwareReply = null
+                capabilitiesReply = null
+            },
+        )
+        try {
+            silent.connect()
+            fail("a silent instrument was connected")
+        } catch (expected: InstrumentException.Timeout) {
+            assertTrue(expected.message!!.contains("answered neither"))
+        }
     }
 
     @Test

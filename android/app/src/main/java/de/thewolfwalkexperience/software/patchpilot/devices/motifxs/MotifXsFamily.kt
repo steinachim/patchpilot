@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import android.content.Context
+import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.FamilyCatalog
@@ -24,6 +25,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+
+private const val TAG = "MotifXsFamily"
 
 private const val CATALOG_ASSET = "yamaha_motif_xs.json"
 
@@ -242,8 +245,13 @@ object MotifXsFamily : InstrumentFamily {
      * connect, while a missing table only drops the factory listing. Delete and move genuinely
      * cannot work without the blanks.
      */
-    private fun loadFactoryVoices(context: Context): MotifXsFactoryVoices =
-        runCatching { factoryVoices.load(context) }.getOrElse { MotifXsFactoryVoices() }
+    private fun loadFactoryVoices(context: Context): MotifXsFactoryVoices = try {
+        factoryVoices.load(context)
+    } catch (e: Exception) {
+        // Logged, since the only other symptom is a factory listing that is missing.
+        Log.w(TAG, "The Motif XS factory voice table could not be loaded; the factory listing is unavailable", e)
+        MotifXsFactoryVoices()
+    }
 
     /**
      * The instrument speaks MIDI SysEx over raw bulk endpoints: it declares a single

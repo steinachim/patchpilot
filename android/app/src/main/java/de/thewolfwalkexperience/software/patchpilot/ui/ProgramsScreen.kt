@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
+import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -163,7 +164,7 @@ fun ProgramsScreen(
 
     // What the session offers, derived once per connection state rather than re-read here on
     // every recomposition; empty while disconnected, so recomposing through a reconnect is safe.
-    // The hand-off to ConnectScreen is PatchPilotNavHost's.
+    // The hand-off to ConnectScreen is PatchPilotApp's.
     val session by viewModel.state.collectAsState()
     val capabilities by viewModel.capabilities.collectAsState()
     val supportedEdits = capabilities.supportedEdits
@@ -383,7 +384,7 @@ fun ProgramsScreen(
             val scanError = index.error
             when {
                 // This screen stays up through a resume's Disconnected/Searching/Opening dip (see
-                // PatchPilotNavHost's session-lost effect), so the reconnect shows as the wait it is
+                // PatchPilotApp's session-lost effect), so the reconnect shows as the wait it is
                 // rather than leaving the old rows under a "Not Connected" title.
                 session !is ConnectionState.Connected -> ConnectingWait()
 
@@ -511,7 +512,8 @@ private class DebugTapCounter {
 
     /** True when this tap completed the gesture, which also resets the count. */
     fun tap(): Boolean {
-        val now = System.currentTimeMillis()
+        // Monotonic: a wall-clock change cannot open the menu or swallow a tap.
+        val now = SystemClock.uptimeMillis()
         taps = taps.filter { now - it <= WINDOW_MS } + now
         if (taps.size < TAPS_TO_OPEN) return false
         taps = emptyList()

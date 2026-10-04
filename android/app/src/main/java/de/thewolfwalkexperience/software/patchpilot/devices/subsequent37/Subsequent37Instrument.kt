@@ -139,12 +139,24 @@ class Subsequent37Instrument(
 
     /**
      * The firmware version, from the standard Identity Reply, and the settings block, whose IN
-     * channel a selection is sent on. Neither stops a session.
+     * channel a selection is sent on. Either one missing still makes a session; both missing does
+     * not, since every later request would go unanswered too.
      */
     override suspend fun connect() {
         lock.withLock {
-            firmware = queryOrNull(TAG) { Subsequent37SysEx.decodeFirmware(device.identityReply()) } ?: UNKNOWN_FIRMWARE
+            val firmwareRead = queryOrNull(TAG) { Subsequent37SysEx.decodeFirmware(device.identityReply()) }
             settings = queryOrNull(TAG) { device.settings() }
+            if (firmwareRead == null && settings == null) {
+                throw InstrumentException.Timeout(
+                    "connecting",
+                    explanation = "The Subsequent 37 answered neither the Identity Request nor the " +
+                        "request for its settings, so nothing can be read from it. Check that it is " +
+                        "switched on and connected by USB, then retry. It answers nothing else while " +
+                        "it sends its preset list, so if a list was being read when Patch Pilot last " +
+                        "closed, it may still be sending it: that takes about 2½ minutes.",
+                )
+            }
+            firmware = firmwareRead ?: UNKNOWN_FIRMWARE
             advisory = advisoryText()
             Log.i(TAG, "$catalogName, firmware $firmware, IN channel ${settings?.inChannelLabel ?: "unknown"}")
         }

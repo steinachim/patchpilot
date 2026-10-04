@@ -29,6 +29,7 @@ class DemoLibrary(
      */
     data class Program(val name: String, val category: String? = null)
 
+    /** Not synchronised: every caller is a coroutine on the ViewModel's scope, which runs on the main thread. */
     private val programs: MutableMap<SlotAddress, Program> = seedPrograms().toMutableMap()
 
     /** Every occupied slot, in device order, as browser rows. */

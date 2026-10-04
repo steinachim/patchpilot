@@ -73,7 +73,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val reportState by reportRunner.state.collectAsState()
     val reportError by reportRunner.error.collectAsState()
     // Collected rather than read as plain properties, so the buttons stay honest through a
-    // reconnect's dip. The hand-off when a session is lost is PatchPilotNavHost's.
+    // reconnect's dip. The hand-off when a session is lost is PatchPilotApp's.
     val capabilities by viewModel.capabilities.collectAsState()
     val hasReport = capabilities.hasReport
     val canVerifyFactoryNames = capabilities.canVerifyFactoryNames

@@ -69,14 +69,6 @@ private fun ConnectionState.rendersOnSessionScreens(): Boolean = when (this) {
 fun PatchPilotApp(
     viewModel: InstrumentViewModel,
     navController: NavHostController,
-) {
-    PatchPilotNavHost(navController, viewModel)
-}
-
-@Composable
-private fun PatchPilotNavHost(
-    navController: NavHostController,
-    viewModel: InstrumentViewModel,
     modifier: Modifier = Modifier,
 ) {
     // Guards every navigate()/popBackStack() below against firing while the current destination

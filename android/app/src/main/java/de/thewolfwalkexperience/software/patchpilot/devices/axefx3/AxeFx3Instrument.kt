@@ -150,8 +150,19 @@ class AxeFx3Instrument(
     }
 
     private suspend fun connectLocked() {
-        firmware = queryOrNull(TAG) { AxeFx3SysEx.decodeFirmware(device.firmwareReply())?.version } ?: UNKNOWN_FIRMWARE
+        val firmwareRead = queryOrNull(TAG) { AxeFx3SysEx.decodeFirmware(device.firmwareReply())?.version }
         capabilities = queryOrNull(TAG) { AxeFx3SysEx.decodeCapabilities(device.capabilitiesReply()) }.orEmpty()
+        // Either answer is enough to go on; neither means every later request would go unanswered
+        // too, so there is no session to offer.
+        if (firmwareRead == null && capabilities.isEmpty()) {
+            throw InstrumentException.Timeout(
+                "connecting",
+                explanation = "The Axe-Fx III answered neither its firmware version nor its " +
+                    "capabilities, so nothing can be read from it. Check that it is switched on and " +
+                    "connected by USB, then retry.",
+            )
+        }
+        firmware = firmwareRead ?: UNKNOWN_FIRMWARE
         presetCount = AxeFx3SysEx.presetCountOf(capabilities)
         model = if (presetCount == AxeFx3SysEx.PRESET_COUNT_MARK_II) "Mark II" else "Mark I"
         format = LinearAddressFormat(presetCount, config.presetsPerBank)

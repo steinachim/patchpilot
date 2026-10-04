@@ -14,6 +14,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -23,14 +24,16 @@ private const val TAG = "Pro800Editor"
 /**
  * Rename, move, swap and delete on an instrument that has none of those commands: every one is
  * composed from reads and writes, and every one has a moment where a preset exists in exactly one
- * place. Four rules follow:
+ * place. Five rules follow:
  *
  *  1. Verify by reading back after every write; the write's own status carries no address and is
  *     not waited for (see [Pro800Instrument.write]).
  *  2. Order the destructive step last: a move writes the destination and only then erases the
- *     source, so an interruption leaves a duplicate rather than a hole.
+ *     source, so an erase that fails leaves a duplicate rather than a hole.
  *  3. Roll back what cannot be finished: a swap whose second write fails puts the first back.
  *  4. Keep what was overwritten in [undoBuffer] for the session.
+ *  5. Do not stop part way: a move's or a swap's writes run under [NonCancellable], so cancelling
+ *     one waits for it to finish rather than leaving it half done.
  */
 class Pro800Editor(
     private val transfer: PresetTransfer,
@@ -90,8 +93,10 @@ class Pro800Editor(
         }
 
         remember(from, source)
-        writeVerified(to, source, expectName = source.name)
-        writeEmptyVerified(from)
+        withContext(NonCancellable) {
+            writeVerified(to, source, expectName = source.name)
+            writeEmptyVerified(from)
+        }
     }
 
     /**
@@ -127,12 +132,16 @@ class Pro800Editor(
         remember(a, first)
         remember(b, second)
 
-        writeOrEmpty(a, second)
-        try {
-            writeOrEmpty(b, first)
-        } catch (e: Exception) {
-            rollback(a, first, becauseOf = e)
-            throw e
+        withContext(NonCancellable) {
+            writeOrEmpty(a, second)
+            try {
+                writeOrEmpty(b, first)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                rollback(a, first, becauseOf = e)
+                throw e
+            }
         }
     }
 

@@ -158,6 +158,10 @@ internal class MotifXsTagger(
      * every time. The table also changes when the player marks something on the front panel, so
      * the cache is dropped on every write and at the start of every listing - see
      * `MotifXsInstrument.index`.
+     *
+     * Not synchronised: every caller is a coroutine on the ViewModel's scope, which runs on the
+     * main thread. Two of them can still interleave at a suspension point, where the worst case is
+     * a table read just before an invalidation being kept - one that was read from the instrument.
      */
     private val marks = HashMap<String, ByteArray>()
 
