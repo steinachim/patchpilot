@@ -19,7 +19,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
  *   reads a serial number, so [instrument] names a model, and two units of the same model would
  *   otherwise share one cached listing. The path is stable across the resume rebuild this cache
  *   exists to survive, but it is not a reliable replug detector (Android hands the same port the
- *   same path again), so the ViewModel drops the listing on the USB detach broadcast; this field
+ *   same path again), so the listing is dropped on the USB detach broadcast; this field
  *   keeps two units apart when a detach is missed or the bus is MIDI.
  *
  * No decoder-version field: this cache dies with the process, so the code that decoded its
@@ -51,7 +51,7 @@ data class CacheKey(
  *
  * For surviving a reconnect, not a restart: a resume on a USB session tears the session down and
  * rebuilds it, and without this a Motif XS would re-index its 416 user voices (about 93 s) every
- * time the user switched apps. Owned by the ViewModel, so it outlives the instrument object the
+ * time the user switched apps. Owned by `PresetListings`, so it outlives the instrument object the
  * reconnect throws away. Not persisted to disk - see `docs/ARCHITECTURE.md`, "Caching".
  */
 class PresetIndexCache {
@@ -82,7 +82,7 @@ class PresetIndexCache {
      * Nord lists only the slots it holds, so a copy into an empty slot writes through an address
      * the listing never had, and appended it would replay under a second bank header.
      */
-    fun update(key: CacheKey, slot: PresetSlot) = synchronized(lock) {
+    fun update(key: CacheKey, slot: PresetSlot): Unit = synchronized(lock) {
         val index = entries[key] ?: return
         if (slot.address in index) {
             index[slot.address] = slot

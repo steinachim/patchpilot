@@ -7,6 +7,7 @@ import android.content.Context
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
+import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 
 private const val TAG = "InstrumentRegistry"
 
@@ -28,6 +29,14 @@ interface InstrumentFamily {
      * fails loudly here; that is a wiring bug in discovery.
      */
     fun create(context: Context, descriptor: InstrumentDescriptor, transport: Transport): Instrument
+
+    /**
+     * Builds an instrument on this family's protocol for a USB device the catalog does not list,
+     * or null where the family never guesses. Which devices reach this is [UnknownDevicePolicy]'s
+     * decision.
+     */
+    fun createForUnknown(transport: UsbBulkTransport, name: String, vendorId: Int, productId: Int): Instrument? =
+        null
 }
 
 /**
@@ -64,4 +73,9 @@ object InstrumentRegistry {
 
     fun create(context: Context, descriptor: InstrumentDescriptor, transport: Transport): Instrument =
         family(descriptor.family).create(context, descriptor, transport)
+
+    /** [InstrumentFamily.createForUnknown] of the family [UnknownDevicePolicy.familyFor] names. */
+    fun createForUnknown(familyId: String, transport: UsbBulkTransport, name: String, vendorId: Int, productId: Int): Instrument =
+        family(familyId).createForUnknown(transport, name, vendorId, productId)
+            ?: error("The '$familyId' family does not open unrecognised devices.")
 }

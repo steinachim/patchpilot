@@ -78,7 +78,7 @@ class DemoCatalog {
 
     private fun programBank(): LinkedHashMap<Slot, String> {
         // (bank, item) left with gaps on purpose, so ProgramsScreen's empty-slot handling
-        // (drag-to-move onto a gap, InstrumentViewModel.allSlots) has something to show.
+        // (drag-to-move onto a gap, PresetListings.allSlots) has something to show.
         val entries = listOf(
             Slot(0, 0) to "Init Program",
             Slot(0, 1) to "Warm Pad",

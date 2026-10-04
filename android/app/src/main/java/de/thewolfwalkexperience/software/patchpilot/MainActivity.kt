@@ -22,7 +22,6 @@ import de.thewolfwalkexperience.software.patchpilot.ui.PatchPilotApp
 import de.thewolfwalkexperience.software.patchpilot.ui.InstrumentViewModel
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.PatchPilotTheme
-import de.thewolfwalkexperience.software.patchpilot.ui.theme.ThemePreferences
 import de.thewolfwalkexperience.software.patchpilot.usb.usbDevice
 
 private const val TAG = "MainActivity"
@@ -41,9 +40,6 @@ class MainActivity : ComponentActivity() {
         // A cold start from the manifest's USB_DEVICE_ATTACHED filter needs nothing beyond this
         // log line: the ViewModel is new, and ConnectScreen scans from Disconnected on its own.
         intent.attachedUsbDevice()?.let { Log.i(TAG, "Started for the USB attach of ${it.deviceName}") }
-        // A display setting rather than instrument state, and every screen needs it before an
-        // instrument is connected (Settings is reachable from ConnectScreen).
-        val themePreferences = ThemePreferences(applicationContext)
         setContent {
             // Created outside PatchPilotTheme's content lambda and threaded down: the `remember`
             // that hands out this controller lives in whatever composition position calls it (see
@@ -53,7 +49,7 @@ class MainActivity : ComponentActivity() {
             // Nothing until the stored theme arrives, which is a frame or more after onCreate:
             // painting the default theme in the meantime would flash the wrong one on a
             // Steampunk install. The launch background covers the gap instead (themes.xml).
-            val appTheme by themePreferences.theme.collectAsState(initial = null)
+            val appTheme by viewModel.preferences.theme.collectAsState(initial = null)
             appTheme?.let { chosen ->
                 PatchPilotTheme(appTheme = chosen) {
                     val theme = LocalThemeStyle.current
@@ -62,7 +58,7 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .let { theme.screenTexture(it) },
                     ) {
-                        PatchPilotApp(viewModel, themePreferences, navController)
+                        PatchPilotApp(viewModel, navController)
                     }
                 }
             }
@@ -95,8 +91,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // Whether a rebuild is wanted is the session's own answer - see Instrument.rebuildOnResume.
-        if (hasResumedBefore && viewModel.shouldRebuildOnResume) {
-            viewModel.forceReconnect()
+        if (hasResumedBefore && viewModel.connection.shouldRebuildOnResume) {
+            viewModel.connection.forceReconnect()
         }
         hasResumedBefore = true
     }

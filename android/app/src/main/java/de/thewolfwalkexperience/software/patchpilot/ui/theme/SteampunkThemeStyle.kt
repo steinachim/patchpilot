@@ -19,6 +19,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -83,8 +84,17 @@ object SteampunkThemeStyle : ThemeStyle {
     override fun screenFrame(base: Modifier): Modifier = base.steampunkFrame()
     override fun screenTexture(base: Modifier): Modifier = base.steampunkTexture()
 
+    @Composable
+    @ReadOnlyComposable
     override fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean): Modifier =
-        base.steampunkRowPanel(dragged, dropTarget)
+        base.steampunkRowPanel(
+            borderColor = when {
+                dragged -> SteampunkAccents.brassLight
+                dropTarget -> MaterialTheme.colorScheme.tertiary
+                else -> SteampunkAccents.brassDark.copy(alpha = 0.7f)
+            },
+            shape = MaterialTheme.shapes.small,
+        )
 
     /**
      * Clear of the cap screws [steampunkVerticalScrews] draws.

@@ -17,7 +17,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
-import de.thewolfwalkexperience.software.patchpilot.ui.theme.ThemePreferences
 
 private const val ROUTE_CONNECT = "connect"
 private const val ROUTE_PROGRAMS = "programs"
@@ -68,17 +67,15 @@ private fun ConnectionState.rendersOnSessionScreens(): Boolean = when (this) {
 @Composable
 fun PatchPilotApp(
     viewModel: InstrumentViewModel,
-    themePreferences: ThemePreferences,
     navController: NavHostController,
 ) {
-    PatchPilotNavHost(navController, viewModel, themePreferences)
+    PatchPilotNavHost(navController, viewModel)
 }
 
 @Composable
 private fun PatchPilotNavHost(
     navController: NavHostController,
     viewModel: InstrumentViewModel,
-    themePreferences: ThemePreferences,
     modifier: Modifier = Modifier,
 ) {
     // Guards every navigate()/popBackStack() below against firing while the current destination
@@ -148,7 +145,7 @@ private fun PatchPilotNavHost(
                 // navigation the graph's own id is 0, and popping that leaves the host with no
                 // destination to render.
                 onBack = {
-                    viewModel.disconnect(showPicker = true)
+                    viewModel.connection.disconnect(showPicker = true)
                     returnToConnect()
                 },
                 onOpenDebugMenu = { guardedNavigate(ROUTE_DEBUG) },
@@ -160,9 +157,7 @@ private fun PatchPilotNavHost(
         }
         composable(ROUTE_SETTINGS) {
             SettingsScreen(
-                themePreferences,
-                viewModel.connectionPreferences,
-                viewModel.noticePreferences,
+                viewModel.preferences,
                 onOpenLicenses = { guardedNavigate(ROUTE_LICENSES) },
                 onBack = { guardedPopBackStack() },
             )

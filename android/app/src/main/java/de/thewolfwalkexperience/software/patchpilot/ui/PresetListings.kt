@@ -1,0 +1,315 @@
+// SPDX-FileCopyrightText: 2026 Achim Stein
+// SPDX-License-Identifier: GPL-3.0-only
+
+package de.thewolfwalkexperience.software.patchpilot.ui
+
+import android.util.Log
+import de.thewolfwalkexperience.software.patchpilot.R
+import de.thewolfwalkexperience.software.patchpilot.cache.CacheKey
+import de.thewolfwalkexperience.software.patchpilot.cache.CachingBrowser
+import de.thewolfwalkexperience.software.patchpilot.cache.PresetIndexCache
+import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.Instrument
+import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
+import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
+import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+private const val TAG = "PresetListings"
+
+/** Sanity cap for [PresetListings.allSlots]'s per-bank loop bound - see its own comment. */
+private const val MAX_ITEMS_PER_BANK = 10_000
+
+/**
+ * The preset listings of the connected instrument, one per [PresetScope], collected here rather
+ * than in the composition, so a rotation does not restart a 93-second scan. Each scope keeps its
+ * own state: "Copy to..." has to know which user slots are free while the factory listing is on
+ * screen, and an edit made from the favorites listing changes a row the user listing also holds.
+ *
+ * @param instrument the session's instrument, or null between sessions.
+ * @param deviceHandle the handle of the device the session runs over - half of the cache key.
+ */
+internal class PresetListings(
+    private val scope: CoroutineScope,
+    private val instrument: () -> Instrument?,
+    private val deviceHandle: () -> String?,
+    private val strings: StringResolver,
+) {
+    private val _indexes = MutableStateFlow<Map<PresetScope, PresetIndexState>>(emptyMap())
+
+    private val _scope = MutableStateFlow(PresetScope.USER)
+
+    /** Which listing the browser shows. */
+    val browseScope: StateFlow<PresetScope> = _scope.asStateFlow()
+
+    /**
+     * The listing for whichever scope is selected. `Eagerly` rather than `WhileSubscribed`: the
+     * scan driving it outlives the composition, so a state that reset itself when the screen went
+     * away would undo that.
+     */
+    val index: StateFlow<PresetIndexState> = combine(_scope, _indexes) { scope, byScope ->
+        byScope[scope] ?: PresetIndexState()
+    }.stateIn(scope, SharingStarted.Eagerly, PresetIndexState())
+
+    /**
+     * The user listing specifically, whatever scope is selected. A flow rather than a getter,
+     * since "can this factory voice be copied, and to where?" is asked while another scope is
+     * displayed and a plain read would be answered once.
+     */
+    val userIndex: StateFlow<PresetIndexState> = _indexes
+        .map { it[PresetScope.USER] ?: PresetIndexState() }
+        .stateIn(scope, SharingStarted.Eagerly, PresetIndexState())
+
+    /** The listing of [scope] as it stands, or null where none has started. */
+    fun listing(scope: PresetScope): PresetIndexState? = _indexes.value[scope]
+
+    // One job per scope, so switching never throws a 93-second user scan away. Two listings at
+    // once is safe: `SysExExchange` serialises one request/reply at a time, so a favorites read
+    // started mid-scan interleaves with it and each reply is matched on its own echoed address.
+    private val indexJobs = mutableMapOf<PresetScope, Job>()
+    private var indexGeneration = 0
+
+    /** Which instrument [_indexes] describes, so a *different* one still triggers a fresh scan. */
+    private var indexedInstrument: String? = null
+
+    /**
+     * The last instrument actually browsed, surviving a teardown, which [indexedInstrument] does
+     * not: [cancel] clears that one on every disconnect, and a resume force-reconnects, so keyed
+     * on it the browser would drop out of the factory or favorites listing every time the user
+     * switched apps.
+     */
+    private var lastBrowsedInstrument: String? = null
+
+    /**
+     * Preset listings, kept for as long as this object lives - longer than any one instrument,
+     * because a resume replaces the instrument on every return to the foreground, and a Motif XS
+     * would otherwise re-read 416 user voices (about 93 s) every time. Not persisted - see
+     * `docs/ARCHITECTURE.md`, "Caching".
+     */
+    private val indexCache = PresetIndexCache()
+
+    private fun updateIndex(scope: PresetScope, transform: (PresetIndexState) -> PresetIndexState) {
+        _indexes.update { byScope ->
+            byScope + (scope to transform(byScope[scope] ?: PresetIndexState()))
+        }
+    }
+
+    /** True where [scope]'s listing has finished or failed, so re-running it would buy nothing. */
+    private fun isSettled(scope: PresetScope): Boolean =
+        _indexes.value[scope]?.let { it.complete || it.error != null } == true
+
+    /** Switches which listing the browser shows, starting it if it has not been read yet; a finished scope costs nothing. */
+    fun setScope(scope: PresetScope) {
+        if (_scope.value == scope) return
+        _scope.value = scope
+        val key = instrument()?.identity?.stableKey ?: return
+        if (isSettled(scope) || indexJobs[scope]?.isActive == true) return
+        launchIndex(key, scope)
+    }
+
+    /**
+     * Starts the listing unless one is running or finished for this instrument. Idempotent, since
+     * both callers are safe: ProgramsScreen on first composition, and the coordinator whenever a
+     * session begins, which is what covers a reconnect.
+     */
+    fun start() {
+        val key = instrument()?.identity?.stableKey ?: return
+        // A different instrument invalidates all three listings and returns the browser to the
+        // user presets. Keyed on the instrument rather than the session, which a resume rebuilds.
+        if (key != lastBrowsedInstrument) {
+            _indexes.value = emptyMap()
+            _scope.value = PresetScope.USER
+        }
+        lastBrowsedInstrument = key
+        val scope = _scope.value
+        if (key == indexedInstrument && (indexJobs[scope]?.isActive == true || isSettled(scope))) return
+        launchIndex(key, scope)
+    }
+
+    /** Re-collects the current listing, keeping the cache: [refreshEdited] has already written the changed addresses through. */
+    fun reload(): Int? {
+        val key = instrument()?.identity?.stableKey ?: return null
+        return launchIndex(key, _scope.value)
+    }
+
+    /**
+     * Drops the cache and re-reads from the instrument - the pull-to-refresh gesture. Returns the
+     * generation it started, so a caller can tell its own refresh finishing from another's; see
+     * [PresetIndexState.generation].
+     */
+    fun refresh(): Int? {
+        invalidate()
+        return reload()
+    }
+
+    private fun launchIndex(key: String, scope: PresetScope): Int {
+        indexJobs.remove(scope)?.cancel()
+        indexedInstrument = key
+        // One counter across all scopes: a per-scope counter would let two scopes issue the same
+        // number, and a refresh of one would look like the screen's own refresh landing.
+        val generation = ++indexGeneration
+        updateIndex(scope) { PresetIndexState(generation = generation) }
+        indexJobs[scope] = this.scope.launch {
+            try {
+                browser().index(scope).collect { update -> updateIndex(scope) { it.plus(update) } }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Listing $scope failed", e)
+                updateIndex(scope) {
+                    it.copy(error = e.message ?: strings.get(R.string.listing_unknown_error), progress = null)
+                }
+            }
+        }
+        return generation
+    }
+
+    /**
+     * Drops the listing and whatever is producing it, so nothing survives into the next session.
+     *
+     * No fresh [PresetIndexState]: emitting one would recompose ProgramsScreen at the moment there
+     * is no instrument to derive its rail and placeholder rows from. [launchIndex] resets the
+     * state when the next scan starts.
+     */
+    fun cancel() {
+        indexJobs.values.forEach { it.cancel() }
+        indexJobs.clear()
+        indexedInstrument = null
+    }
+
+    /**
+     * Throws away the cached listing so the next collection re-reads the instrument - what
+     * pull-to-refresh calls. Only the user listing is cached (see [CachingBrowser]), so this is a
+     * no-op for the other two: refreshing the favorites listing must not cost 93 seconds the next
+     * time the user listing is shown.
+     */
+    fun invalidate() {
+        if (_scope.value != PresetScope.USER) return
+        invalidateUserCache()
+    }
+
+    /**
+     * Drops the cached user listing whichever scope is on screen. Separate from [invalidate]: a
+     * failed re-read after an edit makes the cached user listing untrustworthy whichever listing
+     * the edit was made from, and so does the device being unplugged.
+     */
+    fun invalidateUserCache() {
+        val instrument = instrument() ?: return
+        cacheKey(instrument)?.let { indexCache.invalidate(it) }
+    }
+
+    /**
+     * Re-reads the slots an edit touched, so the cached listing matches the instrument - every
+     * address it touched, since a move and a swap each change two. A failed re-read drops the
+     * whole cached index rather than leaving a row nothing has confirmed.
+     *
+     * The re-read slot is written into every listing already holding that address, not only into
+     * the cache: a favorited user voice sits in two listings at once, and a finished listing is
+     * never re-collected.
+     */
+    suspend fun refreshEdited(vararg addresses: SlotAddress) {
+        val browser = browser()
+        for (address in addresses) {
+            try {
+                val slot = browser.refresh(address)
+                _indexes.update { byScope -> byScope.mapValues { (_, state) -> state.replacing(slot) } }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't re-read $address after an edit; dropping the cached index", e)
+                invalidateUserCache()
+                return
+            }
+        }
+    }
+
+    /**
+     * Forgets the favorites listing and stops a scan still filling it: a scan left running would
+     * write rows read before the edit into the fresh state, which [setScope] would then show as
+     * settled.
+     */
+    fun dropFavorites() {
+        indexJobs.remove(PresetScope.FAVORITES)?.cancel()
+        _indexes.update { it - PresetScope.FAVORITES }
+    }
+
+    /**
+     * Which addresses hold a preset. A user listing still running is waited for and read:
+     * collecting the browser beside it would start a second full read behind the first, about
+     * 142 s on a Subsequent 37. Otherwise the browser is collected, from the cache where a
+     * finished listing left one.
+     */
+    suspend fun occupiedSlots(): Set<SlotAddress> {
+        indexJobs[PresetScope.USER]?.join()
+        val slots = _indexes.value[PresetScope.USER]?.takeIf { it.complete }?.slots
+            ?: browser().index()
+                .filterIsInstance<IndexUpdate.Slots>()
+                .toList()
+                .flatMap { it.slots }
+        return slots.filterNot { it.isEmpty }.map { it.address }.toSet()
+    }
+
+    /**
+     * Every address within the connected instrument's bank/slot range, whether or not a preset is
+     * actually stored there - used by ProgramsScreen to show the gaps a device that only reports
+     * occupied slots leaves behind. Empty rather than throwing while nothing is connected: it is
+     * read during composition, across the reconnect a resume causes.
+     */
+    fun allSlots(scope: PresetScope = PresetScope.USER): List<PresetSlot> {
+        val layout = instrument()?.layout ?: return emptyList()
+        // A favorites listing has no address space of its own: it is a sparse set drawn from every
+        // bank, so there is no address at which one is "missing". Returning the whole instrument
+        // here would make "show empty slots" offer 1,633 placeholder rows for a list of eleven.
+        if (scope == PresetScope.FAVORITES) return emptyList()
+        val wantReadOnly = scope == PresetScope.FACTORY
+        // Clamped on top of the protocol layer's own bound: a bank's capacity traces back to a
+        // value the instrument reported, and this is the loop it feeds.
+        return layout.banks.flatMapIndexed { bank, spec ->
+            if (spec.readOnly != wantReadOnly) return@flatMapIndexed emptyList()
+            (0 until spec.slotCount.coerceIn(0, MAX_ITEMS_PER_BANK)).map { slot ->
+                val address = SlotAddress(bank, slot)
+                PresetSlot(
+                    address = address,
+                    displayId = layout.format.format(address),
+                    bankLabel = spec.label,
+                    name = null,
+                )
+            }
+        }
+    }
+
+    /**
+     * The connected instrument's browser, wrapped so a listing can come from memory. Built per
+     * call: [CachingBrowser] carries no state, and [indexCache] outlives the instrument a
+     * reconnect throws away. Demo mode is not wrapped - its library is already in memory.
+     */
+    private fun browser(): PresetBrowser {
+        val instrument = instrument() ?: error("Not connected to an instrument")
+        val key = cacheKey(instrument) ?: return instrument.browser
+        return CachingBrowser(instrument.browser, indexCache, key)
+    }
+
+    /**
+     * The cache key for [instrument]'s listing, or null where nothing is cached: demo mode, whose
+     * library is in memory already, and a session with no device handle to key on.
+     */
+    private fun cacheKey(instrument: Instrument): CacheKey? {
+        if (instrument is DemoInstrument) return null
+        return CacheKey.of(instrument, deviceHandle() ?: return null)
+    }
+}

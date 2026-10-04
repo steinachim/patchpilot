@@ -72,13 +72,11 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val reportRunner = viewModel.deviceReportRunner
     val reportState by reportRunner.state.collectAsState()
     val reportError by reportRunner.error.collectAsState()
-    // What the connected instrument offers, keyed on the session as ProgramsScreen keys its facet
-    // reads: nothing about a plain getter tells Compose when the answer changes, so read as plain
-    // properties these would not recover when a session came back. The hand-off when a session is
-    // lost is PatchPilotNavHost's; this only keeps the buttons honest through a reconnect's dip.
-    val session by viewModel.state.collectAsState()
-    val hasReport = remember(session) { viewModel.hasReport }
-    val canVerifyFactoryNames = remember(session) { viewModel.canVerifyFactoryNames }
+    // Collected rather than read as plain properties, so the buttons stay honest through a
+    // reconnect's dip. The hand-off when a session is lost is PatchPilotNavHost's.
+    val capabilities by viewModel.capabilities.collectAsState()
+    val hasReport = capabilities.hasReport
+    val canVerifyFactoryNames = capabilities.canVerifyFactoryNames
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -127,7 +125,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     var verifyBank by remember { mutableStateOf<String?>(null) }
     var verifyProgress by remember { mutableStateOf<String?>(null) }
     var verifyResult by remember { mutableStateOf<List<String>?>(null) }
-    val factoryBanks = remember(session) { viewModel.factoryBanks() }
+    val factoryBanks = capabilities.factoryBanks
 
     fun onVerifyFactoryNames(bank: Int) {
         scope.launch {

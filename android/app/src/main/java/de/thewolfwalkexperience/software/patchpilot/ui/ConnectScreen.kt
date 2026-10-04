@@ -39,7 +39,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import de.thewolfwalkexperience.software.patchpilot.usb.displayLabel
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.BarAction
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import androidx.compose.runtime.getValue
@@ -55,6 +54,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
     // would let it be supported. The instrument is already connected here, since the advisory is
     // raised after the handshake.
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
+    val capabilities by viewModel.capabilities.collectAsState()
     // Said rather than swallowed: a read the cable interrupted lands in the same Done as a whole
     // one, and the report is shared the moment it is read. Kept until the next read.
     var incompleteReads by rememberSaveable { mutableStateOf(0) }
@@ -65,7 +65,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
     )
 
     LaunchedEffect(Unit) {
-        if (state is ConnectionState.Disconnected) viewModel.connect()
+        if (state is ConnectionState.Disconnected) viewModel.connection.connect()
     }
     LaunchedEffect(state) {
         if (state is ConnectionState.Connected) onConnected()
@@ -151,7 +151,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
             is ConnectionState.Error -> {
                 Text(stringResource(R.string.programs_error, s.message), color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(16.dp))
-                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
+                theme.FilledButton(onClick = { viewModel.connection.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
             // Retry re-asks: the permission is still not held, so the next open puts the system
             // dialog up again. Nothing else does - see ConnectionState.PermissionDenied.
@@ -163,7 +163,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                 Spacer(Modifier.height(8.dp))
                 Text(stringResource(R.string.connect_permission_denied_hint))
                 Spacer(Modifier.height(16.dp))
-                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
+                theme.FilledButton(onClick = { viewModel.connection.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
             // Not styled as an error: nothing is broken, the instrument is listening on a
             // different port, and what the user needs is the sequence that changes it, legible
@@ -187,7 +187,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                     )
                 }
                 Spacer(Modifier.height(16.dp))
-                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
+                theme.FilledButton(onClick = { viewModel.connection.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
             is ConnectionState.Connected -> {
                 Text(stringResource(R.string.connect_connected, s.instrument.identity.name))
@@ -224,7 +224,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                     theme.DeviceRow(
                         label = entry.label,
                         sublabel = sublabel,
-                        onClick = { viewModel.selectEntry(entry) },
+                        onClick = { viewModel.connection.selectEntry(entry) },
                     )
                     Spacer(Modifier.height(4.dp))
                 }
@@ -237,7 +237,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry_search)) }
+                theme.FilledButton(onClick = { viewModel.connection.connect() }) { Text(stringResource(R.string.action_retry_search)) }
             }
             is ConnectionState.NothingFound -> {
                 Text(stringResource(R.string.connect_none_found))
@@ -253,7 +253,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                     }
                 }
                 Spacer(Modifier.height(16.dp))
-                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry)) }
+                theme.FilledButton(onClick = { viewModel.connection.connect() }) { Text(stringResource(R.string.action_retry)) }
             }
             is ConnectionState.AdvisoryWarning -> {
                 // The same shape as the unknown-device gate below: the same kind of question, and
@@ -268,15 +268,15 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                 Text(s.message, color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(16.dp))
                 Row {
-                    OutlinedButton(onClick = { viewModel.declineAdvisory() }) {
+                    OutlinedButton(onClick = { viewModel.connection.declineAdvisory() }) {
                         Text(stringResource(R.string.action_disconnect))
                     }
                     Spacer(Modifier.width(8.dp))
-                    theme.FilledButton(onClick = { viewModel.confirmAdvisory() }) {
+                    theme.FilledButton(onClick = { viewModel.connection.confirmAdvisory() }) {
                         Text(stringResource(R.string.action_continue_anyway))
                     }
                 }
-                if (viewModel.hasReport) {
+                if (capabilities.hasReport) {
                     TextButton(
                         onClick = { pendingShare = reportShare.dialog() },
                         enabled = !reportShare.running,
@@ -305,12 +305,12 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                     color = MaterialTheme.colorScheme.error,
                 )
                 Spacer(Modifier.height(16.dp))
-                theme.FilledButton(onClick = { viewModel.connect() }) { Text(stringResource(R.string.action_retry_search)) }
+                theme.FilledButton(onClick = { viewModel.connection.connect() }) { Text(stringResource(R.string.action_retry_search)) }
             }
             is ConnectionState.UnknownDeviceWarning -> {
                 Text(stringResource(R.string.connect_unknown_title), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
-                Text(s.device.displayLabel())
+                Text(s.device.label)
                 Spacer(Modifier.height(16.dp))
                 Text(
                     stringResource(R.string.connect_unknown_warning),
@@ -318,9 +318,9 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
                 )
                 Spacer(Modifier.height(16.dp))
                 Row {
-                    OutlinedButton(onClick = { viewModel.cancelUnknownDeviceSelection() }) { Text(stringResource(R.string.action_cancel)) }
+                    OutlinedButton(onClick = { viewModel.connection.cancelUnknownDeviceSelection() }) { Text(stringResource(R.string.action_cancel)) }
                     Spacer(Modifier.width(8.dp))
-                    theme.FilledButton(onClick = { viewModel.confirmUnknownDevice(s.device) }) { Text(stringResource(R.string.action_continue_anyway)) }
+                    theme.FilledButton(onClick = { viewModel.connection.confirmUnknownDevice(s.device) }) { Text(stringResource(R.string.action_continue_anyway)) }
                 }
             }
         }
@@ -337,7 +337,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onConnected: () -> Unit, onOpe
             Spacer(Modifier.height(24.dp))
             // One demo device, not one per family: a second entry would read as a second
             // instrument the app claims to support.
-            TextButton(onClick = { viewModel.connectDemo() }) { Text(stringResource(R.string.action_try_demo)) }
+            TextButton(onClick = { viewModel.connection.connectDemo() }) { Text(stringResource(R.string.action_try_demo)) }
         }
     }
     }

@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.ui.theme
 
 import android.provider.Settings
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -27,7 +28,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -36,9 +36,17 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.currentValueOf
+import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.unit.IntOffset
@@ -85,10 +93,10 @@ private fun rememberReduceMotion(): Boolean {
  * One frame, one placement rule, used identically everywhere a screen wants it -
  * `ConnectScreen`'s root and (via `PatchPilotScaffold`) every `Scaffold`-based screen.
  */
-fun Modifier.steampunkFrame(): Modifier = composed {
+fun Modifier.steampunkFrame(): Modifier {
     val brassDark = SteampunkAccents.brassDark
     val cornerRadius = 24.dp
-    drawWithContent {
+    return drawWithContent {
         drawContent()
         val inset = 8.dp.toPx()
         val radiusPx = cornerRadius.toPx()
@@ -118,11 +126,21 @@ fun Modifier.steampunkFrame(): Modifier = composed {
  * width), they are shrunk to share it evenly and the mid strip is skipped rather than drawn at a
  * negative width.
  */
-fun Modifier.steampunkPlaqueHeader(): Modifier = composed {
-    val left = ImageBitmap.imageResource(R.drawable.steampunk_plaque_left)
-    val mid = ImageBitmap.imageResource(R.drawable.steampunk_plaque_mid)
-    val right = ImageBitmap.imageResource(R.drawable.steampunk_plaque_right)
-    drawBehind {
+fun Modifier.steampunkPlaqueHeader(): Modifier = this then PlaqueHeaderElement
+
+private data object PlaqueHeaderElement : ModifierNodeElement<PlaqueHeaderNode>() {
+    override fun create() = PlaqueHeaderNode()
+    override fun update(node: PlaqueHeaderNode) = Unit
+    override fun InspectorInfo.inspectableProperties() {
+        name = "steampunkPlaqueHeader"
+    }
+}
+
+private class PlaqueHeaderNode : ResourceBitmapNode() {
+    override fun ContentDrawScope.draw() {
+        val left = bitmap(R.drawable.steampunk_plaque_left)
+        val mid = bitmap(R.drawable.steampunk_plaque_mid)
+        val right = bitmap(R.drawable.steampunk_plaque_right)
         val scale = size.height / left.height
         var leftWidth = left.width * scale
         var rightWidth = right.width * scale
@@ -149,6 +167,7 @@ fun Modifier.steampunkPlaqueHeader(): Modifier = composed {
                 dstSize = IntSize(midWidth.roundToInt(), size.height.roundToInt()),
             )
         }
+        drawContent()
     }
 }
 
@@ -161,14 +180,33 @@ fun Modifier.steampunkPlaqueHeader(): Modifier = composed {
  * @param alpha dims the fill alone, so a disabled button's content can dim by its own
  *   (different) amount without doubling up.
  */
-fun Modifier.steampunkBrassFill(image: Int, alpha: Float = 1f): Modifier = composed {
-    val texture = ImageBitmap.imageResource(image)
-    drawBehind {
+fun Modifier.steampunkBrassFill(@DrawableRes image: Int, alpha: Float = 1f): Modifier =
+    this then BrassFillElement(image, alpha)
+
+private data class BrassFillElement(val image: Int, val alpha: Float) : ModifierNodeElement<BrassFillNode>() {
+    override fun create() = BrassFillNode(image, alpha)
+
+    override fun update(node: BrassFillNode) {
+        node.image = image
+        node.alpha = alpha
+        node.invalidateDraw()
+    }
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "steampunkBrassFill"
+        properties["image"] = image
+        properties["alpha"] = alpha
+    }
+}
+
+private class BrassFillNode(var image: Int, var alpha: Float) : ResourceBitmapNode() {
+    override fun ContentDrawScope.draw() {
         drawImage(
-            image = texture,
+            image = bitmap(image),
             dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
             alpha = alpha,
         )
+        drawContent()
     }
 }
 
@@ -179,10 +217,20 @@ fun Modifier.steampunkBrassFill(image: Int, alpha: Float = 1f): Modifier = compo
  * `size.width / 2` - the screw sits at that semicircle's own centre, not at a fixed distance from
  * the edge, so it lands in the middle of the curve regardless of the rail's actual width.
  */
-fun Modifier.steampunkVerticalScrews(): Modifier = composed {
-    val screw = ImageBitmap.imageResource(R.drawable.steampunk_screw)
-    drawWithContent {
+fun Modifier.steampunkVerticalScrews(): Modifier = this then VerticalScrewsElement
+
+private data object VerticalScrewsElement : ModifierNodeElement<VerticalScrewsNode>() {
+    override fun create() = VerticalScrewsNode()
+    override fun update(node: VerticalScrewsNode) = Unit
+    override fun InspectorInfo.inspectableProperties() {
+        name = "steampunkVerticalScrews"
+    }
+}
+
+private class VerticalScrewsNode : ResourceBitmapNode() {
+    override fun ContentDrawScope.draw() {
         drawContent()
+        val screw = bitmap(R.drawable.steampunk_screw)
         val capRadius = size.width / 2f
         val screwSize = 10.dp.toPx()
         val x = size.width / 2f
@@ -192,16 +240,29 @@ fun Modifier.steampunkVerticalScrews(): Modifier = composed {
 }
 
 /**
+ * Draws bitmaps from drawable resources, each loaded on its first draw and kept for the node's
+ * life - what `ImageBitmap.imageResource` does inside a composition, without a composition per
+ * use of the modifier.
+ */
+private abstract class ResourceBitmapNode :
+    Modifier.Node(), DrawModifierNode, CompositionLocalConsumerModifierNode {
+    private val loaded = HashMap<Int, ImageBitmap>()
+
+    protected fun bitmap(@DrawableRes id: Int): ImageBitmap =
+        loaded.getOrPut(id) { ImageBitmap.imageResource(currentValueOf(LocalContext).resources, id) }
+}
+
+/**
  * The brushed-metal backdrop: a faint warm wash from the top plus fine diagonal
  * hairlines - applied once at the app's own root ([MainActivity]'s outer `Surface`) rather than
  * per screen, so every screen shares one continuous texture instead of each redrawing its own.
  * A flat theme color alone reads as "a dark theme"; this is what makes it read as a panel.
  */
-fun Modifier.steampunkTexture(): Modifier = composed {
+fun Modifier.steampunkTexture(): Modifier {
     val wash = SteampunkAccents.brassLight.copy(alpha = 0.22f)
     val vignette = Color.Black.copy(alpha = 0.55f)
     val line = SteampunkAccents.parchment.copy(alpha = 0.07f)
-    drawBehind {
+    return drawBehind {
         // A warm glow from the top, like light catching the top of a brass panel...
         drawRect(
             brush = Brush.radialGradient(
@@ -244,18 +305,11 @@ fun Modifier.steampunkTexture(): Modifier = composed {
  * over the row's existing bounds rather than growing them, so the drag gesture's 56.dp
  * handle-zone threshold (an x-only measurement) is untouched.
  */
-fun Modifier.steampunkRowPanel(dragged: Boolean, dropTarget: Boolean): Modifier = composed {
-    val borderColor = when {
-        dragged -> SteampunkAccents.brassLight
-        dropTarget -> MaterialTheme.colorScheme.tertiary
-        else -> SteampunkAccents.brassDark.copy(alpha = 0.7f)
-    }
-    val shape = MaterialTheme.shapes.small
+fun Modifier.steampunkRowPanel(borderColor: Color, shape: Shape): Modifier =
     this
         .padding(vertical = 2.dp)
         .clip(shape)
         .border(1.dp, borderColor, shape)
-}
 
 /**
  * The compass that stands in for `CircularProgressIndicator` while the connect screen is

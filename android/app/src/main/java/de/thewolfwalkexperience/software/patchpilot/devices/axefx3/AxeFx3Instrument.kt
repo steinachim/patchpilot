@@ -49,7 +49,7 @@ private const val TAG = "AxeFx3Instrument"
  *
  * **One lock for every sequence.** Each public method holds [lock] for its whole sequence, so a
  * listing's name query can never land between an edit's select and its store. The exchange's own
- * lock covers one request at a time, and listings run outside the ViewModel's mutex. Internal
+ * lock covers one request at a time, and listings run outside the app's operation mutex. Internal
  * helpers that send anything take no lock and may only be called while it is held.
  */
 class AxeFx3Instrument(

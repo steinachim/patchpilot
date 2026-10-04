@@ -96,14 +96,25 @@ class NordInstrument(
 
     override val advisory: String? get() = device.firmwareAdvisory
 
-    override suspend fun connect() = exclusive("connecting") { device.connect() }
+    /**
+     * The handshake, then, for a device opened on a guess ([DeviceProfile.unknown]), the bank
+     * bounds it reports in place of the guessed ones - see [NordDevice.applyDerivedBankLayout].
+     * Best-effort: a device with no `Program` category is what that path exists to survive, and
+     * the guessed bounds still work, just generously.
+     */
+    override suspend fun connect() {
+        exclusive("connecting") { device.connect() }
+        if (device.profile.id != DeviceProfile.UNKNOWN_ID) return
+        try {
+            deviceLock.withLock { device.applyDerivedBankLayout() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Couldn't derive a bank layout for ${device.name}", e)
+        }
+    }
 
     override fun close() = device.close()
-
-    /** Replaces an unrecognized device's guessed bank bounds with the ones it reports - see [NordDevice.applyDerivedBankLayout]. */
-    suspend fun deriveBankLayout() {
-        deviceLock.withLock { device.applyDerivedBankLayout() }
-    }
 
     // ---- PresetBrowser ----
 

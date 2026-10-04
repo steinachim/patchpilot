@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import kotlinx.serialization.Serializable
 
 /**
@@ -46,8 +47,8 @@ data class DeviceProfile(
     val programCategoryNameOverrides: Map<String, String>? = null,
 ) {
     companion object {
-        /** The [id] [unknown] stamps on a device the catalog does not recognise; `InstrumentViewModel.isUnknownDevice` compares against it. */
-        const val UNKNOWN_ID = "unknown"
+        /** The [id] [unknown] stamps on a device the catalog does not recognise - see `InstrumentIdentity.isGuessed`. */
+        const val UNKNOWN_ID = InstrumentIdentity.UNKNOWN_DESCRIPTOR_ID
 
         /**
          * Synthesizes a profile for a Clavia USB device the catalog does not list - the "at your

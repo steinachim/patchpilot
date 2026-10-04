@@ -25,15 +25,19 @@ object UnknownDevicePolicy {
     /** Families whose protocol may be tried on an unrecognised device of the same vendor. */
     private val FAMILIES_ALLOWING_A_GUESS = setOf(NordInstrument.FAMILY)
 
-    /** Vendor ids for which [allows] returns true, read from the catalog so adding a Nord model needs no change here. */
-    fun vendorIdsAllowingAGuess(descriptors: List<InstrumentDescriptor>): Set<Int> =
-        descriptors
-            .filter { it.family in FAMILIES_ALLOWING_A_GUESS }
-            .mapNotNull { (it.match as? DeviceMatch.Usb)?.vendorId }
-            .toSet()
+    /**
+     * The family whose protocol an unrecognised device with [vendorId] may be opened on, or null
+     * where none may. Read from the catalog, so adding a Nord model needs no change here; fails
+     * closed on an empty catalog.
+     */
+    fun familyFor(descriptors: List<InstrumentDescriptor>, vendorId: Int): String? =
+        descriptors.firstOrNull { descriptor ->
+            descriptor.family in FAMILIES_ALLOWING_A_GUESS &&
+                (descriptor.match as? DeviceMatch.Usb)?.vendorId == vendorId
+        }?.family
 
-    /** May an unrecognised device with [vendorId] be opened on a guess? Fails closed on an empty catalog. */
+    /** May an unrecognised device with [vendorId] be opened on a guess? */
     @VisibleForTesting
     fun allows(descriptors: List<InstrumentDescriptor>, vendorId: Int): Boolean =
-        vendorId in vendorIdsAllowingAGuess(descriptors)
+        familyFor(descriptors, vendorId) != null
 }

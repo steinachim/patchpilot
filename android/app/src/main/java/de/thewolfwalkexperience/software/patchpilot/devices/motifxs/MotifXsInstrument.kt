@@ -12,6 +12,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.indexWalk
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
+import de.thewolfwalkexperience.software.patchpilot.core.FactoryNameCheck
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
@@ -32,7 +33,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.onStart
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -115,6 +118,10 @@ class MotifXsInstrument(
     /** Categories and favorites; null where the catalog carries no category encoding, which is what names the byte values. */
     override val tagger: PresetTagger? =
         config.categoryEncoding?.let { MotifXsTagger(this, config, it, factoryVoices) }
+
+    /** The shipped factory names against the instrument's; null where no bank is a factory bank. */
+    override val factoryNames: FactoryNameCheck? =
+        if (config.banks.any { it.readOnly }) FactoryNames() else null
 
     /**
      * Reads the identity reply, and refuses the session if the instrument answers nothing at all.
@@ -851,6 +858,44 @@ class MotifXsInstrument(
             if (spec.indexByDefault) {
                 for (slot in 0 until spec.slotCount) yield(SlotAddress(bank, slot))
             }
+        }
+    }
+
+    /**
+     * Reads one factory bank and compares it with the shipped table - about two minutes per bank,
+     * and only dump requests are sent. The expected names come from the factory listing, which is
+     * built from that table with no round trips.
+     */
+    private inner class FactoryNames : FactoryNameCheck {
+        override val banks: List<Pair<Int, String>>
+            get() = layout.banks.withIndex().filter { it.value.readOnly }.map { it.index to it.value.label }
+
+        override suspend fun verify(bank: Int, progress: (String) -> Unit): List<String> {
+            val spec = requireNotNull(layout.banks.getOrNull(bank)) { "No bank $bank" }
+            require(spec.readOnly) { "${spec.label} is not a factory bank." }
+            val expected = browser.index(PresetScope.FACTORY).toList()
+                .filterIsInstance<IndexUpdate.Slots>()
+                .flatMap { it.slots }
+                .filter { it.address.bank == bank }
+                .associateBy { it.address.slot }
+
+            val mismatches = mutableListOf<String>()
+            indexBank(bank).collect { update ->
+                when (update) {
+                    is IndexUpdate.Progress -> progress(update.label)
+                    is IndexUpdate.Failed ->
+                        mismatches += "${update.address.slot + 1}: unreadable (${update.reason})"
+                    is IndexUpdate.Slots -> update.slots.forEach { read ->
+                        val shippedName = expected[read.address.slot]?.name
+                        if (read.name != shippedName) {
+                            mismatches += "${read.displayId}: instrument says " +
+                                "\"${read.name ?: "(empty)"}\", app ships \"${shippedName ?: "(none)"}\""
+                        }
+                    }
+                    IndexUpdate.Complete -> Unit
+                }
+            }
+            return mismatches
         }
     }
 

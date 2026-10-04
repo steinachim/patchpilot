@@ -19,14 +19,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.AppTheme
-import de.thewolfwalkexperience.software.patchpilot.ui.theme.ThemePreferences
-import kotlinx.coroutines.launch
 
 /**
  * The theme picker, the auto-connect toggle, bringing back hidden instrument notices, and the
@@ -36,16 +33,13 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun SettingsScreen(
-    themePreferences: ThemePreferences,
-    connectionPreferences: ConnectionPreferences,
-    noticePreferences: NoticePreferences,
+    preferences: AppPreferences,
     onOpenLicenses: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val current by themePreferences.theme.collectAsState(initial = AppTheme.Default)
-    val autoConnect by connectionPreferences.autoConnectToFirstFound.collectAsState(initial = true)
-    val hiddenNotices by noticePreferences.hidden.collectAsState(initial = emptySet())
-    val scope = rememberCoroutineScope()
+    val current by preferences.theme.collectAsState(initial = AppTheme.Default)
+    val autoConnect by preferences.autoConnectToFirstFound.collectAsState(initial = true)
+    val hiddenNotices by preferences.hiddenNotices.collectAsState(initial = emptySet())
 
     PatchPilotScaffold(title = stringResource(R.string.settings_title), onBack = onBack) { innerPadding ->
         Column(Modifier.padding(innerPadding)) {
@@ -60,13 +54,13 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_theme_default),
                 description = stringResource(R.string.settings_theme_default_description),
                 selected = current == AppTheme.Default,
-                onSelect = { scope.launch { themePreferences.setTheme(AppTheme.Default) } },
+                onSelect = { preferences.setTheme(AppTheme.Default) },
             )
             ThemeOption(
                 title = stringResource(R.string.settings_theme_steampunk),
                 description = stringResource(R.string.settings_theme_steampunk_description),
                 selected = current == AppTheme.Steampunk,
-                onSelect = { scope.launch { themePreferences.setTheme(AppTheme.Steampunk) } },
+                onSelect = { preferences.setTheme(AppTheme.Steampunk) },
             )
             Text(
                 stringResource(R.string.settings_connection_heading),
@@ -84,9 +78,7 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .toggleable(
                         value = autoConnect,
-                        onValueChange = { enabled ->
-                            scope.launch { connectionPreferences.setAutoConnectToFirstFound(enabled) }
-                        },
+                        onValueChange = { enabled -> preferences.setAutoConnectToFirstFound(enabled) },
                         role = Role.Switch,
                     ),
             )
@@ -106,7 +98,7 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(enabled = hiddenNotices.isNotEmpty()) {
-                        scope.launch { noticePreferences.showAll() }
+                        preferences.showAllNotices()
                     },
             )
             Text(

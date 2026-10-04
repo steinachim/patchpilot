@@ -990,7 +990,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         if (children.isEmpty()) return null
         // The largest, so nothing addressable falls outside the range.
         val slotsPerBank = children.maxOf { it.capacity }
-        // This feeds InstrumentViewModel.allSlots, so it has to be plausible - a guard against a
+        // This feeds PresetListings.allSlots, so it has to be plausible - a guard against a
         // malfunctioning device, not an observed one.
         if (slotsPerBank !in 1..MAX_PLAUSIBLE_CHILD_CAPACITY) {
             throw NordProtocolException(
@@ -1334,7 +1334,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
         /**
          * Upper bound on a category-child's `capacity` where it becomes an addressing bound
-         * ([deriveBankLayout], which feeds `InstrumentViewModel.allSlots`). Real instruments
+         * ([deriveBankLayout], which feeds `PresetListings.allSlots`). Real instruments
          * report 25 or 100; this guards against a malfunctioning device. Not applied when parsing
          * a child list, where a Stage 2 EX legitimately reports 0xFFFE for its "(Native)"
          * categories.

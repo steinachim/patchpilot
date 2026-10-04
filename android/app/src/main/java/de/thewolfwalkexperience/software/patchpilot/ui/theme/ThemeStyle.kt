@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,7 +69,12 @@ interface ThemeStyle {
     /** The app-wide background texture, applied once at the root ([MainActivity]'s `Surface`). */
     fun screenTexture(base: Modifier): Modifier
 
-    /** The panel treatment for one preset row, including drag/drop-target highlighting. */
+    /**
+     * The panel treatment for one preset row, including drag/drop-target highlighting. Read-only
+     * composable, so a theme can take its colours and shapes from `MaterialTheme`.
+     */
+    @Composable
+    @ReadOnlyComposable
     fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean): Modifier
 
     /** The decoration for the bank fast-scroll rail (`BankIndex`). */
@@ -129,6 +135,8 @@ object DefaultThemeStyle : ThemeStyle {
 
     override fun screenFrame(base: Modifier) = base
     override fun screenTexture(base: Modifier) = base
+    @Composable
+    @ReadOnlyComposable
     override fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean) = base
     override fun railDecoration(base: Modifier) = base
 

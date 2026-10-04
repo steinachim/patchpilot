@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.catalog
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -75,7 +76,7 @@ class UnknownDevicePolicyTest {
     @Test
     fun `an empty catalog refuses every device`() {
         assertFalse(UnknownDevicePolicy.allows(emptyList(), clavia))
-        assertTrue(UnknownDevicePolicy.vendorIdsAllowingAGuess(emptyList()).isEmpty())
+        assertNull(UnknownDevicePolicy.familyFor(emptyList(), clavia))
     }
 
     /** Read from the catalog, so a new Nord model needs no code change here. */
@@ -84,12 +85,12 @@ class UnknownDevicePolicyTest {
         val newVendor = 4093
         val extended = catalog + usb("nord_piano_6", "nord", newVendor, 9)
         assertTrue(UnknownDevicePolicy.allows(extended, newVendor))
-        assertEquals(setOf(clavia, newVendor), UnknownDevicePolicy.vendorIdsAllowingAGuess(extended))
+        assertEquals("nord", UnknownDevicePolicy.familyFor(extended, newVendor))
     }
 
-    /** A MIDI-matched descriptor contributes no vendor id - there is no USB device to guess at. */
+    /** The guess names the family whose protocol is tried, which is what builds the instrument. */
     @Test
-    fun `only USB matches contribute a vendor id`() {
-        assertEquals(setOf(clavia), UnknownDevicePolicy.vendorIdsAllowingAGuess(catalog))
+    fun `the guess names the Nord family`() {
+        assertEquals("nord", UnknownDevicePolicy.familyFor(catalog, clavia))
     }
 }

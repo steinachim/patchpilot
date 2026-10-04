@@ -271,7 +271,7 @@ class NordDeviceProtocolTest {
     @Test
     fun `an implausible capacity is still refused as an addressing bound`() = runTest {
         // The plausibility bound sits where the value becomes an addressing bound, not in the
-        // parser: deriveBankLayout feeds InstrumentViewModel.allSlots.
+        // parser: deriveBankLayout feeds PresetListings.allSlots.
         val root = parseMessage(NordFixtures.GRAND_ROOT_LIST_RESPONSE).payload
         val device = NordFixtures.device(
             ReplayTransport(listOf(1 to root, 3 to childListPayload(listOf("Bank 1" to 9_999_999)))),

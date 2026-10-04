@@ -39,6 +39,9 @@ interface Instrument {
      */
     val tagger: PresetTagger?
 
+    /** Checks the factory names this app ships against the instrument - see [FactoryNameCheck]. */
+    val factoryNames: FactoryNameCheck? get() = null
+
     /**
      * Something the user must be told before using this instrument, or null where all is well.
      *
@@ -91,7 +94,28 @@ data class InstrumentIdentity(
     /** Which bus this session is actually running over. */
     val bus: Bus,
     val stableKey: String,
-)
+) {
+    /** Opened on a guess at its family's protocol, with no catalog entry - see `UnknownDevicePolicy`. */
+    val isGuessed: Boolean get() = descriptorId == UNKNOWN_DESCRIPTOR_ID
+
+    companion object {
+        /** The [descriptorId] of an instrument the catalog does not list. */
+        const val UNKNOWN_DESCRIPTOR_ID = "unknown"
+    }
+}
+
+/**
+ * Compares the factory preset names this app ships with what the instrument itself reports - the
+ * only way to catch a wrongly transcribed name, which renders exactly like a right one. Read-only.
+ * Offered where the app ships factory names (a Motif XS); null everywhere else.
+ */
+interface FactoryNameCheck {
+    /** The banks that can be checked, as (bank index, display label). */
+    val banks: List<Pair<Int, String>>
+
+    /** Reads [bank] off the instrument and returns one line per disagreement; empty where all agree. */
+    suspend fun verify(bank: Int, progress: (String) -> Unit): List<String>
+}
 
 /**
  * One [Instrument.notices] entry. [id] is what a hidden notice is remembered by, so it must stay
