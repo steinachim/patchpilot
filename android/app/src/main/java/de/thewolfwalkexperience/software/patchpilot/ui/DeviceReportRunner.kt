@@ -77,7 +77,10 @@ internal class DeviceReportRunner(
             listOf(report.json, report.stem, report.description) + report.failures
 
         fun restore(saved: List<String>): HeldReport? =
-            if (saved.size < FIXED_FIELDS) null
-            else HeldReport(saved[0], saved[1], saved[2], saved.drop(FIXED_FIELDS))
+            if (saved.size < FIXED_FIELDS) {
+                null
+            } else {
+                HeldReport(saved[0], saved[1], saved[2], saved.drop(FIXED_FIELDS))
+            }
     }
 }

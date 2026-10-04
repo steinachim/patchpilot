@@ -69,7 +69,9 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
                     append(byte)
                 }
 
-                !inMessage -> Unit // channel-voice traffic between messages is not ours
+                !inMessage -> Unit
+
+                // channel-voice traffic between messages is not ours
 
                 value == SYSEX_END -> {
                     append(byte)

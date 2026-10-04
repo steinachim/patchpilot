@@ -8,15 +8,18 @@ import de.thewolfwalkexperience.software.patchpilot.BuildConfig
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -24,9 +27,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 private const val TAG = "SysExExchange"
 
@@ -108,8 +108,11 @@ class SysExExchange(
                     framer.feed(chunk) to framer.droppedMessages - droppedBefore
                 }
                 if (dropped > 0) {
-                    Log.w(TAG, "dropped $dropped over-long SysEx message(s), " +
-                        "${framer.droppedMessages} this session")
+                    Log.w(
+                        TAG,
+                        "dropped $dropped over-long SysEx message(s), " +
+                            "${framer.droppedMessages} this session",
+                    )
                 }
                 completed.forEach {
                     // A message arriving with no exchange in flight - a fire-and-forget write's

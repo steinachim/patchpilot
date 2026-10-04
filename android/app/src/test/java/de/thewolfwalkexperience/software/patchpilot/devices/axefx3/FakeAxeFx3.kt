@@ -5,8 +5,8 @@ package de.thewolfwalkexperience.software.patchpilot.devices.axefx3
 
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
-import kotlinx.coroutines.test.TestScope
 import java.nio.ByteBuffer
+import kotlinx.coroutines.test.TestScope
 
 /**
  * A scripted Axe-Fx III with the behaviour the app depends on: stored presets, a selection and
@@ -113,20 +113,28 @@ class FakeAxeFx3(
         val payload = request.copyOfRange(6, request.size - 2).map { it.toInt() and 0xFF }
         return when (request[5].toInt() and 0xFF) {
             AxeFx3SysEx.CMD_FIRMWARE -> listOfNotNull(firmwareReply)
+
             AxeFx3SysEx.CMD_CAPABILITIES -> listOfNotNull(capabilitiesReply)
+
             AxeFx3SysEx.CMD_QUERY_NAME -> nameReply(payload[0], payload[1])
+
             AxeFx3SysEx.CMD_EDITOR -> editor(request, payload)
+
             AxeFx3SysEx.CMD_DUMP_READ -> dump((payload[0] shl 7) or payload[1])
+
             AxeFx3SysEx.CMD_DUMP_BEGIN -> {
                 receiving = mutableListOf()
                 listOf(stepAck(AxeFx3SysEx.CMD_DUMP_BEGIN, beginStatus))
             }
+
             AxeFx3SysEx.CMD_DUMP_CHUNK -> {
                 val chunks = receiving ?: return emptyList()
                 chunks += request
                 if (silentChunk == chunks.size) emptyList() else listOf(stepAck(AxeFx3SysEx.CMD_DUMP_CHUNK, chunkStatus(chunks.size)))
             }
+
             AxeFx3SysEx.CMD_DUMP_END -> listOf(stepAck(AxeFx3SysEx.CMD_DUMP_END, endOfWrite(request)))
+
             else -> emptyList()
         }
     }
@@ -161,10 +169,12 @@ class FakeAxeFx3(
                 editBuffer = slots[number]
                 listOf(AxeFx3Fixtures.SELECT_ACK)
             }
+
             AxeFx3SysEx.SUB_STORE -> {
                 if (!ignoreStores) slots[number] = stored(editBuffer)
                 if (silentStores) emptyList() else listOf(AxeFx3Fixtures.STORE_ACK)
             }
+
             AxeFx3SysEx.SUB_SET_NAME -> {
                 val name = renamedTo(request)
                 val image = mutate(editBuffer.image, chunk = 15, at = 1000 + name.length)
@@ -172,6 +182,7 @@ class FakeAxeFx3(
                 editBuffer = Slot(name, image)
                 listOf(message(AxeFx3SysEx.CMD_EDITOR, AxeFx3SysEx.SUB_SET_NAME, 0, 0))
             }
+
             else -> emptyList()
         }
     }

@@ -3,10 +3,10 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.catalog.FamilyCatalog
-import kotlinx.serialization.json.Json
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import java.io.File
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -30,7 +30,7 @@ class MotifXsCategoryDecodingTest {
     private val catalogDir: File by lazy {
         File(
             System.getProperty("deviceCatalogDir")
-                ?: error("deviceCatalogDir is not set; see the Test task config in app/build.gradle.kts")
+                ?: error("deviceCatalogDir is not set; see the Test task config in app/build.gradle.kts"),
         )
     }
 

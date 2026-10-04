@@ -15,8 +15,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 /**
  * Drag-to-reorder state for the preset list: which row is held, where the finger is, and the edge
@@ -108,8 +108,10 @@ internal class ProgramListDragState(
             val scrollAmount = when {
                 overflowBottom > 0f ->
                     (overflowBottom / autoScrollThresholdPx).coerceIn(0f, 1f) * autoScrollMaxSpeedPx
+
                 overflowTop > 0f ->
                     -(overflowTop / autoScrollThresholdPx).coerceIn(0f, 1f) * autoScrollMaxSpeedPx
+
                 else -> 0f
             }
             if (scrollAmount != 0f && listState.scrollBy(scrollAmount) != 0f) {

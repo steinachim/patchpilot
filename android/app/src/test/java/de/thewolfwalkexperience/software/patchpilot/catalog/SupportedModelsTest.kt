@@ -5,12 +5,12 @@ package de.thewolfwalkexperience.software.patchpilot.catalog
 
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.DeviceCatalog
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
+import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /** The connect screen's supported-instrument list, with siblings of one model on one line. */
 class SupportedModelsTest {

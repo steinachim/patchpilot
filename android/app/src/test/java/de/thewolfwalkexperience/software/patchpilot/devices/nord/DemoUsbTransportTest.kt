@@ -107,5 +107,4 @@ class DemoUsbTransportTest {
         assertEquals("Warm Pad", names[0 to 0])
         assertEquals("Init Program", names[0 to 1])
     }
-
 }

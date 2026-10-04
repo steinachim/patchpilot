@@ -3,18 +3,14 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
-import de.thewolfwalkexperience.software.patchpilot.R
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.ui.res.stringResource
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import android.util.Log
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -30,22 +26,24 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -54,13 +52,15 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.SoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.BarAction
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 
 private const val TAG = "ProgramsScreen"
 
@@ -91,6 +91,7 @@ internal fun reportFailure(what: String, error: Throwable, fallback: String): St
 }
 
 // PullToRefreshBox is marked experimental in Material3 1.4; opted in once for the whole screen.
+
 /**
  * The preset browser. Tapping a preset loads it; long-pressing its drag handle and dropping it
  * elsewhere relocates it, an occupied row being a swap and an empty slot a move
@@ -359,74 +360,77 @@ fun ProgramsScreen(
             }
         },
     ) { innerPadding ->
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(innerPadding)
-            .padding(horizontal = 16.dp),
-    ) {
-        ProgramListHeader(
-            scopes = capabilities.browsingScopes,
-            browseScope = browseScope,
-            onSelectScope = viewModel::setScope,
-            advisory = advisory,
-            ops = ops,
-            searchText = searchText,
-            onSearchTextChange = { searchText = it },
-            showEmptySlots = showEmptySlots,
-            onShowEmptySlotsChange = { showEmptySlots = it },
-            index = index,
-        )
-
-        // Bound to a local because `index` is a delegated property and cannot smart-cast.
-        val scanError = index.error
-        when {
-            // This screen stays up through a resume's Disconnected/Searching/Opening dip (see
-            // PatchPilotNavHost's session-lost effect), so the reconnect shows as the wait it is
-            // rather than leaving the old rows under a "Not Connected" title.
-            session !is ConnectionState.Connected -> ConnectingWait()
-            scanError != null ->
-                Text(stringResource(R.string.programs_error, scanError), color = MaterialTheme.colorScheme.error)
-            // The theme's own indicator, the same one ConnectScreen shows while it opens a
-            // device, and centred like the empty states below - this Column has no horizontal
-            // alignment of its own.
-            index.slots.isEmpty() && index.loading -> ConnectingWait()
-            else -> ProgramListBody(
-                listing = listing,
-                index = index,
-                rules = rules,
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp),
+        ) {
+            ProgramListHeader(
+                scopes = capabilities.browsingScopes,
+                browseScope = browseScope,
+                onSelectScope = viewModel::setScope,
+                advisory = advisory,
                 ops = ops,
-                drag = drag,
-                listState = listState,
-                isRefreshing = isRefreshing,
-                onRefresh = ::startRefresh,
                 searchText = searchText,
-                onClearFilter = { searchText = "" },
-                badgesFit = badgesFit,
-                virtualBanks = capabilities.virtualBankLabels,
-                // Drawn in the rail instead of the full label, which does not fit at the rail's width.
-                bankRailLabels = capabilities.bankRailLabels,
-                canSetFavorite = viewModel::canSetFavorite,
-                canSetCategories = viewModel::canSetCategories,
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                onSearchTextChange = { searchText = it },
+                showEmptySlots = showEmptySlots,
+                onShowEmptySlotsChange = { showEmptySlots = it },
+                index = index,
             )
-        }
 
-        // For a device the catalog does not recognise, or one on firmware nobody has tested this
-        // app against: in both cases its owner is the one person who can send back what the app
-        // read off it. For a known instrument the report lives in the debug menu instead.
-        if (capabilities.hasReport && (capabilities.isUnknownDevice || advisory != null)) {
-            TextButton(
-                onClick = { ops.pendingShare = reportShare.dialog() },
-                // Off while a report or a listing is running: the report walks every item, and
-                // two long reads would share one serialized bus.
-                enabled = !reportShare.running && editsEnabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(reportShare.label)
+            // Bound to a local because `index` is a delegated property and cannot smart-cast.
+            val scanError = index.error
+            when {
+                // This screen stays up through a resume's Disconnected/Searching/Opening dip (see
+                // PatchPilotNavHost's session-lost effect), so the reconnect shows as the wait it is
+                // rather than leaving the old rows under a "Not Connected" title.
+                session !is ConnectionState.Connected -> ConnectingWait()
+
+                scanError != null ->
+                    Text(stringResource(R.string.programs_error, scanError), color = MaterialTheme.colorScheme.error)
+
+                // The theme's own indicator, the same one ConnectScreen shows while it opens a
+                // device, and centred like the empty states below - this Column has no horizontal
+                // alignment of its own.
+                index.slots.isEmpty() && index.loading -> ConnectingWait()
+
+                else -> ProgramListBody(
+                    listing = listing,
+                    index = index,
+                    rules = rules,
+                    ops = ops,
+                    drag = drag,
+                    listState = listState,
+                    isRefreshing = isRefreshing,
+                    onRefresh = ::startRefresh,
+                    searchText = searchText,
+                    onClearFilter = { searchText = "" },
+                    badgesFit = badgesFit,
+                    virtualBanks = capabilities.virtualBankLabels,
+                    // Drawn in the rail instead of the full label, which does not fit at the rail's width.
+                    bankRailLabels = capabilities.bankRailLabels,
+                    canSetFavorite = viewModel::canSetFavorite,
+                    canSetCategories = viewModel::canSetCategories,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
+            }
+
+            // For a device the catalog does not recognise, or one on firmware nobody has tested this
+            // app against: in both cases its owner is the one person who can send back what the app
+            // read off it. For a known instrument the report lives in the debug menu instead.
+            if (capabilities.hasReport && (capabilities.isUnknownDevice || advisory != null)) {
+                TextButton(
+                    onClick = { ops.pendingShare = reportShare.dialog() },
+                    // Off while a report or a listing is running: the report walks every item, and
+                    // two long reads would share one serialized bus.
+                    enabled = !reportShare.running && editsEnabled,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(reportShare.label)
+                }
             }
         }
-    }
     }
 
     val notice by viewModel.pendingNotice.collectAsState()

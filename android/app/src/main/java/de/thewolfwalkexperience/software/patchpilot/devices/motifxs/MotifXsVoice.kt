@@ -79,8 +79,11 @@ object MotifXsVoice {
 
     /** A dump payload's packed region, unpacked; null where the payload carries none. */
     fun denseOf(dumpPayload: ByteArray): ByteArray? =
-        if (dumpPayload.size <= PACKED_OFFSET) null
-        else unpack(dumpPayload.copyOfRange(PACKED_OFFSET, dumpPayload.size))
+        if (dumpPayload.size <= PACKED_OFFSET) {
+            null
+        } else {
+            unpack(dumpPayload.copyOfRange(PACKED_OFFSET, dumpPayload.size))
+        }
 
     /** [nameOf] on an already-unpacked stream, so a caller that has one need not unpack twice. */
     fun nameIn(dense: ByteArray): String? {

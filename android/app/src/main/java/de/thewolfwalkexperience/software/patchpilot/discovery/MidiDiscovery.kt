@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.discovery
 
 import android.content.Context
+import android.hardware.usb.UsbDevice
 import android.media.midi.MidiDevice
 import android.media.midi.MidiDeviceInfo
 import android.media.midi.MidiManager
@@ -12,10 +13,14 @@ import android.os.Looper
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
+import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer
 import de.thewolfwalkexperience.software.patchpilot.transport.AndroidMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
@@ -24,11 +29,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
-import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
-import android.hardware.usb.UsbDevice
 
 private const val TAG = "MidiDiscovery"
 
@@ -147,9 +147,16 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
             FIRST_PORT
         }
         val inputPort = device.openInputPort(port)
-            ?: run { device.close(); error("${info.label()} has no input port $port to send on.") }
+            ?: run {
+                device.close()
+                error("${info.label()} has no input port $port to send on.")
+            }
         val outputPort = device.openOutputPort(port)
-            ?: run { inputPort.close(); device.close(); error("${info.label()} has no output port $port to listen on.") }
+            ?: run {
+                inputPort.close()
+                device.close()
+                error("${info.label()} has no output port $port to listen on.")
+            }
         return AndroidMidiTransport(device, inputPort, outputPort)
     }
 
@@ -215,5 +222,3 @@ private fun MidiDeviceInfo.label(): String {
         ?: properties?.getString(MidiDeviceInfo.PROPERTY_PRODUCT)
     return sanitizeDeviceText(name) ?: "MIDI device $id"
 }
-
-

@@ -25,6 +25,11 @@ import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.core.queryOrNull
 import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareAdvisory
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import kotlin.time.ComparableTimeMark
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.ProducerScope
@@ -35,11 +40,6 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.ComparableTimeMark
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.TimeSource
 
 private const val TAG = "Subsequent37Instrument"
 
@@ -233,16 +233,20 @@ class Subsequent37Instrument(
                         emit(decoder.feed(pending.bytes))
                     }
                 }
+
                 // Another message began, or this one ended without the exchange completing (a
                 // channel message inside it aborts it). An ending looks the same for an instant,
                 // so it has two ticks to show up as the exchange's result.
                 pending.start != followed -> interrupted = "another message replaced it"
+
                 pending.size == 0 -> if (++goneTicks >= 2) interrupted = "it broke off"
+
                 pending.bytes.isNotEmpty() -> {
                     lastGrowth = timeSource.markNow()
                     goneTicks = 0
                     emit(decoder.feed(pending.bytes))
                 }
+
                 lastGrowth.elapsedNow() >= STALL -> interrupted = "it stopped arriving"
             }
             if (interrupted != null) break

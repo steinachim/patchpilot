@@ -121,8 +121,11 @@ class CachingBrowserTest {
 
         val cached = cache.get(key)!!
         assertEquals(listOf("One", "refreshed", "Three"), cached.map { it.name })
-        assertEquals("the order the instrument gave must survive a write-through",
-            listOf(0, 1, 2), cached.map { it.address.slot })
+        assertEquals(
+            "the order the instrument gave must survive a write-through",
+            listOf(0, 1, 2),
+            cached.map { it.address.slot },
+        )
     }
 
     /**

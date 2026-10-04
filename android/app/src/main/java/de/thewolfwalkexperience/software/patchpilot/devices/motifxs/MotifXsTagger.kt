@@ -93,10 +93,12 @@ internal class MotifXsTagger(
         val stored = MotifXsVoice.categoriesOf(instrument.readVoicePayload(address)).orEmpty()
             .map { figure -> figure?.let { MotifXsCategories.refOf(it, taxonomy) } }
         val storedPadded = List(ASSIGNMENTS) { stored.getOrNull(it) }
-        if (storedPadded != wanted) throw InstrumentException.ProtocolDesync(
-            "Set the categories of ${instrument.describe(address)} but they read back as " +
-                storedPadded.joinToString { it?.let(taxonomy::label) ?: "none" } + ".",
-        )
+        if (storedPadded != wanted) {
+            throw InstrumentException.ProtocolDesync(
+                "Set the categories of ${instrument.describe(address)} but they read back as " +
+                    storedPadded.joinToString { it?.let(taxonomy::label) ?: "none" } + ".",
+            )
+        }
         invalidate(address.bank)
     }
 
@@ -133,8 +135,11 @@ internal class MotifXsTagger(
     /** `0` none, `1` both, `2` Category 1 only, `3` Category 2 only. Not a bitmask: `1` is both. */
     private fun decodeMark(value: Int): Set<Int> = when (value) {
         MARK_BOTH -> setOf(0, 1)
+
         MARK_FIRST -> setOf(0)
+
         MARK_SECOND -> setOf(1)
+
         // 0, and anything the instrument has been left holding that means nothing to it.
         else -> emptySet()
     }

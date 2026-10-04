@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.core
 
 import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.FakeAxeFx3
 import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.axeFx3
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
@@ -16,7 +17,6 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
 
 /**
  * What the debug menu's regression test does to an instrument, checked against the wire-level Nord
@@ -67,7 +67,10 @@ class RegressionTesterTest {
             allSlots = { instrument.layout.allAddresses().toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { fail("the sandbox should have sufficed"); false },
+            onConfirmRealSlotMutation = {
+                fail("the sandbox should have sufficed")
+                false
+            },
             refreshEdited = {},
         ).run {}
 
@@ -184,14 +187,22 @@ class RegressionTesterTest {
             allSlots = { instrument.layout.allAddresses().toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { realSlotAsked++; true },
+            onConfirmRealSlotMutation = {
+                realSlotAsked++
+                true
+            },
             refreshEdited = {},
         ).run {}
 
         assertEquals(emptyList<RegressionResult>(), report.failures())
         listOf(
-            "Load a preset", "Build a device report", "Copy a preset",
-            "Rename a preset", "Move a preset", "Swap two presets", "Delete a preset",
+            "Load a preset",
+            "Build a device report",
+            "Copy a preset",
+            "Rename a preset",
+            "Move a preset",
+            "Swap two presets",
+            "Delete a preset",
         ).forEach { assertEquals(it, Status.PASS, report.of(it).status) }
 
         // The whole point of the sandbox: no question is ever put to the user, because no slot
@@ -238,7 +249,10 @@ class RegressionTesterTest {
             allSlots = { instrument.layout.allAddresses().toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { realSlotAsked++; true },
+            onConfirmRealSlotMutation = {
+                realSlotAsked++
+                true
+            },
             refreshEdited = {},
         ).run {}
 
@@ -281,7 +295,10 @@ class RegressionTesterTest {
             allSlots = { real.layout.allAddresses().toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { fail("no question is asked while there is room for a second copy"); false },
+            onConfirmRealSlotMutation = {
+                fail("no question is asked while there is room for a second copy")
+                false
+            },
             refreshEdited = {},
         ).run {}
 
@@ -316,7 +333,10 @@ class RegressionTesterTest {
             allSlots = { (before.keys + free).toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { asked += it; true },
+            onConfirmRealSlotMutation = {
+                asked += it
+                true
+            },
             refreshEdited = {},
         ).run {}
 
@@ -370,7 +390,10 @@ class RegressionTesterTest {
             allSlots = { before.keys.toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { realSlotAsked++; true },
+            onConfirmRealSlotMutation = {
+                realSlotAsked++
+                true
+            },
             refreshEdited = {},
         ).run {}
 
@@ -395,7 +418,10 @@ class RegressionTesterTest {
             allSlots = { before.keys.toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { realSlotAsked++; false },
+            onConfirmRealSlotMutation = {
+                realSlotAsked++
+                false
+            },
             refreshEdited = {},
         ).run {}
 
@@ -446,7 +472,10 @@ class RegressionTesterTest {
             instrument = instrument,
             allSlots = { instrument.layout.allAddresses().toList() },
             occupiedSlots = { before.keys },
-            onConfirmSelect = { text -> shown += text; true },
+            onConfirmSelect = { text ->
+                shown += text
+                true
+            },
             onConfirmRealSlotMutation = { true },
             refreshEdited = {},
         ).run {}
@@ -468,7 +497,10 @@ class RegressionTesterTest {
             instrument = instrument,
             allSlots = { instrument.layout.allAddresses().toList() },
             occupiedSlots = { before.keys },
-            onConfirmSelect = { confirmations++; false },
+            onConfirmSelect = {
+                confirmations++
+                false
+            },
             onConfirmRealSlotMutation = { true },
             refreshEdited = {},
         ).run {}

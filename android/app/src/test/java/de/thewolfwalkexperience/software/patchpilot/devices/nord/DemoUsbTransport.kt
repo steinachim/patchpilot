@@ -69,7 +69,9 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
     }
 
     private fun capsReply(subOp: Int): ByteArray = when (subOp) {
-        NordDevice.UiSubOp.CAPABILITY_QUERY.code -> ByteArray(8) // unexamined by anything here
+        NordDevice.UiSubOp.CAPABILITY_QUERY.code -> ByteArray(8)
+
+        // unexamined by anything here
         // ENTER/EXIT_STATUS_MODE's replies are never read; PUSH_STATUS_TEXT is one-way (no
         // bulkRead call happens for it at all - see NordDevice.request(expectReply = false)).
         else -> ByteArray(0)
@@ -77,24 +79,37 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
 
     private fun dbReply(subOp: Int, payload: ByteArray): ByteArray = when (subOp) {
         NordDevice.FileTransferSubOp.ROOT_CATEGORY_LIST.code -> rootCategoryListReply()
+
         NordDevice.FileTransferSubOp.GET_CATEGORY_CHILD.code -> categoryChildReply(readU32(payload, 0))
+
         NordDevice.FileTransferSubOp.SELECT_CATEGORY.code -> {
             selectedCategoryIndex = readU32(payload, 0)
             ByteArray(0)
         }
+
         NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code -> {
             selectedCategoryIndex = -1
             ByteArray(0)
         }
+
         NordDevice.FileTransferSubOp.GET_ITEM_COUNT.code -> itemCountReply(readU32(payload, 0))
+
         NordDevice.FileTransferSubOp.MOVE_PROGRAM.code -> moveReply(payload)
+
         NordDevice.FileTransferSubOp.COPY_PROGRAM.code -> copyReply(payload)
+
         NordDevice.FileTransferSubOp.DELETE_ITEM.code -> deleteReply(payload)
+
         NordDevice.FileTransferSubOp.SWAP_PROGRAMS.code -> swapReply(payload)
+
         NordDevice.FileTransferSubOp.SET_NAME.code -> setNameReply(payload)
+
         NordDevice.FileTransferSubOp.FETCH_ITEM.code -> fetchItemReply(payload)
+
         NordDevice.FileTransferSubOp.CURSOR_NEXT_ITEM.code -> cursorNextItemReply(payload)
+
         NordDevice.FileTransferSubOp.SELECT_PRESET.code -> selectPresetReply(payload)
+
         // RESET/QUERY_CONTENT_VERSION/ENABLE_INVALIDATION: unexamined acks everywhere
         // that calls them (see NordDevice.FileTransferSubOp's own doc).
         else -> ByteArray(4)

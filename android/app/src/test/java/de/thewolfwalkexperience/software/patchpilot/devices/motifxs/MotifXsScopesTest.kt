@@ -8,10 +8,10 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
-import kotlin.time.Duration.Companion.milliseconds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -103,7 +103,9 @@ class MotifXsScopesTest {
                             favoritesDump(mid, favorites[mid] ?: ByteArray(4))
                                 .copyOfRange(0, 11) + MotifXsSysEx.SYSEX_END,
                         )
+
                         favorites.containsKey(mid) -> listOf(favoritesDump(mid, favorites.getValue(mid)))
+
                         else -> emptyList()
                     }
                 }
@@ -167,8 +169,10 @@ class MotifXsScopesTest {
         val slots = updates.slots()
 
         assertEquals(4, slots.size)
-        assertEquals(listOf("Full Concert Grand", "Rock Grand Piano", "Suitcase Rhodes", "Glasgow"),
-            slots.map { it.name })
+        assertEquals(
+            listOf("Full Concert Grand", "Rock Grand Piano", "Suitcase Rhodes", "Glasgow"),
+            slots.map { it.name },
+        )
         // The whole point: it costs nothing. A real one is 1,217 voices and several minutes.
         assertTrue("the factory listing must not touch the wire", transport.sent.isEmpty())
         assertTrue(updates.last() is IndexUpdate.Complete)
@@ -193,7 +197,8 @@ class MotifXsScopesTest {
         val sparse = MotifXsFactoryVoices(
             banks = listOf(
                 MotifXsFactoryBank(
-                    label = "PRE1", slotCount = 4,
+                    label = "PRE1",
+                    slotCount = 4,
                     voices = listOf(MotifXsFactoryVoice(1, "Full Concert Grand"), MotifXsFactoryVoice(4, "Glasgow")),
                 ),
             ),
@@ -372,7 +377,8 @@ class MotifXsScopesTest {
         val table = MotifXsFactoryVoices(
             banks = listOf(
                 MotifXsFactoryBank(
-                    label = "PRE1", slotCount = 2,
+                    label = "PRE1",
+                    slotCount = 2,
                     voices = listOf(
                         MotifXsFactoryVoice(1, "Full Concert Grand"),
                         MotifXsFactoryVoice(0, "impossible"),

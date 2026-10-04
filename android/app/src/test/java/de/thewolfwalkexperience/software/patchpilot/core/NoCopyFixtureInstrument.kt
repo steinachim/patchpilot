@@ -3,11 +3,11 @@
 
 package de.thewolfwalkexperience.software.patchpilot.core
 
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoLibrary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
 
 /**
  * A fictitious instrument shaped like a family with no copy of its own - flat `A00` addressing, no

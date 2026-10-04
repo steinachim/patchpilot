@@ -9,12 +9,12 @@ import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.resolvedConf
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Config
 import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37Config
 import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37SysEx
+import java.io.File
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * The shipped catalog files, decoded by the same serializers the app uses.
@@ -127,9 +127,9 @@ class CatalogParsesTest {
 
         val bySize = config.banks.associate { it.label to it.slotCount }
         assertEquals(128, bySize["USR1"])
-        assertEquals(32, bySize["DRUM"])    // USER DR: groups A-B only
-        assertEquals(64, bySize["PREDR"])   // PRE DR: groups A-D
-        assertEquals(1, bySize["GMDR"])     // GM DR is a single kit
+        assertEquals(32, bySize["DRUM"]) // USER DR: groups A-B only
+        assertEquals(64, bySize["PREDR"]) // PRE DR: groups A-D
+        assertEquals(1, bySize["GMDR"]) // GM DR is a single kit
 
         val byAddress = config.banks.associate { it.label to it.addressMid }
         assertEquals(0x00, byAddress["PRE1"])
@@ -203,8 +203,10 @@ class CatalogParsesTest {
             config.banks.map { it.displayLabel },
         )
         assertEquals(
-            listOf("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "GM",
-                "U1", "U2", "U3", "P DR", "G DR", "U DR"),
+            listOf(
+                "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "GM",
+                "U1", "U2", "U3", "P DR", "G DR", "U DR",
+            ),
             config.banks.map { it.shortLabel },
         )
         // "USER DR" -> "U DR", not "UD": no rule that yields one yields the other, which is why

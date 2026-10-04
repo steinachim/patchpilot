@@ -61,7 +61,7 @@ internal class NordTagger(
     override suspend fun setCategories(address: SlotAddress, categories: List<CategoryRef?>) {
         val wanted = categories.firstOrNull()
             ?: throw IllegalArgumentException(
-                "A Nord program always carries a category; there is no way to clear one."
+                "A Nord program always carries a category; there is no way to clear one.",
             )
         val id = this.categories.idOf(wanted)
             ?: throw IllegalArgumentException("No category ${wanted.main} on this Nord.")

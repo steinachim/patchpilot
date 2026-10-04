@@ -3,11 +3,11 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
+import kotlin.random.Random
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
-import kotlin.random.Random
 
 class Pro800ProgramCodecTest {
 

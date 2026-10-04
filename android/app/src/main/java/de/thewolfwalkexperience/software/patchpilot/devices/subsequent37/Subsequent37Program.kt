@@ -35,10 +35,12 @@ class Subsequent37Program(payload: ByteArray) {
      * continues on the second.
      */
     val name: String
-        get() = String(CharArray(NAME_LENGTH) { i ->
-            val code = bytes[i].toInt() and 0xFF
-            if (code in PRINTABLE) code.toChar() else '?'
-        }).trimEnd()
+        get() = String(
+            CharArray(NAME_LENGTH) { i ->
+                val code = bytes[i].toInt() and 0xFF
+                if (code in PRINTABLE) code.toChar() else '?'
+            },
+        ).trimEnd()
 
     /**
      * Empty, as this app counts it: named `Init Preset`, which is what both a never-written slot
@@ -174,10 +176,14 @@ class Subsequent37BulkDecoder {
      */
     fun problemAtEnd(total: Int = size): String? = when {
         !headerSeen -> "the reply is not a bulk dump"
+
         brokenAt != null -> "program $brokenAt arrived damaged"
+
         (total - Subsequent37SysEx.BODY_OFFSET - 1) % Subsequent37SysEx.BULK_STRIDE != 0 ->
             "the reply is $total bytes, which is not a whole number of programs"
+
         decoded < Subsequent37SysEx.PROGRAM_COUNT -> "the reply holds $decoded programs, not ${Subsequent37SysEx.PROGRAM_COUNT}"
+
         else -> null
     }
 

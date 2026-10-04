@@ -3,10 +3,10 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.axefx3
 
-import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -236,9 +236,11 @@ class AxeFx3EditorTest {
         val instrument = connected(fake)
         instrument.editor.delete(at(9))
         assertEquals(AxeFx3SysEx.EMPTY_NAME, fake.nameAt(9))
-        assertTrue(fake.requests.windowed(16).any { window ->
-            window.zip(AxeFx3DumpImage.parse(AxeFx3Fixtures.EMPTY_PRESET_IMAGE).chunks).all { (a, b) -> a.contentEquals(b) }
-        })
+        assertTrue(
+            fake.requests.windowed(16).any { window ->
+                window.zip(AxeFx3DumpImage.parse(AxeFx3Fixtures.EMPTY_PRESET_IMAGE).chunks).all { (a, b) -> a.contentEquals(b) }
+            },
+        )
 
         val start = fake.requests.size
         instrument.editor.delete(at(9))

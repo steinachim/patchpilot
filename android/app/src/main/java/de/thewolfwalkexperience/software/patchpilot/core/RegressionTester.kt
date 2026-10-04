@@ -210,6 +210,7 @@ class RegressionTester(
 
         results += when {
             EditOp.RENAME !in editor.supported -> skip(RENAME, UNSUPPORTED)
+
             else -> step(RENAME, progress) {
                 val newName = testName(editor)
                 editor.rename(sandbox, newName)
@@ -225,7 +226,9 @@ class RegressionTester(
         val moveTarget = free.getOrNull(1)
         results += when {
             EditOp.MOVE !in editor.supported -> skip(MOVE, UNSUPPORTED)
+
             moveTarget == null -> skip(MOVE, "only one free slot, so there is nowhere to move the copy")
+
             else -> step(MOVE, progress) {
                 val name = sandboxName
                 val from = sandbox
@@ -249,6 +252,7 @@ class RegressionTester(
         var partnerName: String? = null
         results += when {
             EditOp.SWAP !in editor.supported -> skip(SWAP, UNSUPPORTED)
+
             partnerSlot != null -> step(SWAP, progress) {
                 val name = sandboxName
                 val copyName = editor.copyProgram(source, partnerSlot)
@@ -261,9 +265,11 @@ class RegressionTester(
                 "Copied ${display(source)} to ${display(partnerSlot)} as \"$copyName\", swapped " +
                     "it with the copy in ${display(sandbox)} and back."
             }
+
             // No room for a second copy, so the only slot to swap with holds real data: the same
             // question the no-sandbox path asks, narrowed to this one test.
             !onConfirmRealSlotMutation(OccupiedSlotReason.NO_SECOND_FREE_SLOT) -> skip(SWAP, DECLINED)
+
             else -> step(SWAP, progress) {
                 val name = sandboxName
                 val sourceName = instrument.browser.refresh(source).name
@@ -392,6 +398,7 @@ class RegressionTester(
 
         results += when {
             EditOp.RENAME !in editor.supported -> skip(RENAME, UNSUPPORTED)
+
             else -> step(RENAME, progress) {
                 val original = instrument.browser.refresh(target).name
                 checkNotNull(original) { "${display(target)} holds no preset to rename." }
@@ -414,7 +421,9 @@ class RegressionTester(
         val moveTarget = free.firstOrNull()
         results += when {
             EditOp.MOVE !in editor.supported -> skip(MOVE, UNSUPPORTED)
+
             moveTarget == null -> skip(MOVE, "no free slot to move into")
+
             else -> step(MOVE, progress) {
                 val name = instrument.browser.refresh(target).name
                 editor.move(target, moveTarget)
@@ -435,7 +444,9 @@ class RegressionTester(
         val partner = occupied.getOrNull(1)
         results += when {
             EditOp.SWAP !in editor.supported -> skip(SWAP, UNSUPPORTED)
+
             partner == null -> skip(SWAP, "only one preset is stored, so there is nothing to swap with")
+
             else -> step(SWAP, progress) {
                 val targetName = instrument.browser.refresh(target).name
                 val partnerName = instrument.browser.refresh(partner).name
@@ -536,8 +547,11 @@ class RegressionTester(
         val skipped = results.count { it.status == Status.SKIPPED }
         val summary = "${instrument.identity.name}: $passed passed, $failed failed, $skipped skipped"
         // In the headline: the run left the instrument in a state the user did not put it in.
-        return if (remediesApplied.isEmpty()) summary
-        else "$summary. Changed on the instrument to run: ${remediesApplied.joinToString(", ")}"
+        return if (remediesApplied.isEmpty()) {
+            summary
+        } else {
+            "$summary. Changed on the instrument to run: ${remediesApplied.joinToString(", ")}"
+        }
     }
 
     private companion object {

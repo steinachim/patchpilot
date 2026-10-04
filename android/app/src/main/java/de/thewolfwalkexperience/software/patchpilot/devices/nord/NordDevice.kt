@@ -8,15 +8,15 @@ import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressForma
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareAdvisory
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.util.Locale
 
 private const val TAG = "NordDevice"
 
@@ -317,8 +317,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     ): NordMessage = withContext(Dispatchers.IO) {
         // This protocol answers one reply per request, so anything still buffered is stale.
         if (readBuffer.isNotEmpty()) {
-            Log.w(TAG, "discarding ${readBuffer.size} unread bytes left over from an earlier " +
-                "exchange before sending protocol=$protocolId version=$protocolVersion sub-op=$subOp")
+            Log.w(
+                TAG,
+                "discarding ${readBuffer.size} unread bytes left over from an earlier " +
+                    "exchange before sending protocol=$protocolId version=$protocolVersion sub-op=$subOp",
+            )
             readBuffer = ByteArray(0)
         }
         transport.bulkWrite(buildMessage(protocolId, protocolVersion, subOp, payload))
@@ -336,9 +339,12 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                         "its replies are out of step with this session's requests",
                 )
             }
-            Log.w(TAG, "discarding a stale reply (protocol=${reply.protocolId} " +
-                "sub-op=${reply.subOp}, ${reply.payload.size} bytes) while waiting for the answer " +
-                "to protocol=$protocolId sub-op=$subOp")
+            Log.w(
+                TAG,
+                "discarding a stale reply (protocol=${reply.protocolId} " +
+                    "sub-op=${reply.subOp}, ${reply.payload.size} bytes) while waiting for the answer " +
+                    "to protocol=$protocolId sub-op=$subOp",
+            )
             reply = readReply()
         }
         reply
@@ -435,7 +441,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
     suspend fun getFirmwareVersion(): Int = withContext(Dispatchers.IO) {
         val raw = transport.controlTransfer(
-            FIRMWARE_CTRL_BM_REQUEST_TYPE, FIRMWARE_CTRL_BREQUEST, 0, 0, FIRMWARE_CTRL_WLENGTH,
+            FIRMWARE_CTRL_BM_REQUEST_TYPE,
+            FIRMWARE_CTRL_BREQUEST,
+            0,
+            0,
+            FIRMWARE_CTRL_WLENGTH,
         )
         (raw[0].toInt() and 0xFF) or ((raw[1].toInt() and 0xFF) shl 8) // little-endian u16
     }
@@ -619,7 +629,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         val echoItem = readUInt32BE(payload, StatusEcho.ITEM)
         if (status != 0 || echoBank != bank || echoItem != item) {
             throw NordStatusException(
-                what, status,
+                what,
+                status,
                 "Unexpected $what response: status=$status bank=$echoBank item=$echoItem " +
                     "(requested bank=$bank item=$item)",
             )
@@ -692,9 +703,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 }
 
                 val cursorPayload = fileTransfer(
-                                        FileTransferSubOp.CURSOR_NEXT_ITEM,
-                                        uint32BE(bank) + uint32BE(prevItem) + uint32BE(0),
-                                    ).payload
+                    FileTransferSubOp.CURSOR_NEXT_ITEM,
+                    uint32BE(bank) + uint32BE(prevItem) + uint32BE(0),
+                ).payload
                 val bankExhausted = readUInt32BE(cursorPayload, CursorReply.BANK_EXHAUSTED)
                 val nextVal = readUInt32BE(cursorPayload, CursorReply.NEXT_ITEM)
 
@@ -752,6 +763,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 }
                 return read
             }
+
             STATUS_NOT_FOUND -> return null
         }
         Log.w(TAG, "fetch of ($bank, $item) answered status $status; walking the program list instead")
@@ -818,13 +830,14 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     suspend fun swapPrograms(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int) {
         withProgramCategory {
             val payload = fileTransfer(
-                              FileTransferSubOp.SWAP_PROGRAMS,
-                              uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
-                          ).payload
+                FileTransferSubOp.SWAP_PROGRAMS,
+                uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
+            ).payload
             val status = readUInt32BE(payload, StatusEcho.STATUS)
             if (status != 0) {
                 throw NordStatusException(
-                    "swap-programs", status,
+                    "swap-programs",
+                    status,
                     "Unexpected swap-programs response status: $status",
                 )
             }
@@ -841,13 +854,14 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     suspend fun moveProgram(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int) {
         withProgramCategory {
             val payload = fileTransfer(
-                              FileTransferSubOp.MOVE_PROGRAM,
-                              uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
-                          ).payload
+                FileTransferSubOp.MOVE_PROGRAM,
+                uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
+            ).payload
             val status = readUInt32BE(payload, StatusEcho.STATUS)
             if (status != 0) {
                 throw NordStatusException(
-                    "move-program", status,
+                    "move-program",
+                    status,
                     "Unexpected move-program response status: $status",
                 )
             }
@@ -869,38 +883,38 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * Strings" -> "Synth Strings 2"), so the name is read back off the destination's record and
      * returned. Status 4 ("file exists") is the occupied-destination refusal.
      */
-    suspend fun copyProgram(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int): String {
-        return withProgramCategory {
-            val payload = fileTransfer(
-                              FileTransferSubOp.COPY_PROGRAM,
-                              uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
-                          ).payload
-            val status = readUInt32BE(payload, StatusEcho.STATUS)
-            if (status == STATUS_FILE_EXISTS) {
-                throw NordStatusException(
-                    "copy-program", status,
-                    "Cannot copy onto an occupied slot: the instrument answered status 4 (file " +
-                        "exists). A copy needs an empty destination.",
-                )
-            }
-            if (status != 0) {
-                throw NordStatusException(
-                    "copy-program", status,
-                    "Unexpected copy-program response status: $status",
-                )
-            }
-            val echo = listOf(4, 8, 12, 16).map { readUInt32BE(payload, it) }
-            if (echo != listOf(srcBank, srcItem, dstBank, dstItem)) {
-                throw NordProtocolException(
-                    "Unexpected copy-program echo: $echo " +
-                        "(requested [$srcBank, $srcItem, $dstBank, $dstItem])",
-                )
-            }
-            val record = fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(dstBank) + uint32BE(dstItem)).payload
-            val newName = parseItemName(record)
-            reloadPresetForDisplay(dstBank, dstItem)
-            newName
+    suspend fun copyProgram(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int): String = withProgramCategory {
+        val payload = fileTransfer(
+            FileTransferSubOp.COPY_PROGRAM,
+            uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
+        ).payload
+        val status = readUInt32BE(payload, StatusEcho.STATUS)
+        if (status == STATUS_FILE_EXISTS) {
+            throw NordStatusException(
+                "copy-program",
+                status,
+                "Cannot copy onto an occupied slot: the instrument answered status 4 (file " +
+                    "exists). A copy needs an empty destination.",
+            )
         }
+        if (status != 0) {
+            throw NordStatusException(
+                "copy-program",
+                status,
+                "Unexpected copy-program response status: $status",
+            )
+        }
+        val echo = listOf(4, 8, 12, 16).map { readUInt32BE(payload, it) }
+        if (echo != listOf(srcBank, srcItem, dstBank, dstItem)) {
+            throw NordProtocolException(
+                "Unexpected copy-program echo: $echo " +
+                    "(requested [$srcBank, $srcItem, $dstBank, $dstItem])",
+            )
+        }
+        val record = fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(dstBank) + uint32BE(dstItem)).payload
+        val newName = parseItemName(record)
+        reloadPresetForDisplay(dstBank, dstItem)
+        newName
     }
 
     /**
@@ -967,8 +981,12 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "Category $categoryIndex's child list could not be read, so its bank " +
-                "count is unknown; the walk will rely on the item count and the empty-bank rule", e)
+            Log.w(
+                TAG,
+                "Category $categoryIndex's child list could not be read, so its bank " +
+                    "count is unknown; the walk will rely on the item count and the empty-bank rule",
+                e,
+            )
             null
         }
     }
@@ -1056,30 +1074,29 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * [CategorySpace.itemCount] is reported as the instrument gave it, 0 for a non-empty
      * category included.
      */
-    suspend fun fetchCategorySpace(categoryIndex: Int): CategorySpace {
-        return withCategory(categoryIndex) {
-            val payload = fileTransfer(FileTransferSubOp.GET_ITEM_COUNT, uint32BE(categoryIndex)).payload
-            if (payload.size < 24) {
-                throw NordProtocolException(
-                    "Item-count reply for category $categoryIndex is ${payload.size} bytes, " +
-                        "too short for the six fields this reply is expected to carry",
-                )
-            }
-            val status = readUInt32BE(payload, ItemCountReply.STATUS)
-            if (status != 0) {
-                throw NordStatusException(
-                    "item-count query", status,
-                    "Item-count query for category $categoryIndex answered status $status",
-                )
-            }
-            CategorySpace(
-                itemCount = readUInt32BE(payload, ItemCountReply.ITEM_COUNT),
-                free = readUInt32BE(payload, ItemCountReply.FREE),
-                used = readUInt32BE(payload, ItemCountReply.USED),
-                reclaimable = readUInt32BE(payload, ItemCountReply.RECLAIMABLE),
-                unitCode = readUInt32BE(payload, ItemCountReply.UNIT_CODE),
+    suspend fun fetchCategorySpace(categoryIndex: Int): CategorySpace = withCategory(categoryIndex) {
+        val payload = fileTransfer(FileTransferSubOp.GET_ITEM_COUNT, uint32BE(categoryIndex)).payload
+        if (payload.size < 24) {
+            throw NordProtocolException(
+                "Item-count reply for category $categoryIndex is ${payload.size} bytes, " +
+                    "too short for the six fields this reply is expected to carry",
             )
         }
+        val status = readUInt32BE(payload, ItemCountReply.STATUS)
+        if (status != 0) {
+            throw NordStatusException(
+                "item-count query",
+                status,
+                "Item-count query for category $categoryIndex answered status $status",
+            )
+        }
+        CategorySpace(
+            itemCount = readUInt32BE(payload, ItemCountReply.ITEM_COUNT),
+            free = readUInt32BE(payload, ItemCountReply.FREE),
+            used = readUInt32BE(payload, ItemCountReply.USED),
+            reclaimable = readUInt32BE(payload, ItemCountReply.RECLAIMABLE),
+            unitCode = readUInt32BE(payload, ItemCountReply.UNIT_CODE),
+        )
     }
 
     /** One storage area and everything measured about it - see [calibrateStorageUnits]. */
@@ -1152,7 +1169,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
         return grouped.values.map { indexes ->
             calibrateArea(
-                indexes.map { names[it] }, indexes, spaces.getValue(indexes.first()),
+                indexes.map { names[it] },
+                indexes,
+                spaces.getValue(indexes.first()),
                 indexes.map { spaces.getValue(it).itemCount },
                 // Every category in an area states the same unit; the first tolerates a short trailer.
                 indexes.firstNotNullOfOrNull { reportedUnits.getOrNull(it) },
@@ -1178,7 +1197,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             )
         }
 
-        val listings = ArrayList<Map<Any, Int>>()     // per category: identity -> times listed
+        val listings = ArrayList<Map<Any, Int>>() // per category: identity -> times listed
         val sizeOf = HashMap<Any, Int>()
         for ((name, index) in names.zip(indexes)) {
             progress?.invoke(name, index)
@@ -1414,7 +1433,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         }
 
         private fun uint32BE(value: Int): ByteArray = byteArrayOf(
-            (value ushr 24).toByte(), (value ushr 16).toByte(), (value ushr 8).toByte(), value.toByte(),
+            (value ushr 24).toByte(),
+            (value ushr 16).toByte(),
+            (value ushr 8).toByte(),
+            value.toByte(),
         )
 
         /** A sub-opcode 31 item record's data-size field: the exact byte length of the item's blob. */
@@ -1517,7 +1539,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             }
             if (used < count) {
                 return SolvedUnit(
-                    null, null, null,
+                    null,
+                    null,
+                    null,
                     "$count records against a reported used of $used - fewer units than items, so " +
                         "these records are not (only) what this area is accounting for",
                 )
@@ -1527,7 +1551,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 // that goes into a shared JSON report, and a German phone renders "1.05" as "1,05".
                 val perItem = String.format(Locale.ROOT, "%.2f", used.toDouble() / count)
                 return SolvedUnit(
-                    null, null, null,
+                    null,
+                    null,
+                    null,
                     "$used units over $count items is $perItem per item - at barely one unit each, " +
                         "every candidate at or above the largest item explains the figures equally " +
                         "well, so these records cannot separate a block size from a per-item slot " +
@@ -1548,7 +1574,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             val unitLo = lo
             if (storageUnitsAt(sizes, unitLo) < used - tolerance) {
                 return SolvedUnit(
-                    null, null, null,
+                    null,
+                    null,
+                    null,
                     "no unit size reproduces a used of $used from these $count records " +
                         "(the closest total is ${storageUnitsAt(sizes, unitLo)})",
                 )
@@ -1566,7 +1594,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             val unit = roundestInRange(unitLo, unitHi)
             val residual = (used - storageUnitsAt(sizes, unit)).toInt()
             return SolvedUnit(
-                unit, residual, unitLo to unitHi,
+                unit,
+                residual,
+                unitLo to unitHi,
                 "$count records, $used units used, $residual unaccounted for; any unit from " +
                     "$unitLo to $unitHi bytes fits as well",
             )

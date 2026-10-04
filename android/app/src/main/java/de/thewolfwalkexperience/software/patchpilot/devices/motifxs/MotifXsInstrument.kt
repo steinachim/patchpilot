@@ -6,13 +6,13 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.AddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.BankSpec
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
-import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
-import de.thewolfwalkexperience.software.patchpilot.core.indexWalk
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.FactoryNameCheck
+import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
@@ -26,20 +26,20 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
+import de.thewolfwalkexperience.software.patchpilot.core.indexWalk
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.onStart
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "MotifXsInstrument"
 
@@ -229,9 +229,11 @@ class MotifXsInstrument(
                 ?: throw InstrumentException.NotSupported("rename an empty slot")
 
             editCommonBlock(address, "renaming $where", "rename of $where") { payload ->
-                if (payload.size < MotifXsVoice.NAME_LENGTH) throw InstrumentException.ProtocolDesync(
-                    "The Common block of $where is ${payload.size} bytes, too short to hold a name.",
-                )
+                if (payload.size < MotifXsVoice.NAME_LENGTH) {
+                    throw InstrumentException.ProtocolDesync(
+                        "The Common block of $where is ${payload.size} bytes, too short to hold a name.",
+                    )
+                }
                 // NUL-padded, as the instrument itself does and revision C0 of the Data List
                 // permits; revision B0 says space-padded and does not match the instrument.
                 for (i in 0 until MotifXsVoice.NAME_LENGTH) {
@@ -241,9 +243,11 @@ class MotifXsInstrument(
 
             // Read back through `0C`, the path the browser lists with.
             val stored = MotifXsVoice.nameOf(readVoicePayload(address))
-            if (stored != trimmed) throw InstrumentException.ProtocolDesync(
-                "Renamed $where but it reads back as ${stored ?: "empty"}.",
-            )
+            if (stored != trimmed) {
+                throw InstrumentException.ProtocolDesync(
+                    "Renamed $where but it reads back as ${stored ?: "empty"}.",
+                )
+            }
 
             reloadIfShowing(address, previousName)
         }
@@ -363,7 +367,7 @@ class MotifXsInstrument(
                 "put ${kind(source)} into a slot that holds ${kind(target)} - " +
                     "${source.shownLabel} and " +
                     "${target.shownLabel} store different kinds of " +
-                    "voice, and the instrument does not refuse the mismatch itself"
+                    "voice, and the instrument does not refuse the mismatch itself",
             )
         }
 
@@ -385,7 +389,11 @@ class MotifXsInstrument(
             try {
                 exchange.exchange(
                     request = MotifXsSysEx.bulkDump(
-                        config.deviceNumber, bank.addressHi, bank.addressMid, address.slot, payload,
+                        config.deviceNumber,
+                        bank.addressHi,
+                        bank.addressMid,
+                        address.slot,
+                        payload,
                     ),
                     what = "writing $where",
                     timeout = WRITE_TIMEOUT,
@@ -395,7 +403,8 @@ class MotifXsInstrument(
             } catch (e: InstrumentException.Timeout) {
                 // Silence is how the instrument refuses a write.
                 throw InstrumentException.Timeout(
-                    "writing $where", e,
+                    "writing $where",
+                    e,
                     explanation = "The instrument refused the write to $where, so nothing has " +
                         "been stored. $ARMED_WRITE_WARNING",
                 )
@@ -441,7 +450,8 @@ class MotifXsInstrument(
                 throw e
             } catch (e: InstrumentException.Timeout) {
                 throw InstrumentException.Timeout(
-                    "committing the write", e,
+                    "committing the write",
+                    e,
                     explanation = "The instrument did not confirm the commit, so the writes may or " +
                         "may not have been stored. Re-read the bank before trusting what it shows.",
                 )
@@ -457,10 +467,12 @@ class MotifXsInstrument(
         /** Reads a slot back and insists it holds what was written. */
         private suspend fun verify(address: SlotAddress, payload: ByteArray) {
             val readBack = readVoicePayload(address)
-            if (!readBack.contentEquals(payload)) throw InstrumentException.ProtocolDesync(
-                "Wrote ${layout.format.format(address)} but read back something different " +
-                    "(${payload.size} bytes out, ${readBack.size} back).",
-            )
+            if (!readBack.contentEquals(payload)) {
+                throw InstrumentException.ProtocolDesync(
+                    "Wrote ${layout.format.format(address)} but read back something different " +
+                        "(${payload.size} bytes out, ${readBack.size} back).",
+                )
+            }
         }
     }
 
@@ -502,8 +514,11 @@ class MotifXsInstrument(
         val body = blocks
             .filter { !isHeaderOrFooter(it) }
             .map { block ->
-                if (MotifXsSysEx.isCommonBlock(block)) patchedCommonBlock(block, patch)
-                else MotifXsSysEx.rebuildForHost(config.deviceNumber, block)
+                if (MotifXsSysEx.isCommonBlock(block)) {
+                    patchedCommonBlock(block, patch)
+                } else {
+                    MotifXsSysEx.rebuildForHost(config.deviceNumber, block)
+                }
             }
         // No expected block count: a Normal Voice is 24 blocks and a Drum Voice 81, the shape
         // comes from the instrument, and every byte but the patched ones goes straight back. What
@@ -526,7 +541,8 @@ class MotifXsInstrument(
             throw e
         } catch (e: InstrumentException.Timeout) {
             throw InstrumentException.Timeout(
-                busyWhat, e,
+                busyWhat,
+                e,
                 explanation = "The instrument did not acknowledge the $failedWhat. The sequence " +
                     "was sent whole, so it has either been stored or refused outright - the " +
                     "instrument's own screen says which. Re-read the bank before trusting what the " +
@@ -588,7 +604,8 @@ class MotifXsInstrument(
         } catch (e: Exception) {
             if (damaged) {
                 throw InstrumentException.ProtocolDesync(
-                    "Voice $where arrived damaged (bad length or checksum) on every attempt.", e,
+                    "Voice $where arrived damaged (bad length or checksum) on every attempt.",
+                    e,
                 )
             }
             throw e
@@ -612,7 +629,9 @@ class MotifXsInstrument(
         val where = layout.format.format(address)
         val blocks = exchange.exchangeSequence(
             request = MotifXsSysEx.requestStoredVoice(
-                config.deviceNumber, bank.addressMid, address.slot,
+                config.deviceNumber,
+                bank.addressMid,
+                address.slot,
             ),
             what = "reading $where by its documented address",
             timeout = SEQUENCE_TIMEOUT,
@@ -627,10 +646,12 @@ class MotifXsInstrument(
         // Exactly one, since the patch assumes one: "at least one" would let an unrecognised
         // sequence through and patch only its first block.
         val commonBlocks = blocks.count { MotifXsSysEx.isCommonBlock(it) }
-        if (commonBlocks != 1) throw InstrumentException.ProtocolDesync(
-            "The documented read of $where carried $commonBlocks Common blocks; expected exactly " +
-                "one, so there is no single name to patch.",
-        )
+        if (commonBlocks != 1) {
+            throw InstrumentException.ProtocolDesync(
+                "The documented read of $where carried $commonBlocks Common blocks; expected exactly " +
+                    "one, so there is no single name to patch.",
+            )
+        }
         return blocks
     }
 
@@ -697,10 +718,12 @@ class MotifXsInstrument(
         }
         // The write was acknowledged, so this says it has not shown up yet rather than that it
         // failed.
-        if (settled != true) throw InstrumentException.Timeout(
-            "applying $label's favorite marks",
-            explanation = "$label's favorite marks were acknowledged but had not applied after $FAVORITE_SETTLE.",
-        )
+        if (settled != true) {
+            throw InstrumentException.Timeout(
+                "applying $label's favorite marks",
+                explanation = "$label's favorite marks were acknowledged but had not applied after $FAVORITE_SETTLE.",
+            )
+        }
     }
 
     // ---- Mode ----
@@ -771,7 +794,7 @@ class MotifXsInstrument(
         val stuck = last ?: return
         throw InstrumentException.BlockedByDeviceState(
             "The instrument was still in ${stuck.label} mode after being asked to switch. " +
-                "Change it from the panel instead."
+                "Change it from the panel instead.",
         )
     }
 
@@ -817,7 +840,10 @@ class MotifXsInstrument(
                 "select a voice in ${bank.shownLabel}, whose bank-select LSB is unknown",
             )
             val sets = MotifXsSysEx.selectVoice(
-                config.deviceNumber, lsb, address.slot, bank.selectMsb,
+                config.deviceNumber,
+                lsb,
+                address.slot,
+                bank.selectMsb,
             )
             // The first two are told, not asked: only the third echo - the program - means the
             // selection landed.
@@ -883,8 +909,10 @@ class MotifXsInstrument(
             indexBank(bank).collect { update ->
                 when (update) {
                     is IndexUpdate.Progress -> progress(update.label)
+
                     is IndexUpdate.Failed ->
                         mismatches += "${update.address.slot + 1}: unreadable (${update.reason})"
+
                     is IndexUpdate.Slots -> update.slots.forEach { read ->
                         val shippedName = expected[read.address.slot]?.name
                         if (read.name != shippedName) {
@@ -892,6 +920,7 @@ class MotifXsInstrument(
                                 "\"${read.name ?: "(empty)"}\", app ships \"${shippedName ?: "(none)"}\""
                         }
                     }
+
                     IndexUpdate.Complete -> Unit
                 }
             }
@@ -1150,7 +1179,6 @@ class MotifXsInstrument(
          */
         private val MODE_SETTLE_INTERVAL = 250.milliseconds
         private val MODE_SETTLE_BUDGET = 3.seconds
-
 
         /** A whole documented block sequence, not each message: the read takes ~1.4 s and the write ends in a flash commit. */
         private val SEQUENCE_TIMEOUT = 10.seconds

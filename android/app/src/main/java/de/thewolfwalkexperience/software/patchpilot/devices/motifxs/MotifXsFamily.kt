@@ -4,26 +4,26 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import android.content.Context
+import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
+import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.FamilyCatalog
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentFamily
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
+import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer
-import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbMidiBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.transportScope
 import kotlinx.coroutines.CoroutineScope
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
-import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 
 private const val CATALOG_ASSET = "yamaha_motif_xs.json"
 
@@ -165,8 +165,10 @@ data class MotifXsBlanks(val normal: ByteArray, val drum: ByteArray) {
 
     // A data class over ByteArray needs these written out; the default ones compare identity.
     override fun equals(other: Any?): Boolean =
-        this === other || (other is MotifXsBlanks &&
-            normal.contentEquals(other.normal) && drum.contentEquals(other.drum))
+        this === other || (
+            other is MotifXsBlanks &&
+                normal.contentEquals(other.normal) && drum.contentEquals(other.drum)
+            )
 
     override fun hashCode(): Int = 31 * normal.contentHashCode() + drum.contentHashCode()
 }
@@ -255,12 +257,16 @@ object MotifXsFamily : InstrumentFamily {
         scope: CoroutineScope,
     ): MidiTransport = when (transport) {
         is MidiTransport -> transport
+
         is UsbBulkTransport -> {
             val cable = (descriptor.match as? DeviceMatch.Usb)?.midiCable
-                ?: error("${descriptor.name} is on USB but its catalog entry sets no midiCable, " +
-                    "so there is no way to know which cable its SysEx is on.")
+                ?: error(
+                    "${descriptor.name} is on USB but its catalog entry sets no midiCable, " +
+                        "so there is no way to know which cable its SysEx is on.",
+                )
             UsbMidiBulkTransport(transport, cable, scope)
         }
+
         else -> error("A Motif XS speaks MIDI SysEx, not ${transport::class.simpleName}.")
     }
 }

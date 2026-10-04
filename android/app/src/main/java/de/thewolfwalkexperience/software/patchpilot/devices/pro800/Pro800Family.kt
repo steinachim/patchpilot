@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import android.content.Context
+import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 import de.thewolfwalkexperience.software.patchpilot.catalog.FamilyCatalog
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentFamily
@@ -13,7 +14,6 @@ import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 import de.thewolfwalkexperience.software.patchpilot.transport.transportScope
 import kotlinx.serialization.Serializable
-import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 
 /** Named for the one instrument it describes; the loader dispatches on the `family` field inside it. */
 private const val CATALOG_ASSET = "behringer_pro800.json"

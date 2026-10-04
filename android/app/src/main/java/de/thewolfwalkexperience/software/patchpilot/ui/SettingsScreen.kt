@@ -3,7 +3,6 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
-import de.thewolfwalkexperience.software.patchpilot.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.AppTheme
 
 /**

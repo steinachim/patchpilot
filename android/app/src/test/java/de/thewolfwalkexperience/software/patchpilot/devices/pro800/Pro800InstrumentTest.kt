@@ -3,10 +3,11 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
-import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CoroutineScope
@@ -19,7 +20,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
 
 /**
  * The Pro-800 driven end to end against a scripted MIDI device - the SysEx sibling of what
@@ -37,10 +37,16 @@ class Pro800InstrumentTest {
         val payload = run {
             val dense = ByteArray(Pro800ProgramFields.NAME_DENSE_END)
             Pro800ProgramCodec.writeValue(
-                dense, Pro800ProgramFields.VERSION.denseOffset, Pro800ProgramFields.VERSION.byteCount, 111,
+                dense,
+                Pro800ProgramFields.VERSION.denseOffset,
+                Pro800ProgramFields.VERSION.byteCount,
+                111,
             )
             Pro800ProgramCodec.writeString(
-                dense, Pro800ProgramFields.NAME_DENSE_OFFSET, Pro800ProgramFields.NAME_LENGTH, name,
+                dense,
+                Pro800ProgramFields.NAME_DENSE_OFFSET,
+                Pro800ProgramFields.NAME_LENGTH,
+                name,
             )
             Pro800ProgramCodec.encode(dense)
         }
@@ -61,15 +67,18 @@ class Pro800InstrumentTest {
                     Pro800SysEx.HEADER + byteArrayOf(Pro800SysEx.TYPE_DEVICE_NAME_REPLY.toByte()) +
                         "PRO-800".toByteArray(Charsets.US_ASCII) + Pro800SysEx.SYSEX_END,
                 )
+
                 Pro800SysEx.TYPE_FIRMWARE -> listOf(
                     // 0x00 at index 9 echoes the request's parameter; the version starts at 10.
                     Pro800SysEx.HEADER + byteArrayOf(Pro800SysEx.TYPE_FIRMWARE_REPLY.toByte(), 0x00, 1, 4, 6) +
                         Pro800SysEx.SYSEX_END,
                 )
+
                 Pro800SysEx.TYPE_REQUEST_DUMP -> {
                     val number = Pro800SysEx.addressOf(request)!!
                     listOf(dumpFor(number, names[number]))
                 }
+
                 else -> emptyList()
             }
         }
@@ -160,8 +169,10 @@ class Pro800InstrumentTest {
         }
         val pro800 = Pro800Instrument(
             SysExExchange(
-                transport, backgroundScope,
-                defaultTimeout = kotlin.time.Duration.parse("20ms"), retries = 1,
+                transport,
+                backgroundScope,
+                defaultTimeout = kotlin.time.Duration.parse("20ms"),
+                retries = 1,
             ),
             config,
         )
@@ -191,8 +202,12 @@ class Pro800InstrumentTest {
                 emptyList()
             } else {
                 val number = Pro800SysEx.addressOf(request)!!
-                if (number == 0) { reads++; listOf(shortDumpFor(number, "Tiny")) }
-                else listOf(dumpFor(number, names[number]))
+                if (number == 0) {
+                    reads++
+                    listOf(shortDumpFor(number, "Tiny"))
+                } else {
+                    listOf(dumpFor(number, names[number]))
+                }
             }
         }
         val pro800 = Pro800Instrument(SysExExchange(transport, backgroundScope), config)
@@ -244,7 +259,10 @@ class Pro800InstrumentTest {
     private fun shortDumpFor(programNumber: Int, marker: String): ByteArray {
         val dense = ByteArray(Pro800ProgramFields.NAME_DENSE_OFFSET - 8)
         Pro800ProgramCodec.writeValue(
-            dense, Pro800ProgramFields.VERSION.denseOffset, Pro800ProgramFields.VERSION.byteCount, 109,
+            dense,
+            Pro800ProgramFields.VERSION.denseOffset,
+            Pro800ProgramFields.VERSION.byteCount,
+            109,
         )
         // Something that differs between the two replies, standing in for a foreign tail.
         marker.forEachIndexed { i, c -> dense[dense.size - marker.length + i] = c.code.toByte() }
@@ -260,10 +278,16 @@ class Pro800InstrumentTest {
         val tooLong = Pro800ProgramFields.maxDenseSizeFor(111) + 16
         val dense = ByteArray(tooLong)
         Pro800ProgramCodec.writeValue(
-            dense, Pro800ProgramFields.VERSION.denseOffset, Pro800ProgramFields.VERSION.byteCount, 111,
+            dense,
+            Pro800ProgramFields.VERSION.denseOffset,
+            Pro800ProgramFields.VERSION.byteCount,
+            111,
         )
         Pro800ProgramCodec.writeString(
-            dense, Pro800ProgramFields.NAME_DENSE_OFFSET, Pro800ProgramFields.NAME_LENGTH, "Wrong Record",
+            dense,
+            Pro800ProgramFields.NAME_DENSE_OFFSET,
+            Pro800ProgramFields.NAME_LENGTH,
+            "Wrong Record",
         )
         return Pro800SysEx.HEADER +
             byteArrayOf(Pro800SysEx.TYPE_DUMP.toByte()) +
@@ -476,9 +500,11 @@ class Pro800InstrumentTest {
         val transport = FakeMidiTransport { request ->
             when {
                 Pro800SysEx.typeOf(request) != Pro800SysEx.TYPE_REQUEST_DUMP -> emptyList()
+
                 // Slots 0..4 hold presets; everything above answers the empty reply.
                 Pro800SysEx.addressOf(request)!! < 5 -> // bank A
                     listOf(dumpFor(Pro800SysEx.addressOf(request)!!, "Preset"))
+
                 else -> listOf(byteArrayOf(0xF0.toByte(), 0xF7.toByte()))
             }
         }
@@ -522,7 +548,9 @@ class Pro800InstrumentTest {
                     Pro800SysEx.HEADER + byteArrayOf(Pro800SysEx.TYPE_DEVICE_NAME_REPLY.toByte()) +
                         "PRO-800".toByteArray(Charsets.US_ASCII) + Pro800SysEx.SYSEX_END,
                 )
+
                 Pro800SysEx.typeOf(request) == Pro800SysEx.TYPE_FIRMWARE -> listOfNotNull(firmware)
+
                 else -> listOf(byteArrayOf(0xF0.toByte(), 0xF7.toByte()))
             }
         }
@@ -547,8 +575,10 @@ class Pro800InstrumentTest {
         assertNotNull("an untested firmware must raise an advisory", advisory)
         assertTrue("it must name the version found", advisory!!.contains("1.4.5"))
         assertTrue("and the versions that were tested", advisory.contains("1.4.6"))
-        assertTrue("and point at the report, which is the useful thing to send back",
-            advisory.contains("device report"))
+        assertTrue(
+            "and point at the report, which is the useful thing to send back",
+            advisory.contains("device report"),
+        )
 
         // Usable, not merely connected: the facets have to work, or "continue anyway" is a lie.
         // This fixture answers every address with a bare F0 F7, so the presets are all empty -

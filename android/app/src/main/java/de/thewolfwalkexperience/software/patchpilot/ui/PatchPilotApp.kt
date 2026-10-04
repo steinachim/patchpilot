@@ -45,6 +45,7 @@ private fun ConnectionState.rendersOnSessionScreens(): Boolean = when (this) {
     ConnectionState.Searching,
     is ConnectionState.Opening,
     -> true
+
     is ConnectionState.Error,
     is ConnectionState.PermissionDenied,
     is ConnectionState.NeedsManualSetting,
@@ -95,6 +96,7 @@ private fun PatchPilotNavHost(
         if (!currentEntryIsResumed()) return
         navController.popBackStack()
     }
+
     // Returns to ROUTE_CONNECT from a session route, a no-op if that has already happened: a
     // session that cycles through several unrenderable states re-runs the effect below for each,
     // and once the first call has left `programs`, `popUpTo(ROUTE_PROGRAMS)` matches nothing and

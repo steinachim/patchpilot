@@ -6,14 +6,14 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
-import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
-import kotlin.time.Duration.Companion.milliseconds
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -85,11 +85,13 @@ class MotifXsTaggerTest {
                 slotCount = 4,
                 voices = listOf(
                     MotifXsFactoryVoice(
-                        1, "Full Concert Grand",
+                        1,
+                        "Full Concert Grand",
                         listOf(MotifXsFactoryCategory("Piano", "APno")),
                     ),
                     MotifXsFactoryVoice(
-                        2, "Ballad Key",
+                        2,
+                        "Ballad Key",
                         listOf(
                             MotifXsFactoryCategory("Piano", "Layer"),
                             MotifXsFactoryCategory("Pads", "Warm"),
@@ -154,6 +156,7 @@ class MotifXsTaggerTest {
                 val (hi, mid, lo) = address
                 return when (hi) {
                     0x0C -> listOf(deviceDump(0x0C, mid, lo, voicePayload()))
+
                     MotifXsSysEx.FAVORITES_ADDRESS_HI -> {
                         val table = if (stale > 0) {
                             stale--
@@ -163,7 +166,9 @@ class MotifXsTaggerTest {
                         }
                         listOf(deviceDump(hi, mid, 0, table))
                     }
+
                     MotifXsSysEx.BULK_HEADER_HI -> documentedRead(mid, lo)
+
                     else -> emptyList()
                 }
             }
@@ -180,11 +185,13 @@ class MotifXsTaggerTest {
                     marks[mid] = MotifXsSysEx.dumpPayload(request)
                     listOf(ACK)
                 }
+
                 MotifXsSysEx.BULK_HEADER_HI -> {
                     inbound = mutableListOf()
                     inboundTarget = mid to lo
                     emptyList()
                 }
+
                 MotifXsSysEx.BULK_FOOTER_HI -> {
                     val blocks = inbound ?: return emptyList()
                     inbound = null
@@ -199,6 +206,7 @@ class MotifXsTaggerTest {
                     }
                     listOf(ACK)
                 }
+
                 else -> {
                     inbound?.add(request)
                     emptyList()
@@ -255,10 +263,14 @@ class MotifXsTaggerTest {
     @Test
     fun `a factory voice can be favorited but not re-categorised`() = runTest {
         val (_, tagger, _) = instrument(backgroundScope, Device())
-        assertTrue("a factory favorite is user data the instrument accepts",
-            tagger.canSetFavorite(factorySlot))
-        assertFalse("a factory voice's own bytes are not rewritable",
-            tagger.canSetCategories(factorySlot))
+        assertTrue(
+            "a factory favorite is user data the instrument accepts",
+            tagger.canSetFavorite(factorySlot),
+        )
+        assertFalse(
+            "a factory voice's own bytes are not rewritable",
+            tagger.canSetCategories(factorySlot),
+        )
         assertTrue(tagger.canSetFavorite(userSlot))
         assertTrue(tagger.canSetCategories(userSlot))
     }
@@ -368,7 +380,8 @@ class MotifXsTaggerTest {
         device.marks[0x00] = byteArrayOf(0, 2, 0, 0)
         assertEquals(
             "still cached, which is correct until something re-reads",
-            emptySet<Int>(), tagger.read(factorySlot).favoriteUnder,
+            emptySet<Int>(),
+            tagger.read(factorySlot).favoriteUnder,
         )
 
         motif.browser.index(PresetScope.FAVORITES).toList()

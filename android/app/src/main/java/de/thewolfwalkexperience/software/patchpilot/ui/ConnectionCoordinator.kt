@@ -192,8 +192,11 @@ internal class ConnectionCoordinator(
      */
     fun onUsbDeviceAttached(device: AttachedUsbDevice) {
         val s = state.value
-        Log.i(TAG, "USB attach of ${device.label} while $s; attached devices: " +
-            usb.attachedDevices().joinToString { it.label })
+        Log.i(
+            TAG,
+            "USB attach of ${device.label} while $s; attached devices: " +
+                usb.attachedDevices().joinToString { it.label },
+        )
         when (s) {
             is ConnectionState.NothingFound,
             is ConnectionState.Error,
@@ -201,11 +204,14 @@ internal class ConnectionCoordinator(
             is ConnectionState.NeedsManualSetting,
             ConnectionState.Disconnected,
             -> connect()
+
             is ConnectionState.DeviceSelection -> {
                 forcePickerOnNextConnect = true
                 connect()
             }
+
             is ConnectionState.DeviceLost -> if (device.physicalKey == s.physicalKey) connect()
+
             is ConnectionState.Connected,
             ConnectionState.Searching,
             is ConnectionState.Opening,
@@ -284,10 +290,12 @@ internal class ConnectionCoordinator(
             // risk" gate this session if it is still attached, otherwise offer whatever else is
             // attached.
             known.isEmpty() -> reconnectRememberedUnknownDeviceOrOffer()
+
             // Auto-connect is on and nobody asked to be shown the picker anyway: take the first
             // one the scan found. Reached only when USB alone did not already resolve it above -
             // so everything here is a MIDI-only family, or the picker was forced.
             autoConnect && !forcePicker -> connectCandidate(known.first())
+
             // Auto-connect is off, or the user backed out and asked to choose again: let them
             // pick rather than taking whichever the scan happened to return first.
             else -> _state.value = ConnectionState.DeviceSelection(pickerEntries(known))

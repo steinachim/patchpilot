@@ -3,19 +3,21 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
-import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
-import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -26,8 +28,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.time.Duration.Companion.milliseconds
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
 
 /**
  * The Motif XS browser end to end against a scripted device that replays sample dumps.
@@ -42,10 +42,22 @@ class MotifXsInstrumentTest {
         banks = listOf(
             // selectLsb is the real instrument's: USER 1 selects with 0x08 and dumps at 0x0A,
             // which is exactly why bank-select LSB is not derivable from the dump address.
-            MotifXsBank(label = "USR1", slotCount = 3, addressHi = 0x0C, addressMid = 0x0A,
-                displayLabel = "USER 1", selectLsb = 0x08),
-            MotifXsBank(label = "USR2", slotCount = 3, addressHi = 0x0C, addressMid = 0x0B,
-                displayLabel = "USER 2", selectLsb = 0x09),
+            MotifXsBank(
+                label = "USR1",
+                slotCount = 3,
+                addressHi = 0x0C,
+                addressMid = 0x0A,
+                displayLabel = "USER 1",
+                selectLsb = 0x08,
+            ),
+            MotifXsBank(
+                label = "USR2",
+                slotCount = 3,
+                addressHi = 0x0C,
+                addressMid = 0x0B,
+                displayLabel = "USER 2",
+                selectLsb = 0x09,
+            ),
         ),
     )
 
@@ -179,18 +191,20 @@ class MotifXsInstrumentTest {
             drum: Boolean = false,
         ): List<ByteArray> {
             val name = renamed[bankByte to slot] ?: currentName
-            if (drum) return buildList {
-                // On the instrument: eight 46 xx Common blocks - note 46 08, not the Normal
-                // Voice's 46 06 - and 73 elements at 47 ee 00, ee running 0..72.
-                add(deviceDump(MotifXsSysEx.BULK_HEADER_HI, bankByte, slot, ByteArray(0)))
-                add(deviceDump(0x46, 0x00, 0x00, commonPayload(name, size = 74)))
-                for (mid in listOf(0x01, 0x02, 0x03, 0x04, 0x05, 0x08, 0x30)) {
-                    add(deviceDump(0x46, mid, 0x00, ByteArray(37) { it.toByte() }))
+            if (drum) {
+                return buildList {
+                    // On the instrument: eight 46 xx Common blocks - note 46 08, not the Normal
+                    // Voice's 46 06 - and 73 elements at 47 ee 00, ee running 0..72.
+                    add(deviceDump(MotifXsSysEx.BULK_HEADER_HI, bankByte, slot, ByteArray(0)))
+                    add(deviceDump(0x46, 0x00, 0x00, commonPayload(name, size = 74)))
+                    for (mid in listOf(0x01, 0x02, 0x03, 0x04, 0x05, 0x08, 0x30)) {
+                        add(deviceDump(0x46, mid, 0x00, ByteArray(37) { it.toByte() }))
+                    }
+                    for (element in 0..72) {
+                        add(deviceDump(0x47, element, 0x00, ByteArray(47) { it.toByte() }))
+                    }
+                    add(deviceDump(MotifXsSysEx.BULK_FOOTER_HI, bankByte, slot, ByteArray(0)))
                 }
-                for (element in 0..72) {
-                    add(deviceDump(0x47, element, 0x00, ByteArray(47) { it.toByte() }))
-                }
-                add(deviceDump(MotifXsSysEx.BULK_FOOTER_HI, bankByte, slot, ByteArray(0)))
             }
             return buildList {
                 add(deviceDump(MotifXsSysEx.BULK_HEADER_HI, bankByte, slot, ByteArray(0)))
@@ -225,6 +239,7 @@ class MotifXsInstrumentTest {
                     inboundTarget = mid to lo
                     return emptyList()
                 }
+
                 MotifXsSysEx.BULK_FOOTER_HI -> {
                     val blocks = inbound ?: return emptyList()
                     val target = inboundTarget
@@ -247,6 +262,7 @@ class MotifXsInstrumentTest {
                     written[Triple(0x0C, mid, lo)] = syntheticVoicePayload(name)
                     return listOf(ACK)
                 }
+
                 else -> {
                     inbound?.add(request)
                     return emptyList()
@@ -333,7 +349,9 @@ class MotifXsInstrumentTest {
                     slots.writeDocumented(request)
 
                 MotifXsSysEx.typeOf(request) == MotifXsSysEx.TYPE_BULK_DUMP ->
-                    slots.write(request)   // a write draws no dump back, only an acknowledgement
+                    slots.write(request)
+
+                // a write draws no dump back, only an acknowledgement
 
                 // A dump request at the Bulk Header address reads the whole voice, block by block.
                 MotifXsSysEx.typeOf(request) == MotifXsSysEx.TYPE_DUMP_REQUEST &&
@@ -391,7 +409,8 @@ class MotifXsInstrumentTest {
                     if ((request[7].toInt() and 0xFF) == MotifXsSysEx.SELECT_PROGRAM) {
                         val slot = request[8].toInt() and 0x7F
                         loadedVoice = slots.read(
-                            Triple(0x0C, 0x0A, slot), defaultVoiceAt(0x0C, 0x0A, slot),
+                            Triple(0x0C, 0x0A, slot),
+                            defaultVoiceAt(0x0C, 0x0A, slot),
                         )?.let { MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(it)) }
                     }
                     listOf(selectEcho(request))
@@ -418,18 +437,23 @@ class MotifXsInstrumentTest {
                             favoritesDump(mid, favorites[mid] ?: ByteArray(0)).copyOfRange(0, 11)
                                 .plus(MotifXsSysEx.SYSEX_END),
                         )
+
                         favorites.containsKey(mid) -> listOf(favoritesDump(mid, favorites.getValue(mid)))
+
                         else -> emptyList()
                     }
                 }
 
                 else -> listOfNotNull(
-                    address?.let { slots.read(it, defaultVoiceAt(it.first, it.second, it.third)) }
+                    address?.let { slots.read(it, defaultVoiceAt(it.first, it.second, it.third)) },
                 )
             }
         }
         return MotifXsInstrument(
-            SysExExchange(transport, scope), withConfig, testBlanks, factoryVoices = factoryVoices,
+            SysExExchange(transport, scope),
+            withConfig,
+            testBlanks,
+            factoryVoices = factoryVoices,
         ) to transport
     }
 
@@ -464,9 +488,13 @@ class MotifXsInstrumentTest {
     private companion object {
         /** Every address-hi a documented sequence uses: brackets, then Normal or Drum blocks. */
         val DOCUMENTED_ADDRESS_HI = setOf(
-            MotifXsSysEx.BULK_HEADER_HI, MotifXsSysEx.BULK_FOOTER_HI,
-            0x40, 0x41, 0x42,   // Normal Voice: Common, element groups 1 and 2
-            0x46, 0x47,         // Drum Voice: Common, element group
+            MotifXsSysEx.BULK_HEADER_HI,
+            MotifXsSysEx.BULK_FOOTER_HI,
+            0x40,
+            0x41,
+            0x42, // Normal Voice: Common, element groups 1 and 2
+            0x46,
+            0x47, // Drum Voice: Common, element group
         )
     }
 
@@ -510,8 +538,14 @@ class MotifXsInstrumentTest {
             SysExExchange(transport, backgroundScope, defaultTimeout = 200.milliseconds, retries = 2),
             MotifXsConfig(
                 banks = listOf(
-                    MotifXsBank(label = "USR1", slotCount = 1, addressHi = 0x0C, addressMid = 0x0A,
-                        displayLabel = "USER 1", selectLsb = 0x08),
+                    MotifXsBank(
+                        label = "USR1",
+                        slotCount = 1,
+                        addressHi = 0x0C,
+                        addressMid = 0x0A,
+                        displayLabel = "USER 1",
+                        selectLsb = 0x08,
+                    ),
                 ),
             ),
             testBlanks,
@@ -744,7 +778,6 @@ class MotifXsInstrumentTest {
                 transport.sent.none { MotifXsSysEx.modeOf(it) != null },
             )
         }
-
     }
 
     /**
@@ -756,7 +789,9 @@ class MotifXsInstrumentTest {
     @Test
     fun `the offered remedy switches the instrument to voice mode`() = runTest {
         val (motif, transport) = instrument(
-            backgroundScope, mode = MotifXsMode.PERFORMANCE, modeIsSettable = true,
+            backgroundScope,
+            mode = MotifXsMode.PERFORMANCE,
+            modeIsSettable = true,
         )
         val blocked = try {
             motif.selector!!.select(SlotAddress(0, 0))
@@ -812,7 +847,9 @@ class MotifXsInstrumentTest {
     @Test
     fun `a mode change that does not take is reported`() = runTest {
         val (motif, _) = instrument(
-            backgroundScope, mode = MotifXsMode.PERFORMANCE, modeIsSettable = false,
+            backgroundScope,
+            mode = MotifXsMode.PERFORMANCE,
+            modeIsSettable = false,
         )
         val blocked = try {
             motif.selector!!.select(SlotAddress(0, 0))
@@ -903,7 +940,8 @@ class MotifXsInstrumentTest {
     @Test
     fun `renaming the loaded voice reloads it so the panel updates`() = runTest {
         val (motif, transport) = instrument(
-            backgroundScope, loadedVoiceName = "TWE2 Wolf Walk",
+            backgroundScope,
+            loadedVoiceName = "TWE2 Wolf Walk",
         )
         motif.editor!!.rename(SlotAddress(0, 0), "Renamed In Place")
 
@@ -924,7 +962,8 @@ class MotifXsInstrumentTest {
     @Test
     fun `renaming an unloaded voice does not reload anything`() = runTest {
         val (motif, transport) = instrument(
-            backgroundScope, loadedVoiceName = "Something Else",
+            backgroundScope,
+            loadedVoiceName = "Something Else",
         )
         motif.editor!!.rename(SlotAddress(0, 0), "Renamed In Place")
         assertTrue(
@@ -1002,8 +1041,14 @@ class MotifXsInstrumentTest {
     fun `a drum voice renames, despite a completely different block sequence`() = runTest {
         val drumConfig = MotifXsConfig(
             banks = listOf(
-                MotifXsBank(label = "DRUM", slotCount = 1, addressHi = 0x0C, addressMid = 0x28,
-                    displayLabel = "USER DR", selectLsb = 0x28),
+                MotifXsBank(
+                    label = "DRUM",
+                    slotCount = 1,
+                    addressHi = 0x0C,
+                    addressMid = 0x28,
+                    displayLabel = "USER DR",
+                    selectLsb = 0x28,
+                ),
             ),
         )
         val (motif, transport) = instrument(backgroundScope, withConfig = drumConfig, drumShape = true)
@@ -1040,17 +1085,29 @@ class MotifXsInstrumentTest {
     fun `copy, move and swap refuse to cross the drum boundary`() = runTest {
         val mixed = MotifXsConfig(
             banks = listOf(
-                MotifXsBank(label = "USR1", slotCount = 3, addressHi = 0x0C, addressMid = 0x0A,
-                    displayLabel = "USER 1", selectLsb = 0x08),
-                MotifXsBank(label = "DRUM", slotCount = 3, addressHi = 0x0C, addressMid = 0x28,
-                    displayLabel = "USER DR", selectLsb = 0x28),
+                MotifXsBank(
+                    label = "USR1",
+                    slotCount = 3,
+                    addressHi = 0x0C,
+                    addressMid = 0x0A,
+                    displayLabel = "USER 1",
+                    selectLsb = 0x08,
+                ),
+                MotifXsBank(
+                    label = "DRUM",
+                    slotCount = 3,
+                    addressHi = 0x0C,
+                    addressMid = 0x28,
+                    displayLabel = "USER DR",
+                    selectLsb = 0x28,
+                ),
             ),
         )
         assertFalse("USR1 is not a drum bank", mixed.banks[0].isDrum)
         assertTrue("USER DR is", mixed.banks[1].isDrum)
 
         val normal = SlotAddress(0, 0)
-        val drum = SlotAddress(1, 1)   // slot 1 reads empty in the fixture, so copy has a target
+        val drum = SlotAddress(1, 1) // slot 1 reads empty in the fixture, so copy has a target
         for (op in listOf<Pair<String, suspend (PresetEditor) -> Unit>>(
             "copy" to { e -> e.copyProgram(normal, drum) },
             "move" to { e -> e.move(normal, drum) },
@@ -1092,8 +1149,14 @@ class MotifXsInstrumentTest {
         val fullBank = MotifXsConfig(
             banks = listOf(
                 // Every slot named, and none of it matters: there is no fallback to avoid.
-                MotifXsBank(label = "DRUM", slotCount = 2, addressHi = 0x0C, addressMid = 0x28,
-                    displayLabel = "USER DR", selectLsb = 0x28),
+                MotifXsBank(
+                    label = "DRUM",
+                    slotCount = 2,
+                    addressHi = 0x0C,
+                    addressMid = 0x28,
+                    displayLabel = "USER DR",
+                    selectLsb = 0x28,
+                ),
             ),
         )
         val shipped = MotifXsBlanks(normal = ByteArray(64) { 1 }, drum = ByteArray(64) { 2 })
@@ -1102,14 +1165,19 @@ class MotifXsInstrumentTest {
             val address = MotifXsSysEx.addressOf(request)
             when {
                 MotifXsSysEx.typeOf(request) == MotifXsSysEx.TYPE_BULK_DUMP -> slots.write(request)
+
                 // Both slots always read as a named voice - no empty one anywhere.
-                else -> listOfNotNull(address?.let {
-                    slots.read(it, dumpAt(MotifXsFixtures.namedVoice, it.first, it.second, it.third))
-                })
+                else -> listOfNotNull(
+                    address?.let {
+                        slots.read(it, dumpAt(MotifXsFixtures.namedVoice, it.first, it.second, it.third))
+                    },
+                )
             }
         }
         val motif = MotifXsInstrument(
-            SysExExchange(transport, backgroundScope), fullBank, shipped,
+            SysExExchange(transport, backgroundScope),
+            fullBank,
+            shipped,
         )
         motif.editor!!.delete(SlotAddress(0, 0))
 
@@ -1129,8 +1197,14 @@ class MotifXsInstrumentTest {
     fun `rename refuses a read-only bank`() = runTest {
         val readOnly = MotifXsConfig(
             banks = listOf(
-                MotifXsBank(label = "PRE1", slotCount = 3, addressHi = 0x0C, addressMid = 0x00,
-                    displayLabel = "PRE 1", readOnly = true),
+                MotifXsBank(
+                    label = "PRE1",
+                    slotCount = 3,
+                    addressHi = 0x0C,
+                    addressMid = 0x00,
+                    displayLabel = "PRE 1",
+                    readOnly = true,
+                ),
             ),
         )
         val (motif, transport) = instrument(backgroundScope, withConfig = readOnly)
@@ -1181,9 +1255,12 @@ class MotifXsInstrumentTest {
         // The write on its own changes nothing.
         transport.send(
             MotifXsSysEx.bulkDump(
-                0, 0x0C, 0x0A, 0,
+                0,
+                0x0C,
+                0x0A,
+                0,
                 MotifXsSysEx.dumpPayload(MotifXsFixtures.emptyVoice),
-            )
+            ),
         )
         assertEquals(before, motif.browser.refresh(SlotAddress(0, 0)).name)
 
@@ -1202,8 +1279,8 @@ class MotifXsInstrumentTest {
     @Test
     fun `swap exchanges the two slots`() = runTest {
         val (motif, _) = instrument(backgroundScope)
-        val a = SlotAddress(0, 0)   // named
-        val b = SlotAddress(0, 2)   // long-named
+        val a = SlotAddress(0, 0) // named
+        val b = SlotAddress(0, 2) // long-named
         val before = motif.browser.refresh(a).name to motif.browser.refresh(b).name
         assertNotEquals(before.first, before.second)
 
@@ -1222,8 +1299,8 @@ class MotifXsInstrumentTest {
     @Test
     fun `move carries the voice across and empties the slot it came from`() = runTest {
         val (motif, _) = instrument(backgroundScope)
-        val from = SlotAddress(0, 0)   // named
-        val to = SlotAddress(1, 0)     // named, in the other bank - will be overwritten
+        val from = SlotAddress(0, 0) // named
+        val to = SlotAddress(1, 0) // named, in the other bank - will be overwritten
         val moving = motif.browser.refresh(from).name
         assertNotNull(moving)
 
@@ -1243,8 +1320,8 @@ class MotifXsInstrumentTest {
     @Test
     fun `copy duplicates the voice and leaves the source where it was`() = runTest {
         val (motif, _) = instrument(backgroundScope)
-        val from = SlotAddress(0, 0)   // named
-        val to = SlotAddress(1, 1)     // empty, in the other bank
+        val from = SlotAddress(0, 0) // named
+        val to = SlotAddress(1, 1) // empty, in the other bank
         val source = motif.browser.refresh(from).name
         assertNotNull(source)
 
@@ -1302,10 +1379,23 @@ class MotifXsInstrumentTest {
     fun `writing a read-only bank is refused before it is attempted`() = runTest {
         val withFactory = MotifXsConfig(
             banks = listOf(
-                MotifXsBank(label = "USR1", slotCount = 3, addressHi = 0x0C, addressMid = 0x0A,
-                    displayLabel = "USER 1", selectLsb = 0x08),
-                MotifXsBank(label = "PRE1", slotCount = 3, addressHi = 0x0C, addressMid = 0x00,
-                    displayLabel = "PRE1", readOnly = true, indexByDefault = false),
+                MotifXsBank(
+                    label = "USR1",
+                    slotCount = 3,
+                    addressHi = 0x0C,
+                    addressMid = 0x0A,
+                    displayLabel = "USER 1",
+                    selectLsb = 0x08,
+                ),
+                MotifXsBank(
+                    label = "PRE1",
+                    slotCount = 3,
+                    addressHi = 0x0C,
+                    addressMid = 0x00,
+                    displayLabel = "PRE1",
+                    readOnly = true,
+                    indexByDefault = false,
+                ),
             ),
         )
         val (motif, transport) = instrument(backgroundScope, withFactory)
@@ -1347,10 +1437,22 @@ class MotifXsInstrumentTest {
     fun `a full index walks only the banks marked indexByDefault`() = runTest {
         val scoped = MotifXsConfig(
             banks = listOf(
-                MotifXsBank(label = "USR1", slotCount = 3, addressHi = 0x0C, addressMid = 0x0A,
-                    displayLabel = "USER 1"),
-                MotifXsBank(label = "PRE1", slotCount = 3, addressHi = 0x0C, addressMid = 0x00,
-                    displayLabel = "PRE1", readOnly = true, indexByDefault = false),
+                MotifXsBank(
+                    label = "USR1",
+                    slotCount = 3,
+                    addressHi = 0x0C,
+                    addressMid = 0x0A,
+                    displayLabel = "USER 1",
+                ),
+                MotifXsBank(
+                    label = "PRE1",
+                    slotCount = 3,
+                    addressHi = 0x0C,
+                    addressMid = 0x00,
+                    displayLabel = "PRE1",
+                    readOnly = true,
+                    indexByDefault = false,
+                ),
             ),
         )
         val (motif, transport) = instrument(backgroundScope, scoped)
@@ -1368,10 +1470,22 @@ class MotifXsInstrumentTest {
     fun `a factory bank can be indexed on demand`() = runTest {
         val scoped = MotifXsConfig(
             banks = listOf(
-                MotifXsBank(label = "USR1", slotCount = 3, addressHi = 0x0C, addressMid = 0x0A,
-                    displayLabel = "USER 1"),
-                MotifXsBank(label = "PRE1", slotCount = 3, addressHi = 0x0C, addressMid = 0x00,
-                    displayLabel = "PRE1", readOnly = true, indexByDefault = false),
+                MotifXsBank(
+                    label = "USR1",
+                    slotCount = 3,
+                    addressHi = 0x0C,
+                    addressMid = 0x0A,
+                    displayLabel = "USER 1",
+                ),
+                MotifXsBank(
+                    label = "PRE1",
+                    slotCount = 3,
+                    addressHi = 0x0C,
+                    addressMid = 0x00,
+                    displayLabel = "PRE1",
+                    readOnly = true,
+                    indexByDefault = false,
+                ),
             ),
         )
         val (motif, transport) = instrument(backgroundScope, scoped)
@@ -1444,8 +1558,14 @@ class MotifXsInstrumentTest {
             SysExExchange(transport, backgroundScope, defaultTimeout = 200.milliseconds),
             MotifXsConfig(
                 banks = listOf(
-                    MotifXsBank(label = "USR1", slotCount = 1, addressHi = 0x0C, addressMid = 0x0A,
-                        displayLabel = "USER 1", selectLsb = 0x08),
+                    MotifXsBank(
+                        label = "USR1",
+                        slotCount = 1,
+                        addressHi = 0x0C,
+                        addressMid = 0x0A,
+                        displayLabel = "USER 1",
+                        selectLsb = 0x08,
+                    ),
                 ),
             ),
             testBlanks,
@@ -1479,7 +1599,7 @@ private fun syntheticVoicePayload(name: String): ByteArray {
     var at = 0
     "0:0:".forEach { dense[at++] = it.code.toByte() }
     name.forEach { dense[at++] = it.code.toByte() }
-    at += MotifXsVoice.NAME_TRAILER_BYTES     // left as NUL: stops the printable run cleanly
+    at += MotifXsVoice.NAME_TRAILER_BYTES // left as NUL: stops the printable run cleanly
     name.forEach { dense[at++] = it.code.toByte() }
     return byteArrayOf(0, 0) + packMsb(dense)
 }
@@ -1502,5 +1622,4 @@ internal fun packMsb(dense: ByteArray): ByteArray {
         i += 7
     }
     return out.toByteArray()
-
 }

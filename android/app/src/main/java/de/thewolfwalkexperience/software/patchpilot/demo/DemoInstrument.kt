@@ -3,6 +3,8 @@
 
 package de.thewolfwalkexperience.software.patchpilot.demo
 
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
@@ -18,13 +20,11 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
 
 /**
  * A fictitious instrument, implemented directly against [Instrument] with an in-memory library
@@ -60,6 +60,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
     override val browser: PresetBrowser get() = this
     override val selector: PresetSelector get() = this
     override val editor: PresetEditor get() = this
+
     /** Categories, shaped like a Nord's - see [DemoCategories]. No favorites: nothing here models the per-bank table one lives in. */
     override val tagger: PresetTagger = DemoTagger()
 
@@ -133,7 +134,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
         override suspend fun setCategories(address: SlotAddress, categories: List<CategoryRef?>) {
             val wanted = categories.firstOrNull()
                 ?: throw IllegalArgumentException(
-                    "This instrument always files a preset under a category; there is none to clear."
+                    "This instrument always files a preset under a category; there is none to clear.",
                 )
             val name = DemoCategories.nameOf(wanted)
                 ?: throw IllegalArgumentException("No category ${wanted.main} on this instrument.")

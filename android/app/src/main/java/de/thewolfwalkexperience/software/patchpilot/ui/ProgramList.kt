@@ -208,6 +208,7 @@ internal fun ProgramListBody(
                                 stringResource(R.string.programs_bank_header, row.bank)
                             },
                         )
+
                     is ProgramRow.ProgramEntry -> ProgramRowItem(
                         row = row,
                         isEmpty = row.item.address !in occupied,
@@ -477,9 +478,12 @@ private fun ProgramRowItem(
                             }
                         }.semantics { contentDescription = description }
                     }
+
                     // Inert while picking, as the row menu is.
                     ops.picking -> m
+
                     isEmpty || !rules.canSelect -> m
+
                     else -> m.clickable { ops.onProgramTapped(program) }
                 }
             },
@@ -555,7 +559,8 @@ private fun RowActionsMenu(
                 // Named for its row: in a list of 128, "More options" alone says nothing about
                 // which preset a screen-reader user is on.
                 contentDescription = stringResource(
-                    R.string.cd_row_options, program.name ?: program.displayId,
+                    R.string.cd_row_options,
+                    program.name ?: program.displayId,
                 ),
             )
         }
@@ -563,13 +568,19 @@ private fun RowActionsMenu(
             if (canRename) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_rename)) },
-                    onClick = { expanded = false; onRename() },
+                    onClick = {
+                        expanded = false
+                        onRename()
+                    },
                 )
             }
             if (canCopy) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_copy)) },
-                    onClick = { expanded = false; onCopy() },
+                    onClick = {
+                        expanded = false
+                        onCopy()
+                    },
                 )
             }
             // The reachable half of drag-to-reorder: a long-press drag has no keyboard or
@@ -577,14 +588,20 @@ private fun RowActionsMenu(
             if (canMove) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_move)) },
-                    onClick = { expanded = false; onMove() },
+                    onClick = {
+                        expanded = false
+                        onMove()
+                    },
                 )
             }
             // Before Delete, which stays last.
             if (canSetFavorite) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_set_favorite)) },
-                    onClick = { expanded = false; onSetFavorite() },
+                    onClick = {
+                        expanded = false
+                        onSetFavorite()
+                    },
                 )
             }
             if (canSetCategories) {
@@ -592,7 +609,10 @@ private fun RowActionsMenu(
                     text = {
                         Text(pluralStringResource(R.plurals.action_set_categories, categoryCount))
                     },
-                    onClick = { expanded = false; onSetCategories() },
+                    onClick = {
+                        expanded = false
+                        onSetCategories()
+                    },
                 )
             }
             if (canDelete) {
@@ -603,7 +623,10 @@ private fun RowActionsMenu(
                             color = MaterialTheme.colorScheme.error,
                         )
                     },
-                    onClick = { expanded = false; onDelete() },
+                    onClick = {
+                        expanded = false
+                        onDelete()
+                    },
                 )
             }
         }
@@ -653,7 +676,10 @@ private fun BankIndex(
             .pointerInput(banks) {
                 detectDragGestures(
                     onDragStart = { offset -> jumpToY(offset.y) },
-                    onDrag = { change, _ -> change.consume(); jumpToY(change.position.y) },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        jumpToY(change.position.y)
+                    },
                 )
             },
         horizontalAlignment = Alignment.CenterHorizontally,

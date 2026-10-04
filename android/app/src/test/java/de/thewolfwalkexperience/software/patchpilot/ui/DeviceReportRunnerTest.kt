@@ -23,7 +23,10 @@ class DeviceReportRunnerTest {
         DeviceReportRunner(
             scope = scope,
             savedState = saved,
-            build = { progress -> progress("reading"); result },
+            build = { progress ->
+                progress("reading")
+                result
+            },
             identity = { "nord_grand" to "Reads everything." },
         )
 

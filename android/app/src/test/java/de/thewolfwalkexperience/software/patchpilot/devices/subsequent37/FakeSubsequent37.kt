@@ -6,12 +6,12 @@ package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * A scripted Subsequent 37: the library of [Subsequent37Fixtures.BULK_DUMP], answering the
@@ -107,17 +107,23 @@ class FakeSubsequent37(private val scope: CoroutineScope) {
         val command = (request[3].toInt() and 0xFF) to (request[4].toInt() and 0xFF)
         return when {
             command.first == 0x32 -> listOf(byteArrayOf(0xF0.toByte(), 0x04, 0x0C, 0x32, 0x7F, 0x7F, 0xF7.toByte()))
+
             command == (0x06 to 0x04) -> listOfNotNull(settingsReply)
+
             command == (0x06 to 0x00) -> emptyList()
+
             command == (0x06 to 0x01) -> read(((request[5].toInt() and 0x7F) shl 7) or (request[6].toInt() and 0x7F))
+
             command == (0x06 to 0x03) -> {
                 startDump()
                 emptyList()
             }
+
             command == (0x05 to 0x01) -> {
                 write(request)
                 emptyList()
             }
+
             else -> emptyList()
         }
     }

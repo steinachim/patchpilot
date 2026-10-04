@@ -77,8 +77,12 @@ class UsbMidiBulkTransport(
                 // Never rethrown: a dead endpoint is a session outcome, not something for the
                 // scope's exception handler (see transportScope).
                 if (++consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                    Log.w(TAG, "Giving up on the IN endpoint after $consecutiveFailures " +
-                        "consecutive failures; this session is over.", e)
+                    Log.w(
+                        TAG,
+                        "Giving up on the IN endpoint after $consecutiveFailures " +
+                            "consecutive failures; this session is over.",
+                        e,
+                    )
                     return@launch
                 }
                 delay(FAILURE_BACKOFF_MS)

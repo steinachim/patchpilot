@@ -226,8 +226,11 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         requireFacet(instrument.tagger, "favorite presets").setFavorite(slot.address, under)
         listings.refreshEdited(slot.address)
         listings.dropFavorites()
-        if (under.isEmpty()) str(R.string.result_favorite_cleared, slot.displayId)
-        else str(R.string.result_favorite_set, slot.displayId)
+        if (under.isEmpty()) {
+            str(R.string.result_favorite_cleared, slot.displayId)
+        } else {
+            str(R.string.result_favorite_set, slot.displayId)
+        }
     }
 
     /** Replaces [slot]'s category assignments, nulls included. */
@@ -240,8 +243,11 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             // the instrument lists it - the same reason setFavorite drops that listing.
             listings.dropFavorites()
             val shown = categories.mapNotNull { ref -> ref?.let { tagger.taxonomy.label(it) } }
-            if (shown.isEmpty()) str(R.string.result_categories_cleared, slot.displayId)
-            else str(R.string.result_categories_set, slot.displayId, shown.joinToString(", "))
+            if (shown.isEmpty()) {
+                str(R.string.result_categories_cleared, slot.displayId)
+            } else {
+                str(R.string.result_categories_set, slot.displayId, shown.joinToString(", "))
+            }
         }
 
     /**

@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.content.Context
+import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentFamily
@@ -12,7 +13,6 @@ import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
-import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 
 private const val DEVICE_CATALOG_ASSET = "nord_devices.json"
 

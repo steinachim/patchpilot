@@ -3,17 +3,17 @@
 
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
-import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsCategories
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsCategoryEncoding
+import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsFactoryVoices
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsVoice
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.resolvedConfig
+import java.io.File
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * The shipped factory voice-name table, read from `devices/` in the repository.
@@ -95,7 +95,8 @@ class MotifXsFactoryVoicesTest {
             val config = resolvedConfig(catalog.familyConfig, descriptor.familyConfig, json)
             assertEquals(
                 "${descriptor.id} should resolve the family's category encoding",
-                encoding(), config.categoryEncoding,
+                encoding(),
+                config.categoryEncoding,
             )
         }
     }
@@ -148,7 +149,8 @@ class MotifXsFactoryVoicesTest {
                 val resolved = MotifXsCategories.refsOf(listed, encoding())
                 assertEquals(
                     "${bank.label}:${voice.slot} ${voice.name} has an unresolvable category",
-                    listed.size, resolved.size,
+                    listed.size,
+                    resolved.size,
                 )
                 assertTrue(resolved.all { taxonomy.label(it) != null })
             }

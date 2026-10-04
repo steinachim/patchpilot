@@ -3,9 +3,9 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
-import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Fixtures.bytes
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
@@ -199,7 +199,9 @@ class Pro800DecodingTest {
         val transport = FakeMidiTransport { request ->
             when (Pro800SysEx.typeOf(request)) {
                 Pro800SysEx.TYPE_DEVICE_NAME -> listOf(bytes(Pro800Fixtures.DEVICE_NAME_REPLY))
+
                 Pro800SysEx.TYPE_FIRMWARE -> listOf(bytes(Pro800Fixtures.FIRMWARE_REPLY))
+
                 Pro800SysEx.TYPE_REQUEST_DUMP -> {
                     val number = Pro800SysEx.addressOf(request)!!
                     if (number == Pro800SysEx.SETTINGS_ADDRESS) {
@@ -211,17 +213,20 @@ class Pro800DecodingTest {
                             ?: listOf(bytes(Pro800Fixtures.DUMP_EMPTY_REPLY))
                     }
                 }
+
                 Pro800SysEx.TYPE_DUMP -> {
                     if (Pro800SysEx.addressOf(request) == Pro800SysEx.SETTINGS_ADDRESS) {
                         settings = request
                     }
                     emptyList()
                 }
+
                 Pro800SysEx.TYPE_RESET_MODE -> listOf(
                     Pro800SysEx.HEADER +
                         byteArrayOf(Pro800SysEx.TYPE_STATUS.toByte(), 0x00, Pro800SysEx.STATUS_OK.toByte()) +
                         Pro800SysEx.SYSEX_END,
                 )
+
                 else -> emptyList()
             }
         }
@@ -328,7 +333,8 @@ class Pro800DecodingTest {
         // Stated outright: the two replies differ only at offset 10.
         assertEquals(
             "offset 9 is identical in both, which is why reading it there sees nothing",
-            ok[9], failure[9],
+            ok[9],
+            failure[9],
         )
         assertTrue("they differ at offset 10", ok[Pro800SysEx.STATUS_CODE_INDEX] != failure[Pro800SysEx.STATUS_CODE_INDEX])
     }
@@ -456,7 +462,10 @@ class Pro800DecodingTest {
     fun `suspicion begins exactly below the start of the name field`() {
         val filler = ByteArray(Pro800ProgramFields.NAME_DENSE_OFFSET)
         Pro800ProgramCodec.writeValue(
-            filler, Pro800ProgramFields.VERSION.denseOffset, Pro800ProgramFields.VERSION.byteCount, 109,
+            filler,
+            Pro800ProgramFields.VERSION.denseOffset,
+            Pro800ProgramFields.VERSION.byteCount,
+            109,
         )
         assertFalse(
             "a record reaching the name field is taken at face value",

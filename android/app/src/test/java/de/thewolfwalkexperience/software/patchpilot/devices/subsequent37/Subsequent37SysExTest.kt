@@ -117,8 +117,11 @@ class Subsequent37SysExTest {
             listOf(0x07, 0x02), listOf(0x35), listOf(0x1D), listOf(0x12), listOf(0x13), listOf(0x18),
         )
         val sent = listOf(
-            Subsequent37SysEx.ping(), Subsequent37SysEx.bulkDumpRequest(), Subsequent37SysEx.settingsRequest(),
-            Subsequent37SysEx.settingsPair(), Subsequent37SysEx.readProgram(7),
+            Subsequent37SysEx.ping(),
+            Subsequent37SysEx.bulkDumpRequest(),
+            Subsequent37SysEx.settingsRequest(),
+            Subsequent37SysEx.settingsPair(),
+            Subsequent37SysEx.readProgram(7),
             Subsequent37SysEx.writeProgram(7, Subsequent37Fixtures.unpackBlock(7)),
         )
         for (message in sent) {

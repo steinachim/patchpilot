@@ -291,8 +291,11 @@ internal class ProgramsController(
         if (busy != null) return
         val label = when (pickIntent) {
             PickIntent.COPY -> strings.get(
-                R.string.programs_busy_copying, source.displayId, destination.displayId,
+                R.string.programs_busy_copying,
+                source.displayId,
+                destination.displayId,
             )
+
             PickIntent.MOVE -> strings.get(
                 if (destinationIsEmpty) R.string.programs_busy_moving else R.string.programs_busy_swapping,
                 source.displayId,

@@ -4,34 +4,34 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.util.Log
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
-import de.thewolfwalkexperience.software.patchpilot.core.slugifyDeviceId
-import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
 import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
+import de.thewolfwalkexperience.software.patchpilot.core.slugifyDeviceId
+import de.thewolfwalkexperience.software.patchpilot.core.toHex
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
-import java.util.Locale
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
-import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 
 private const val TAG = "NordInstrument"
 
@@ -84,6 +84,7 @@ class NordInstrument(
     override val browser: PresetBrowser get() = this
     override val selector: PresetSelector get() = this
     override val editor: PresetEditor get() = this
+
     /** Categories, where the catalog says which ones this model offers; null where [NordCategories.resolve] declines. */
     override val tagger: PresetTagger? = categories?.let { NordTagger(device, it, deviceLock) }
 
@@ -161,7 +162,6 @@ class NordInstrument(
 
     override suspend fun select(address: SlotAddress) =
         exclusive("load a preset") { device.selectPreset(address.bank, address.slot) }
-
 
     // ---- PresetEditor ----
 
@@ -332,6 +332,7 @@ private fun nordStatusExplanation(what: String, status: Int): String? = when (st
     NordDevice.STATUS_FILE_EXISTS ->
         "Couldn't $what: the instrument says that slot already holds one, though the listing " +
             "shows it as empty. Refresh the listing."
+
     else -> null
 }
 

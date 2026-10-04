@@ -3,13 +3,13 @@
 
 package de.thewolfwalkexperience.software.patchpilot.core
 
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
 
 class AddressFormatTest {
 

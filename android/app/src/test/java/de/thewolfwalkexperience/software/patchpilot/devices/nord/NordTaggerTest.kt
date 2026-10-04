@@ -40,7 +40,10 @@ class NordTaggerTest {
     private val categories = NordCategories.resolve(profile, master)!!
 
     private fun uint32BE(value: Int) = byteArrayOf(
-        (value ushr 24).toByte(), (value ushr 16).toByte(), (value ushr 8).toByte(), value.toByte(),
+        (value ushr 24).toByte(),
+        (value ushr 16).toByte(),
+        (value ushr 8).toByte(),
+        value.toByte(),
     )
 
     private fun readUInt32BE(b: ByteArray, off: Int): Int =

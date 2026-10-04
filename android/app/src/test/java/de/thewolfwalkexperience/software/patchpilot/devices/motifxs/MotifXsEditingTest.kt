@@ -38,10 +38,10 @@ class MotifXsEditingTest {
     @Test
     fun `the program byte carries the panel's group and position`() {
         val cases = listOf(
-            Triple(3, 'A', 4),      // PRE1 A:04, Glasgow
-            Triple(36, 'C', 5),     // USER 2 C:05, TWE2 EAIT
-            Triple(22, 'B', 7),     // USER DR B:07, Jazz Kit
-            Triple(125, 'H', 14),   // USER 3 H:14
+            Triple(3, 'A', 4), // PRE1 A:04, Glasgow
+            Triple(36, 'C', 5), // USER 2 C:05, TWE2 EAIT
+            Triple(22, 'B', 7), // USER DR B:07, Jazz Kit
+            Triple(125, 'H', 14), // USER 3 H:14
         )
         for ((program, group, position) in cases) {
             assertEquals(group, 'A' + (program / 16))
@@ -105,9 +105,9 @@ class MotifXsEditingTest {
     @Test
     fun `a rebuilt bulk dump matches the instrument's, with the host's model byte`() {
         for (fixture in listOf(
-            MotifXsFixtures.namedVoice,      // 1.9 kB user voice
-            MotifXsFixtures.emptyVoice,      // the 1,903-byte initialised voice a move writes
-            MotifXsFixtures.drumVoice,       // 12.6 kB, the size that stresses the count field
+            MotifXsFixtures.namedVoice, // 1.9 kB user voice
+            MotifXsFixtures.emptyVoice, // the 1,903-byte initialised voice a move writes
+            MotifXsFixtures.drumVoice, // 12.6 kB, the size that stresses the count field
         )) {
             val address = MotifXsSysEx.addressOf(fixture)!!
             val rebuilt = MotifXsSysEx.bulkDump(

@@ -8,10 +8,10 @@ import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
 import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
+import kotlin.time.TimeSource
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlin.time.TimeSource
 
 /**
  * Everything the app can read off a Subsequent 37 in a few seconds without changing anything on

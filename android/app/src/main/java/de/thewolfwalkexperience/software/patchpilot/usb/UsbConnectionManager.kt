@@ -15,17 +15,18 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
+import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
 import de.thewolfwalkexperience.software.patchpilot.transport.AndroidUsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.resume
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.resume
-import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
 
 private const val ACTION_USB_PERMISSION = "de.thewolfwalkexperience.software.patchpilot.USB_PERMISSION"
+
 /** Interface 0 on every device this app opens so far - Nord and Motif XS alike. */
 private const val DEVICE_INTERFACE_INDEX = 0
 
@@ -57,7 +58,10 @@ class UsbConnectionManager(private val context: Context) {
                 0
             }
             val pendingIntent = PendingIntent.getBroadcast(
-                context, 0, Intent(ACTION_USB_PERMISSION).setPackage(context.packageName), flags,
+                context,
+                0,
+                Intent(ACTION_USB_PERMISSION).setPackage(context.packageName),
+                flags,
             )
 
             val receiver = object : BroadcastReceiver() {
@@ -95,7 +99,10 @@ class UsbConnectionManager(private val context: Context) {
         val connection: UsbDeviceConnection = usbManager.openDevice(device)
             ?: error("Failed to open USB device ${device.deviceName}")
         return AndroidUsbBulkTransport(
-            connection, usbInterface, endpointOutAddress = endpointOut, endpointInAddress = endpointIn,
+            connection,
+            usbInterface,
+            endpointOutAddress = endpointOut,
+            endpointInAddress = endpointIn,
         )
     }
 

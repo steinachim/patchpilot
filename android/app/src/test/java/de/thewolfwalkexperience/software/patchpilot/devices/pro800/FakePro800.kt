@@ -68,23 +68,28 @@ class FakePro800(
                 Pro800SysEx.HEADER + byteArrayOf(Pro800SysEx.TYPE_DEVICE_NAME_REPLY.toByte()) +
                     "PRO-800".toByteArray(Charsets.US_ASCII) + Pro800SysEx.SYSEX_END,
             )
+
             Pro800SysEx.TYPE_FIRMWARE -> listOf(
                 Pro800SysEx.HEADER +
                     byteArrayOf(Pro800SysEx.TYPE_FIRMWARE_REPLY.toByte(), 0x00, 1, 4, 6) +
                     Pro800SysEx.SYSEX_END,
             )
+
             Pro800SysEx.TYPE_REQUEST_DUMP -> listOf(dumpFor(Pro800SysEx.addressOf(request)!!))
+
             // A write. The instrument answers nothing, which is exactly the point.
             Pro800SysEx.TYPE_DUMP -> {
                 applyWrite(request)
                 emptyList()
             }
+
             // The preset reload. Answers a plain OK status, like every other command.
             Pro800SysEx.TYPE_RESET_MODE -> listOf(
                 Pro800SysEx.HEADER +
                     byteArrayOf(Pro800SysEx.TYPE_STATUS.toByte(), 0x00, Pro800SysEx.STATUS_OK.toByte()) +
                     Pro800SysEx.SYSEX_END,
             )
+
             else -> emptyList()
         }
     }
@@ -153,11 +158,17 @@ class FakePro800(
         fun preset(name: String?, version: Int = 111): ByteArray {
             val dense = ByteArray(Pro800ProgramFields.NAME_DENSE_END)
             Pro800ProgramCodec.writeValue(
-                dense, Pro800ProgramFields.VERSION.denseOffset, Pro800ProgramFields.VERSION.byteCount, version,
+                dense,
+                Pro800ProgramFields.VERSION.denseOffset,
+                Pro800ProgramFields.VERSION.byteCount,
+                version,
             )
             if (name != null) {
                 Pro800ProgramCodec.writeString(
-                    dense, Pro800ProgramFields.NAME_DENSE_OFFSET, Pro800ProgramFields.NAME_LENGTH, name,
+                    dense,
+                    Pro800ProgramFields.NAME_DENSE_OFFSET,
+                    Pro800ProgramFields.NAME_LENGTH,
+                    name,
                 )
             }
             return Pro800ProgramCodec.encode(dense)

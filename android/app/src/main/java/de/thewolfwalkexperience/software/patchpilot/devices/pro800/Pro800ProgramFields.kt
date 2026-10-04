@@ -50,8 +50,13 @@ object Pro800ProgramFields {
      */
     fun maxDenseSizeFor(version: Int?): Int = when {
         version == null -> NAME_DENSE_END
-        version >= 111 -> Pro800ProgramCodec.denseIndexOf(197) + 1 // ...Pitchbend Range
-        version >= 110 -> Pro800ProgramCodec.denseIndexOf(191) + 1 // ...LFO Aftertouch Amount
+
+        version >= 111 -> Pro800ProgramCodec.denseIndexOf(197) + 1
+
+        // ...Pitchbend Range
+        version >= 110 -> Pro800ProgramCodec.denseIndexOf(191) + 1
+
+        // ...LFO Aftertouch Amount
         else -> NAME_DENSE_END // the name is the last field
     }
 
@@ -90,7 +95,9 @@ class Pro800Program(val dense: ByteArray) {
     val version: Int?
         get() = if (dense.size > Pro800ProgramFields.VERSION.denseOffset) {
             Pro800ProgramCodec.readValue(
-                dense, Pro800ProgramFields.VERSION.denseOffset, Pro800ProgramFields.VERSION.byteCount,
+                dense,
+                Pro800ProgramFields.VERSION.denseOffset,
+                Pro800ProgramFields.VERSION.byteCount,
             )
         } else {
             null
@@ -157,7 +164,10 @@ class Pro800Program(val dense: ByteArray) {
 
         val copy = dense.copyOf(target)
         Pro800ProgramCodec.writeString(
-            copy, Pro800ProgramFields.NAME_DENSE_OFFSET, Pro800ProgramFields.NAME_LENGTH, newName,
+            copy,
+            Pro800ProgramFields.NAME_DENSE_OFFSET,
+            Pro800ProgramFields.NAME_LENGTH,
+            newName,
         )
         return Pro800Program(copy)
     }

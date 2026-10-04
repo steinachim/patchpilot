@@ -1,6 +1,6 @@
+import java.util.Properties
 import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.PathSensitivity
-import java.util.Properties
 
 // Release signing credentials live in local.properties (gitignored, never committed) rather than
 // in this file, so the keystore path/passwords aren't checked into git. A debug build or a
@@ -89,7 +89,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
 
     buildFeatures {
         compose = true

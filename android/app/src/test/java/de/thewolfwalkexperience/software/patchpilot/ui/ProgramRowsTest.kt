@@ -32,8 +32,12 @@ class ProgramRowsTest {
 
     /** A Pro-800: answers for every address, empty ones included. */
     private val pro800Reported = listOf(
-        slot(0, 0, "Grand"), slot(0, 1, null), slot(0, 2, "Rhodes"),
-        slot(1, 0, null), slot(1, 1, "Pad"), slot(1, 2, null),
+        slot(0, 0, "Grand"),
+        slot(0, 1, null),
+        slot(0, 2, "Rhodes"),
+        slot(1, 0, null),
+        slot(1, 1, "Pad"),
+        slot(1, 2, null),
     )
 
     private fun entries(listing: ProgramListing) =

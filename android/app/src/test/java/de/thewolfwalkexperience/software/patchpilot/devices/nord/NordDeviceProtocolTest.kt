@@ -36,7 +36,10 @@ class NordDeviceProtocolTest {
     }
 
     private fun uint32BE(value: Int): ByteArray = byteArrayOf(
-        (value ushr 24).toByte(), (value ushr 16).toByte(), (value ushr 8).toByte(), value.toByte(),
+        (value ushr 24).toByte(),
+        (value ushr 16).toByte(),
+        (value ushr 8).toByte(),
+        value.toByte(),
     )
 
     /**
@@ -445,7 +448,7 @@ class NordDeviceProtocolTest {
     @Test
     fun `both instruments land on their expected trailer lengths`() {
         assertEquals(29, NordDevice.rootCategoryTrailerLenForVersion(10)) // Nord Grand
-        assertEquals(28, NordDevice.rootCategoryTrailerLenForVersion(8))  // Nord Stage 2 EX
+        assertEquals(28, NordDevice.rootCategoryTrailerLenForVersion(8)) // Nord Stage 2 EX
     }
 
     /**

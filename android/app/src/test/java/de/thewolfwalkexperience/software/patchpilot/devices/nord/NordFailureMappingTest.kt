@@ -24,7 +24,10 @@ class NordFailureMappingTest {
     // Same two builders NordDeviceProtocolTest uses; private there, so restated rather than
     // widened - these tests are about the adapter, not about that class's fixtures.
     private fun uint32BE(value: Int): ByteArray = byteArrayOf(
-        (value ushr 24).toByte(), (value ushr 16).toByte(), (value ushr 8).toByte(), value.toByte(),
+        (value ushr 24).toByte(),
+        (value ushr 16).toByte(),
+        (value ushr 8).toByte(),
+        value.toByte(),
     )
 
     private fun rootList(trailerLen: Int = 29): ByteArray {

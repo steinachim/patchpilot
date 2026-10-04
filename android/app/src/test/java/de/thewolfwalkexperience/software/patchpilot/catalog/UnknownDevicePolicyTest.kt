@@ -62,8 +62,10 @@ class UnknownDevicePolicyTest {
 
     @Test
     fun `a vendor in no catalog at all may not be`() {
-        assertFalse("a USB keyboard must not be opened as a Nord",
-            UnknownDevicePolicy.allows(catalog, 0x1234))
+        assertFalse(
+            "a USB keyboard must not be opened as a Nord",
+            UnknownDevicePolicy.allows(catalog, 0x1234),
+        )
     }
 
     /**

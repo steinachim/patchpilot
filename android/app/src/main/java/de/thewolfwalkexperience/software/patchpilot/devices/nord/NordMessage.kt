@@ -79,7 +79,7 @@ fun parseMessage(data: ByteArray): NordMessage {
     require(expectedCrc == actualCrc) {
         "CRC mismatch in response: expected 0x%04x, computed 0x%04x " +
             "(protocol=%d version=%d sub-op=%d)"
-            .format(expectedCrc, actualCrc, protocolId, protocolVersion, subOp)
+                .format(expectedCrc, actualCrc, protocolId, protocolVersion, subOp)
     }
     return NordMessage(protocolId, protocolVersion, subOp, payload)
 }

@@ -25,8 +25,8 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -127,7 +127,9 @@ object DefaultThemeStyle : ThemeStyle {
         val icon = when (action) {
             // Mirrored in a right-to-left locale, where a `<-` glyph is not.
             BarAction.Back -> Icons.AutoMirrored.Filled.ArrowBack
+
             BarAction.Refresh -> Icons.Filled.Refresh
+
             BarAction.Settings -> Icons.Filled.Settings
         }
         Icon(icon, contentDescription = contentDescription, modifier = modifier)
@@ -135,6 +137,7 @@ object DefaultThemeStyle : ThemeStyle {
 
     override fun screenFrame(base: Modifier) = base
     override fun screenTexture(base: Modifier) = base
+
     @Composable
     @ReadOnlyComposable
     override fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean) = base

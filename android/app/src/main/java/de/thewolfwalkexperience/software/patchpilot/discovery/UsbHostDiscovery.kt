@@ -6,10 +6,10 @@ package de.thewolfwalkexperience.software.patchpilot.discovery
 import android.hardware.usb.UsbDevice
 import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 import de.thewolfwalkexperience.software.patchpilot.usb.UsbConnectionManager
 import de.thewolfwalkexperience.software.patchpilot.usb.displayLabel
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
 
 /**
  * Finds instruments on the USB host bus by vendor/product id. The runtime permission prompt

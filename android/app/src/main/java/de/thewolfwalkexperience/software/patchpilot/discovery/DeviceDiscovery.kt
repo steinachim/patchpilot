@@ -4,8 +4,8 @@
 package de.thewolfwalkexperience.software.patchpilot.discovery
 
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
-import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
+import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 
 /**
  * An attached instrument a scan matched against the catalog.

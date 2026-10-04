@@ -17,8 +17,12 @@ object Pro800SysEx {
 
     val HEADER = byteArrayOf(
         0xF0.toByte(),
-        0x00, 0x20, 0x32, // Behringer
-        0x00, 0x01, 0x24, // Pro-800
+        0x00,
+        0x20,
+        0x32, // Behringer
+        0x00,
+        0x01,
+        0x24, // Pro-800
         0x00, // device number: 00 by default, settable with type 0x00 (never sent); replies carry the instrument's
     )
 

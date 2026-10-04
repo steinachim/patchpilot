@@ -20,7 +20,10 @@ const val UNKNOWN_FIRMWARE = "unknown"
  * A device report's Json. encodeDefaults, so a report spells out every field, defaults included:
  * a Nord report's catalog entry has to show every field its recipient fills in.
  */
-val REPORT_JSON: Json = Json { prettyPrint = true; encodeDefaults = true }
+val REPORT_JSON: Json = Json {
+    prettyPrint = true
+    encodeDefaults = true
+}
 
 /**
  * The sentence an [Instrument.advisory] opens with for firmware this app has not been tested

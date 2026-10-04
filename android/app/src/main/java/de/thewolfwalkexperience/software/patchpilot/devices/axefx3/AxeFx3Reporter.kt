@@ -8,11 +8,11 @@ import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
 import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
+import kotlin.time.ComparableTimeMark
+import kotlin.time.TimeSource
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlin.time.ComparableTimeMark
-import kotlin.time.TimeSource
 
 /**
  * Everything the app can read off an Axe-Fx III without changing anything on it, as JSON: the

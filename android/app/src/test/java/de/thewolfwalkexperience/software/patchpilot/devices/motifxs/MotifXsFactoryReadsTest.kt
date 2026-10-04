@@ -9,9 +9,9 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
-import kotlin.time.Duration.Companion.milliseconds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -68,11 +68,13 @@ class MotifXsFactoryReadsTest {
                 slotCount = 4,
                 voices = listOf(
                     MotifXsFactoryVoice(
-                        1, "Full Concert Grand",
+                        1,
+                        "Full Concert Grand",
                         listOf(MotifXsFactoryCategory("Piano", "APno")),
                     ),
                     MotifXsFactoryVoice(
-                        2, "Ballad Key",
+                        2,
+                        "Ballad Key",
                         listOf(
                             MotifXsFactoryCategory("Piano", "Layer"),
                             MotifXsFactoryCategory("Keys", "EP"),

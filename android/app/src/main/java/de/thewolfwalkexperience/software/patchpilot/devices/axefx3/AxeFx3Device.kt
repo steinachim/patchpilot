@@ -6,11 +6,11 @@ package de.thewolfwalkexperience.software.patchpilot.devices.axefx3
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 
 private const val TAG = "AxeFx3Device"
 

@@ -120,9 +120,14 @@ object Subsequent37SysEx {
         require(channel in 0..15) { "MIDI channel $channel is outside 0..15." }
         requireProgram(number)
         return bytes(
-            0xB0 or channel, 0x00, 0x00,
-            0xB0 or channel, 0x20, number shr 7,
-            0xC0 or channel, number and 0x7F,
+            0xB0 or channel,
+            0x00,
+            0x00,
+            0xB0 or channel,
+            0x20,
+            number shr 7,
+            0xC0 or channel,
+            number and 0x7F,
         )
     }
 

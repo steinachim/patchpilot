@@ -24,8 +24,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentNotice
@@ -154,10 +154,14 @@ internal fun RenameDialog(
                 label = { Text(stringResource(R.string.programs_new_name)) },
                 isError = problem != null,
                 supportingText = when {
-                    problem != null -> { { Text(problem) } }
+                    problem != null -> {
+                        { Text(problem) }
+                    }
+
                     maxNameLength != null -> {
                         { Text(stringResource(R.string.programs_name_counter, text.length, maxNameLength)) }
                     }
+
                     else -> null
                 },
                 singleLine = true,

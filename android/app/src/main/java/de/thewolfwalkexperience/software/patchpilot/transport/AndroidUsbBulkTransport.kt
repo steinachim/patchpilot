@@ -72,7 +72,7 @@ class AndroidUsbBulkTransport(
         if (read < 0) {
             val elapsedMs = (System.nanoTime() - started) / 1_000_000
             check(elapsedMs >= timeoutMs / 2) {
-                "USB bulk read failed after ${elapsedMs} ms (result=$read)"
+                "USB bulk read failed after $elapsedMs ms (result=$read)"
             }
         }
         return ByteArray(0)

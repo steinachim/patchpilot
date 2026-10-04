@@ -153,7 +153,9 @@ internal fun ProgramListHeader(
         // Unreadable slots are a finding rather than a failure of the whole scan.
         Text(
             pluralStringResource(
-                R.plurals.programs_unreadable_slots, failures.size, failures.size,
+                R.plurals.programs_unreadable_slots,
+                failures.size,
+                failures.size,
             ),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.error,

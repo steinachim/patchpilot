@@ -130,7 +130,15 @@ class AxeFx3Editor(private val instrument: AxeFx3Instrument) : PresetEditor {
         if (a == b) return
         val first = instrument.numberOf(a)
         val second = instrument.numberOf(b)
-        instrument.operation(follow = { if (it == first) second else if (it == second) first else it }) {
+        instrument.operation(follow = {
+            if (it == first) {
+                second
+            } else if (it == second) {
+                first
+            } else {
+                it
+            }
+        }) {
             val nameA = device.name(first)
             val nameB = device.name(second)
             if (nameA == AxeFx3SysEx.EMPTY_NAME && nameB == AxeFx3SysEx.EMPTY_NAME) return@operation

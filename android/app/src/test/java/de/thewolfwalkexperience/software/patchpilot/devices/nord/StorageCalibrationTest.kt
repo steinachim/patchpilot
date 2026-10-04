@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
+import kotlin.random.Random
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -10,7 +11,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.random.Random
 
 /**
  * Storage-unit calibration, held to the same figures as five hand-measured real areas, plus the
@@ -299,12 +299,12 @@ class StorageCalibrationTest {
         val name = "Bank 1".toByteArray(Charsets.US_ASCII)
         val zero = List(4) { 0.toByte() }
         return (
-            zero +                                            // status
-                zero +                                        // category index
-                1.toByte() +                                  // one child
+            zero + // status
+                zero + // category index
+                1.toByte() + // one child
                 listOf(0, 0, 0, name.size).map { it.toByte() } +
                 name.toList() +
-                listOf(0, 0, 0, 100).map { it.toByte() }      // slot capacity
+                listOf(0, 0, 0, 100).map { it.toByte() } // slot capacity
             ).toByteArray()
     }
 
@@ -343,8 +343,11 @@ class StorageCalibrationTest {
             1 to rootListPayload(listOf("Broken", "Wave Pool")),
         )
         // "Broken" answers the item-count query with a non-zero status...
-        responses += listOf(5 to ByteArray(0), 9 to countPayload(0, 0, 0, 0, 0).also { it[3] = 7 },
-                            7 to ByteArray(4))
+        responses += listOf(
+            5 to ByteArray(0),
+            9 to countPayload(0, 0, 0, 0, 0).also { it[3] = 7 },
+            7 to ByteArray(4),
+        )
         responses += listOf(5 to ByteArray(0), 9 to count, 7 to ByteArray(4))
         responses += walkResponses(records, count)
 
@@ -370,7 +373,9 @@ class StorageCalibrationTest {
         val count = countPayload(3, 100, 5, 0, 4)
         val responses = mutableListOf<Pair<Int, ByteArray>>(
             1 to rootListPayload(listOf("Wave Pool")),
-            5 to ByteArray(0), 9 to count, 7 to ByteArray(4),
+            5 to ByteArray(0),
+            9 to count,
+            7 to ByteArray(4),
             // The walk: child list, select, count, first cursor step - and then the instrument
             // goes silent, which the replay transport reports by running out of replies.
             3 to singleBankChildList(),
@@ -397,8 +402,8 @@ class StorageCalibrationTest {
         // where the instrument holds 206, and 16 units of overhead reported where the true
         // figure is 11.
         val unit = 1024
-        val shared = listOf(1000, 2000, 3000)   // what Program holds
-        val copies = listOf(1000, 2000)         // Live, byte-identical to two of them
+        val shared = listOf(1000, 2000, 3000) // what Program holds
+        val copies = listOf(1000, 2000) // Live, byte-identical to two of them
         val used = NordDevice.storageUnitsAt(shared + copies, unit).toInt()
         assertEquals("1+2+3 for the programs, 1+2 for the copies", 9, used)
 
@@ -538,8 +543,8 @@ class StorageCalibrationTest {
         val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
         val area = device.calibrateStorageUnits().single()
 
-        assertEquals(131_072, area.unitBytes)      // the fit rounds elsewhere...
-        assertEquals(4, area.residual)             // ...and leaves 4 unexplained
-        assertEquals(0, area.reportedResidual)     // where the reported unit leaves none
+        assertEquals(131_072, area.unitBytes) // the fit rounds elsewhere...
+        assertEquals(4, area.residual) // ...and leaves 4 unexplained
+        assertEquals(0, area.reportedResidual) // where the reported unit leaves none
     }
 }

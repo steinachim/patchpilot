@@ -14,10 +14,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -166,14 +166,19 @@ internal fun SetCategoriesDialog(
                     Picker(
                         // Numbered only where there is more than one to tell apart.
                         label = pluralStringResource(
-                            R.plurals.programs_categories_main, assignmentCount, slot + 1,
+                            R.plurals.programs_categories_main,
+                            assignmentCount,
+                            slot + 1,
                         ),
                         selected = main?.name ?: noneLabel,
                         options = (if (allowsUnassigned) listOf(noneLabel) else emptyList()) +
                             taxonomy.mains.map { it.name },
                         onSelect = { index ->
-                            picks[slot] = if (allowsUnassigned && index == 0) null
-                            else CategoryRef(index - offset, null)
+                            picks[slot] = if (allowsUnassigned && index == 0) {
+                                null
+                            } else {
+                                CategoryRef(index - offset, null)
+                            }
                         },
                     )
 
@@ -230,7 +235,10 @@ private fun Picker(
             options.forEachIndexed { index, option ->
                 DropdownMenuItem(
                     text = { Text(option) },
-                    onClick = { expanded = false; onSelect(index) },
+                    onClick = {
+                        expanded = false
+                        onSelect(index)
+                    },
                 )
             }
         }

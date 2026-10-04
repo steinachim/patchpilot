@@ -18,7 +18,11 @@ import org.junit.Test
  * through the same [Json] config [InstrumentRegistry] uses to read the real catalog file.
  */
 class DeviceProfileSerializationTest {
-    private val json = Json { ignoreUnknownKeys = true; prettyPrint = true; encodeDefaults = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        prettyPrint = true
+        encodeDefaults = true
+    }
 
     private val profile = DeviceProfile(
         id = "some_new_device",

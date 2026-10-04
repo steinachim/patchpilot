@@ -6,30 +6,30 @@ package de.thewolfwalkexperience.software.patchpilot.core
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
 import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.FakeAxeFx3
 import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.axeFx3
-import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.FakeSubsequent37
-import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.subsequent37
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsBank
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsBlanks
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsInstrument
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
+import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.FakeSubsequent37
+import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.subsequent37
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
 
 /**
  * The check that closes the gap a `Set<Capability>` beside a fat interface would have left open:
@@ -48,8 +48,14 @@ class InstrumentFacetTest {
             SysExExchange(NullMidiTransport, scope),
             MotifXsConfig(
                 banks = listOf(
-                    MotifXsBank(label = "USR1", slotCount = 4, addressHi = 0x0C, addressMid = 0x0A,
-                        displayLabel = "USER 1", selectLsb = 0x08),
+                    MotifXsBank(
+                        label = "USR1",
+                        slotCount = 4,
+                        addressHi = 0x0C,
+                        addressMid = 0x0A,
+                        displayLabel = "USER 1",
+                        selectLsb = 0x08,
+                    ),
                 ),
             ),
             MotifXsBlanks(normal = ByteArray(0), drum = ByteArray(0)),
@@ -253,12 +259,18 @@ class InstrumentFacetTest {
     fun `delete is declared by every family that can do it`() = runTest {
         val nordOps = nord().also { it.connect() }.editor!!.supported
         assertTrue("a Nord deletes with sub-opcode 20/21", EditOp.DELETE in nordOps)
-        assertTrue("the Motif XS erases the slot the way a move clears its source",
-            EditOp.DELETE in motifXs().editor!!.supported)
-        assertTrue("an Axe-Fx III writes the editor's own empty preset",
-            EditOp.DELETE in axeFx3(FakeAxeFx3()).editor.supported)
-        assertTrue("a Subsequent 37 writes the panel's own Initialize",
-            EditOp.DELETE in subsequent37(FakeSubsequent37(backgroundScope)).editor.supported)
+        assertTrue(
+            "the Motif XS erases the slot the way a move clears its source",
+            EditOp.DELETE in motifXs().editor!!.supported,
+        )
+        assertTrue(
+            "an Axe-Fx III writes the editor's own empty preset",
+            EditOp.DELETE in axeFx3(FakeAxeFx3()).editor.supported,
+        )
+        assertTrue(
+            "a Subsequent 37 writes the panel's own Initialize",
+            EditOp.DELETE in subsequent37(FakeSubsequent37(backgroundScope)).editor.supported,
+        )
     }
 
     // ---- Facet presence is what the UI gates on ----

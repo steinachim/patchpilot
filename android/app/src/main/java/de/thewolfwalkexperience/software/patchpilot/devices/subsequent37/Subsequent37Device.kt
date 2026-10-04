@@ -6,11 +6,11 @@ package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 
 private const val TAG = "Subsequent37Device"
 

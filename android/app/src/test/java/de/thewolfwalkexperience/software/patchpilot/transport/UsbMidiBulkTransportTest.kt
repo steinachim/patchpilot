@@ -158,10 +158,16 @@ class UsbMidiBulkTransportTest {
     private class FakeBulk(private val always: ByteArray? = null) : UsbBulkTransport {
         val written = java.util.Collections.synchronizedList(mutableListOf<ByteArray>())
         override val rebuildOnResume = true
-        override fun bulkWrite(data: ByteArray) { written += data }
+        override fun bulkWrite(data: ByteArray) {
+            written += data
+        }
         override fun bulkRead(bufferSize: Int): ByteArray = always ?: ByteArray(0)
         override fun controlTransfer(
-            requestType: Int, request: Int, value: Int, index: Int, length: Int,
+            requestType: Int,
+            request: Int,
+            value: Int,
+            index: Int,
+            length: Int,
         ): ByteArray = ByteArray(length)
         override fun close() {}
     }

@@ -9,8 +9,8 @@ import android.hardware.usb.UsbManager
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -18,8 +18,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
-import de.thewolfwalkexperience.software.patchpilot.ui.PatchPilotApp
 import de.thewolfwalkexperience.software.patchpilot.ui.InstrumentViewModel
+import de.thewolfwalkexperience.software.patchpilot.ui.PatchPilotApp
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.PatchPilotTheme
 import de.thewolfwalkexperience.software.patchpilot.usb.usbDevice

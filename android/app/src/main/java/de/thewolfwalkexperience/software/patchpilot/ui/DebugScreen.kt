@@ -3,7 +3,6 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
-import de.thewolfwalkexperience.software.patchpilot.R
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,14 +23,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.OccupiedSlotReason
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionReport
 import de.thewolfwalkexperience.software.patchpilot.core.Status
@@ -41,8 +43,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 
 /**
  * The hidden debug menu, reached by tapping the instrument name five times on the preset screen.
@@ -148,6 +148,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     // reports render inside this screen rather than on routes of their own, so a finished report
     // is a state of it, and back clears that state. Only from the menu itself does back leave.
     val atMenu = run !is RunState.Done && reportState !is RunState.Done
+
     // Clears both; only one is ever set, since each report hides the button that starts the other.
     fun backToMenu() {
         runner.dismissReport()
@@ -221,10 +222,13 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     onSave = { saveJsonLauncher.launch(report.stem + jsonSuffix) },
                     onBackToMenu = ::backToMenu,
                 )
+
                 reportRun is RunState.Running ->
                     RunningView(stringResource(R.string.debug_report_running), reportRun.step)
+
                 state is RunState.Running ->
                     RunningView(stringResource(R.string.debug_regression_running), state.step)
+
                 finished != null -> RegressionReportView(
                     report = finished.report,
                     onShare = {
@@ -249,6 +253,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     onSave = { saveTextLauncher.launch("${finished.stem}_capabilities$txtSuffix") },
                     onBackToMenu = ::backToMenu,
                 )
+
                 else -> {
                     Text(stringResource(R.string.debug_report_body), style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
@@ -282,7 +287,10 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                         Spacer(Modifier.height(8.dp))
                         factoryBanks.forEach { (bank, label) ->
                             OutlinedButton(
-                                onClick = { verifyBank = label; onVerifyFactoryNames(bank) },
+                                onClick = {
+                                    verifyBank = label
+                                    onVerifyFactoryNames(bank)
+                                },
                                 enabled = verifyProgress == null,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
@@ -306,7 +314,8 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                                 Text(
                                     stringResource(
                                         R.string.debug_verify_mismatches,
-                                        verifyBank.orEmpty(), mismatches.size,
+                                        verifyBank.orEmpty(),
+                                        mismatches.size,
                                     ),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.error,
@@ -335,6 +344,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     when (val question = confirmation.question) {
                         is PendingQuestion.ConfirmSelect ->
                             stringResource(R.string.debug_confirm_select_body, question.shownOnDevice)
+
                         // The swap alone has its own wording, since the three-test body names
                         // two tests that are not in question there.
                         is PendingQuestion.ConfirmRealSlotMutation -> when (question.reason) {
@@ -342,10 +352,12 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                                 R.string.debug_confirm_occupied_body,
                                 stringResource(R.string.debug_confirm_occupied_reason_no_slot),
                             )
+
                             OccupiedSlotReason.CANNOT_COPY -> stringResource(
                                 R.string.debug_confirm_occupied_body,
                                 stringResource(R.string.debug_confirm_occupied_reason_no_copy),
                             )
+
                             OccupiedSlotReason.NO_SECOND_FREE_SLOT ->
                                 stringResource(R.string.debug_confirm_swap_body)
                         }
@@ -475,4 +487,3 @@ private fun ReportActions(onShare: () -> Unit, onSave: () -> Unit, onBackToMenu:
         Text(stringResource(R.string.debug_regression_back))
     }
 }
-
