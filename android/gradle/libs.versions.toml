@@ -1,15 +1,15 @@
 [versions]
 agp = "9.4.0"
 kotlin = "2.4.10"
-composeBom = "2026.01.01"
-coroutines = "1.8.1"
-coreKtx = "1.13.1"
-lifecycle = "2.8.4"
-activityCompose = "1.9.1"
-navigationCompose = "2.7.7"
-datastorePreferences = "1.1.1"
+composeBom = "2026.09.00"
+coroutines = "1.11.0"
+coreKtx = "1.19.1"
+lifecycle = "2.11.0"
+activityCompose = "1.13.0"
+navigationCompose = "2.10.2"
+datastorePreferences = "1.2.1"
 junit = "4.13.2"
-kotlinxSerializationJson = "1.6.3"
+kotlinxSerializationJson = "1.11.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -22,7 +22,7 @@ androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graph
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core", version = "1.7.8" }
+androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }

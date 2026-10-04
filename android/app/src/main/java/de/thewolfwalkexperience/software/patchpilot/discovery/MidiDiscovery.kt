@@ -165,7 +165,7 @@ class MidiDiscovery(private val context: Context) : DeviceDiscovery {
                     if (device == null) {
                         continuation.resumeWithException(IllegalStateException("Couldn't open ${info.label()}."))
                     } else {
-                        continuation.resume(device) { device.close() }
+                        continuation.resume(device) { _, opened, _ -> opened.close() }
                     }
                 },
                 handler,
