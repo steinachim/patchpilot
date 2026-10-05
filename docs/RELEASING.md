@@ -25,11 +25,11 @@ Install the release APK, not a debug build, on a phone, connect a real instrumen
 
 CI also runs `./gradlew spotlessCheck` and `./gradlew lintRelease`; lint passes with warnings only, and an error fails the run.
 
-If this release bumps Gradle, AGP or the build JDK, re-verify reproducibility before tagging: build twice from a clean checkout and confirm `classes.dex` matches byte-for-byte (extract it from both APKs and `cmp`), then once this version is published, `fdroid build --test <appid>:<versionCode>` against the GitHub binary should report a successful comparison. A regression here doesn't fail this build - it fails F-Droid's `Binaries:` check (see below), meaning F-Droid can no longer adopt the GitHub signature for this release.
+A Gradle bump also updates `distributionSha256Sum` in `android/gradle/wrapper/gradle-wrapper.properties` to that version's published checksum. If this release bumps Gradle, AGP or the build JDK, re-verify reproducibility before tagging: build twice from a clean checkout and confirm `classes.dex` matches byte-for-byte (extract it from both APKs and `cmp`), then once this version is published, `fdroid build --test <appid>:<versionCode>` against the GitHub binary should report a successful comparison. A regression here doesn't fail this build - it fails F-Droid's `Binaries:` check (see below), meaning F-Droid can no longer adopt the GitHub signature for this release.
 
 ## 3. Tag and publish on GitHub
 
-Fast-forward `main` to the release commit and push both branch and tag. The push to `main` runs the signed CI build (`android.yml`); the tag push runs `release.yml`, which builds its own signed APK and creates the GitHub Release, using the `## <version>` section of `CHANGELOG.md` as the release notes.
+Fast-forward `main` to the release commit and push both branch and tag. The push to `main` runs the signed CI build (`android.yml`); the tag push runs `release.yml`, which tests, lints and builds its own signed APK and then creates the GitHub Release, using the `## <version>` section of `CHANGELOG.md` as the release notes. The build job has a read-only token; only the publishing job, which never runs the build, can write to the repository.
 
 ```
 git checkout main && git merge --ff-only dev

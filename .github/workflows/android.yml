@@ -29,7 +29,10 @@ jobs:
         working-directory: android
 
     steps:
+      # The token stays off the disk the build and its plugins run on.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # The JDK the build runs on. Nothing else is provisioned: AGP 9 needs 17 or newer, and the
       # bytecode target is 17 whatever the build JDK is.
@@ -41,7 +44,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           # The action only writes its cache from the repository's default branch, which is dev -
-          # a branch this workflow never runs on. Without this every run would start cold.
+          # a branch this workflow never runs on - so without this nothing would ever be written.
+          # A run reads its own branch's cache and its base branch's: main pushes reuse main's,
+          # and a pull request's later runs reuse its first's.
           cache-read-only: false
 
       - name: Install release signing key
