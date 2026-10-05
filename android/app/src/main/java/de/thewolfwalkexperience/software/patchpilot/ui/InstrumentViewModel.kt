@@ -117,6 +117,9 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
 
     init {
         connection.start()
+        // From here rather than from a screen: after process death the restored back stack can
+        // start on the preset screen, where nothing else would ever connect.
+        connection.connect()
         // Offered once the session is usable, so a notice never sits on top of the advisory gate.
         viewModelScope.launch {
             state.collect { s ->
@@ -146,13 +149,31 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     fun onUsbDeviceAttached(device: UsbDevice) = connection.onUsbDeviceAttached(AndroidUsbDevice(device))
 
     /**
-     * Stops a running scan when the app backgrounds, called from `MainActivity.onPause` (not from
-     * a rotation, which the activity filters out). A no-op where the session will not be rebuilt
-     * on the way back; where it will, the resume discards the scan anyway, and on a Motif XS its
-     * display would sit on "dump in progress" for up to 93 s with the phone locked.
+     * Whether the app has been in the background since the last [onAppForegrounded]. Held here
+     * rather than in the activity, so a recreation while backgrounded still rebuilds on return.
      */
-    fun cancelScanOnBackground() {
+    private var backgrounded = false
+
+    /**
+     * The app went to the background, from `MainActivity.onPause` (not on a rotation, which the
+     * activity filters out). Stops a running scan where the session will be rebuilt on the way
+     * back: the resume discards it anyway, and on a Motif XS its display would sit on "dump in
+     * progress" for up to 93 s with the phone locked.
+     */
+    fun onAppBackgrounded() {
+        backgrounded = true
         if (connection.shouldRebuildOnResume) listings.cancel()
+    }
+
+    /**
+     * The app is in the foreground again, from `MainActivity.onResume`. Rebuilds the session after
+     * a stay in the background, where the session wants that
+     * ([ConnectionCoordinator.shouldRebuildOnResume]). Not on a launch or a rotation, which were
+     * never in the background.
+     */
+    fun onAppForegrounded() {
+        if (backgrounded && connection.shouldRebuildOnResume) connection.forceReconnect()
+        backgrounded = false
     }
 
     /**

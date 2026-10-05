@@ -29,16 +29,12 @@ private const val TAG = "MainActivity"
 class MainActivity : ComponentActivity() {
     private val viewModel: InstrumentViewModel by viewModels()
 
-    // The first onResume() after onCreate() is the launch path ConnectScreen's own initial
-    // connect() already handles, so the reconnect below skips it.
-    private var hasResumedBefore = false
-
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before the content is set; PatchPilotScaffold is what applies the insets.
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         // A cold start from the manifest's USB_DEVICE_ATTACHED filter needs nothing beyond this
-        // log line: the ViewModel is new, and ConnectScreen scans from Disconnected on its own.
+        // log line: the ViewModel is new, and it scans as it is created.
         intent.attachedUsbDevice()?.let { Log.i(TAG, "Started for the USB attach of ${it.deviceName}") }
         setContent {
             // Created outside PatchPilotTheme's content lambda and threaded down: the `remember`
@@ -80,21 +76,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        // A resume discards a running scan anyway (see below), and on a Motif XS its own display
-        // would otherwise sit on "dump in progress" for the whole scan with the phone locked.
-        //
-        // Not on a rotation: that pauses this instance only to recreate it, the ViewModel and its
-        // scan survive, and the new instance's first resume does not rebuild.
-        if (!isChangingConfigurations) viewModel.cancelScanOnBackground()
+        // Not on a rotation: that pauses this instance only to recreate it, and the ViewModel, its
+        // session and its scan survive.
+        if (!isChangingConfigurations) viewModel.onAppBackgrounded()
     }
 
     override fun onResume() {
         super.onResume()
         // Whether a rebuild is wanted is the session's own answer - see Instrument.rebuildOnResume.
-        if (hasResumedBefore && viewModel.connection.shouldRebuildOnResume) {
-            viewModel.connection.forceReconnect()
-        }
-        hasResumedBefore = true
+        viewModel.onAppForegrounded()
     }
 }
 

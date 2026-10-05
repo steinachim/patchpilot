@@ -19,6 +19,7 @@
 - Spaces before or after a new preset name are now removed before it is sent, so renaming a Behringer Pro-800 preset with them no longer fails.
 - TalkBack reads Settings → “Auto-Connect to First Found Instrument” as a single switch.
 - Plugging an instrument in while the phone is locked now opens its preset list once unlocked, instead of stopping at “Connected to …”.
+- After Android closes Patch Pilot in the background, reopening it reconnects the instrument instead of staying on “Connecting…”.
 
 ## 1.1
 

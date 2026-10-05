@@ -111,6 +111,9 @@ android {
             // defaults instead lets those paths run under plain JUnit without pulling in
             // Robolectric just for logging.
             isReturnDefaultValues = true
+            // The Robolectric tests (the ViewModel and the screens) read the app's resources and
+            // the catalog assets synced into src/main/assets.
+            isIncludeAndroidResources = true
         }
     }
 }
@@ -156,6 +159,12 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Test-only, so none of it reaches the APK.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

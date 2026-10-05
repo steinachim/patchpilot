@@ -72,7 +72,7 @@ class PresetListingsTest {
         assertEquals(listOf(PresetScope.USER), slow.cleanedUp)
     }
 
-    /** As `cancelScanOnBackground` does on pause, ahead of the resume's teardown. */
+    /** As `onAppBackgrounded` does on pause, ahead of the resume's teardown. */
     @Test
     fun `a listing cancelled earlier is still waited for`() = runListings { listings, slow ->
         listings.start()
