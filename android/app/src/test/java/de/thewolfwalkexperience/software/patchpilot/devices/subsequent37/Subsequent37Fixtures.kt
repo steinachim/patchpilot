@@ -9,9 +9,11 @@ import java.io.File
  * Real Subsequent 37 traffic, firmware 1.2.0, in `src/test/resources/subsequent37/`. Nothing
  * here is produced by the code under test.
  *
- * The preset names are scrubbed: every program not named `Init Preset` is renamed
- * `Preset NNN` (NNN its program number) and its checksum closed again, by a separate reference
- * implementation; every other byte is the instrument's own.
+ * The programs are scrubbed, in every file alike. Each program not named `Init Preset` is renamed
+ * `Preset NNN` (NNN its program number), carries the panel's Initialize
+ * (`devices/blanks/subsequent37_panel_initialized.bin`) in place of its sound bytes, keeps its
+ * category and byte 51, and has its checksum closed again. The framing, the categories, byte 51,
+ * the settings blocks and every `Init Preset` program are the instrument's own.
  */
 object Subsequent37Fixtures {
 

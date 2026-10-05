@@ -46,7 +46,7 @@ class AxeFx3SysExTest {
         ).forEach { assertTrue(it.joinToString(" ") { b -> "%02x".format(b) }, AxeFx3SysEx.isOurs(it)) }
     }
 
-    /** The real chunk's last wire byte carries padding bits, so only the data round-trips. */
+    /** A chunk's last wire byte carries padding bits, so only the data round-trips. */
     @Test
     fun `packing inverts unpacking on a real chunk, padding aside`() {
         val chunk = AxeFx3Fixtures.REAL_CHUNK
