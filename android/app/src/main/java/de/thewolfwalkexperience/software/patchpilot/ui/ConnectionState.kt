@@ -32,6 +32,7 @@ sealed interface PickerEntry {
 
 /** Mirrors the states a connection attempt moves through, made explicit for the UI. */
 sealed class ConnectionState {
+    /** Before the ViewModel's first connect attempt; every later attempt starts in [Searching]. */
     data object Disconnected : ConnectionState()
     data object Searching : ConnectionState()
 
@@ -91,10 +92,10 @@ sealed class ConnectionState {
     data class AdvisoryWarning(val instrument: Instrument, val message: String) : ConnectionState()
 
     /**
-     * The instrument this session was using was physically unplugged. Its own state rather than
-     * [Disconnected], from which ConnectScreen auto-connects - which would latch onto a different
-     * instrument that happens to still be attached. Nothing reconnects until the user asks, with
-     * one exception: the same instrument being plugged back in, which
+     * The instrument this session was using was physically unplugged. Its own state rather than a
+     * rescan, which would latch onto a different instrument that happens to still be attached;
+     * for the same reason it does not rebuild on resume. Nothing reconnects until the user asks,
+     * with one exception: the same instrument being plugged back in, which
      * [ConnectionCoordinator.onUsbDeviceAttached] matches on [physicalKey].
      */
     data class DeviceLost(val instrumentName: String, val physicalKey: String?) : ConnectionState()

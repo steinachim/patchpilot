@@ -321,7 +321,7 @@ fun ProgramsScreen(
         titleModifier = Modifier.pointerInput(Unit) {
             detectTapGestures { if (debugTaps.tap()) onOpenDebugMenu() }
         },
-        // Back returns to the connect screen, which re-scans on arrival.
+        // Back closes the session and returns to the connect screen's picker.
         onBack = onBack,
         // Off while an edit is in flight, which `busy` only ever is - never the index scan, which
         // leaves back available for the whole 93 seconds it can take. Not the safety itself

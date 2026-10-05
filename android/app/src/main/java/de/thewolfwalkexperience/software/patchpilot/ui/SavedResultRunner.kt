@@ -6,6 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,6 +52,8 @@ internal class SavedResultRunner<T : Any>(
 
     val isRunning: Boolean get() = _state.value is RunState.Running
 
+    private var job: Job? = null
+
     /**
      * Starts [work] unless a job is running, replacing any held result. [startingLabel] is the
      * first step shown; [work] reports later ones through the callback it is handed. Anything
@@ -59,7 +62,7 @@ internal class SavedResultRunner<T : Any>(
      */
     fun start(startingLabel: String, work: suspend (progress: (String) -> Unit) -> T) {
         if (isRunning) return
-        scope.launch {
+        job = scope.launch {
             _error.value = null
             set(RunState.Running(startingLabel))
             try {
@@ -77,6 +80,11 @@ internal class SavedResultRunner<T : Any>(
     /** Drops a held result. A job in progress is not dismissable. */
     fun dismiss() {
         if (_state.value is RunState.Done) set(RunState.Idle)
+    }
+
+    /** Cancels a job in progress, which ends as [RunState.Idle]; a held result stays. */
+    fun cancel() {
+        job?.cancel()
     }
 
     fun clearError() {

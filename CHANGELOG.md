@@ -20,6 +20,10 @@
 - TalkBack reads Settings → “Auto-Connect to First Found Instrument” as a single switch.
 - Plugging an instrument in while the phone is locked now opens its preset list once unlocked, instead of stopping at “Connected to …”.
 - After Android closes Patch Pilot in the background, reopening it reconnects the instrument instead of staying on “Connecting…”.
+- Leaving the preset list while a device report or another operation is running now goes straight to the instrument list, instead of bouncing back or stopping at “Connecting…”.
+- Returning to the app reconnects the instrument that was in use: with two attached it no longer switches to the other, and with auto-connect off it no longer asks which one every time.
+- Choosing demo mode on the untested-firmware warning releases the instrument, so the next search finds it.
+- An accepted firmware warning is no longer shown again each time the app returns from the background.
 
 ## 1.1
 

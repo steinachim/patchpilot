@@ -34,10 +34,11 @@ private val SESSION_ROUTES = setOf(ROUTE_PROGRAMS, ROUTE_DEBUG)
  * ConnectScreen. Exhaustive with no `else`, so a new [ConnectionState] is a compile error until
  * it says which side it falls on.
  *
- * `Disconnected`, `Searching` and `Opening` stay alongside `Connected`, because
- * `forceReconnect()` passes through them on a successful resume and leaving during that dip
- * would bounce to ConnectScreen and straight back. Everything else is a choice or a message only
- * ConnectScreen renders.
+ * `Searching` and `Opening` stay alongside `Connected`, because `forceReconnect()` passes through
+ * them on a successful resume and leaving during that dip would bounce to ConnectScreen and
+ * straight back. `Disconnected` stays too: it is the moment before the ViewModel's first attempt,
+ * which a session screen restored after process death starts in. Everything else is a choice or a
+ * message only ConnectScreen renders.
  */
 private fun ConnectionState.rendersOnSessionScreens(): Boolean = when (this) {
     is ConnectionState.Connected,
@@ -135,16 +136,15 @@ fun PatchPilotApp(
         composable(ROUTE_PROGRAMS) {
             ProgramsScreen(
                 viewModel,
-                // Disconnect first, then navigate: ConnectScreen starts a scan only when it
-                // finds the session already Disconnected. showPicker = true because the user
-                // asked for the picker, so the rescan must not silently reconnect the same lone
-                // device and skip straight back here.
+                // `disconnect()` leaves Connected at once and ends on the picker, which this
+                // screen cannot render, so the hand-off above also returns to ConnectScreen if
+                // this navigate is dropped mid-transition.
                 //
                 // `returnToConnect` pops to ROUTE_PROGRAMS, never to 0: under route-based
                 // navigation the graph's own id is 0, and popping that leaves the host with no
                 // destination to render.
                 onBack = {
-                    viewModel.connection.disconnect(showPicker = true)
+                    viewModel.connection.disconnect()
                     returnToConnect()
                 },
                 onOpenDebugMenu = { guardedNavigate(ROUTE_DEBUG) },

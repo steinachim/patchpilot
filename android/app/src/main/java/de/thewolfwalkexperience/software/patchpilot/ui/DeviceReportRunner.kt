@@ -64,6 +64,9 @@ internal class DeviceReportRunner(
     /** Drops a held report. A read in progress is not dismissable. */
     fun dismiss() = runner.dismiss()
 
+    /** Stops a read in progress, for a session the user is leaving; a held report stays. */
+    fun cancel() = runner.cancel()
+
     fun clearError() = runner.clearError()
 
     private companion object {

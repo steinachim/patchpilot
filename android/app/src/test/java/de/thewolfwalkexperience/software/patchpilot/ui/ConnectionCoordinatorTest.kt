@@ -14,6 +14,7 @@ import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.usb.AttachedUsbDevice
 import de.thewolfwalkexperience.software.patchpilot.usb.UsbHost
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,20 +24,24 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * The connection state machine against fake buses: what a USB detach does in each state a session
- * can be in, and the unknown-device gate.
+ * can be in, the unknown-device and advisory gates, leaving a session, and the resume rebuild.
  */
 class ConnectionCoordinatorTest {
 
@@ -63,7 +68,7 @@ class ConnectionCoordinatorTest {
 
     /** One bus whose scan finds [candidates], each opened by [open]. */
     private class FakeDiscovery(
-        private val candidates: List<Candidate>,
+        var candidates: List<Candidate>,
         private val open: suspend (Candidate) -> Transport,
     ) : DeviceDiscovery {
         override val bus = Bus.USB
@@ -79,6 +84,15 @@ class ConnectionCoordinatorTest {
     )
     private val stageKey = "usb:4092:33"
     private val stageCandidate = Candidate(nordStage, "Nord Stage 2 EX", Bus.USB, stageKey, handle = Any())
+
+    private val nordGrand = InstrumentDescriptor(
+        id = "nord_grand",
+        family = "nord",
+        name = "Nord Grand",
+        match = DeviceMatch.Usb(vendorId = 0x0FFC, productId = 0x2E),
+    )
+    private val grandKey = "usb:4092:46"
+    private val grandCandidate = Candidate(nordGrand, "Nord Grand", Bus.USB, grandKey, handle = Any())
 
     /**
      * [test] with a scope for the coordinator's own work, cancelled when [test] ends: a child of
@@ -114,6 +128,7 @@ class ConnectionCoordinatorTest {
         onSessionStarted = { events += "started" },
         onSessionEnding = onSessionEnding,
         onDeviceLost = { events += "lost" },
+        onLeavingSession = { events += "leaving" },
     ).also { it.start() }
 
     /**
@@ -221,6 +236,22 @@ class ConnectionCoordinatorTest {
         }
     }
 
+    /** An instrument that raises an advisory once connected, and records its close. */
+    private fun advisoryRaising(events: MutableList<String>): Instrument {
+        val demo = DemoInstrument()
+        return object : Instrument by demo {
+            override val advisory = "Untested firmware"
+
+            override fun close() {
+                events += "closed"
+            }
+        }
+    }
+
+    /** Holds the operation mutex the way an edit or a device report does, until [release] completes. */
+    private fun CoroutineScope.holdMutex(coordinator: ConnectionCoordinator, release: CompletableDeferred<Unit>) =
+        launch { coordinator.exclusive { release.await() } }
+
     @Test
     fun `unplugging a device while it is being opened fails the attempt`() = runSession { session ->
         val usb = FakeUsbHost()
@@ -262,5 +293,206 @@ class ConnectionCoordinatorTest {
         val newNord = FakeDevice("usb:4092:99", productId = 99)
         coordinator.selectUnknownDevice(newNord)
         assertEquals(ConnectionState.UnknownDeviceWarning(newNord), coordinator.state.value)
+    }
+
+    @Test
+    fun `back leaves the session at once and ends on the picker once the operation holding it is done`() =
+        runSession { session ->
+            val events = mutableListOf<String>()
+            val coordinator =
+                coordinator(
+                    session,
+                    FakeUsbHost(),
+                    FakeDiscovery(listOf(stageCandidate)) {
+                        FakeTransport()
+                    },
+                    events = events,
+                )
+            coordinator.connect()
+            advanceUntilIdle()
+            val release = CompletableDeferred<Unit>()
+            session.holdMutex(coordinator, release)
+            runCurrent()
+
+            coordinator.disconnect()
+            // Before the teardown gets the mutex: no screen may still see the session as connected.
+            assertEquals(ConnectionState.Searching, coordinator.state.value)
+            assertTrue("leaving" in events)
+            advanceUntilIdle()
+            assertEquals(ConnectionState.Searching, coordinator.state.value)
+
+            release.complete(Unit)
+            advanceUntilIdle()
+            // The picker even for a lone instrument with auto-connect on: the user asked to choose.
+            val picker = coordinator.state.value as ConnectionState.DeviceSelection
+            assertEquals(listOf(stageKey), picker.entries.map { (it as PickerEntry.Known).candidate.physicalKey })
+            assertEquals(null, coordinator.instrument)
+        }
+
+    @Test
+    fun `back during a resume's reconnect replaces it rather than being undone by it`() = runSession { session ->
+        var opening: CompletableDeferred<Unit>? = null
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate)) {
+                opening?.await()
+                FakeTransport()
+            },
+        )
+        coordinator.connect()
+        advanceUntilIdle()
+
+        opening = CompletableDeferred()
+        coordinator.forceReconnect()
+        advanceUntilIdle()
+        assertTrue(coordinator.state.value is ConnectionState.Opening)
+
+        coordinator.disconnect()
+        opening.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(coordinator.state.value is ConnectionState.DeviceSelection)
+        assertEquals(null, coordinator.instrument)
+    }
+
+    @Test
+    fun `a resume reopens the session's own instrument, not the first one a scan finds`() = runSession { session ->
+        val opened = mutableListOf<String>()
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate, grandCandidate)) {
+                opened += it.physicalKey
+                FakeTransport()
+            },
+        )
+        coordinator.selectEntry(PickerEntry.Known(grandCandidate))
+        advanceUntilIdle()
+
+        coordinator.forceReconnect()
+        advanceUntilIdle()
+        assertTrue(coordinator.state.value is ConnectionState.Connected)
+        assertEquals(listOf(grandKey, grandKey), opened)
+    }
+
+    @Test
+    fun `with auto-connect off, a resume reconnects the chosen instrument rather than asking again`() =
+        runSession { session ->
+            val coordinator = coordinator(
+                session,
+                FakeUsbHost(),
+                FakeDiscovery(listOf(stageCandidate)) { FakeTransport() },
+                autoConnect = false,
+            )
+            coordinator.connect()
+            advanceUntilIdle()
+            coordinator.selectEntry((coordinator.state.value as ConnectionState.DeviceSelection).entries.single())
+            advanceUntilIdle()
+
+            coordinator.forceReconnect()
+            advanceUntilIdle()
+            assertTrue(coordinator.state.value is ConnectionState.Connected)
+        }
+
+    @Test
+    fun `a resume whose instrument is gone offers the picker rather than switching to another`() =
+        runSession { session ->
+            val discovery = FakeDiscovery(listOf(stageCandidate, grandCandidate)) { FakeTransport() }
+            val coordinator = coordinator(session, FakeUsbHost(), discovery)
+            coordinator.selectEntry(PickerEntry.Known(grandCandidate))
+            advanceUntilIdle()
+
+            discovery.candidates = listOf(stageCandidate)
+            coordinator.forceReconnect()
+            advanceUntilIdle()
+            val picker = coordinator.state.value as ConnectionState.DeviceSelection
+            assertEquals(listOf(stageKey), picker.entries.map { (it as PickerEntry.Known).candidate.physicalKey })
+            assertEquals(null, coordinator.instrument)
+        }
+
+    @Test
+    fun `a choice the user has not made yet is not rebuilt on resume`() = runSession { session ->
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate)) { FakeTransport() },
+            autoConnect = false,
+        )
+        coordinator.connect()
+        advanceUntilIdle()
+        assertTrue(coordinator.state.value is ConnectionState.DeviceSelection)
+        assertFalse(coordinator.shouldRebuildOnResume)
+
+        coordinator.selectUnknownDevice(FakeDevice("usb:4092:99", productId = 99))
+        assertTrue(coordinator.state.value is ConnectionState.UnknownDeviceWarning)
+        assertFalse(coordinator.shouldRebuildOnResume)
+    }
+
+    @Test
+    fun `demo mode from the advisory gate closes the instrument it replaces`() = runSession { session ->
+        val events = mutableListOf<String>()
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate)) { FakeTransport() },
+            create = { advisoryRaising(events) },
+        )
+        coordinator.connect()
+        advanceUntilIdle()
+        val gated = (coordinator.state.value as ConnectionState.AdvisoryWarning).instrument
+
+        coordinator.connectDemo()
+        advanceUntilIdle()
+        assertEquals(listOf("closed"), events)
+        val demo = (coordinator.state.value as ConnectionState.Connected).instrument
+        assertNotSame(gated, demo)
+        assertSame(demo, coordinator.instrument)
+    }
+
+    @Test
+    fun `an accepted advisory is not raised again by a resume, but is after the user backs out`() =
+        runSession { session ->
+            val coordinator = coordinator(
+                session,
+                FakeUsbHost(),
+                FakeDiscovery(listOf(stageCandidate)) { FakeTransport() },
+                create = { advisoryRaising(mutableListOf()) },
+            )
+            coordinator.connect()
+            advanceUntilIdle()
+            assertTrue(coordinator.state.value is ConnectionState.AdvisoryWarning)
+            coordinator.confirmAdvisory()
+
+            coordinator.forceReconnect()
+            advanceUntilIdle()
+            assertTrue(coordinator.state.value is ConnectionState.Connected)
+
+            coordinator.disconnect()
+            advanceUntilIdle()
+            coordinator.selectEntry((coordinator.state.value as ConnectionState.DeviceSelection).entries.single())
+            advanceUntilIdle()
+            assertTrue(coordinator.state.value is ConnectionState.AdvisoryWarning)
+        }
+
+    @Test
+    fun `unplugging the device the unknown-device warning is about returns to the picker`() = runSession { session ->
+        val newNord = FakeDevice("usb:4092:99", productId = 99)
+        val keyboard = FakeDevice("usb:1234:1", vendorId = 0x1234, label = "Keyboard")
+        val usb = FakeUsbHost(attached = listOf(newNord, keyboard))
+        val coordinator = coordinator(session, usb, FakeDiscovery(emptyList()) { FakeTransport() })
+        advanceUntilIdle()
+        coordinator.selectUnknownDevice(newNord)
+        assertTrue(coordinator.state.value is ConnectionState.UnknownDeviceWarning)
+
+        usb.attached = listOf(keyboard)
+        usb.detaches.emit(newNord)
+        advanceUntilIdle()
+        val picker = coordinator.state.value as ConnectionState.DeviceSelection
+        assertEquals(
+            listOf(keyboard.physicalKey),
+            picker.entries.map {
+                (it as PickerEntry.Unknown).device.physicalKey
+            },
+        )
     }
 }

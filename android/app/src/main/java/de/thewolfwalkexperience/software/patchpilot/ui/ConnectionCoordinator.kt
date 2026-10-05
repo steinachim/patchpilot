@@ -50,6 +50,9 @@ private const val TAG = "ConnectionCoordinator"
  *   once that has finished its cleanup. Runs under the operation mutex, right before the close.
  * @param onDeviceLost the connected device was unplugged. Runs before the teardown, which clears
  *   the [deviceHandle] a cache key is built from.
+ * @param onLeavingSession the user is leaving the session ([disconnect]): cancel work that only
+ *   reads from it, such as a device report, so the teardown does not wait it out. Runs before the
+ *   teardown asks for the operation mutex.
  */
 internal class ConnectionCoordinator(
     private val scope: CoroutineScope,
@@ -63,8 +66,18 @@ internal class ConnectionCoordinator(
     private val onSessionStarted: () -> Unit = {},
     private val onSessionEnding: suspend () -> Unit = {},
     private val onDeviceLost: () -> Unit = {},
+    private val onLeavingSession: () -> Unit = {},
     private val demo: () -> Instrument = { DemoInstrument() },
 ) {
+    /** The device a session was opened on, which [forceReconnect] reopens. */
+    private sealed interface SessionOrigin {
+        /** A catalog match, found again by a scan of its bus. */
+        data class Recognised(val candidate: Candidate) : SessionOrigin
+
+        /** A device opened on a guess, reopened through [lastConfirmedUnknownDevice]. */
+        data object Guessed : SessionOrigin
+    }
+
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
 
@@ -96,12 +109,26 @@ internal class ConnectionCoordinator(
 
     /**
      * The device behind the most recent accepted [confirmUnknownDevice], so
-     * [reconnectRememberedUnknownDeviceOrOffer] can restore it without the warning screen when
-     * [connect] finds nothing in the catalog - most often a [forceReconnect] on resume. Cleared by
-     * [disconnect] and by a real detach, not by [teardownCurrentInstrument], which
-     * [forceReconnect] runs before reconnecting.
+     * [reconnectRememberedUnknownDeviceOrOffer] can restore it without the warning screen: on a
+     * [forceReconnect] of a session opened this way, and when [connect] finds nothing in the
+     * catalog. Cleared by [disconnect] and by a real detach, not by [teardownCurrentInstrument],
+     * which [forceReconnect] runs before reconnecting.
      */
     private var lastConfirmedUnknownDevice: AttachedUsbDevice? = null
+
+    /**
+     * Where the session's [instrument] came from, so [forceReconnect] reopens that device rather
+     * than whichever one a scan finds first. Null in demo mode and with no session; set and
+     * cleared with [instrument].
+     */
+    private var sessionOrigin: SessionOrigin? = null
+
+    /**
+     * The advisory the user accepted, as the instrument's `stableKey` and the advisory text, so a
+     * [forceReconnect] that raises the same advisory again does not ask again. Cleared by
+     * [disconnect] and by a real detach.
+     */
+    private var acceptedAdvisory: Pair<String, String>? = null
 
     /**
      * Serialises every read-then-write against [instrument] with [forceReconnect]'s teardown, so
@@ -115,10 +142,6 @@ internal class ConnectionCoordinator(
     private val instrumentMutex = Mutex()
 
     private var connectJob: Job? = null
-
-    // Set by disconnect(showPicker = true) - the user backed out of a session on purpose and
-    // asked to choose again, so the next connect() must not silently reconnect a lone device.
-    private var forcePickerOnNextConnect = false
 
     /**
      * Starts listening for USB detaches; called once. Guarded, unlike this class's other
@@ -147,10 +170,11 @@ internal class ConnectionCoordinator(
         instrumentMutex.withLock { block(instrument ?: error("Not connected to an instrument")) }
 
     /**
-     * Reacts to a physical USB detach in whichever of three shapes the session is in: closes an
+     * Reacts to a physical USB detach in whichever of four shapes the session is in: closes an
      * active session using that device ([ConnectionState.DeviceLost]); fails a connect attempt
      * waiting on it ([ConnectionState.Opening], most often on a permission dialog that can now
-     * never arrive); or drops the matching row from [ConnectionState.DeviceSelection].
+     * never arrive); leaves [ConnectionState.UnknownDeviceWarning] for a device that is gone; or
+     * drops the matching row from [ConnectionState.DeviceSelection].
      *
      * Ignores everything else: every device Android has seen fires this broadcast on unplug.
      */
@@ -164,6 +188,7 @@ internal class ConnectionCoordinator(
             // overwrite DeviceLost with a stale Connected or Error.
             connectJob?.cancel()
             lastConfirmedUnknownDevice = null
+            acceptedAdvisory = null
             scope.launch {
                 // The device's cached listing goes with it: once the instrument has left the bus
                 // its contents may change before it is next seen, and Android hands a replug the
@@ -180,6 +205,9 @@ internal class ConnectionCoordinator(
             _state.value = ConnectionState.Error(strings.get(R.string.connect_opening_device_unplugged, device.label))
             return
         }
+        // Back to the picker, whose row for this device the filter below drops.
+        val warning = state.value as? ConnectionState.UnknownDeviceWarning
+        if (warning?.device?.physicalKey == detachedKey) offerUnknownDeviceOrFail()
         val picker = state.value as? ConnectionState.DeviceSelection ?: return
         val remaining = picker.entries.filterNot { it.physicalKey() == detachedKey }
         if (remaining.size != picker.entries.size) {
@@ -210,10 +238,7 @@ internal class ConnectionCoordinator(
             ConnectionState.Disconnected,
             -> connect()
 
-            is ConnectionState.DeviceSelection -> {
-                forcePickerOnNextConnect = true
-                connect()
-            }
+            is ConnectionState.DeviceSelection -> launchConnect { performConnect(forcePicker = true) }
 
             is ConnectionState.DeviceLost -> if (device.physicalKey == s.physicalKey) connect()
 
@@ -233,23 +258,40 @@ internal class ConnectionCoordinator(
      */
     private fun launchConnect(failureMessage: String? = null, block: suspend () -> Unit) {
         if (connectJob?.isActive == true) return
+        connectJob = scope.launch { runAttempt(failureMessage, block) }
+    }
+
+    /**
+     * Runs [block] in place of whatever attempt is in flight: cancels that one and starts [block]
+     * once it has finished, so the two never interleave. For [disconnect], which the
+     * single-flight guard in [launchConnect] would otherwise drop during a [forceReconnect].
+     */
+    private fun replaceConnect(block: suspend () -> Unit) {
+        val previous = connectJob
+        previous?.cancel()
         connectJob = scope.launch {
-            try {
-                block()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: InstrumentException.NeedsManualSetting) {
-                // Not an error line: the user has something to go and do, and the screen has to
-                // show them what. See ConnectionState.NeedsManualSetting.
-                _state.value = ConnectionState.NeedsManualSetting(
-                    message = e.message ?: strings.get(R.string.connect_failed),
-                    steps = e.steps,
-                    alsoCheck = e.alsoCheck,
-                )
-            } catch (e: Exception) {
-                _state.value =
-                    ConnectionState.Error(e.message ?: failureMessage ?: strings.get(R.string.connect_failed))
-            }
+            previous?.join()
+            runAttempt(failureMessage = null, block)
+        }
+    }
+
+    /** The catch every attempt shares: a failure lands on a screen, cancellation does not. */
+    private suspend fun runAttempt(failureMessage: String?, block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: InstrumentException.NeedsManualSetting) {
+            // Not an error line: the user has something to go and do, and the screen has to
+            // show them what. See ConnectionState.NeedsManualSetting.
+            _state.value = ConnectionState.NeedsManualSetting(
+                message = e.message ?: strings.get(R.string.connect_failed),
+                steps = e.steps,
+                alsoCheck = e.alsoCheck,
+            )
+        } catch (e: Exception) {
+            _state.value =
+                ConnectionState.Error(e.message ?: failureMessage ?: strings.get(R.string.connect_failed))
         }
     }
 
@@ -259,17 +301,15 @@ internal class ConnectionCoordinator(
      * so it is claimed through the interface that can browse presets.
      */
     fun connect() {
-        launchConnect { performConnect(consumeForcePicker()) }
+        launchConnect { performConnect(forcePicker = false) }
     }
 
-    /** Reads and clears [forcePickerOnNextConnect] in one step, so every caller that folds it
-     * into a connect attempt - [connect] and [forceReconnect] alike - consumes it the same way. */
-    private fun consumeForcePicker(): Boolean =
-        forcePickerOnNextConnect.also { forcePickerOnNextConnect = false }
-
     /**
-     * The scan-then-connect body [connect] and [forceReconnect] share, so [forceReconnect] runs
-     * it inside its own [launchConnect] job rather than a second, untracked one.
+     * The scan-then-connect body of every attempt with no particular device in mind, run inside
+     * that attempt's own job.
+     *
+     * [forcePicker] shows the picker where auto-connect would otherwise take the first instrument
+     * found: after the user backed out of a session ([disconnect]), and while the picker is up.
      *
      * The MIDI scan is skipped where auto-connect already has its answer from USB alone:
      * `MidiDiscovery.scan` opens every port and waits up to 600 ms per port for a probe reply,
@@ -319,20 +359,45 @@ internal class ConnectionCoordinator(
             }
         }
         val built = closingOnFailure(transport::close) { create(candidate.descriptor, transport) }
-        connectAndPublish(built, candidate.physicalKey, candidate.deviceHandle())
+        connectAndPublish(built, SessionOrigin.Recognised(candidate), candidate.physicalKey, candidate.deviceHandle())
+    }
+
+    /**
+     * Reopens the device a session ran on, found again by a scan of its own bus: by its handle, or
+     * by model where only one unit of it is attached. Where it is gone, offers the picker rather
+     * than taking whatever else is attached, so a resume never switches instruments.
+     */
+    private suspend fun reopen(previous: Candidate) {
+        _state.value = ConnectionState.Searching
+        val sameModel = discoveryFor(previous).scan(catalog())
+            .filter { it.physicalKey == previous.physicalKey && it.descriptor.id == previous.descriptor.id }
+        val again = sameModel.firstOrNull { it.deviceHandle() == previous.deviceHandle() }
+            ?: sameModel.singleOrNull()
+        if (again != null) connectCandidate(again) else performConnect(forcePicker = true)
     }
 
     /**
      * Connects [built] and makes it the session - the tail every connect path shares. A failure
      * before it becomes the session closes it, so a MIDI port or USB interface is never left
-     * claimed by a session that does not exist.
+     * claimed by a session that does not exist. That includes an attempt cancelled while it waits
+     * for the mutex, which a [disconnect] replacing it does.
+     *
+     * Expects no session: every path that can run with one tears it down first.
      */
-    private suspend fun connectAndPublish(built: Instrument, physicalKey: String?, handle: String?) {
-        closingOnFailure({ closeQuietly(built) }) { built.connect() }
-        instrumentMutex.withLock {
-            instrument = built
-            connectedPhysicalKey = physicalKey
-            deviceHandle = handle
+    private suspend fun connectAndPublish(
+        built: Instrument,
+        origin: SessionOrigin?,
+        physicalKey: String?,
+        handle: String?,
+    ) {
+        closingOnFailure({ closeQuietly(built) }) {
+            built.connect()
+            instrumentMutex.withLock {
+                instrument = built
+                sessionOrigin = origin
+                connectedPhysicalKey = physicalKey
+                deviceHandle = handle
+            }
         }
         _state.value = connectedOrAdvisory(built)
         onSessionStarted()
@@ -478,7 +543,7 @@ internal class ConnectionCoordinator(
             usb.openBulk(device)
         }
         val built = closingOnFailure(transport::close) { createForUnknown(familyId, transport, device) }
-        connectAndPublish(built, device.physicalKey, device.handle)
+        connectAndPublish(built, SessionOrigin.Guessed, device.physicalKey, device.handle)
         lastConfirmedUnknownDevice = device
     }
 
@@ -488,81 +553,107 @@ internal class ConnectionCoordinator(
      */
     fun connectDemo() {
         launchConnect(failureMessage = strings.get(R.string.connect_failed_demo)) {
+            // Offered on the advisory gate, where a real instrument is already the session: it is
+            // closed here, so its port is not left claimed.
+            teardownCurrentInstrument()
             // No bus and no device handle: nothing to detach, and nothing for the cache to key on.
-            connectAndPublish(demo(), physicalKey = null, handle = null)
+            connectAndPublish(demo(), origin = null, physicalKey = null, handle = null)
         }
     }
 
     /**
-     * Whether returning to the foreground should rebuild the session: asked of the connected
-     * instrument, which asks its transport (`Transport.rebuildOnResume`), so a USB session is
-     * rebuilt and a MIDI or demo one is not.
+     * Whether returning to the foreground should rebuild the session: asked of the instrument,
+     * which asks its transport (`Transport.rebuildOnResume`), so a USB session is rebuilt and a
+     * MIDI or demo one is not. That includes one waiting on the advisory gate.
      *
      * True while nothing is connected, which is how an instrument plugged in while the app was
-     * away gets picked up. False on [ConnectionState.DeviceLost], which exists so nothing
-     * reconnects until the user asks; and false on [ConnectionState.Opening] and
-     * [ConnectionState.PermissionDenied], where dismissing the permission dialog is itself the
-     * resume and a rescan would put it straight back up.
+     * away gets picked up. False where a rescan would undo something:
+     * - [ConnectionState.DeviceLost], which exists so nothing reconnects until the user asks.
+     * - [ConnectionState.Opening] and [ConnectionState.PermissionDenied]: dismissing the
+     *   permission dialog is itself the resume, and a rescan would put it straight back up.
+     * - [ConnectionState.DeviceSelection] and [ConnectionState.UnknownDeviceWarning]: a choice the
+     *   user has not made yet, which auto-connect would make for them. An attach or a detach
+     *   while away still updates them.
      */
     val shouldRebuildOnResume: Boolean
         get() = when (val s = state.value) {
             is ConnectionState.Connected -> s.instrument.rebuildOnResume
-            is ConnectionState.DeviceLost -> false
-            is ConnectionState.Opening -> false
-            is ConnectionState.PermissionDenied -> false
-            else -> true
+
+            is ConnectionState.AdvisoryWarning -> s.instrument.rebuildOnResume
+
+            is ConnectionState.DeviceLost,
+            is ConnectionState.Opening,
+            is ConnectionState.PermissionDenied,
+            is ConnectionState.DeviceSelection,
+            is ConnectionState.UnknownDeviceWarning,
+            -> false
+
+            ConnectionState.Disconnected,
+            ConnectionState.Searching,
+            is ConnectionState.Error,
+            is ConnectionState.NeedsManualSetting,
+            is ConnectionState.NothingFound,
+            -> true
         }
 
-    /** [ConnectionState.Connected], or the advisory gate where the instrument raised one. */
-    private fun connectedOrAdvisory(built: Instrument): ConnectionState =
-        built.advisory
-            ?.let { ConnectionState.AdvisoryWarning(built, it) }
-            ?: ConnectionState.Connected(built)
+    /**
+     * [ConnectionState.Connected], or the advisory gate where the instrument raised an advisory
+     * the user has not already accepted for it.
+     */
+    private fun connectedOrAdvisory(built: Instrument): ConnectionState {
+        val advisory = built.advisory ?: return ConnectionState.Connected(built)
+        if (acceptedAdvisory == (built.identity.stableKey to advisory)) return ConnectionState.Connected(built)
+        return ConnectionState.AdvisoryWarning(built, advisory)
+    }
 
     /** User accepted the advisory - carries on with the instrument already connected. */
     fun confirmAdvisory() {
         val pending = state.value as? ConnectionState.AdvisoryWarning ?: return
+        acceptedAdvisory = pending.instrument.identity.stableKey to pending.message
         _state.value = ConnectionState.Connected(pending.instrument)
         onSessionStarted()
     }
 
     /**
-     * User declined the advisory: closes the session and offers the picker. Not a plain
-     * [disconnect] - ConnectScreen scans only on its first composition and is already on screen,
-     * so `Disconnected` would show a bare "Not connected". The picker is forced, since
-     * auto-connect would reopen the same instrument and raise the same advisory.
+     * The user backed out of the session, from the preset screen or the advisory gate: closes it
+     * and offers the picker, even for a lone instrument, since they asked to choose.
+     *
+     * Publishes [ConnectionState.Searching] at once. The teardown waits for whatever holds the
+     * operation mutex, and a session left showing as connected meanwhile would send the connect
+     * screen straight back to the presets. Replaces any attempt in flight, a [forceReconnect]
+     * included, so the session that attempt would have published never lands.
      */
-    fun declineAdvisory() {
+    fun disconnect() {
         lastConfirmedUnknownDevice = null
-        launchConnect {
+        acceptedAdvisory = null
+        onLeavingSession()
+        _state.value = ConnectionState.Searching
+        replaceConnect {
             teardownCurrentInstrument()
-            _state.value = ConnectionState.Disconnected
             performConnect(forcePicker = true)
         }
     }
 
-    fun disconnect(showPicker: Boolean = false) {
-        forcePickerOnNextConnect = showPicker
-        lastConfirmedUnknownDevice = null
-        scope.launch {
-            teardownCurrentInstrument()
-            _state.value = ConnectionState.Disconnected
-        }
-    }
-
     /**
-     * Tears down whatever connection exists and reconnects from scratch, on every return to the
+     * Tears down whatever connection exists and reconnects from scratch, on a return to the
      * foreground: unrelated USB bus activity while backgrounded can leave the endpoints erroring
      * on every subsequent transfer, with no way to detect or repair that specifically.
      *
-     * Runs through [launchConnect], so this job lands in [connectJob] like every other attempt -
-     * the single-flight guard, the error handling and [handleUsbDetach]'s cancel all depend on it.
+     * Reopens the session's own device ([reopen]), not whichever one a scan finds first; with no
+     * session, it scans as [connect] does. Runs through [launchConnect], so this job lands in
+     * [connectJob] like every other attempt - the single-flight guard, the error handling and
+     * [handleUsbDetach]'s cancel all depend on it.
      */
     fun forceReconnect() {
         launchConnect {
+            // Read before the teardown clears it.
+            val origin = sessionOrigin
             teardownCurrentInstrument()
-            _state.value = ConnectionState.Disconnected
-            performConnect(consumeForcePicker())
+            when (origin) {
+                null -> performConnect(forcePicker = false)
+                is SessionOrigin.Recognised -> reopen(origin.candidate)
+                SessionOrigin.Guessed -> reconnectRememberedUnknownDeviceOrOffer()
+            }
         }
     }
 
@@ -599,6 +690,7 @@ internal class ConnectionCoordinator(
             onSessionEnding()
             closeQuietly(instrument)
             instrument = null
+            sessionOrigin = null
             connectedPhysicalKey = null
             deviceHandle = null
         }

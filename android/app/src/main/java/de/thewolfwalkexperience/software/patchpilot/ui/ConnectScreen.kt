@@ -27,7 +27,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,10 +62,6 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
         onStarted = { incompleteReads = 0 },
         onShared = { _, failedReads -> incompleteReads = failedReads },
     )
-
-    LaunchedEffect(Unit) {
-        if (state is ConnectionState.Disconnected) viewModel.connection.connect()
-    }
 
     Box(
         // No Scaffold: this screen is a centred hero with its own title, which a top app bar would
@@ -130,7 +125,15 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                 )
                 Spacer(Modifier.height(16.dp))
                 when (val s = state) {
-                    is ConnectionState.Disconnected -> Text(stringResource(R.string.connect_idle))
+                    // Shown only before the ViewModel's first attempt starts; the button keeps it
+                    // from being a dead end all the same.
+                    is ConnectionState.Disconnected -> {
+                        Text(stringResource(R.string.connect_idle))
+                        Spacer(Modifier.height(16.dp))
+                        theme.FilledButton(onClick = {
+                            viewModel.connection.connect()
+                        }) { Text(stringResource(R.string.action_retry_search)) }
+                    }
 
                     is ConnectionState.Searching -> {
                         theme.ProgressIndicator()
@@ -289,7 +292,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                         Text(s.message, color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(16.dp))
                         Row {
-                            OutlinedButton(onClick = { viewModel.connection.declineAdvisory() }) {
+                            OutlinedButton(onClick = { viewModel.connection.disconnect() }) {
                                 Text(stringResource(R.string.action_disconnect))
                             }
                             Spacer(Modifier.width(8.dp))
