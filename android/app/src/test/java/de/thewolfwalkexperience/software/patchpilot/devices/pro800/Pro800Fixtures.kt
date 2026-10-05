@@ -41,18 +41,20 @@ object Pro800Fixtures {
     /** Reply to the device-name query: `0x07` then ASCII "PRO-800". */
     const val DEVICE_NAME_REPLY = "f0002032000124000750524f2d38303000f7"
 
-    /** Reply to the firmware query. The `00` at index 9 echoes the request parameter; the version
-     * bytes `01 04 06` start at index 10, which is the off-by-one that reported 1.4.6 as garbage. */
+    /**
+     * Reply to the firmware query. The `00` at index 9 echoes the request parameter; the version
+     * bytes `01 04 06` start at index 10.
+     */
     const val FIRMWARE_REPLY = "f0002032000124000900010406f7"
 
-    /** Undocumented types that answer with a fixed payload nobody has decoded, recorded verbatim
-     * in case that changes: `0x02` -> `03 00`, `0x04` -> `05` + ASCII "P0E9I". */
+    /**
+     * Undocumented types that answer with a fixed payload nobody has decoded, recorded verbatim
+     * in case that changes: `0x02` -> `03 00`, `0x04` -> `05` + ASCII "P0E9I".
+     */
     const val TYPE_02_REPLY = "f0002032000124000300f7"
     const val TYPE_04_REPLY = "f00020320001240005503045394900f7"
 
-    /** The settings block. Byte 10 of the decoded record held 4, i.e.
-     * channel 3 - the setting whose being wrong made preset selection silently do
-     * nothing. */
+    /** The settings block. Byte 10 of the decoded record holds 4, i.e. channel 3. */
     const val SETTINGS_DUMP =
         "f000203200012400787e0301251661006f06004401047f04000030000401100103020006017f7f0c00000100" +
             "00010001003232000000000101f7"

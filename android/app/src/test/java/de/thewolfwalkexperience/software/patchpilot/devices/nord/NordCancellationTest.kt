@@ -22,17 +22,16 @@ import org.junit.Test
  * without looking like it does, because `CancellationException` *is* an `Exception`: the operation
  * reports a failure that never happened, or worse, carries on against a scope that is already gone.
  *
- * These are the regression tests for two places where that had happened. There were none before -
- * `main` had ~30 hand-written `CancellationException` rethrow guards and not one test that any of
- * them was there, which is exactly why the two missing ones went unnoticed.
+ * `main` has about 30 hand-written `CancellationException` rethrow guards; these tests cover the
+ * two whose absence is hardest to notice, since a missing one fails nothing.
  */
 class NordCancellationTest {
 
     /**
      * A transport that cancels the caller's job on the first write, then refuses to be read.
      *
-     * Models the real timing that exposed both bugs: the request goes out, and the user leaves
-     * before the reply comes back. Cancelling from inside `bulkWrite` makes that deterministic -
+     * Models the timing that matters: the request goes out, and the user leaves before the reply
+     * comes back. Cancelling from inside `bulkWrite` makes that deterministic -
      * by the time [NordDevice.readReply] runs its `ensureActive()` the job is already gone - and
      * the throwing `bulkRead` proves the test never silently took the ordinary path instead.
      */
@@ -66,15 +65,15 @@ class NordCancellationTest {
     }
 
     /**
-     * `connect()` reads the file-transfer protocol version first, and wrapped *any* exception from
-     * that read in an `IllegalStateException` explaining that the instrument could not be talked
-     * to. Cancelling the connect therefore put an error screen - "Couldn't read the file-transfer
-     * protocol version" - in front of a user whose only crime was backing out of it.
+     * `connect()` reads the file-transfer protocol version first, and wraps a failure of that read
+     * in an `IllegalStateException` explaining that the instrument could not be talked to. A
+     * cancellation must pass through unwrapped, or backing out of a connect would show an error
+     * screen - "Couldn't read the file-transfer protocol version".
      */
     @Test
     fun `cancelling a connect surfaces as cancellation, not as a protocol failure`() = runTest {
-        // 168 is GRAND_PROFILE's one supported firmware, so validateFirmwareVersion passes and the
-        // run reaches the protocol-version read this test is actually about.
+        // 168 is GRAND_PROFILE's tested firmware, so nothing but the protocol-version read this
+        // test is about stands in the way.
         val transport = CancelOnWriteTransport(firmwareVersion = 168)
         val device = NordFixtures.device(transport)
 
@@ -99,10 +98,10 @@ class NordCancellationTest {
     }
 
     /**
-     * The sibling bug, and the more insidious of the two: this one did not report anything at all.
-     * A cancelled child-list read was logged as "could not be read" and answered `null`, which the
-     * bank walk treats as "unknown, carry on with the item count" - so a scan the app had already
-     * decided to tear down kept issuing requests against a closed instrument.
+     * The quieter of the two: a cancelled child-list read taken as "could not be read" would
+     * answer `null`, which the bank walk treats as "unknown, carry on with the item count" - so a
+     * scan the app had already decided to tear down would keep issuing requests against a closed
+     * instrument.
      */
     @Test
     fun `cancelling a bank-count walk stops it rather than reporting an unknown count`() = runTest {

@@ -22,13 +22,12 @@ import org.junit.Test
  *
  * The factory listing is free - 1,217 rows and no round trips - because every one of them comes
  * out of the shipped table. That is a property of the whole class rather than of one method, and
- * it is easy to lose one call site at a time: adding categories put three new paths in front of a
- * factory address, and the refresh after a favorite write was reachable with one for the first
- * time, since favoriting is the first edit that can target a read-only bank at all.
+ * it is easy to lose one call site at a time: categories put three paths in front of a factory
+ * address, and favoriting, the one edit that can target a read-only bank, refreshes one.
  *
  * So the device here **refuses** to answer a `0C` request aimed at a read-only bank, exactly as if
- * it did not exist. A path that regresses times out instead of quietly costing seven minutes on
- * real hardware.
+ * it did not exist. A path that dumps a factory voice times out here instead of quietly re-reading
+ * factory banks on real hardware.
  */
 class MotifXsFactoryReadsTest {
 

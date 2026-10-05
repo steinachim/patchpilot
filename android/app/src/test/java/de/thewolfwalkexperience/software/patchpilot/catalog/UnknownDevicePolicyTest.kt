@@ -12,12 +12,12 @@ import org.junit.Test
 /**
  * The gate that stops the app sending a vendor protocol at hardware it has not identified.
  *
- * Worth real tests despite being twelve lines: before it existed, picking any attached USB device
- * - a keyboard, a hub, a charger - claimed its interface and spoke Clavia's bulk protocol at it.
+ * Worth real tests despite being twelve lines: without it, picking any attached USB device - a
+ * keyboard, a hub, a charger - would claim its interface and speak Clavia's bulk protocol at it.
  */
 class UnknownDevicePolicyTest {
 
-    /** The real ids, so a catalog edit that changed them would surface here. */
+    /** The vendors' USB ids, copied from the catalog. */
     private val clavia = 4092
     private val yamaha = 1177
     private val behringer = 5015
@@ -49,8 +49,8 @@ class UnknownDevicePolicyTest {
     /**
      * The policy's rule, asserted rather than only documented.
      *
-     * Two Nord models have been verified to share one protocol; Yamaha, Behringer, Fractal and
-     * Moog contribute one instrument each, and one instrument is no evidence about a vendor.
+     * Eight Nord models are verified to share one protocol; Yamaha, Behringer, Fractal and Moog
+     * contribute one instrument each, and one instrument is no evidence about a vendor.
      */
     @Test
     fun `a Yamaha, Behringer, Fractal or Moog device may not be`() {

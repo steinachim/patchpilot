@@ -86,7 +86,7 @@ class NordFailureMappingTest {
         assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
     }
 
-    /** Status 4 is the one code the protocol names - "file exists" (§3.3.12). */
+    /** Status 4 is the one code with a known meaning - "file exists"; see `docs/PROTOCOLS.md`, sub-opcode 22/23. */
     @Test
     fun `copying onto an occupied slot reports status 4`() = runTest {
         val instrument = instrument(

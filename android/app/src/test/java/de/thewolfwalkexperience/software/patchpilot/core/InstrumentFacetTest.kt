@@ -227,14 +227,12 @@ class InstrumentFacetTest {
     /**
      * A share filename can be derived for **every** instrument, reporter or not.
      *
-     * This is the regression guard for a real crash: the debug menu's regression test is offered
-     * for every family and named its shared file with the *reporter's* helper, which requires a
-     * facet a Motif XS does not have. Tapping Share killed the app. The rule it broke is the one
-     * the whole facet design rests on - a null facet means "cannot do this at all", so a
+     * The debug menu's regression test is offered for every family, so the file it shares cannot
+     * be named by the *reporter's* helper, which needs a facet a Motif XS does not have. That is
+     * the rule the facet design rests on: a null facet means "cannot do this at all", so a
      * feature outside that facet must not route through it.
      *
-     * The Motif XS case is the one that mattered, and it is included by name because it is the
-     * shipping family whose `report` is null.
+     * The Motif XS is included by name because it is the family whose `report` is null.
      */
     @Test
     fun `a filename stem exists for every instrument, with or without a reporter`() = runTest {
@@ -250,11 +248,11 @@ class InstrumentFacetTest {
             assertTrue("'$stem' is not filename-safe", stem.all { it.isDigit() || it in 'a'..'z' || it == '_' })
         }
 
-        // The one literal worth keeping, because it is the name that crashed.
+        // The one literal worth keeping: the family with no reporter.
         assertEquals("yamaha_motif_xs", slugifyDeviceId("Yamaha Motif XS"))
     }
 
-    /** Every family that declares DELETE must actually implement it - the point of this change. */
+    /** Every family that declares DELETE implements it. */
     @Test
     fun `delete is declared by every family that can do it`() = runTest {
         val nordOps = nord().also { it.connect() }.editor!!.supported

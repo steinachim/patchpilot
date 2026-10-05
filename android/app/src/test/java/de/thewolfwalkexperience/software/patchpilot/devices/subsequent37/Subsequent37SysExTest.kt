@@ -11,13 +11,13 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Every expected request is the reference implementation's output, written out as hex. */
+/** Every expected request is written out as hex, as sent to the instrument in the measurements `docs/PROTOCOLS.md` records. */
 class Subsequent37SysExTest {
 
     private fun hex(text: String) = text.hexToBytes()
 
     @Test
-    fun `the short requests are 13 command bytes, as the reference sends them`() {
+    fun `the short requests are 13 command bytes, zero-padded`() {
         assertArrayEquals(hex("f0 04 0c 32 00 00 00 00 00 00 00 00 00 00 00 00 f7"), Subsequent37SysEx.ping())
         assertArrayEquals(
             hex("f0 04 0c 06 03 00 00 00 00 00 00 00 00 00 00 00 f7"),

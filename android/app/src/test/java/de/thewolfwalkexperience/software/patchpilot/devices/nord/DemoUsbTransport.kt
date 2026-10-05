@@ -21,9 +21,9 @@ import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
  * (sub-opcode 32/33) and the per-item fetch (30/31) don't carry a category index of their own -
  * only [NordDevice.FileTransferSubOp.SELECT_CATEGORY]'s request does.
  *
- * Every response's sub-opcode is unread by [NordDevice] (it trusts payload shape, not the
- * sub-opcode echoed back), so this always replies with `request sub-op + 1` and never needs to
- * track more than the pending message and, for the content database, the current lock.
+ * [NordDevice] accepts a reply only for its request's protocol and `sub-op + 1`, so this always
+ * replies with exactly that and never needs to track more than the pending message and, for the
+ * content database, the current lock.
  */
 class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBulkTransport {
 
@@ -57,8 +57,10 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
         else -> error("DemoUsbTransport can't answer cmd=${msg.protocolId} sub-op=${msg.subOp}")
     }
 
-    /** The protocol version table NordDevice.connect() reads protocolVersionFileTransfer from - the only
-     * field of this reply anything here consults. */
+    /**
+     * The protocol version table NordDevice.connect() reads protocolVersionFileTransfer from - the only
+     * field of this reply anything here consults.
+     */
     private fun deviceInfoReply(): ByteArray {
         val pairs = listOf(
             NordDevice.PROTOCOL_UI to NordDevice.PROTOCOL_VERSION_UI,
@@ -71,9 +73,7 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
     private fun capsReply(subOp: Int): ByteArray = when (subOp) {
         NordDevice.UiSubOp.CAPABILITY_QUERY.code -> ByteArray(8)
 
-        // unexamined by anything here
-        // ENTER/EXIT_STATUS_MODE's replies are never read; PUSH_STATUS_TEXT is one-way (no
-        // bulkRead call happens for it at all - see NordDevice.request(expectReply = false)).
+        // No other UI sub-op is sent.
         else -> ByteArray(0)
     }
 
@@ -110,15 +110,16 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
 
         NordDevice.FileTransferSubOp.SELECT_PRESET.code -> selectPresetReply(payload)
 
-        // RESET/QUERY_CONTENT_VERSION/ENABLE_INVALIDATION: unexamined acks everywhere
-        // that calls them (see NordDevice.FileTransferSubOp's own doc).
+        // Anything else: a zero status word and nothing more.
         else -> ByteArray(4)
     }
 
-    /** Sub-opcode 0/1: 4 unused bytes, a count byte, then per category a
+    /**
+     * Sub-opcode 0/1: 4 unused bytes, a count byte, then per category a
      * length-prefixed name and a fixed trailer - the same shape
      * NordDeviceProtocolTest.buildRootCategoryListPayload() builds and round-trips in tests, with
-     * the same trailer length (29, proven to detect uniquely there too). */
+     * the same trailer length (29, proven to detect uniquely there too).
+     */
     private fun rootCategoryListReply(): ByteArray {
         val out = mutableListOf<Byte>()
         out += List(4) { 0.toByte() }
@@ -132,8 +133,10 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
         return out.toByteArray()
     }
 
-    /** Sub-opcode 2/3: status, echoed category index, a child count byte, then
-     * per bank a length-prefixed letter and its occupied-slot count. */
+    /**
+     * Sub-opcode 2/3: status, echoed category index, a child count byte, then
+     * per bank a length-prefixed letter and its occupied-slot count.
+     */
     private fun categoryChildReply(categoryIndex: Int): ByteArray {
         val banks = catalog.itemsInCategory(categoryIndex).keys.map { it.bank }.distinct().sorted()
         val out = mutableListOf<Byte>()
@@ -149,10 +152,12 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
         return out.toByteArray()
     }
 
-    /** Sub-opcode 8/9: status, item count, then free/used/reclaimable/unitCode. Always
+    /**
+     * Sub-opcode 8/9: status, item count, then free/used/reclaimable/unitCode. Always
      * answers unitCode=0 ("counted in bytes"), which is what tells
      * [NordDevice.calibrateStorageUnits] there is nothing to calibrate for a demo category - there
-     * is no real allocation scheme behind this data to simulate. */
+     * is no real allocation scheme behind this data to simulate.
+     */
     private fun itemCountReply(categoryIndex: Int): ByteArray {
         val count = catalog.itemsInCategory(categoryIndex).size
         return u32(0) + u32(count) + u32(DEMO_FREE_BYTES) + u32(DEMO_USED_BYTES) + u32(0) + u32(0)
@@ -167,9 +172,11 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
         return u32(0) + u32(srcBank) + u32(srcItem) + u32(dstBank) + u32(dstItem)
     }
 
-    /** Sub-opcode 22/23: [moveReply]'s shape, but the source stays and the destination
+    /**
+     * Sub-opcode 22/23: [moveReply]'s shape, but the source stays and the destination
      * has to be empty - status 4 ("file exists") where it is not, which is the refusal
-     * [NordDevice.copyProgram] names. */
+     * [NordDevice.copyProgram] names.
+     */
     private fun copyReply(payload: ByteArray): ByteArray {
         val srcBank = readU32(payload, 0)
         val srcItem = readU32(payload, 4)
@@ -179,8 +186,10 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
         return u32(status) + u32(srcBank) + u32(srcItem) + u32(dstBank) + u32(dstItem)
     }
 
-    /** Sub-opcode 20/21: status plus an echo of the slot, which NordDevice checks
-     * against the one it asked for. */
+    /**
+     * Sub-opcode 20/21: status plus an echo of the slot, which NordDevice checks
+     * against the one it asked for.
+     */
     private fun deleteReply(payload: ByteArray): ByteArray {
         val bank = readU32(payload, 0)
         val item = readU32(payload, 4)
@@ -201,13 +210,15 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
         return u32(0) + u32(bank) + u32(item)
     }
 
-    /** Sub-opcode 30/31: the name field NordDevice.parseItemName reads always sits at a
+    /**
+     * Sub-opcode 30/31: the name field NordDevice.parseItemName reads always sits at a
      * fixed offset (32/36), regardless of the record's content tag - so this only needs to fill
      * that much, unlike a real item record's other fields (data size, content id), which nothing
      * here reads (calibration is short-circuited by [itemCountReply]'s unitCode=0).
      *
      * An empty slot answers status 1 with the previous record's bytes after it, name included,
-     * as a Stage 2 EX does - so a reader that skips the status shows a stale name. */
+     * as a Stage 2 EX does - so a reader that skips the status shows a stale name.
+     */
     private fun fetchItemReply(payload: ByteArray): ByteArray {
         val bank = readU32(payload, 0)
         val item = readU32(payload, 4)
@@ -224,9 +235,11 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
     /** The last record [fetchItemReply] served, whose bytes an empty slot's reply carries. */
     private var lastRecord = ByteArray(36)
 
-    /** Sub-opcode 32/33: the bank/item cursor. [prevItem] is -1 (0xFFFFFFFF) before the
+    /**
+     * Sub-opcode 32/33: the bank/item cursor. [prevItem] is -1 (0xFFFFFFFF) before the
      * first call in a bank - the walk asks for the smallest occupied item strictly greater than
-     * it, exactly as the real cursor's "give me the next one" contract works. */
+     * it, exactly as the real cursor's "give me the next one" contract works.
+     */
     private fun cursorNextItemReply(payload: ByteArray): ByteArray {
         val bank = readU32(payload, 0)
         val prevItem = readU32(payload, 4)
@@ -240,8 +253,10 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
         }
     }
 
-    /** Sub-opcode 47/48 (select/load) and the reload-for-display call inside rename/move/swap's
-     * lock both send (bank, item) and expect the same triple echoed back with a zero flag. */
+    /**
+     * Sub-opcode 47/48 (select/load) and the reload-for-display call inside rename/move/swap's
+     * lock both send (bank, item) and expect the same triple echoed back with a zero flag.
+     */
     private fun selectPresetReply(payload: ByteArray): ByteArray =
         u32(0) + u32(readU32(payload, 0)) + u32(readU32(payload, 4))
 

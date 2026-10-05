@@ -15,9 +15,9 @@ import org.junit.Test
  * A program's category tag: decoding it out of the item record, and resolving ids to names.
  *
  * **The decode is checked against recordings with an independently known answer.** The `ngp`
- * fixture is `A:1:1` "White Grand"; the protocol notes capture a sub-opcode 51 write on that
- * *same* preset carrying category id 21 for "Grand". So the value asserted here comes from a
- * different message on a different day than the record it is read out of.
+ * fixture is `A:1:1` "White Grand", and a sub-opcode 51 write captured on that *same* preset
+ * carried category id 21 for "Grand". So the value asserted here comes from a different message
+ * on a different day than the record it is read out of.
  */
 class NordCategoryTest {
 
@@ -90,7 +90,7 @@ class NordCategoryTest {
         assertEquals("None", catalog.programCategories["17"])
     }
 
-    /** Both profiled instruments offer the same 21, and both relabel 23/24. */
+    /** The Grand and the Stage 2 EX offer the same 21, and both relabel 23/24. */
     @Test
     fun `each model resolves its own subset, overrides applied`() {
         for (id in listOf("nord_grand", "nord_stage_2ex")) {

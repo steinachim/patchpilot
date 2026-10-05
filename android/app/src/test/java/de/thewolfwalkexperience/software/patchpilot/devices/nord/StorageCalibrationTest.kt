@@ -113,7 +113,7 @@ class StorageCalibrationTest {
         assertEquals(1001, NordDevice.roundestInRange(1001, 1001))
     }
 
-    // ---- Item identity: the defect the first live run exposed ----
+    // ---- Item identity ----
 
     private fun itemRecord(bank: Int, item: Int, size: Int, tag: String = "nsmp", name: String = "x"): ByteArray {
         val nameBytes = name.toByteArray(Charsets.US_ASCII)
@@ -135,10 +135,10 @@ class StorageCalibrationTest {
 
     @Test
     fun `item identity ignores the address and follows the content`() {
-        // On a Nord Grand, two Samp Lib views list the
-        // same 235 samples at *different* (bank, item), so an address-keyed merge saw 258 items,
-        // inflated the byte total, and solved Samp Lib to 68,608 bytes - outside the
-        // 65,036.8 <= u < 67,746.7 bracket a delete had already pinned.
+        // On a Nord Grand, two Samp Lib views list the same 235 samples at *different*
+        // (bank, item), so an address-keyed merge would see 258 items, inflate the byte total and
+        // solve Samp Lib to 68,608 bytes - outside the 65,036.8 <= u < 67,746.7 bracket a delete
+        // pins.
         val device = NordFixtures.device(ReplayTransport(emptyList()), NordFixtures.GRAND_PROFILE)
 
         val here = itemRecord(0, 3, 952_640, name = "Vibes_DV mono 3.1")
@@ -404,9 +404,8 @@ class StorageCalibrationTest {
         // Two categories sharing an area are the same item set only if they list the *whole*
         // same set. Merging item by item instead loses real storage, and a Nord Grand shows it:
         // every Live slot holds a copy of the program last loaded into it, so all five are
-        // byte-identical to five programs. A per-item merge dropped them - 201 items counted
-        // where the instrument holds 206, and 16 units of overhead reported where the true
-        // figure is 11.
+        // byte-identical to five programs. A per-item merge drops them - 201 items counted where
+        // the instrument holds 206, and 16 units of overhead reported where the true figure is 11.
         val unit = 1024
         val shared = listOf(1000, 2000, 3000) // what Program holds
         val copies = listOf(1000, 2000) // Live, byte-identical to two of them
@@ -438,10 +437,9 @@ class StorageCalibrationTest {
 
     @Test
     fun `deriveBankLayout reports why it failed instead of just answering null`() = runTest {
-        // From the power-cut report: a null bank layout with nothing to say why, where every
-        // other probe explained itself. Swallowing the cause here robbed both callers of it -
-        // the device report wants it for its failure map, the connect path for its log - so this
-        // throws, and null now means only "the instrument answered with no children".
+        // Both callers want the cause - the device report for its failure map, the connect path
+        // for its log - so this throws, and null means only "the instrument answered with no
+        // children".
         val device = NordFixtures.device(ReplayTransport(emptyList(), thenSilent = true), NordFixtures.GRAND_PROFILE)
 
         val thrown = try {

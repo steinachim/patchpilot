@@ -10,7 +10,7 @@ import org.junit.Test
 /**
  * What counts as an instrument answering a scan's probe. The case that matters: a virtual or
  * loopback MIDI port sends the probe straight back, and an Axe-Fx III's reply prefix is the start
- * of its own probe, so a phone with four loopback ports listed four Axe-Fx IIIs.
+ * of its own probe, so a phone with four loopback ports would list four Axe-Fx IIIs.
  */
 class ProbeAnswerTest {
 

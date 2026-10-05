@@ -326,9 +326,9 @@ class Pro800InstrumentTest {
      * The whole sequence, in order: read the settings block, write the pointer back, confirm it by
      * reading again, then reload.
      *
-     * **Nothing channel-voice goes out at all.** That is the point of the change: a bank select and
-     * a program change need a channel, nothing acknowledges either, and the channel is not always
-     * knowable - so a mismatch was a Load button that silently did nothing.
+     * **Nothing channel-voice goes out at all.** A bank select and a program change would need a
+     * channel, nothing acknowledges either, and the channel is not always knowable - a mismatch
+     * would be a Load button that silently does nothing.
      */
     @Test
     fun `select writes the settings pointer and then reloads`() = runTest {
@@ -454,14 +454,13 @@ class Pro800InstrumentTest {
     }
 
     @Test
-    fun `the facets a Pro-800 has no equivalent for are absent`() = runTest {
+    fun `a Pro-800 offers a report, an editor and a transfer`() = runTest {
         val (pro800, _) = instrument(backgroundScope)
-        // The report facet *is* present: it is read-only, and it is where the test fixtures
-        // come from (Pro800Reporter).
+        // Read-only, and the source of the test fixtures (Pro800Reporter).
         assertTrue(pro800.report != null)
-        // The write path exists now, with its read-back verification and undo buffer.
+        // With read-back verification and an undo buffer.
         assertTrue(pro800.editor != null)
-        // Present from day one: its browser is built on this.
+        // The browser is built on it.
         assertTrue(pro800.transfer != null)
     }
 
@@ -472,8 +471,10 @@ class Pro800InstrumentTest {
         assertEquals("Fat Saw Bass", Pro800Program.fromEncoded(blob).name)
     }
 
-    /** The settings block shares this address space at 510; a browsable row that overwrites global
-     * settings is not a preset. */
+    /**
+     * The settings block shares this address space at 510; a browsable row that overwrites global
+     * settings is not a preset.
+     */
     @Test
     fun `an address beyond the program count is refused`() = runTest {
         val bigConfig = Pro800Config(bankCount = 6, slotsPerBank = 100)

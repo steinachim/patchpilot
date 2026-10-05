@@ -46,7 +46,7 @@ class Pro800DecodingTest {
     }
 
     @Test
-    fun `the undocumented replies match what the protocol notes record`() {
+    fun `the undocumented replies match what the instrument was measured to send`() {
         // 0x02 -> "03 00"
         val two = bytes(Pro800Fixtures.TYPE_02_REPLY)
         assertEquals(0x03, Pro800SysEx.typeOf(two))
@@ -61,8 +61,8 @@ class Pro800DecodingTest {
     /**
      * A value of 4 here is front-panel channel 3, which is wire channel 2.
      *
-     * Nothing depends on this any more - selection needs no channel - but it is still read and
-     * still reported in the device report, so it still has to decode correctly.
+     * Selection needs no channel, but the device report reports it, so it has to decode
+     * correctly.
      */
     @Test
     fun `the settings block yields the instrument's MIDI receive channel`() {
@@ -158,8 +158,10 @@ class Pro800DecodingTest {
         assertTrue(Pro800Program.fromEncoded(ByteArray(0)).isEmpty)
     }
 
-    /** Whatever the instrument sent, the codec must be able to hand back unchanged - the
-     * precondition for a write path that does not corrupt a preset it merely renamed. */
+    /**
+     * Whatever the instrument sent, the codec must be able to hand back unchanged - the
+     * precondition for a write path that does not corrupt a preset it merely renamed.
+     */
     @Test
     fun `every record survives a decode-encode round trip`() {
         listOf(
@@ -480,8 +482,10 @@ class Pro800DecodingTest {
         )
     }
 
-    /** No false positives: a record within its own version's declared limit must never be flagged
-     * as corrupt. */
+    /**
+     * No false positives: a record within its own version's declared limit must never be flagged
+     * as corrupt.
+     */
     @Test
     fun `every record is within the length its version declares`() {
         listOf(

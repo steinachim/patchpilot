@@ -131,13 +131,9 @@ class MotifXsInstrumentTest {
         private val pending = mutableMapOf<Triple<Int, Int, Int>, ByteArray>()
 
         /**
-         * Answers a host bulk dump the way the instrument does, which is **not** the way this
-         * fake used to.
-         *
-         * It applied every write immediately and acknowledged nothing. Both halves were wrong: a
-         * write is acknowledged and *held*, and only `11 00 00` stores it. The fake now holds
-         * writes in [pending] until a marker arrives, so a code path that forgets to commit fails
-         * here rather than only on real hardware.
+         * Answers a host bulk dump the way the instrument does: a write is acknowledged and
+         * *held*, and only `11 00 00` stores it. Writes wait in [pending] until a marker arrives,
+         * so a code path that forgets to commit fails here rather than only on real hardware.
          *
          * A refusal is silence - no acknowledgement and nothing buffered - for a write to a
          * read-only bank or a dump that fails its own checksum.
@@ -286,8 +282,7 @@ class MotifXsInstrumentTest {
             }
 
         private companion object {
-            /** `F0 43 60 02 F7` - the only acknowledgement ever observed, now known to mean
-             * "accepted", with silence meaning "refused". */
+            /** `F0 43 60 02 F7` - the only acknowledgement observed: "accepted", with silence meaning "refused". */
             val ACK = byteArrayOf(0xF0.toByte(), 0x43, 0x60, 0x02, 0xF7.toByte())
         }
     }
@@ -312,8 +307,10 @@ class MotifXsInstrumentTest {
         loadedVoiceName: String? = null,
         /** Answer the documented read with a Drum Voice's shape rather than a Normal Voice's. */
         drumShape: Boolean = false,
-        /** Whether the Universal Device Inquiry is answered. False models an instrument
-         * routing MIDI somewhere other than USB - it enumerates and opens, then says nothing. */
+        /**
+         * Whether the Universal Device Inquiry is answered. False models an instrument
+         * routing MIDI somewhere other than USB - it enumerates and opens, then says nothing.
+         */
         answersIdentity: Boolean = true,
         /**
          * Favorite marks per bank **address-mid byte**, one raw byte per slot.
@@ -323,8 +320,10 @@ class MotifXsInstrumentTest {
          * test that expects it to be read cannot be confused with one another.
          */
         favorites: Map<Int, ByteArray> = emptyMap(),
-        /** Marks whose reply is corrupted on every attempt, to exercise the retry and the
-         * per-bank failure isolation. */
+        /**
+         * Marks whose reply is corrupted on every attempt, to exercise the retry and the
+         * per-bank failure isolation.
+         */
         damagedFavorites: Set<Int> = emptySet(),
         /** The names the factory listing draws on; empty means no factory scope is offered. */
         factoryVoices: MotifXsFactoryVoices = MotifXsFactoryVoices(),
@@ -401,9 +400,9 @@ class MotifXsInstrumentTest {
                     emptyList()
                 }
 
-                // A selection is echoed back a set at a time - and the echo repeats what was
-                // *sent* rather than reporting what happened, which is the whole reason the mode
-                // has to be read separately.
+                // A selection is echoed back a set at a time. This fake echoes in every mode; the
+                // instrument answers only in Voice mode (see `selection is refused outside voice
+                // mode`).
                 MotifXsSysEx.typeOf(request) == MotifXsSysEx.TYPE_SELECT -> {
                     // The program set is the one that loads the voice into the edit buffer.
                     if ((request[7].toInt() and 0xFF) == MotifXsSysEx.SELECT_PROGRAM) {
@@ -515,10 +514,10 @@ class MotifXsInstrumentTest {
     /**
      * A dump that arrives truncated is **retried**, not reported as a permanent failure.
      *
-     * This is the defect a live 416-voice scan kept showing: a handful of slots read "arrived
-     * damaged" with *zero* retries logged against them. The well-formedness check sat after the
-     * exchange returned, so a corrupted dump satisfied the matcher, became "the reply", and the
-     * retry machinery never saw a fault that is transient by nature.
+     * A live 416-voice scan shows a handful of damaged dumps. The well-formedness check belongs
+     * inside the exchange's matcher: checked after the exchange returned, a corrupted dump would
+     * satisfy the matcher, become "the reply", and never reach the retry for a fault that is
+     * transient by nature.
      */
     @Test
     fun `a damaged dump is retried rather than failing the slot`() = runTest {
@@ -624,9 +623,11 @@ class MotifXsInstrumentTest {
         assertTrue("expected a timeout, got $refusal", refusal is InstrumentException.Timeout)
     }
 
-    /** A damaged dump costs its own voice and nothing else - a large scan is likely to hit at
+    /**
+     * A damaged dump costs its own voice and nothing else - a large scan is likely to hit at
      * least one corrupted dump along the way, so a walk that gives up on the first one would
-     * never finish. */
+     * never finish.
+     */
     @Test
     fun `a damaged dump fails one slot and the walk continues`() = runTest {
         val transport = FakeMidiTransport { request ->
@@ -679,7 +680,7 @@ class MotifXsInstrumentTest {
         }
     }
 
-    /** Read-only for now, and the nulls say so - see MotifXsInstrument's class doc. */
+    /** Only what was measured on the instrument is offered, and the nulls say so - see MotifXsInstrument's class doc. */
     @Test
     fun `only the facets something has actually observed are offered`() = runTest {
         val (motif, _) = instrument(backgroundScope)
@@ -744,9 +745,9 @@ class MotifXsInstrumentTest {
      * A selection outside Voice mode is refused, and the message says what to press.
      *
      * In Performance and Song mode the three parameter sets draw **no echo at all** and change
-     * nothing - not the Performance, not any part's voice assignment. Before this check the app
-     * waited out its timeout and reported that the instrument had not answered, which is true and
-     * tells a player nothing.
+     * nothing - not the Performance, not any part's voice assignment. Without this check the app
+     * would wait out its timeout and report that the instrument had not answered, which is true
+     * and tells a player nothing.
      */
     @Test
     fun `selection is refused outside voice mode`() = runTest {
@@ -882,7 +883,7 @@ class MotifXsInstrumentTest {
      *
      * The check exists to explain a silent failure, not to invent a new one. An older firmware
      * that ignores the mode request must still be usable, so a missing answer falls through to
-     * the selection - which then behaves exactly as it did before this check existed.
+     * the selection, which then succeeds or times out on its own.
      */
     @Test
     fun `an unreadable mode does not block a selection`() = runTest {
@@ -1439,9 +1440,8 @@ class MotifXsInstrumentTest {
      *
      * `index()` builds rows from dumps; the view model builds placeholder rows for unread slots
      * from `SlotLayout`'s [BankSpec]s. The browser groups by `bankLabel`, so if those two ever
-     * disagree - as they did the moment the layout started carrying panel labels while
-     * `readSlot` still carried catalog shorthand - every bank grows a second header and its rows
-     * split across both.
+     * disagree - the panel label on one side and the catalog shorthand on the other, say - every
+     * bank grows a second header and its rows split across both.
      */
     @Test
     fun `indexed rows and layout banks label a bank the same way`() = runTest {

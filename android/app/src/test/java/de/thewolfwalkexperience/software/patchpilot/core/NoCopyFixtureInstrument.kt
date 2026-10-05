@@ -14,8 +14,7 @@ import kotlinx.coroutines.flow.flow
  * categories, no display, emulated edits, and a slow index that arrives in batches - kept as a
  * **test fixture only**, never reachable from the app.
  *
- * Two things exercise it, and both are the reason it exists rather than being deleted alongside
- * `DemoInstrument`'s old `Profile.ANALOG`:
+ * Two things exercise it:
  *
  * - `InstrumentFacetTest` needs an instrument shaped differently from a Nord to check the
  *   screens' facet-gating - `report`/`transfer` absent, edits emulated, a batched index -
@@ -23,12 +22,8 @@ import kotlinx.coroutines.flow.flow
  * - `RegressionTesterTest` needs an instrument that declares no [EditOp.COPY], to exercise the
  *   debug menu's regression test's fallback path for a family that has no sandbox to work in.
  *
- * **Not modeled on either real family today.** Both the real `Pro800Editor` and the real
- * `MotifXsInstrument` gained `copyProgram` after this shape was first written as
- * `DemoInstrument.Profile.ANALOG`; nothing this app currently talks to actually lacks copy. The
- * name says what it is for rather than which instrument it mirrors, so it stays meaningful even
- * if that stops being true of every family, and doesn't need renaming if a fourth family without
- * copy shows up.
+ * **Not modeled on any real family.** Every family the app talks to has copy; the name says
+ * what the fixture is for rather than which instrument it mirrors.
  */
 class NoCopyFixtureInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor {
 
@@ -87,8 +82,7 @@ class NoCopyFixtureInstrument : Instrument, PresetBrowser, PresetSelector, Prese
         library.requireOccupied(address)
     }
 
-    /** Mirrors what a fire-and-forget instrument can honestly claim - see
-     * NordInstrument.confirmationFor for the contrast. */
+    /** What a fire-and-forget instrument can honestly claim, against the default "Selected" of `PresetSelector.confirmationFor`. */
     override fun confirmationFor(displayId: String) = "Sent $displayId."
 
     // ---- PresetEditor ----

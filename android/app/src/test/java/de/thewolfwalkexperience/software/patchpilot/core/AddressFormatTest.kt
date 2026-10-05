@@ -33,7 +33,7 @@ class AddressFormatTest {
     }
 
     @Test
-    fun `grouped format accepts leading zeros and lowercase, like the CLI does`() {
+    fun `grouped format accepts leading zeros, lowercase and surrounding spaces`() {
         assertEquals(SlotAddress(0, 0), grand.parse("a:01:01"))
         assertEquals(SlotAddress(1, 12), grand.parse(" B:3:3 "))
     }

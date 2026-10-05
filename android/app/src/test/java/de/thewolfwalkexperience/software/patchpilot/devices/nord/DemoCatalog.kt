@@ -14,8 +14,10 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 class DemoCatalog {
     data class Slot(val bank: Int, val item: Int)
 
-    /** Category name -> (bank, item) -> patch name, insertion order preserved for both, since
-     * that order is what [DemoUsbTransport] hands out as root-list/cursor-walk indexes. */
+    /**
+     * Category name -> (bank, item) -> patch name, insertion order preserved for both, since
+     * that order is what [DemoUsbTransport] hands out as root-list/cursor-walk indexes.
+     */
     private val categories: LinkedHashMap<String, LinkedHashMap<Slot, String>> = linkedMapOf(
         "Program" to programBank(),
         "Piano" to singleBank(

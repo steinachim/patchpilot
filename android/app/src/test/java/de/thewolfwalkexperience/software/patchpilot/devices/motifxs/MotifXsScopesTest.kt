@@ -119,8 +119,8 @@ class MotifXsScopesTest {
         }
         return MotifXsInstrument(
             // A short timeout and no retry: two of the tests below deliberately make the fake go
-            // silent or answer damage, and each of those otherwise costs the full budget times
-            // the retry count in real time.
+            // silent or answer damage, and each of those otherwise waits out the full budget times
+            // the retry count.
             SysExExchange(transport, scope, defaultTimeout = 20.milliseconds, retries = 0),
             config,
             blanks,

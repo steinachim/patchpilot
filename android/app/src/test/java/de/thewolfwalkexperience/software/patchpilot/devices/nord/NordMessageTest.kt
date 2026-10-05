@@ -37,7 +37,7 @@ class NordMessageTest {
         assertEquals(data.size - MESSAGE_HEADER_LEN - MESSAGE_CRC_LEN, msg.payload.size)
     }
 
-    // PROTOCOL_FILE_TRANSFER at PROTOCOL_VERSION_FILE_TRANSFER (Grand), SELECT_PRESET,
+    // PROTOCOL_FILE_TRANSFER at the Grand's file-transfer version, SELECT_PRESET,
     // bank=1 item=6 ("B:2:2")
     @Test
     fun `build select preset request matches the wire format`() {

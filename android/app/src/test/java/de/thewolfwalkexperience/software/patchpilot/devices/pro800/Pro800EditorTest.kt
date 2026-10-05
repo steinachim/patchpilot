@@ -162,7 +162,7 @@ class Pro800EditorTest {
 
         assertEquals("Warm Pad", fake.nameAt(1))
         // Format 109 must stay 109: the reference implementation silently upgrades a short record
-        // to 111 when it resizes one, which converts a preset nobody asked to convert (§11.7).
+        // to 111 when it resizes one, which converts a preset nobody asked to convert.
         assertEquals(109, Pro800Program.fromEncoded(fake.contentsOf(1)!!).version)
     }
 

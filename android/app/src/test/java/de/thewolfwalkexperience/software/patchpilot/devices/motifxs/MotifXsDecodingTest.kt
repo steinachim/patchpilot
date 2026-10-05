@@ -56,9 +56,8 @@ class MotifXsDecodingTest {
     /**
      * The framer must be configured for this instrument, not left on its default.
      *
-     * This is the regression test for a bug that would have shipped: the default cap is 4096
-     * bytes, sized for a Pro-800's 210-byte program, and every drum voice exceeds it. The failure
-     * mode is silent - the message is dropped, the read times out, and the DRUM bank simply lists
+     * The default cap is 4096 bytes, sized for a Pro-800's 210-byte program, and every drum voice
+     * exceeds it. The failure mode is silent - the message is dropped, the read times out, and the DRUM bank simply lists
      * as 32 unreadable slots.
      */
     @Test
@@ -253,8 +252,10 @@ class MotifXsDecodingTest {
         assertNotEquals(correct, misread)
     }
 
-    /** [MotifXsVoice.nameOf]'s scan, applied to an already-unpacked stream, so a test can ask
-     * what a *differently* unpacked stream would have named the voice. */
+    /**
+     * [MotifXsVoice.nameOf]'s scan, applied to an already-unpacked stream, so a test can ask
+     * what a *differently* unpacked stream would have named the voice.
+     */
     private fun readNameAt(dense: ByteArray): String? {
         val start = MotifXsVoice.nameStart(dense) ?: return null
         val text = StringBuilder()
@@ -268,8 +269,10 @@ class MotifXsDecodingTest {
         return text.toString().trim().ifEmpty { null }
     }
 
-    /** MSB packing, checked on a group whose high bits are known: 7 bytes per 8, high bit set by
-     * the leading byte's bit j. */
+    /**
+     * MSB packing, checked on a group whose high bits are known: 7 bytes per 8, high bit set by
+     * the leading byte's bit j.
+     */
     @Test
     fun `unpack lifts each group's high bits out of its leading byte`() {
         val packed = byteArrayOf(0b0000_0101, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07)
@@ -281,9 +284,11 @@ class MotifXsDecodingTest {
         assertEquals(0x04.toByte(), dense[3])
     }
 
-    /** A truncated group must not run off the end. This shape does not occur in a well-formed
+    /**
+     * A truncated group must not run off the end. This shape does not occur in a well-formed
      * dump, but a dropped USB frame produces exactly this and would otherwise index past the
-     * array. */
+     * array.
+     */
     @Test
     fun `unpack tolerates a group cut short`() {
         val dense = MotifXsVoice.unpack(byteArrayOf(0b0000_0010, 0x41, 0x42))

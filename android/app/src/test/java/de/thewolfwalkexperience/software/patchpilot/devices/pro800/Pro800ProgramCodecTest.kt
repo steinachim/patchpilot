@@ -66,8 +66,9 @@ class Pro800ProgramCodecTest {
         assertEquals(6, Pro800ProgramCodec.denseIndexOf(7))
         assertEquals(7, Pro800ProgramCodec.denseIndexOf(9))
         assertEquals(4, Pro800ProgramCodec.denseIndexOf(5))
-        // The name field's start, per Pro800ProgramConstants.h (the markdown says 173; see
-        // Pro800ProgramFields.NAME_DENSE_OFFSET for why the header wins).
+        // The name field's start: raw 172, as the reference implementation's
+        // Pro800ProgramConstants.h gives it. Its markdown says 173; a dumped program's name
+        // decodes at 172 (Pro800DecodingTest).
         assertEquals(150, Pro800ProgramCodec.denseIndexOf(172))
     }
 
@@ -112,8 +113,10 @@ class Pro800ProgramCodecTest {
         assertEquals(0xBEEF, Pro800ProgramCodec.readValue(dense, 2, 2))
     }
 
-    /** A preset name is device-supplied text rendered straight into a list row, so control bytes
-     * are stripped rather than passed through. */
+    /**
+     * A preset name is device-supplied text rendered straight into a list row, so control bytes
+     * are stripped rather than passed through.
+     */
     @Test
     fun `strings drop NULs and other control bytes wherever they fall`() {
         val dense = "Fat Saw\u0000Bass\u0000\u0000".toByteArray(Charsets.US_ASCII)

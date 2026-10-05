@@ -14,7 +14,6 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -58,8 +57,10 @@ class SysExExchangeTest {
         assertTrue(told is InstrumentException.TransportLost)
     }
 
-    /** A reply delivered in pieces is exactly what a real port does; the framer underneath has to
-     * make that invisible here. */
+    /**
+     * A reply delivered in pieces is exactly what a real port does; the framer underneath has to
+     * make that invisible here.
+     */
     @Test
     fun `a reply split across chunks still satisfies an exchange`() = runTest {
         val whole = dump(3)
@@ -121,8 +122,10 @@ class SysExExchangeTest {
         assertTrue(thrown!!.message!!.contains("reading preset A00"))
     }
 
-    /** On a stream transport a single dropped message is normal; failing a 400-slot scan on the
-     * first hiccup would make the feature unusable. */
+    /**
+     * On a stream transport a single dropped message is normal; failing a 400-slot scan on the
+     * first hiccup would make the feature unusable.
+     */
     @Test
     fun `a dropped reply is retried`() = runTest {
         var attempt = 0
@@ -139,8 +142,10 @@ class SysExExchangeTest {
         assertEquals(2, transport.sent.size)
     }
 
-    /** One chunk of a multi-message write must reach the instrument once, whatever the exchange's
-     * own retry policy: a re-send would put the chunk into the transfer twice. */
+    /**
+     * One chunk of a multi-message write must reach the instrument once, whatever the exchange's
+     * own retry policy: a re-send would put the chunk into the transfer twice.
+     */
     @Test
     fun `a per-call retries of zero never re-sends`() = runTest {
         var attempt = 0
@@ -240,14 +245,15 @@ class SysExExchangeTest {
     }
 
     /**
-     * **The one that protects the instrument.** A Motif XS left mid-sequence sits on *receiving
-     * midi bulk data* until it is completed or power-cycled, so a cancelled write must still put
-     * every block on the wire - the footer above all, since that is what ends the transaction.
+     * **The one that protects the instrument.** A Motif XS left mid-sequence shows *receiving
+     * midi bulk data*. The unit measured recovered on its own and discarded the change; whether
+     * every unit does is unconfirmed, so a cancelled write must still put every block on the wire
+     * - the footer above all, since that is what ends the transaction.
      *
-     * Before `exchangeAfterAll` ran its send loop under `NonCancellable`, the `delay(gap)` between
-     * blocks was a cancellation point on every iteration: tapping back during a rename abandoned
-     * the sequence at ~15ms granularity and left the instrument stuck. This drives exactly that -
-     * cancel the caller a couple of blocks in - and asserts the whole sequence went out anyway.
+     * The `delay(gap)` between blocks is a cancellation point on every iteration, so outside
+     * `NonCancellable` tapping back during a rename would abandon the sequence at ~15 ms
+     * granularity. This cancels the caller a couple of blocks in and asserts the whole sequence
+     * went out anyway.
      */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test

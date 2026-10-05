@@ -21,7 +21,7 @@ import org.junit.Test
  * The USB-MIDI event-packet codec, which is what stands between this app and a Motif XS.
  *
  * Every expected byte string here matches the packing a real instrument accepts and answers to -
- * the same standard the two `SysExFramer` implementations are held to. Packing and unpacking have
+ * the same standard `SysExFramer` is held to. Packing and unpacking have
  * to agree exactly with what the instrument actually expects on the wire.
  */
 class UsbMidiBulkTransportTest {

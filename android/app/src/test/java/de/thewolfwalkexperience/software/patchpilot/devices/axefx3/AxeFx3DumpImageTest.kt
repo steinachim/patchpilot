@@ -20,7 +20,7 @@ class AxeFx3DumpImageTest {
         assertEquals(16, image.chunks.size)
         assertTrue(image.chunks.all { it.size == AxeFx3SysEx.DUMP_CHUNK_MESSAGE_BYTES })
         assertEquals(listOf(0x79, 0, 0, 0), image.end.copyOfRange(5, 9).map { it.toInt() and 0xFF })
-        // Almost all fill: 18,432 bytes of 0xFF among the 43,008 (PROTOCOL_AxeFX3.md §8.3).
+        // Almost all fill: 18,432 bytes of 0xFF among the 43,008.
         assertEquals(43_008, image.decodedData.size)
         assertEquals(18_432, image.decodedData.count { it == 0xFF.toByte() })
     }

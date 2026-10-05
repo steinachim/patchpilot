@@ -79,7 +79,7 @@ class CachingBrowserTest {
     /**
      * A run with an unreadable address is not cached.
      *
-     * Today a transient failure is retried on the next reconnect. Caching a run that contained one
+     * A transient failure is retried on the next reconnect. Caching a run that contained one
      * would freeze it for the session - and a missing address is indistinguishable from an empty
      * slot, since `PresetSlot.isEmpty` is `name == null`.
      */

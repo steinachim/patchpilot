@@ -18,8 +18,10 @@ import kotlinx.coroutines.flow.asSharedFlow
  * the framing bugs live.
  */
 class FakeMidiTransport(
-    /** Raised by a test that delivers a large reply in many small pieces, as a platform handing
-     * over one USB-MIDI event per callback does. */
+    /**
+     * Raised by a test that delivers a large reply in many small pieces, as a platform handing
+     * over one USB-MIDI event per callback does.
+     */
     bufferCapacity: Int = 256,
     private val respond: (request: ByteArray) -> List<ByteArray>,
 ) : MidiTransport {

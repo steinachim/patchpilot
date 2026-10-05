@@ -15,7 +15,7 @@ import org.junit.Test
  * catalog entry (see that function's doc). These tests pin the two encoding details a plain
  * "it compiles" check wouldn't catch: [DeviceProfile.maxBankLetter] must serialize as a bare JSON
  * string (the schema's `^[A-Z]$` pattern, not a number), and the whole thing must round-trip
- * through the same [Json] config [InstrumentRegistry] uses to read the real catalog file.
+ * through [Json] with unknown keys ignored, as the real catalog file is read.
  */
 class DeviceProfileSerializationTest {
     private val json = Json {
@@ -79,8 +79,8 @@ class DeviceProfileSerializationTest {
     }
 
     /**
-     * And an entry written before the field existed must still load, falling back to the display
-     * width - which is what every instrument measured so far turns out to store.
+     * An entry without the field still loads, falling back to the display width - which is what
+     * every instrument measured stores.
      */
     @Test
     fun `an entry without maxProgramNameLen falls back to the display width`() {

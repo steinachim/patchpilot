@@ -144,10 +144,9 @@ class ProgramRowsTest {
      * **Bank labels come back in device order, not alphabetical order.**
      *
      * `distinct()` already preserves the order the rows arrive in, which is the instrument's own;
-     * sorting them threw that away. It was invisible for as long as every instrument's labels
-     * happened to sort into device order - "A".."D", "USER 1".."USER DR" - and stops being
-     * invisible the moment a bank is called "PRE1" and another "PRE DR", because a space sorts
-     * before a digit. The rail would then offer GM, GM DR, PRE DR, PRE1..PRE8 against a list
+     * sorting would throw that away. That is invisible while every instrument's labels sort into
+     * device order - "A".."D", "USER 1".."USER DR" - and visible once a bank is called "PRE1" and
+     * another "PRE DR", because a space sorts before a digit. The rail would then offer GM, GM DR, PRE DR, PRE1..PRE8 against a list
      * running PRE1..PRE8, GM, PRE DR, GM DR: taps still land, since the jump is a lookup by
      * label, but dragging the rail scrubs through them in order and jumps back and forth.
      */

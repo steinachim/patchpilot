@@ -143,7 +143,7 @@ class NordDeviceProtocolTest {
         override fun close() {}
     }
 
-    /** The tail of a content-database reply a killed session never read - what X9 left queued. */
+    /** The tail of a content-database reply a killed session never read, as a force-stop mid-report leaves it queued. */
     private fun staleFileTransferReply(): ByteArray =
         buildMessage(NordDevice.PROTOCOL_FILE_TRANSFER, 10, 31, ByteArray(390))
 
@@ -270,9 +270,8 @@ class NordDeviceProtocolTest {
     @Test
     fun `a Native category's 0xFFFE capacity parses instead of failing the reply`() {
         // A Nord Stage 2 EX reports 0xFFFE for every "(Native)" category - a documented
-        // sentinel, not corruption. Vetting it at parse
-        // time threw the whole child list away, which cost three of that instrument's ten
-        // categories their bank counts and showed up as three failures in a device report.
+        // sentinel, not corruption. Vetted at parse time it would throw the whole child list
+        // away, costing three of that instrument's ten categories their bank counts.
         val children = NordDevice.parseCategoryChildren(childListPayload(listOf("Bank 1" to 65534)))
 
         assertEquals(1, children.size)
@@ -484,7 +483,7 @@ class NordDeviceProtocolTest {
     @Test
     fun `an unknown device parses a real root list with nothing declared`() {
         // The case detection helps most: nothing declared, no guesses, still correct. No profile
-        // declares a trailer length any more, so this is the only way it can work at all.
+        // declares a trailer length, so this is the only way it works at all.
         val device = NordFixtures.device(
             ReplayTransport(emptyList()),
             DeviceProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
@@ -687,10 +686,9 @@ class NordDeviceProtocolTest {
         // Every bank reports itself exhausted, so the cursor yields nothing at all while
         // the count claims 3. Only a count of *zero* is treated as uninformative.
         //
-        // Running out of banks with the count unsatisfied now consults the category's
-        // child list once, so that reply is part of the expected traffic: it reports the
-        // same 16 banks the walk already covered, which raises nothing and leaves the
-        // disagreement to be reported as before.
+        // Running out of banks with the count unsatisfied consults the category's child list
+        // once, so that reply is part of the expected traffic: it reports the same 16 banks the
+        // walk already covered, which raises nothing and leaves the disagreement to be reported.
         val exhausted = uint32BE(1) + uint32BE(0) + uint32BE(0)
         val responses = listOf(
             3 to childListPayload(List(16) { "Bank" to 25 }), // the Grand's 16 banks, A-P
@@ -781,9 +779,9 @@ class NordDeviceProtocolTest {
     @Test
     fun `fetchCategoryItems does not probe a one-bank category past its only bank`() = runTest {
         // The gain the bound buys beyond correctness: a category reporting one child is
-        // walked as one bank. Before, `Live` and `Settings` - one bank each, and an item
-        // count of 0 - were only stopped by *finding* bank 1 empty, which cost a cursor
-        // request to a bank the instrument does not have.
+        // walked as one bank. Without it, `Live` and `Settings` - one bank each, and an item
+        // count of 0 - would only stop on *finding* bank 1 empty, a cursor request to a bank
+        // the instrument does not have.
         val itemPayload = parseMessage(NordFixtures.NGP_RECORD_RESPONSE).payload
         val responses = listOf(
             3 to childListPayload(listOf("Live" to 5)),
@@ -805,8 +803,8 @@ class NordDeviceProtocolTest {
     }
 
     // ---- selectPreset / moveProgram ----
-    // Neither sends UiSubOp.ENTER_STATUS_MODE first - only
-    // SELECT_CATEGORY locks the instrument, so only the trailing unlock (sub-op 6/7) is needed.
+    // Only SELECT_CATEGORY locks the instrument, so the trailing unlock (sub-op 6/7) is all
+    // either needs.
 
     @Test
     fun `selectPreset succeeds when the device echoes the request`() = runTest {
@@ -1172,8 +1170,9 @@ class NordDeviceProtocolTest {
     }
 
     /**
-     * Needed on this side regardless of what the instrument does: READ_BUFSIZE is 8 KB here and
-     * a READ_ITEM_DATA reply can be 32 KB, so a large reply always spans reads.
+     * Needed on this side regardless of what the instrument does: READ_BUFSIZE is 8 KB here, and
+     * a reply can be larger (an item-data read answers with up to 65,532 bytes), so a large reply
+     * spans reads.
      */
     @Test
     fun `a message split across reads is reassembled`() = runTest {
@@ -1224,9 +1223,9 @@ class NordDeviceProtocolTest {
     }
 
     /**
-     * A device answering only with zero-length transfers makes no progress, and [readReply] used to
-     * wait on that forever - in a loop with no suspension point, so neither cancellation nor a
-     * surrounding timeout could end it. One IO thread stranded per reconnect.
+     * A device answering only with zero-length transfers makes no progress. Waited on in a loop
+     * with no suspension point, neither cancellation nor a surrounding timeout could end it, and
+     * every reconnect would strand one IO thread.
      */
     @Test
     fun `a device that only returns empty reads is given up on`() = runTest {
@@ -1269,9 +1268,9 @@ class NordDeviceProtocolTest {
     }
 
     /**
-     * The name's *length* was checked; its *contents* were not. A newline renders as two rows in
-     * the browser the user picks delete targets from, and NUL or ESC reaches the shared report and
-     * logcat. The equivalent rule was already enforced for category names and USB product strings.
+     * A name's *contents* are checked, not only its length. A newline renders as two rows in the
+     * browser the user picks delete targets from, and NUL or ESC reaches the shared report and
+     * logcat. Category names and USB product strings follow the same rule.
      */
     @Test
     fun `control characters in an item name are stripped`() = runTest {

@@ -19,8 +19,8 @@ object NordFixtures {
      * A [NordDevice] with the protocol version already set, as `connect()` would have left it.
      *
      * Tests drive individual operations against canned bytes rather than running `connect()`, but
-     * every content-database request needs the version in its header, and no profile declares one
-     * any more. This supplies the version the matching instrument really reports.
+     * every content-database request needs the version in its header, and no profile declares
+     * one. This supplies the version the matching instrument reports.
      */
     fun device(
         transport: de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport,

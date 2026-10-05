@@ -201,13 +201,13 @@ class MotifXsFactoryVoicesTest {
     /**
      * One value pinned against something read off real hardware.
      *
-     * `PRE1 - A:04` reads `Glasgow` on the instrument's own panel; it is the worked example the
-     * protocol notes use for voice-name decoding. It is a single point of contact between this
-     * transcribed table and a thing somebody actually saw, which is worth more than its size:
-     * a table generated from the wrong spreadsheet, or off by one slot, fails here.
+     * `PRE1 - A:04` reads `Glasgow` on the instrument's own panel. It is a single point of
+     * contact between this transcribed table and a thing somebody actually saw, which is worth
+     * more than its size: a table generated from the wrong spreadsheet, or off by one slot, fails
+     * here.
      */
     @Test
-    fun `PRE1 slot 4 is the voice the protocol notes recorded from hardware`() {
+    fun `PRE1 slot 4 is the voice read off the instrument's panel`() {
         assertEquals("Glasgow", table.name("PRE1", 3))
     }
 

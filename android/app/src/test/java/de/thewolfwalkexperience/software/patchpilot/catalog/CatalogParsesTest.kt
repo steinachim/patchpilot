@@ -41,13 +41,17 @@ class CatalogParsesTest {
     private fun catalog(name: String): FamilyCatalog =
         json.decodeFromString(FamilyCatalog.serializer(), catalogDir.resolve(name).readText())
 
-    /** The XS6 entry specifically - the family's other tests below are shape checks shared by
-     * XS6/7/8, and pin their assertions to the model that was actually captured. */
+    /**
+     * The XS6 entry specifically - the family's other tests below are shape checks shared by
+     * XS6/7/8, and pin their assertions to the model that was actually captured.
+     */
     private fun motifXs6(): InstrumentDescriptor =
         catalog("yamaha_motif_xs.json").devices.single { it.id == "yamaha_motif_xs6" }
 
-    /** XS6's resolved config - banks included, whichever of the device entry or the catalog's
-     * shared familyConfig they actually came from. See [resolvedConfig]. */
+    /**
+     * XS6's resolved config - banks included, whichever of the device entry or the catalog's
+     * shared familyConfig they actually came from. See [resolvedConfig].
+     */
     private fun motifXs6Config(): MotifXsConfig {
         val catalog = catalog("yamaha_motif_xs.json")
         val descriptor = catalog.devices.single { it.id == "yamaha_motif_xs6" }
@@ -317,8 +321,10 @@ class CatalogParsesTest {
         }
     }
 
-    /** A probe must be a read-only enquiry. Every family uses a universal or documented identity
-     * query for exactly the reason in `MidiDiscovery`'s class doc. */
+    /**
+     * A probe must be a read-only enquiry. Every family uses a universal or documented identity
+     * query for exactly the reason in `MidiDiscovery`'s class doc.
+     */
     @Test
     fun `every MIDI probe is a single well-formed SysEx message`() {
         for (name in listOf("behringer_pro800.json", "yamaha_motif_xs.json", "fractal_axefx3.json")) {

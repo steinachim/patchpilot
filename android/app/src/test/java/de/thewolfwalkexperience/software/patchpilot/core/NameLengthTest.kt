@@ -14,15 +14,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Every family that offers rename must say how long a name may be.
+ * A family that offers rename says how long a name may be.
  *
  * The rename field caps input at [PresetEditor.maxNameLength], so a family that leaves it null
  * gets **no cap and no character counter** - and the failure that produces is the quiet kind:
  * these instruments accept an over-long name, store a prefix of it, and report success. The user
- * sees a rename that worked and a preset that is called something else.
- *
- * A Nord went two years without one for exactly that reason - nothing failed, so nothing pointed
- * at it. This test is what makes the omission loud for the next family.
+ * sees a rename that worked and a preset that is called something else. Nothing fails, so
+ * nothing points at it; this test checks demo mode and the families' declared limits.
  */
 class NameLengthTest {
 

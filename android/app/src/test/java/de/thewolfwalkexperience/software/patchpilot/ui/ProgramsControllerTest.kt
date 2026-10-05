@@ -29,9 +29,8 @@ import org.junit.Test
  * Every one of these is a rule the screen's own comments state as deliberate - a delete dialog
  * dismissed before the work rather than after it, a copy picker that closes only on success, a
  * blocked operation becoming answerable only when the family offers both a remedy and a retry.
- * They were unreachable without standing up a whole composition, so none of them was covered;
  * [ProgramsController] taking [ProgramsOperations] and [StringResolver] rather than a ViewModel
- * and a Context is what makes them ordinary functions to call.
+ * and a Context is what makes them ordinary functions to call, with no composition.
  */
 class ProgramsControllerTest {
 
