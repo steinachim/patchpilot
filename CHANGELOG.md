@@ -3,8 +3,8 @@
 ## Next release
 
 ### Added
-- The Fractal Audio Axe-Fx III is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted. A Mark II is recognized and lists all 1,024 presets, but has not been tested yet.
-- The Moog Subsequent 37 is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted, and their categories shown and set. Reading its preset list takes about 2½ minutes, the instrument's own transfer time.
+- The Fractal Audio Axe-Fx III is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted. Every operation was verified on a Mark I, but the app itself has not yet been run on one. A Mark II is recognized and lists all 1,024 presets, but has not been tested yet.
+- The Moog Subsequent 37 is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted, and their categories shown and set. Reading its preset list takes about 2½ minutes, the instrument's own transfer time. Every operation was verified on a unit, but the app itself has not yet been run on one.
 - An instrument can show a notice when it connects, with a “Don't show this again” option; Settings → “Show Hidden Messages Again” brings hidden notices back.
 
 ### Changed

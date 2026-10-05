@@ -9,7 +9,8 @@ On `dev`:
 1. In `android/app/build.gradle.kts`, bump `versionName` and increase `versionCode` by one. `versionCode` must never go down or repeat: Play rejects the upload, and F-Droid pins each build to it.
 2. In `CHANGELOG.md`, rename the "Next release" heading to the version and start a fresh "Next release" section above it.
 3. Add `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`, at most 500 characters (Play's limit), condensed from the changelog section.
-4. Refresh the screenshots in `fastlane/metadata/android/en-US/images/` if the UI changed. Play accepts PNG or JPEG without alpha, each side 320 to 3840 px, longest side at most twice the shortest.
+4. Check `fastlane/metadata/android/en-US/full_description.txt` and `short_description.txt` against the release: every supported instrument listed with its status as README states it, and every manufacturer named in the disclaimer.
+5. Refresh the screenshots in `fastlane/metadata/android/en-US/images/` if the UI changed. Play accepts PNG or JPEG without alpha, each side 320 to 3840 px, longest side at most twice the shortest.
 
 ## 2. Build and check
 
