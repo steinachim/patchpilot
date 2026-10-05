@@ -17,9 +17,10 @@ import kotlinx.coroutines.flow.flow
  *
  * A cached index is one that finished cleanly: on a hit the cached slots are replayed without a
  * round trip; on a miss the delegate runs unchanged and the result is cached only if it reached
- * [IndexUpdate.Complete] with no [IndexUpdate.Failed]. A partial run is not cached, because a
- * missing address is indistinguishable from an empty slot (`PresetSlot.isEmpty` is
- * `name == null`), and a transient failure is retried on the next reconnect instead.
+ * [IndexUpdate.Complete] with no [IndexUpdate.Failed], and with no edit written through while it
+ * ran. A partial run is not cached, because a missing address is indistinguishable from an empty
+ * slot (`PresetSlot.isEmpty` is `name == null`), and a transient failure is retried on the next
+ * reconnect instead. A run an edit overlapped may hold the row from before the edit.
  */
 class CachingBrowser(
     private val delegate: PresetBrowser,
@@ -48,6 +49,8 @@ class CachingBrowser(
         val collected = mutableListOf<PresetSlot>()
         var anyFailed = false
         var completed = false
+        // Read before the first request, so an edit written through mid-listing is seen.
+        val version = cache.version(key)
 
         delegate.index(scope).collect { update ->
             when (update) {
@@ -60,7 +63,7 @@ class CachingBrowser(
         }
 
         // Cancellation throws out of collect above, so an interrupted scan never reaches here.
-        if (completed && !anyFailed) cache.put(key, collected)
+        if (completed && !anyFailed) cache.putIfUnchanged(key, collected, version)
     }
 
     /** Re-reads one slot and writes it through to the cache. A caller refreshes every address an edit touched; move and swap touch two. */

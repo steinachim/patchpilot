@@ -8,9 +8,12 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -218,5 +221,34 @@ class CachingBrowserTest {
         cache.update(key, slot(0, 0, "One"))
         assertFalse(cache.holds(key))
         assertNull(cache.get(key))
+    }
+
+    /**
+     * An edit written through while the listing is still collecting keeps that run out of the
+     * cache: the listing may already hold the row from before the edit, and replayed from here
+     * after the next resume, the edit would look undone.
+     */
+    @Test
+    fun `a listing an edit overlapped is not cached`() = runTest {
+        val cache = PresetIndexCache()
+        val midway = CompletableDeferred<Unit>()
+        val delegate = object : PresetBrowser {
+            override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
+                emit(IndexUpdate.Slots(listOf(slot(0, 0, "Before"))))
+                midway.await()
+                emit(IndexUpdate.Complete)
+            }
+
+            override suspend fun refresh(address: SlotAddress) = slot(address.bank, address.slot, "After")
+        }
+        val browser = CachingBrowser(delegate, cache, key)
+
+        val listing = async { browser.index().toList() }
+        runCurrent()
+        browser.refresh(SlotAddress(0, 0))
+        midway.complete(Unit)
+        listing.await()
+
+        assertFalse(cache.holds(key))
     }
 }

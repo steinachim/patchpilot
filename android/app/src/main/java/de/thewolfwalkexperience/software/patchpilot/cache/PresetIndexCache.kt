@@ -61,6 +61,9 @@ class PresetIndexCache {
 
     private val lock = Any()
 
+    /** Bumped by every write-through and invalidation, so a listing that ran across one can tell - see [putIfUnchanged]. */
+    private val versions = mutableMapOf<CacheKey, Int>()
+
     /**
      * The cached index, or null if there is none. Null and empty mean different things: an
      * instrument with nothing stored has a legitimately empty *completed* index.
@@ -76,6 +79,21 @@ class PresetIndexCache {
         }
     }
 
+    /** Where [key]'s writes stand; a listing reads it as it starts - see [putIfUnchanged]. */
+    fun version(key: CacheKey): Int = synchronized(lock) { versions[key] ?: 0 }
+
+    /**
+     * [put], unless [key] was written through or invalidated since [version]. An edit made while
+     * the listing was collecting may have changed a row the listing had already read, which would
+     * then replay stale from here. Skipping costs the next listing a re-read; the listing on screen
+     * was already corrected by the edit's own re-read. Returns whether it stored.
+     */
+    fun putIfUnchanged(key: CacheKey, slots: List<PresetSlot>, version: Int): Boolean = synchronized(lock) {
+        if ((versions[key] ?: 0) != version) return false
+        put(key, slots)
+        true
+    }
+
     /**
      * Replaces one slot, if this instrument has a cached index at all; never creates an entry,
      * since a cache holding one slot would claim to be a completed index.
@@ -85,6 +103,7 @@ class PresetIndexCache {
      * the listing never had, and appended it would replay under a second bank header.
      */
     fun update(key: CacheKey, slot: PresetSlot): Unit = synchronized(lock) {
+        bump(key)
         val index = entries[key] ?: return
         if (slot.address in index) {
             index[slot.address] = slot
@@ -105,8 +124,13 @@ class PresetIndexCache {
 
     /** Forgets one instrument's index, so the next listing re-reads it from the hardware. */
     fun invalidate(key: CacheKey) = synchronized(lock) {
+        bump(key)
         entries.remove(key)
         Unit
+    }
+
+    private fun bump(key: CacheKey) {
+        versions[key] = (versions[key] ?: 0) + 1
     }
 
     /** Whether [key] has a cached index. */
