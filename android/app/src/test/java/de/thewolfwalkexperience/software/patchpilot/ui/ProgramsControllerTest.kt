@@ -68,9 +68,8 @@ class ProgramsControllerTest {
 
         override fun launchEdit(block: suspend () -> Unit): Job = testScope.launch { block() }
 
-        override fun reloadIndex(): Int? {
+        override fun reloadAfterEdit() {
             reloads++
-            return null
         }
 
         private fun <T> answer(call: String, value: T): T {
@@ -373,6 +372,20 @@ class ProgramsControllerTest {
             listOf("move(A1->A2,empty=true)", "move(A1->A3,empty=false)"),
             ops.calls,
         )
+    }
+
+    /** Taken as empty, a drop onto a slot that could not be read would move over whatever it holds. */
+    @Test
+    fun `dropping onto an unreadable row is refused and says why`() = runTest {
+        val (controller, ops) = controller()
+        val source = slot(0, 1)
+        val unreadable = slot(0, 2)
+
+        controller.onSwapDropped(source, unreadable, setOf(source.address), setOf(unreadable.address))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(emptyList<String>(), ops.calls)
+        assertTrue(controller.operationError != null)
     }
 
     @Test

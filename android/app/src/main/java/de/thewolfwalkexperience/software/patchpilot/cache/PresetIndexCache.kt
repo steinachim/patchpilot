@@ -91,7 +91,7 @@ class PresetIndexCache {
         val reordered = LinkedHashMap<SlotAddress, PresetSlot>(index.size + 1)
         var inserted = false
         for ((address, cached) in index) {
-            if (!inserted && ADDRESS_ORDER.compare(slot.address, address) < 0) {
+            if (!inserted && SlotAddress.DEVICE_ORDER.compare(slot.address, address) < 0) {
                 reordered[slot.address] = slot
                 inserted = true
             }
@@ -110,9 +110,4 @@ class PresetIndexCache {
     /** Whether [key] has a cached index. */
     @VisibleForTesting
     fun holds(key: CacheKey): Boolean = synchronized(lock) { entries.containsKey(key) }
-
-    private companion object {
-        /** Device order on every family: bank first, then slot within it. */
-        val ADDRESS_ORDER: Comparator<SlotAddress> = compareBy({ it.bank }, { it.slot })
-    }
 }

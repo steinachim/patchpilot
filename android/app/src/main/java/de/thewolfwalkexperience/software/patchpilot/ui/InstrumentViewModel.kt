@@ -197,7 +197,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
 
     override fun setScope(scope: PresetScope) = listings.setScope(scope)
 
-    override fun reloadIndex(): Int? = listings.reload()
+    override fun reloadAfterEdit() = listings.reloadAfterEdit()
 
     // ---- Actions, each routed through a facet ----
 
@@ -244,7 +244,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     /**
      * Files [slot] under the categories named by [under], or removes the favorite mark. Drops the
      * favorites listing rather than patching the row in: favoriting adds a voice to a listing it
-     * was absent from, and `PresetIndexState.replacing` is a no-op for an absent address.
+     * was absent from, and `PresetIndexState.withSlot` grows only the user listing.
      */
     override suspend fun setFavorite(slot: PresetSlot, under: Set<Int>): String = connection.exclusive { instrument ->
         requireFacet(instrument.tagger, "favorite presets").setFavorite(slot.address, under)
@@ -358,12 +358,13 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         progress(str(R.string.listing_reading_presets))
         // Read once, before anything is written: which slots are free is what the run is planned
         // around, and re-answering it halfway through would plan against the test's own edits.
-        val occupied = listings.occupiedSlots()
+        val (occupied, unreadable) = listings.occupancy()
         RegressionTester(
             instrument = instrument,
             // The writable addresses: the tester writes to the first free one it is handed, and
-            // given the whole layout that would be PRE1's first slot.
-            allSlots = { listings.allSlots(PresetScope.USER).map { it.address } },
+            // given the whole layout that would be PRE1's first slot. Not the unreadable ones,
+            // which may hold a preset the run would overwrite as scratch.
+            allSlots = { listings.allSlots(PresetScope.USER).map { it.address } - unreadable },
             occupiedSlots = { occupied },
             onConfirmSelect = onConfirmSelect,
             onConfirmRealSlotMutation = onConfirmRealSlotMutation,

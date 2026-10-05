@@ -8,7 +8,6 @@ import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.cache.CacheKey
 import de.thewolfwalkexperience.software.patchpilot.cache.CachingBrowser
 import de.thewolfwalkexperience.software.patchpilot.cache.PresetIndexCache
-import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
@@ -24,10 +23,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
@@ -149,10 +147,25 @@ internal class PresetListings(
         launchIndex(key, scope)
     }
 
-    /** Re-collects the current listing, keeping the cache: [refreshEdited] has already written the changed addresses through. */
-    fun reload(): Int? {
-        val key = instrument()?.identity?.stableKey ?: return null
-        return launchIndex(key, _browseScope.value)
+    /**
+     * Set where an edit could not re-read an address it touched ([refreshEdited]), so the
+     * listings may show a row nothing has confirmed. Cleared by [reloadAfterEdit].
+     */
+    private var editLeftListingStale = false
+
+    /**
+     * Re-collects the listing on screen after an edit, only where the edit left it unconfirmed:
+     * a re-read failed, or the listing was dropped ([dropFavorites]). Otherwise [refreshEdited]
+     * has already corrected every listing holding the addresses the edit touched, and collecting
+     * again would re-read a listing the cache does not hold from the instrument - one with an
+     * unreadable slot, say, which costs 93 s on a Motif XS.
+     */
+    fun reloadAfterEdit() {
+        val key = instrument()?.identity?.stableKey ?: return
+        val scope = _browseScope.value
+        if (!editLeftListingStale && listingsByScope.value[scope] != null) return
+        editLeftListingStale = false
+        launchIndex(key, scope)
     }
 
     /**
@@ -162,7 +175,8 @@ internal class PresetListings(
      */
     fun refresh(): Int? {
         invalidate()
-        return reload()
+        val key = instrument()?.identity?.stableKey ?: return null
+        return launchIndex(key, _browseScope.value)
     }
 
     private fun launchIndex(key: String, scope: PresetScope): Int {
@@ -241,19 +255,23 @@ internal class PresetListings(
      *
      * The re-read slot is written into every listing already holding that address, not only into
      * the cache: a favorited user voice sits in two listings at once, and a finished listing is
-     * never re-collected.
+     * never re-collected. The user listing also gains an address it lacked, as a copy into an
+     * empty Nord slot needs - see [PresetIndexState.withSlot].
      */
     suspend fun refreshEdited(vararg addresses: SlotAddress) {
         val browser = browser()
         for (address in addresses) {
             try {
                 val slot = browser.refresh(address)
-                listingsByScope.update { byScope -> byScope.mapValues { (_, state) -> state.replacing(slot) } }
+                listingsByScope.update { byScope ->
+                    byScope.mapValues { (scope, state) -> state.withSlot(slot, insert = scope == PresetScope.USER) }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Couldn't re-read $address after an edit; dropping the cached index", e)
                 invalidateUserCache()
+                editLeftListingStale = true
                 return
             }
         }
@@ -269,20 +287,23 @@ internal class PresetListings(
         listingsByScope.update { it - PresetScope.FAVORITES }
     }
 
+    /** Which user addresses hold a preset, and which could not be read and so may or may not. */
+    data class Occupancy(val occupied: Set<SlotAddress>, val unreadable: Set<SlotAddress>)
+
     /**
-     * Which addresses hold a preset. A user listing still running is waited for and read:
+     * The user listing's [Occupancy]. A user listing still running is waited for and read:
      * collecting the browser beside it would start a second full read behind the first, about
      * 142 s on a Subsequent 37. Otherwise the browser is collected, from the cache where a
      * finished listing left one.
      */
-    suspend fun occupiedSlots(): Set<SlotAddress> {
+    suspend fun occupancy(): Occupancy {
         indexJobs[PresetScope.USER]?.join()
-        val slots = listingsByScope.value[PresetScope.USER]?.takeIf { it.complete }?.slots
-            ?: browser().index()
-                .filterIsInstance<IndexUpdate.Slots>()
-                .toList()
-                .flatMap { it.slots }
-        return slots.filterNot { it.isEmpty }.map { it.address }.toSet()
+        val listing = listingsByScope.value[PresetScope.USER]?.takeIf { it.complete }
+            ?: browser().index().fold(PresetIndexState()) { state, update -> state.plus(update) }
+        return Occupancy(
+            occupied = listing.slots.filterNot { it.isEmpty }.mapTo(mutableSetOf()) { it.address },
+            unreadable = listing.unreadable,
+        )
     }
 
     /**

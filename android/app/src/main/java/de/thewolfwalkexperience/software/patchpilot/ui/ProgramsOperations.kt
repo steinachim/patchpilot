@@ -24,7 +24,8 @@ internal interface ProgramsOperations {
     /** Runs an edit on a scope that outlives the screen - see [InstrumentViewModel.launchEdit]. */
     fun launchEdit(block: suspend () -> Unit): Job
 
-    fun reloadIndex(): Int?
+    /** After an edit, re-collects the listing on screen where the edit left it unconfirmed. */
+    fun reloadAfterEdit()
 
     suspend fun selectProgram(slot: PresetSlot): String
     suspend fun renameProgram(slot: PresetSlot, newName: String): String

@@ -7,6 +7,8 @@ import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
+import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
+import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -18,16 +20,18 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Stopping the listings at the end of a session: every listing's cleanup has run before
  * [PresetListings.cancelAndJoin] returns, as a Nord's category unlock has to before the
- * connection closes.
+ * connection closes. And what an edit costs the listings afterwards.
  */
 class PresetListingsTest {
 
@@ -94,7 +98,94 @@ class PresetListingsTest {
         assertEquals(listOf(PresetScope.USER, PresetScope.FAVORITES), slow.cleanedUp)
     }
 
+    /**
+     * Demo mode's library, with one slot that cannot be read, so the cache never holds the
+     * listing; counts every collection.
+     */
+    private class PartlyUnreadable {
+        val collected = mutableListOf<PresetScope>()
+        var refreshFails = false
+        private val demo = DemoInstrument()
+
+        val instrument = object : Instrument by demo {
+            override val browser = object : PresetBrowser by demo {
+                override fun index(scope: PresetScope) = flow {
+                    collected += scope
+                    demo.index(scope).collect { update ->
+                        if (update == IndexUpdate.Complete) emit(IndexUpdate.Failed(UNREADABLE, "timed out"))
+                        emit(update)
+                    }
+                }
+
+                override suspend fun refresh(address: SlotAddress): PresetSlot {
+                    if (refreshFails) error("timed out")
+                    return demo.refresh(address)
+                }
+            }
+        }
+    }
+
+    /** [test] against [PartlyUnreadable], with a device handle so the listing goes through the cache. */
+    private fun runEdits(test: suspend TestScope.(PresetListings, PartlyUnreadable) -> Unit) = runTest {
+        val session = CoroutineScope(coroutineContext + Job(coroutineContext.job))
+        val fake = PartlyUnreadable()
+        val listings =
+            PresetListings(session, { fake.instrument }, { "usb:test" }, StringResolver { id, _ -> "string $id" })
+        try {
+            listings.start()
+            advanceUntilIdle()
+            test(listings, fake)
+        } finally {
+            session.cancel()
+        }
+    }
+
+    /**
+     * An edit patches the rows it touched and collects nothing again: a listing the cache does not
+     * hold would otherwise be re-read from the instrument after every rename - 93 s on a Motif XS.
+     */
+    @Test
+    fun `an edit on a listing the cache does not hold does not collect it again`() = runEdits { listings, fake ->
+        val edited = listings.userIndex.value.slots.first().address
+        listings.refreshEdited(edited)
+        listings.reloadAfterEdit()
+        advanceUntilIdle()
+        assertEquals(listOf(PresetScope.USER), fake.collected)
+    }
+
+    @Test
+    fun `a failed re-read after an edit collects the listing again`() = runEdits { listings, fake ->
+        fake.refreshFails = true
+        listings.refreshEdited(listings.userIndex.value.slots.first().address)
+        listings.reloadAfterEdit()
+        advanceUntilIdle()
+        assertEquals(listOf(PresetScope.USER, PresetScope.USER), fake.collected)
+    }
+
+    /** A favorite set or cleared drops that listing, which the screen showing it needs back. */
+    @Test
+    fun `a favorites listing an edit dropped is collected again`() = runEdits { listings, fake ->
+        listings.setScope(PresetScope.FAVORITES)
+        advanceUntilIdle()
+        listings.dropFavorites()
+        listings.reloadAfterEdit()
+        advanceUntilIdle()
+        assertEquals(listOf(PresetScope.USER, PresetScope.FAVORITES, PresetScope.FAVORITES), fake.collected)
+    }
+
+    /** The regression run plans its scratch slots around this: an unreadable slot is neither free nor taken. */
+    @Test
+    fun `occupancy keeps unreadable slots apart from occupied ones`() = runEdits { listings, _ ->
+        val (occupied, unreadable) = listings.occupancy()
+        assertEquals(setOf(UNREADABLE), unreadable)
+        assertTrue(occupied.isNotEmpty())
+        assertTrue(UNREADABLE !in occupied)
+    }
+
     private companion object {
         const val CLEANUP_MS = 1_000L
+
+        /** Outside the demo library, so it is unreadable and nothing else. */
+        val UNREADABLE = SlotAddress(9, 0)
     }
 }

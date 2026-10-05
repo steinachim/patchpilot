@@ -110,6 +110,8 @@
     <string name="programs_show_empty">Show empty slots</string>
     <string name="programs_bank_header">Bank %1$s</string>
     <string name="programs_slot_empty">Empty</string>
+    <string name="programs_slot_unreadable">Could not be read</string>
+    <string name="programs_unreadable_target">%1$s could not be read. Refresh the list before moving a preset there.</string>
     <string name="programs_no_category">No category</string>
     <string name="programs_no_presets">This instrument reports no presets.</string>
     <string name="programs_no_matches">No presets match \"%1$s\".</string>

@@ -23,6 +23,8 @@ internal sealed class ProgramRow {
  * @property rows what the list renders, headers interleaved.
  * @property bankLabels the banks the index rail offers, in order.
  * @property occupied addresses that actually hold a preset.
+ * @property unreadable addresses whose read failed: neither occupied nor free as far as anyone
+ *   knows, so no edit is offered on them or onto them.
  * @property freeSlots every address a copy could be written to.
  * @property bankHeaderIndex bank label -> the row index of its header, for the rail's jump.
  */
@@ -30,19 +32,26 @@ internal data class ProgramListing(
     val rows: List<ProgramRow> = emptyList(),
     val bankLabels: List<String> = emptyList(),
     val occupied: Set<SlotAddress> = emptySet(),
+    val unreadable: Set<SlotAddress> = emptySet(),
     val freeSlots: List<PresetSlot> = emptyList(),
     val bankHeaderIndex: Map<String, Int> = emptyMap(),
 )
 
 /**
- * Where a copy could be written: every address the layout allows that does not already hold one.
- * Its own function, because it is not a property of what is on screen - copying a factory voice
- * needs the free user slots while the factory listing, in which nothing is free, is displayed.
- * [allSlots] is therefore the caller's choice of address space.
+ * Where a copy could be written: every address the layout allows that does not already hold one
+ * and was read. Its own function, because it is not a property of what is on screen - copying a
+ * factory voice needs the free user slots while the factory listing, in which nothing is free, is
+ * displayed. [allSlots] is therefore the caller's choice of address space.
+ *
+ * @param unreadable addresses whose read failed, which may hold a preset a copy would overwrite.
  */
-internal fun freeSlots(reported: List<PresetSlot>, allSlots: List<PresetSlot>): List<PresetSlot> {
+internal fun freeSlots(
+    reported: List<PresetSlot>,
+    allSlots: List<PresetSlot>,
+    unreadable: Set<SlotAddress> = emptySet(),
+): List<PresetSlot> {
     val occupied = reported.filterNot { it.isEmpty }.map { it.address }.toSet()
-    return allSlots.filterNot { it.address in occupied }
+    return allSlots.filterNot { it.address in occupied || it.address in unreadable }
 }
 
 /**
@@ -52,6 +61,7 @@ internal fun freeSlots(reported: List<PresetSlot>, allSlots: List<PresetSlot>): 
  * @param reported what the instrument answered with. A Nord lists only what it holds; a Pro-800
  *   answers for every address, empty ones included.
  * @param allSlots every address the instrument's layout allows, in device order.
+ * @param unreadable addresses the listing could not read; see [ProgramListing.unreadable].
  */
 internal fun buildProgramListing(
     reported: List<PresetSlot>,
@@ -59,6 +69,7 @@ internal fun buildProgramListing(
     showEmptySlots: Boolean,
     picking: Boolean,
     searchText: String,
+    unreadable: Set<SlotAddress> = emptySet(),
 ): ProgramListing {
     // Addresses that actually hold a preset, not every address the index mentioned: a Pro-800
     // answers for all 400, and an empty slot must not get a drag handle and a Rename button.
@@ -66,7 +77,7 @@ internal fun buildProgramListing(
 
     // From the full address space rather than the toggle, since picking a destination needs all
     // of it whether or not "show empty slots" is on.
-    val freeSlots = freeSlots(reported, allSlots)
+    val freeSlots = freeSlots(reported, allSlots, unreadable)
 
     // Bank labels come off the rows rather than being parsed out of a display id, since "A:1:1"
     // yields its bank to substringBefore(':') and "A00" does not.
@@ -121,6 +132,7 @@ internal fun buildProgramListing(
         rows = rows,
         bankLabels = bankLabels,
         occupied = occupied,
+        unreadable = unreadable,
         freeSlots = freeSlots,
         // Row index of each bank's header, so the index rail can scroll straight to it.
         bankHeaderIndex = rows.withIndex()

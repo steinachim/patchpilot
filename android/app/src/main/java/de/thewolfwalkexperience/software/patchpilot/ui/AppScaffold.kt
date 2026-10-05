@@ -151,11 +151,11 @@ fun CenteredMessage(modifier: Modifier = Modifier, content: @Composable () -> Un
     )
 }
 
-/** The muted styling an empty slot gets. */
+/** The muted styling an empty slot gets, and a slot whose read failed, which may or may not be empty. */
 @Composable
-fun EmptySlotText(modifier: Modifier = Modifier) {
+fun EmptySlotText(modifier: Modifier = Modifier, unreadable: Boolean = false) {
     Text(
-        stringResource(R.string.programs_slot_empty),
+        stringResource(if (unreadable) R.string.programs_slot_unreadable else R.string.programs_slot_empty),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier,

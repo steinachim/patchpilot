@@ -26,6 +26,8 @@
 - An accepted firmware warning is no longer shown again each time the app returns from the background.
 - On a Nord, an edit the instrument applies to a different slot than the one chosen is reported as such, with a prompt to refresh the list, instead of as a refusal; and a write is no longer reported as failed when only the display refresh after it goes unconfirmed.
 - Moving a Yamaha Motif XS voice onto a slot that holds one, which an out-of-date list can show as empty, is now refused instead of overwriting that voice.
+- After an edit, the preset list updates only the changed rows, instead of re-reading the whole instrument whenever its list had a slot that could not be read (about 1½ minutes on a Yamaha Motif XS).
+- A preset slot that could not be read is shown as such and is no longer offered as an empty destination for a copy or move.
 
 ## 1.1
 

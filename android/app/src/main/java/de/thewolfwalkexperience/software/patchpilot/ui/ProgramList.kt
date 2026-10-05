@@ -139,6 +139,7 @@ internal fun ProgramListBody(
     val scope = rememberCoroutineScope()
     val visibleRows = listing.rows
     val occupied = listing.occupied
+    val unreadable = listing.unreadable
     val browseScope = rules.browseScope
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -172,7 +173,7 @@ internal fun ProgramListBody(
                         val source = visibleRows.getOrNull(from) as? ProgramRow.ProgramEntry
                         val target = visibleRows.getOrNull(to) as? ProgramRow.ProgramEntry
                         if (source != null && target != null) {
-                            ops.onSwapDropped(source.item, target.item, occupied)
+                            ops.onSwapDropped(source.item, target.item, occupied, unreadable)
                         }
                     },
                     onDragCancel = { drag.cancel() },
@@ -212,6 +213,7 @@ internal fun ProgramListBody(
                     is ProgramRow.ProgramEntry -> ProgramRowItem(
                         row = row,
                         isEmpty = row.item.address !in occupied,
+                        isUnreadable = row.item.address in unreadable,
                         isDragged = drag.draggedIndex == rowIndex,
                         isDropTarget = drag.dropTargetIndex == rowIndex &&
                             drag.draggedIndex != null && drag.draggedIndex != rowIndex,
@@ -294,6 +296,7 @@ private fun NothingListed(browseScope: PresetScope, searchText: String, onClearF
 private fun ProgramRowItem(
     row: ProgramRow.ProgramEntry,
     isEmpty: Boolean,
+    isUnreadable: Boolean,
     isDragged: Boolean,
     isDropTarget: Boolean,
     rules: RowRules,
@@ -308,7 +311,8 @@ private fun ProgramRowItem(
     // Which rows a tap can act on depends on what is being picked
     // for: a copy needs somewhere empty, a move can land anywhere but
     // its own source.
-    val isPickTarget = ops.picking && when (ops.pickIntent) {
+    // An unreadable slot is neither: what it holds is unknown.
+    val isPickTarget = ops.picking && !isUnreadable && when (ops.pickIntent) {
         PickIntent.COPY -> isEmpty
         PickIntent.MOVE -> program.address != ops.pickSource?.address
     }
@@ -320,7 +324,7 @@ private fun ProgramRowItem(
     }
     ListItem(
         headlineContent = {
-            if (program.name == null) EmptySlotText() else Text(program.name)
+            if (program.name == null) EmptySlotText(unreadable = isUnreadable) else Text(program.name)
         },
         supportingContent = {
             // Badges are short family-supplied strings rendered

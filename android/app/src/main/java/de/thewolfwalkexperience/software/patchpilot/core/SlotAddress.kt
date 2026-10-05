@@ -14,6 +14,11 @@ data class SlotAddress(val bank: Int, val slot: Int) {
         require(bank >= 0) { "bank must not be negative, was $bank" }
         require(slot >= 0) { "slot must not be negative, was $slot" }
     }
+
+    companion object {
+        /** Device order on every family: bank first, then slot within it. */
+        val DEVICE_ORDER: Comparator<SlotAddress> = compareBy({ it.bank }, { it.slot })
+    }
 }
 
 /**

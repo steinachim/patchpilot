@@ -254,10 +254,12 @@ fun ProgramsScreen(
     val scopeSlots = remember(capabilities, browseScope) { viewModel.listings.allSlots(browseScope) }
     // Everything the list needs, derived in one pure pass - see [buildProgramListing], which
     // holds the occupancy rules and is testable without Compose.
-    val listing = remember(programs, showEmptySlots, searchText, ops.picking, scopeSlots) {
+    val unreadable = remember(index.failures) { index.unreadable }
+    val listing = remember(programs, unreadable, showEmptySlots, searchText, ops.picking, scopeSlots) {
         buildProgramListing(
             reported = programs,
             allSlots = scopeSlots,
+            unreadable = unreadable,
             // Only the user listing has empty slots to show, and hiding the checkbox in the other
             // two does not reset it: left ticked, it would render the favorites listing empty,
             // since that scope has no address space.
@@ -272,7 +274,8 @@ fun ProgramsScreen(
     // be empty in the factory scope, where every row holds a voice.
     val userIndex by viewModel.listings.userIndex.collectAsState()
     val userSlots = remember(capabilities) { viewModel.listings.allSlots(PresetScope.USER) }
-    val copyDestinations = remember(userIndex, userSlots) { freeSlots(userIndex.slots, userSlots) }
+    val copyDestinations =
+        remember(userIndex, userSlots) { freeSlots(userIndex.slots, userSlots, userIndex.unreadable) }
     // Hidden rather than disabled where there is nowhere to copy to. Gated on the user listing
     // being complete rather than on `editsEnabled`, which describes whichever listing is
     // displayed - and the factory one completes the moment it is opened, before the destinations

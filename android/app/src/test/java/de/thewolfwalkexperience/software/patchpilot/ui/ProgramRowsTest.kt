@@ -210,4 +210,15 @@ class ProgramRowsTest {
             entries(buildProgramListing(sparse, emptyList(), false, false, "")).map { it.name },
         )
     }
+
+    /** A slot whose read failed may hold a preset, so a copy is never offered onto it. */
+    @Test
+    fun `an unreadable slot is not offered as free`() {
+        val unreadable = setOf(SlotAddress(0, 1))
+        val listing = buildProgramListing(nordReported, allSlots(), false, true, "", unreadable)
+
+        assertTrue(listing.freeSlots.none { it.address in unreadable })
+        assertEquals(unreadable, listing.unreadable)
+        assertTrue(freeSlots(nordReported, allSlots(), unreadable).none { it.address in unreadable })
+    }
 }

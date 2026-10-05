@@ -108,8 +108,9 @@ internal class ProgramsController(
      * Runs one instrument operation, owning the busy line, the error path and the
      * blocked-by-state dialog for it.
      *
-     * @param reloadAfter re-reads the listing once the operation succeeds. False where nothing
-     *   was stored - a selection, or a read that only opened a dialog.
+     * @param reloadAfter brings the listing up to date once the operation succeeds
+     *   ([ProgramsOperations.reloadAfterEdit]). False where nothing was stored - a selection, or
+     *   a read that only opened a dialog.
      * @param retry re-runs the whole operation, which is what makes a [BlockedOperation]
      *   answerable. Null where there is nothing sensible to retry.
      * @param showProgress whether to put a progress line above the list. False for selection,
@@ -137,7 +138,7 @@ internal class ProgramsController(
             statusMessage = null
             try {
                 statusMessage = block()
-                if (reloadAfter) viewModel.reloadIndex()
+                if (reloadAfter) viewModel.reloadAfterEdit()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: InstrumentException.BlockedByDeviceState) {
@@ -323,9 +324,20 @@ internal class ProgramsController(
     /**
      * @param occupied which addresses hold a preset, from the listing rather than re-derived,
      *   since the drop was aimed at the rows the user can see.
+     * @param unreadable which addresses the listing could not read. A drop onto one is refused:
+     *   taken as empty it would be a move, which overwrites whatever the slot does hold.
      */
-    fun onSwapDropped(source: PresetSlot, target: PresetSlot, occupied: Set<SlotAddress>) {
+    fun onSwapDropped(
+        source: PresetSlot,
+        target: PresetSlot,
+        occupied: Set<SlotAddress>,
+        unreadable: Set<SlotAddress> = emptySet(),
+    ) {
         if (source.address == target.address) return
+        if (target.address in unreadable) {
+            operationError = strings.get(R.string.programs_unreadable_target, target.displayId)
+            return
+        }
         val targetWasEmpty = target.address !in occupied
         // onDragStart already blocks a drag from an empty row; this is a re-check. An empty target
         // is valid, and targetWasEmpty picks move over swap.
