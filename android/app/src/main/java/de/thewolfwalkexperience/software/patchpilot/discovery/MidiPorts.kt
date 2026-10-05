@@ -31,7 +31,7 @@ interface MidiPort {
     /** The physical device behind it, spelled as a USB device's own key so the two buses deduplicate. */
     val physicalKey: String
 
-    /** Which enumeration this is, which a replug changes - see `CacheKey.physicalDevice`. */
+    /** Which enumeration this is: stable across a resume; whether a replug changes it is unmeasured, so it is no replug detector - see `CacheKey.physicalDevice`. */
     val handle: String
 
     /** The backing USB device's ids, where the platform exposes one. */
@@ -120,8 +120,10 @@ private class AndroidMidiPort(val info: MidiDeviceInfo) : MidiPort {
     override val usbIds: UsbIds? get() = info.usbDevice()?.let { UsbIds(it.vendorId, it.productId) }
 }
 
-/** The `UsbDevice` behind a MIDI port, where the platform exposes one. `Bundle.get` is
- * deprecated from API 33; minSdk is 26. */
+/**
+ * The `UsbDevice` behind a MIDI port, where the platform exposes one. `Bundle.get` is
+ * deprecated from API 33; minSdk is 26.
+ */
 @Suppress("DEPRECATION")
 private fun MidiDeviceInfo.usbDevice(): UsbDevice? = properties?.get(MidiDeviceInfo.PROPERTY_USB_DEVICE) as? UsbDevice
 

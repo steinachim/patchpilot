@@ -84,8 +84,10 @@ val SteampunkColorScheme: ColorScheme = darkColorScheme(
     scrim = Ink,
 )
 
-/** Exposed for the bespoke Steampunk drawing (borders, the backdrop texture) that works outside
- *  the `ColorScheme` roles above. */
+/**
+ * Exposed for the bespoke Steampunk drawing (borders, the backdrop texture) that works outside
+ *  the `ColorScheme` roles above.
+ */
 object SteampunkAccents {
     val brassLight = BrassLight
     val brassDark = BrassDark

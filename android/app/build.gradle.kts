@@ -38,13 +38,10 @@ android {
     // Compile-time only: `minSdk` still decides which devices can install this, and `targetSdk`
     // still decides which runtime behaviours are opted into - neither moves with this.
     //
-    // **37 is Compose 1.12's floor, and headroom for this build rather than its requirement.**
-    // The BOM pinned in libs.versions.toml (2026.01.01) resolves to Compose 1.10.2, whose AAR
-    // metadata declares `minCompileSdk=35`, and this app's own code reaches no further than API
-    // 33 (UsbConnectionManager's TIRAMISU branches) - so 35 compiles today, verified rather than
-    // assumed. It stays at 37 because that is what Compose 1.12's AARs declare, so moving the BOM
-    // forward needs no change here. The price is that anyone building this needs the SDK 37
-    // platform installed, which is the one reason to reconsider it.
+    // **37 is Compose 1.12's floor.** The BOM pinned in libs.versions.toml resolves to Compose
+    // 1.12, whose AAR metadata declares `minCompileSdk=37`; this app's own code reaches no
+    // further than API 31 (the `S` branches in UsbConnectionManager and Theme). Building it needs
+    // the SDK 37 platform installed.
     compileSdk = 37
 
     defaultConfig {
@@ -151,7 +148,6 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.navigation.compose)

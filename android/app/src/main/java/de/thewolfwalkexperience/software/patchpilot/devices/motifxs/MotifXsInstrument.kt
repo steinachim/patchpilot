@@ -557,9 +557,9 @@ class MotifXsInstrument(
         } catch (e: Exception) {
             // A send that failed part way, which exchangeAfterAll cannot prevent.
             throw InstrumentException.TransportLost(
-                "The $failedWhat failed part way through (${e.message}). An instrument left " +
-                    "mid-sequence waits on \"receiving midi bulk data\" until it is switched off " +
-                    "and on; re-read the bank afterwards before trusting what the app shows.",
+                "The $failedWhat failed part way through (${e.message}). If the instrument's " +
+                    "screen stays on \"receiving midi bulk data\", switch it off and on; re-read " +
+                    "the bank afterwards before trusting what the app shows.",
                 e,
             )
         }
@@ -894,8 +894,9 @@ class MotifXsInstrument(
     }
 
     /**
-     * Reads one factory bank and compares it with the shipped table - about two minutes per bank,
-     * and only dump requests are sent. The expected names come from the factory listing, which is
+     * Reads one factory bank and compares it with the shipped table, sending only dump requests:
+     * about 20 s for a 128-voice bank and a minute for the drum bank at the user-voice rates
+     * measured below (an extrapolation; not timed). The expected names come from the factory listing, which is
      * built from that table with no round trips.
      */
     private inner class FactoryNames : FactoryNameCheck {

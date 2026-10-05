@@ -208,9 +208,9 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     /**
      * Runs an edit on [viewModelScope] rather than on the caller's composition scope, so
      * navigating away cannot abandon it mid-write: a `rememberCoroutineScope()` dies with the
-     * screen, and a Motif XS left mid-sequence sits on "receiving midi bulk data" until it is
-     * completed or power-cycled. `SysExExchange.exchangeAfterAll` is the other half of that
-     * guarantee.
+     * screen, and a Motif XS left mid-sequence shows "receiving midi bulk data" and may need
+     * switching off and on (see `SysExExchange.exchangeAfterAll`, the other half of that
+     * guarantee).
      */
     override fun launchEdit(block: suspend () -> Unit): Job = viewModelScope.launch { block() }
 

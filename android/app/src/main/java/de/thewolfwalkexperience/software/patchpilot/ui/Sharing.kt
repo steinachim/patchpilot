@@ -85,8 +85,10 @@ fun saveTextReport(context: Context, uri: Uri, content: String) {
     stream.use { it.write(content.toByteArray()) }
 }
 
-/** Subdirectory of `cacheDir` holding the one report currently being shared - see
- * [shareTextReport] and the `<cache-path>` entry in `res/xml/file_paths.xml`. */
+/**
+ * Subdirectory of `cacheDir` holding the one report currently being shared - see
+ * [shareTextReport] and the `<cache-path>` entry in `res/xml/file_paths.xml`.
+ */
 const val SHARE_DIR = "shared"
 
 /** The MIME type a device report is shared as. Its `.json` half is `R.string.programs_json_suffix`. */

@@ -32,7 +32,7 @@ private const val CATALOG_ASSET = "yamaha_motif_xs.json"
 
 /**
  * The factory voice-name table - see [MotifXsFactoryVoices]. A separate asset from the catalog:
- * 94 kB of transcribed reference data rather than configuration, and bundling them would carry
+ * 277 kB of transcribed reference data rather than configuration, and bundling them would carry
  * the whole table through every `InstrumentDescriptor.familyConfig`.
  */
 private const val FACTORY_VOICES_ASSET = "motifxs_factory_voices.json"
@@ -96,8 +96,10 @@ data class MotifXsBank(
  */
 @Serializable
 data class MotifXsConfig(
-    /** The device number in the SysEx status byte. This app always uses 0; whether the
-     * instrument answers others is untested. */
+    /**
+     * The device number in the SysEx status byte. This app always uses 0; whether the
+     * instrument answers others is untested.
+     */
     val deviceNumber: Int = 0,
     val banks: List<MotifXsBank> = emptyList(),
     /**

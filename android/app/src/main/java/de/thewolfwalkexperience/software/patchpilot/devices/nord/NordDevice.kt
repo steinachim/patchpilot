@@ -102,8 +102,10 @@ class UnsupportedProtocolVersionException(message: String) : IllegalStateExcepti
  */
 class NordDevice(private val transport: UsbBulkTransport, initialProfile: DeviceProfile) {
 
-    /** The transport's own resume policy - see [de.thewolfwalkexperience.software.patchpilot
-     * .core.Instrument.rebuildOnResume], which is what actually consults it. */
+    /**
+     * The transport's own resume policy - see [de.thewolfwalkexperience.software.patchpilot
+     * .core.Instrument.rebuildOnResume], which is what actually consults it.
+     */
     val rebuildOnResume: Boolean get() = transport.rebuildOnResume
 
     /**
@@ -288,8 +290,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         }
     }
 
-    /** Set by [validateFirmwareVersion] where the firmware is untested; surfaced as
-     * [de.thewolfwalkexperience.software.patchpilot.core.Instrument.advisory]. */
+    /**
+     * Set by [validateFirmwareVersion] where the firmware is untested; surfaced as
+     * [de.thewolfwalkexperience.software.patchpilot.core.Instrument.advisory].
+     */
     var firmwareAdvisory: String? = null
         private set
 
@@ -1307,7 +1311,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         /**
          * Runaway guard for a bank walk whose category could not be asked how many banks it has.
          * Not a device property: the walk is still ended by the item count or an empty bank. The
-         * most banks any category on a supported instrument has is 16.
+         * most banks any category on a supported instrument has is 20, a Nord Electro 7's
+         * programs (A-T, per the catalog).
          */
         internal const val FALLBACK_MAX_BANKS = 256
 
@@ -1381,8 +1386,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
         /**
          * Upper bound on a category-child's `capacity` where it becomes an addressing bound
-         * ([deriveBankLayout], which feeds `PresetListings.allSlots`). Real instruments
-         * report 25 or 100; this guards against a malfunctioning device. Not applied when parsing
+         * ([deriveBankLayout], which feeds `PresetListings.allSlots`). The catalog's models hold
+         * 25 to 100 programs per bank (**assumption:** the reported capacity is groups times slots
+         * per group, as measured on a Grand and a Stage 2 EX); this guards against a
+         * malfunctioning device. Not applied when parsing
          * a child list, where a Stage 2 EX legitimately reports 0xFFFE for its "(Native)"
          * categories.
          */

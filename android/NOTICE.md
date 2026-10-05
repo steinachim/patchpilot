@@ -7,8 +7,8 @@ Version 2.0 (full text at <https://www.apache.org/licenses/LICENSE-2.0>):
 - AndroidX (`core-ktx`, `lifecycle-runtime-ktx`, `lifecycle-viewmodel-compose`,
   `activity-compose`, `navigation-compose`, `datastore-preferences`) — The
   Android Open Source Project
-- Jetpack Compose (`ui`, `ui-graphics`, `ui-tooling`, `ui-tooling-preview`,
-  `material3`, `material-icons-core`) — The Android Open Source Project
+- Jetpack Compose (`ui`, `ui-graphics`, `material3`, `material-icons-core`) —
+  The Android Open Source Project
 - Kotlin standard library and `kotlinx.coroutines`, `kotlinx.serialization` —
   JetBrains s.r.o. and contributors
 

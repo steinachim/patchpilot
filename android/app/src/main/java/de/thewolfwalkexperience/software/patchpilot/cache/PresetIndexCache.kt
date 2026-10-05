@@ -61,8 +61,10 @@ class PresetIndexCache {
 
     private val lock = Any()
 
-    /** The cached index, or null if there is none. Null and empty mean different things: an
-     * instrument with nothing stored has a legitimately empty *completed* index. */
+    /**
+     * The cached index, or null if there is none. Null and empty mean different things: an
+     * instrument with nothing stored has a legitimately empty *completed* index.
+     */
     fun get(key: CacheKey): List<PresetSlot>? = synchronized(lock) {
         entries[key]?.values?.toList()
     }

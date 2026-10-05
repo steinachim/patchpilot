@@ -30,7 +30,7 @@ import de.thewolfwalkexperience.software.patchpilot.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** One entry in the list: what it covers, which license, and the asset [syncLicenses] put it in. */
+/** One entry in the list: what it covers, which license, and the asset the `syncLicenses` build task put it in. */
 private data class LicenseEntry(val groupRes: Int, val licenseNameRes: Int, val assetFile: String)
 
 /**

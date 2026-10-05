@@ -43,7 +43,7 @@ internal class NordCategories private constructor(
          * Resolves [profile]'s subset against the catalog's [master] list. Null - and so no
          * tagging facet - when the profile declares no ids, or when any declared id cannot be
          * named from [master] or the profile's overrides: a partial list would look like a
-         * working feature. Ids 47-52 have no master name, so an override for them is expected.
+         * working feature.
          *
          * Ordered alphabetically with [NONE] last, the order the vendor's own editor lists
          * categories in; the catalog stores the ids in the instrument's own order.

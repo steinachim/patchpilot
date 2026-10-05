@@ -98,7 +98,7 @@
     <string name="connect_pick_unknown">Select a connected USB device to try anyway:</string>
     <string name="connect_entry_known">Recognised — %1$s</string>
     <string name="connect_entry_unknown">Not recognised</string>
-    <string name="connect_advisory_title">Untested firmware</string>
+    <string name="connect_advisory_title">Untested firmware or model</string>
     <string name="action_disconnect">Disconnect</string>
     <string name="connect_unknown_title">Unknown device</string>
     <string name="connect_unknown_warning">This is not a recognized instrument and is not supported by this app. Continuing is at your own risk.</string>
@@ -206,7 +206,7 @@
 
     <!-- Shown while nothing is connected - briefly, mid-reconnect, and never for long: a
          ProgramsScreen that lands on a settled failure/choice state hands off to ConnectScreen
-         instead of sitting here (see ProgramsScreen's session-lost effect). Says so rather than
+         instead of sitting here (see PatchPilotApp's session-lost effect). Says so rather than
          naming a screen, since a bug that manages to strand this title here should not also
          read as an unrelated screen name. -->
     <string name="programs_title_fallback">Not Connected</string>
@@ -239,7 +239,7 @@
     <string name="debug_regression_body">Runs every operation this instrument supports and reports what worked. Edits are made against a copy the test creates and deletes again; where no free slot exists, it asks first.</string>
     <string name="debug_regression_action">Run regression test</string>
     <!-- Checking the shipped factory voice names against the instrument itself. Read-only. -->
-    <string name="debug_verify_body">The factory voice names shown in the browser are transcribed from the manufacturer\'s data list, not read from this instrument. This reads one factory bank and reports any name that disagrees. It writes nothing, and takes a couple of minutes per bank.</string>
+    <string name="debug_verify_body">The factory voice names shown in the browser are transcribed from the manufacturer\'s data list, not read from this instrument. This reads one factory bank and reports any name that disagrees. It writes nothing, and takes about half a minute per bank, a minute for a drum bank.</string>
     <string name="debug_verify_action">Check %1$s against the instrument</string>
     <string name="debug_verify_starting">Reading the bank…</string>
     <string name="debug_verify_ok">%1$s: every name matches what the app ships.</string>

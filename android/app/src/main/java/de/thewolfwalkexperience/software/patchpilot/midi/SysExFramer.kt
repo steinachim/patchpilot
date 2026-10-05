@@ -17,8 +17,10 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
     private var size = 0
     private var inMessage = false
 
-    /** Messages that were dropped for being over-long - a symptom worth surfacing, not hiding;
-     * [SysExExchange] logs each one. */
+    /**
+     * Messages that were dropped for being over-long - a symptom worth surfacing, not hiding;
+     * [SysExExchange] logs each one.
+     */
     var droppedMessages: Int = 0
         private set
 
@@ -110,8 +112,10 @@ class SysExFramer(private val maxMessageBytes: Int = DEFAULT_MAX_MESSAGE_BYTES) 
         const val SYSEX_START = 0xF0
         const val SYSEX_END = 0xF7
 
-        /** Generous for a Pro-800 program dump (210 bytes); the Motif XS, Axe-Fx III and
-         * Subsequent 37 families pass their own. Not a protocol limit. */
+        /**
+         * Generous for a Pro-800 program dump (210 bytes); the Motif XS, Axe-Fx III and
+         * Subsequent 37 families pass their own. Not a protocol limit.
+         */
         const val DEFAULT_MAX_MESSAGE_BYTES = 4096
 
         private const val INITIAL_CAPACITY = 256

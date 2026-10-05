@@ -33,17 +33,23 @@ data class DeviceProfile(
      * measured; defaults to it where a catalog entry omits this.
      */
     val maxProgramNameLen: Int = maxDisplayTextLen,
-    /** Firmware version codes this profile has been verified against. Empty means "skip the
-     * firmware check" - see [NordDevice.validateFirmwareVersion] - used for [unknown], not for a
-     * real supported instrument. */
+    /**
+     * Firmware version codes this profile has been verified against. Empty means "raise no
+     * firmware advisory" - see [NordDevice.validateFirmwareVersion] - used for [unknown], not for
+     * a real supported instrument.
+     */
     val supportedFirmwareVersions: Set<Int> = emptySet(),
-    /** Which ids of the master programCategories list in devices/nord_devices.json this
+    /**
+     * Which ids of the master programCategories list in devices/nord_devices.json this
      * instrument offers - an index into it, not a redefinition of it.
      * Null (always true for [unknown]) means "this instrument's subset has not been
-     * established", which is what leaves such a device without a [NordTagger]. */
+     * established", which is what leaves such a device without a [NordTagger].
+     */
     val programCategoryIds: List<Int>? = null,
-    /** Ids from [programCategoryIds] this instrument displays under a name other than the master
-     * list's, id -> name. Both current instruments relabel 23/24 as EPiano1/EPiano2. */
+    /**
+     * Ids from [programCategoryIds] this instrument displays under a name other than the master
+     * list's, id -> name: the Grand relabels 23/24 as EPiano1/EPiano2, the Stage 4 ten ids.
+     */
     val programCategoryNameOverrides: Map<String, String>? = null,
 ) {
     companion object {

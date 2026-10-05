@@ -34,12 +34,12 @@ private val CinzelFamily = FontFamily(
 private val ShareTechMonoFamily = FontFamily(Font(R.font.share_tech_mono, weight = FontWeight.Normal))
 
 /**
- * Cinzel across the roles the app's headings and titles actually resolve to - `TopAppBar`'s
- * title, `ListItem`'s `headlineContent` (patch names), dialog titles and empty-state headings
- * all read `titleLarge`/`titleMedium`/`headlineSmall` by default, so this reaches every one of
- * them with no per-composable change. Share Tech Mono across `body*`/`label*` gives IDs, badges,
- * button labels and captions a mechanical-counter feel - `ListItem`'s
- * `supportingContent` (the "A:01  v2" line) is `bodyMedium`.
+ * Cinzel across the title and display roles - `TopAppBar`'s title, dialog titles and empty-state
+ * headings read `titleLarge`/`titleMedium`/`headlineSmall` by default, so this reaches each of
+ * them with no per-composable change. Share Tech Mono across `body*`/`label*` gives a
+ * mechanical-counter feel to everything else, preset names included: in Material 3 1.4 a
+ * `ListItem`'s `headlineContent` reads `bodyLarge` and its `supportingContent` (the "A:01  v2"
+ * line) `bodyMedium`.
  *
  * Sizes, line heights and letter spacing are left exactly as [base] (Material's defaults, or
  * whatever the dynamic-color base already resolved) - only the family and weight change, so the

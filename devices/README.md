@@ -53,7 +53,6 @@ This assumes the instrument speaks the protocol in `docs/PROTOCOLS.md`. No Kotli
 3. List the instrument's category-tag ids in `programCategoryIds`, an index into the top-level `programCategories` master list. Do not copy another instrument's list: which ids a Nord offers is per product, and an instrument shows `No Cat` for every id it does not implement. Leave the field out rather than guessing if it has not been established; the instrument then gets no category editing. Add `programCategoryNameOverrides` only for ids the instrument displays under a different name than the master list gives them.
 4. Optionally, add a hand-written `DeviceProfile` fixture in `android/app/src/test/.../devices/nord/NordFixtures.kt` if the model's replies differ from the ones the protocol tests already cover; the protocol tests are driven from fixtures rather than from the catalog.
 
-
 The device report the app shares (from the debug menu, or from the preset screen's "Share device details" for an unrecognised device) contains a `catalogEntry` object in exactly this shape, filled in with what the wire could settle, which is the intended starting point for a new entry.
 
 ## Adding an instrument of another family

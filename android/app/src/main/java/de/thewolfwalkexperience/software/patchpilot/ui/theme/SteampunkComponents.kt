@@ -13,7 +13,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -381,8 +380,10 @@ fun SteampunkCompass(modifier: Modifier = Modifier) {
     }
 }
 
-/** The needle's axle within `steampunk_compass_needle`: on its vertical axis, at pixel row 339
- *  of 688 in the source art - the middle of its hub, which is 4.5 px above the image's centre. */
+/**
+ * The needle's axle within `steampunk_compass_needle`: on its vertical axis, at pixel row 339
+ *  of 688 in the source art - the middle of its hub, which is 4.5 px above the image's centre.
+ */
 private val NEEDLE_PIVOT = Offset(0.5f, 339f / 688f)
 
 /**

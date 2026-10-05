@@ -239,8 +239,8 @@ object MotifXsSysEx {
 
     /**
      * The instrument's current mode, readable with a parameter request at `0A 00 01`. The `4n`
-     * selection works in Voice mode only, and its echo repeats what was sent rather than what
-     * happened, so reading the mode is the only way to tell.
+     * selection works in Voice mode only and draws no echo outside it, so reading the mode is what
+     * turns that silence into a reason.
      */
     const val MODE_ADDRESS_HI = 0x0A
     const val MODE_ADDRESS_MID = 0x00

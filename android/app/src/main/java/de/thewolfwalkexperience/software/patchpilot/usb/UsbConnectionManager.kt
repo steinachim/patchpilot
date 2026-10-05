@@ -143,8 +143,10 @@ class UsbConnectionManager(private val context: Context) {
 internal fun Intent.usbDevice(): UsbDevice? =
     IntentCompat.getParcelableExtra(this, UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
 
-/** Human-readable label for a [UsbDevice] of unknown make, sanitized because it lands next to the
- * "continue at your own risk" gate. `productName` is not guaranteed by the USB spec. */
+/**
+ * Human-readable label for a [UsbDevice] of unknown make, sanitized because it lands next to the
+ * "continue at your own risk" gate. `productName` is not guaranteed by the USB spec.
+ */
 fun UsbDevice.displayLabel(): String {
     val label = sanitizeDeviceText(productName) ?: "USB device"
     return "$label (0x%04X:0x%04X)".format(vendorId, productId)

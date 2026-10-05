@@ -17,9 +17,11 @@ interface Transport {
      *
      * True for USB host, where unrelated bus activity while backgrounded (a USB keyboard being
      * unplugged and replugged, say) can leave the endpoints erroring on every subsequent
-     * transfer, with no clean way to detect or repair that specifically. False for
-     * MIDI, which has explicit device add/remove callbacks and no reason to tear down a working
-     * session on every resume.
+     * transfer, with no clean way to detect or repair that specifically. False for MIDI: a port
+     * opened through Android's MIDI service keeps working across a stay in the background
+     * (measured on a Pro-800), so there is no reason to tear a working session down on every
+     * resume. The app registers no MIDI device callback; a USB-backed MIDI device's unplug is
+     * caught by the USB detach broadcast.
      */
     val rebuildOnResume: Boolean
 }

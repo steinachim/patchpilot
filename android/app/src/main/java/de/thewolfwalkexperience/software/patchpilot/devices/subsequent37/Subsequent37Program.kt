@@ -13,8 +13,8 @@ package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
  * | 51 | 1 | stored as given; the panel's own save writes `7` |
  * | 486 | 2 | checksum ([Subsequent37SysEx.checksumCloses]) |
  *
- * The other 461 bytes are the sound and are not decoded: an edit changes the name or the
- * category and writes every other byte back as it was read.
+ * The other 460 bytes are the sound and are not decoded, nor is byte 51: an edit changes the
+ * name or the category and writes every other byte back as it was read.
  */
 class Subsequent37Program(payload: ByteArray) {
 

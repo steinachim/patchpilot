@@ -29,6 +29,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
  *   rows carry so the rail can render something narrow and still jump by the header's value.
  * @property virtualBankLabels banks the app made up to split a flat numbering, whose headers show
  *   the range alone.
+ * @property tagger the instrument's favorites and categories, or null where it has neither.
  * @property hasReport whether the instrument can describe itself. True behind the advisory gate
  *   too, where the connect screen offers the report.
  * @property isUnknownDevice connected to something the catalog does not list - what "Share device

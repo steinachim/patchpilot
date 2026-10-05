@@ -24,9 +24,11 @@ object Pro800ProgramFields {
     /** Raw offset 5: the record's own format version. 110 and 111 add fields; older ones lack them. */
     val VERSION = field("version", rawOffset = 5, byteCount = 1)
 
-    /** Raw offsets 1..4: a storage code the instrument writes. Not read: an empty slot is told by
+    /**
+     * Raw offsets 1..4: a storage code the instrument writes. Not read: an empty slot is told by
      * its empty reply ([Pro800Program.isEmpty]). Listed so [validate] checks the version byte does
-     * not overlap it. */
+     * not overlap it.
+     */
     val STORAGE_CODE = field("storageCode", rawOffset = 1, byteCount = 4)
 
     /**

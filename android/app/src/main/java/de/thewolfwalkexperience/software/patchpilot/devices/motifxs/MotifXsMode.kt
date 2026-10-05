@@ -5,9 +5,8 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 /**
  * Which mode the instrument is in, read from `0A 00 01`. Selection is gated on it: the `4n` voice
- * selection works in [VOICE] only, and in [PERFORMANCE] and [SONG] the instrument does not
- * acknowledge it and nothing changes, silently - the echo repeats what was sent. [PATTERN] and
- * [MASTER] are presumed gated the same way, untested.
+ * selection works in [VOICE] only; in [PERFORMANCE] and [SONG] it draws no echo and nothing
+ * changes. [PATTERN] and [MASTER] are presumed gated the same way, untested.
  */
 enum class MotifXsMode(val value: Int, val label: String) {
     VOICE(0, "Voice"),

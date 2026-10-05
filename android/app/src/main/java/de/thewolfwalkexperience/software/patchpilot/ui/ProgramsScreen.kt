@@ -5,37 +5,27 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 
 import android.os.SystemClock
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,7 +33,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,7 +44,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
@@ -91,32 +79,17 @@ internal fun reportFailure(what: String, error: Throwable, fallback: String): St
     return error.message ?: fallback
 }
 
-// PullToRefreshBox is marked experimental in Material3 1.4; opted in once for the whole screen.
-
 /**
  * The preset browser. Tapping a preset loads it; long-pressing its drag handle and dropping it
  * elsewhere relocates it, an occupied row being a swap and an empty slot a move
- * ([ProgramsController.onSwapDropped] picks between them from the loaded index).
- *
- * The drag gesture is detected on a Box wrapping the whole LazyColumn rather than on a row, and
- * hit-tests the touch position against `listState.layoutInfo` plus a left-edge band for the
- * handle's column: a per-row `pointerInput` would be cancelled the moment the dragged row
- * scrolled out of the composed range. The dragged row stays in place, dimmed, and a separate
- * ghost ListItem positioned from the finger's own y follows the finger, since LazyColumn composes
- * from each item's untranslated layout slot and would tear the row down.
- *
- * Bank captions are interleaved into the same LazyColumn, so the drag indices are into
- * `visibleRows` rather than the preset list, and headers and rows are not the same height - which
- * is why a position resolves to a row through `hitRowInfo` rather than by dividing by a row
- * height. Row shading alternates, and the dragged row and its drop target are set through
- * ListItem's own `colors`, which an external `Modifier.background()` would sit beneath.
+ * ([ProgramsController.onSwapDropped] picks between them from the loaded index). The list and
+ * its gesture are [ProgramListBody].
  *
  * Three things follow what the instrument declares: the tag actions and the Share button appear
  * only where those facets exist; the drag handle and Rename only for edits it supports; and drag
  * is disabled until the index is whole, since a drop into a region that has not loaded has no
  * defined target.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProgramsScreen(
     viewModel: InstrumentViewModel,
@@ -149,7 +122,6 @@ fun ProgramsScreen(
         }
     }
     val debugTaps = remember { DebugTapCounter() }
-    val scope = rememberCoroutineScope()
     // Captured at screen level rather than inside a dialog: it is needed *as* the dialog is being
     // disposed, by which point a controller resolved inside it is already going away.
     val keyboardController = LocalSoftwareKeyboardController.current

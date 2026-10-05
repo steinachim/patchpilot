@@ -536,8 +536,10 @@ class RegressionTester(
 
     private fun display(address: SlotAddress): String = instrument.layout.format.format(address)
 
-    /** Capped to what the instrument will actually store, so a rename is not verified against a
-     * name the instrument silently truncated (see [PresetEditor.maxNameLength]). */
+    /**
+     * Capped to what the instrument will actually store, so a rename is not verified against a
+     * name the instrument silently truncated (see [PresetEditor.maxNameLength]).
+     */
     private fun testName(editor: PresetEditor): String =
         editor.maxNameLength?.let { TEST_NAME.take(it) } ?: TEST_NAME
 

@@ -59,8 +59,10 @@ class MidiDiscovery(private val ports: MidiPorts) : DeviceDiscovery {
         }
     }
 
-    /** Asks each plausible descriptor's probe on the port it names and returns the first that
-     * answers as expected. Closes every port it opens. */
+    /**
+     * Asks each plausible descriptor's probe on the port it names and returns the first that
+     * answers as expected. Closes every port it opens.
+     */
     private suspend fun identify(port: MidiPort, plausible: List<InstrumentDescriptor>): InstrumentDescriptor? {
         val byPort = plausible.groupBy { (it.match as DeviceMatch.MidiIdentity).portIndex }
         for ((portIndex, descriptors) in byPort) {
@@ -112,8 +114,10 @@ class MidiDiscovery(private val ports: MidiPorts) : DeviceDiscovery {
     }
 
     private companion object {
-        /** Long enough for a device that is slow to answer, short enough that a port which is not
-         * an instrument at all does not stall the connect screen. */
+        /**
+         * Long enough for a device that is slow to answer, short enough that a port which is not
+         * an instrument at all does not stall the connect screen.
+         */
         const val PROBE_TIMEOUT_MS = 600L
     }
 }

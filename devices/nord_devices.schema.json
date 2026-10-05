@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/nord_usb/devices/nord_devices.schema.json",
+  "$id": "https://raw.githubusercontent.com/steinachim/patchpilot/dev/devices/nord_devices.schema.json",
   "title": "Nord USB device catalog",
   "description": "Source of truth for per-instrument USB/protocol constants. See devices/README.md for how to add a new instrument, and docs/PROTOCOLS.md for the wire protocol these values are used by.",
   "type": "object",
@@ -39,7 +39,7 @@
         "id": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*$",
-          "description": "Stable machine id, e.g. 'nord_grand'. Not currently read by either app, but a device needs one so profiles can be referenced (test fixtures, future tooling) without depending on array order."
+          "description": "Stable machine id, e.g. 'nord_grand'. The app keys a session's identity and its listing cache on it, so a shipped id must not change; it also lets profiles be referenced without depending on array order."
         },
         "name": {
           "type": "string",

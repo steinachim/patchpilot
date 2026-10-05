@@ -49,8 +49,7 @@ class AndroidMidiTransport(
 
     override val incoming: Flow<ByteArray> = _incoming.asSharedFlow()
 
-    /** MIDI has explicit device add/remove callbacks, so there is no reason to rebuild a working
-     * session just because the app was backgrounded. */
+    /** A MIDI port keeps working across a stay in the background - see [Transport.rebuildOnResume]. */
     override val rebuildOnResume = false
 
     private val receiver = object : MidiReceiver() {
@@ -75,8 +74,10 @@ class AndroidMidiTransport(
         withContext(Dispatchers.IO) { inputPort.send(bytes, 0, bytes.size) }
     }
 
-    /** Closes in reverse order of acquisition; an early failure must not skip the rest, since a
-     * leaked MidiDevice keeps the port unavailable to every app on the phone. */
+    /**
+     * Closes in reverse order of acquisition; an early failure must not skip the rest, since a
+     * leaked MidiDevice keeps the port unavailable to every app on the phone.
+     */
     override fun close() {
         runCatching { outputPort.disconnect(receiver) }
         runCatching { outputPort.close() }

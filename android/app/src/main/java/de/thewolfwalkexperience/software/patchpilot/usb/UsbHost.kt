@@ -17,7 +17,7 @@ interface AttachedUsbDevice {
     /** The model, by vendor and product id: what a detach is matched on, and stable across a replug. */
     val physicalKey: String
 
-    /** The handle the platform gave this enumeration, which a replug changes - see `CacheKey`. */
+    /** The handle the platform gave this enumeration: stable across a resume, and not a replug detector, since a replug can get the same one - see `CacheKey`. */
     val handle: String
 
     /** What a picker row and the unknown-device warning show. */

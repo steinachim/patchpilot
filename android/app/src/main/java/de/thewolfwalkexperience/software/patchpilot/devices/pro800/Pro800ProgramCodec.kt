@@ -143,8 +143,10 @@ object Pro800ProgramCodec {
             .trim()
     }
 
-    /** Writes [value] into a fixed span, NUL-padding the remainder and truncating an over-long
-     * name rather than running past the field. */
+    /**
+     * Writes [value] into a fixed span, NUL-padding the remainder and truncating an over-long
+     * name rather than running past the field.
+     */
     fun writeString(dense: ByteArray, denseOffset: Int, length: Int, value: String) {
         require(denseOffset + length <= dense.size) {
             "string at $denseOffset..${denseOffset + length - 1} runs past a ${dense.size}-byte record"

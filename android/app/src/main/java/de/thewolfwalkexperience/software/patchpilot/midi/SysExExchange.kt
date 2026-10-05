@@ -50,8 +50,10 @@ class SysExExchange(
     private val retries: Int = 1,
 ) {
 
-    /** The transport's own resume policy - see [de.thewolfwalkexperience.software.patchpilot
-     * .core.Instrument.rebuildOnResume], which is what actually consults it. */
+    /**
+     * The transport's own resume policy - see [de.thewolfwalkexperience.software.patchpilot
+     * .core.Instrument.rebuildOnResume], which is what actually consults it.
+     */
     val rebuildOnResume: Boolean get() = transport.rebuildOnResume
     private val lock = Mutex()
 
@@ -221,11 +223,12 @@ class SysExExchange(
      *
      * [gap] paces the sends, matching the vendor editor's own spacing.
      *
-     * There is no safe place to stop part way: a Motif XS left mid-sequence sits on "receiving
-     * midi bulk data" until it is completed or power-cycled. The send loop therefore runs under
-     * [NonCancellable]; cancellation is observed at the wait for the acknowledgement, by which
-     * time the instrument has the whole sequence. Every check a caller wants belongs before the
-     * call.
+     * There is no safe place to stop part way: a Motif XS left mid-sequence shows "receiving midi
+     * bulk data". The unit measured recovered on its own and discarded the change; whether every
+     * unit does is unconfirmed, and it may need switching off and on. The send loop therefore
+     * runs under [NonCancellable]; cancellation is observed at the wait for the acknowledgement,
+     * by which time the instrument has the whole sequence. Every check a caller wants belongs
+     * before the call.
      */
     suspend fun exchangeAfterAll(
         messages: List<ByteArray>,
@@ -311,8 +314,10 @@ class SysExExchange(
     }
 }
 
-/** Enough of a message to identify it (header, type, address) without dumping a whole 210-byte
- * program into the log. */
+/**
+ * Enough of a message to identify it (header, type, address) without dumping a whole 210-byte
+ * program into the log.
+ */
 private const val PREFIX_BYTES = 12
 
 private fun ByteArray.prefixHex(): String =

@@ -20,7 +20,7 @@ reads as empty without leaving any of the previous voice's sound behind. Clearin
 name alone is not sufficient: a slot with its parameters intact still sounds like what
 it was, even once it displays as unnamed.
 
-These are the only payloads the app writes when deleting or moving a Motif XS voice,
+These are the only payloads the app writes over a cleared Motif XS slot (a delete, or the source of a move),
 chosen by the destination bank's kind (Normal or Drum).
 
 ## Axe-Fx III
@@ -34,13 +34,13 @@ checksum over the wire bytes whose algorithm is unknown, so a blank can only be 
 exactly as recorded (see `docs/PROTOCOLS.md`). SHA-256
 `cb64bd85166fd81e4849736a317858edbc588593d961065d319e80166c3be380`.
 
-## Adding one
-
-Do not hand-construct a replacement for another instrument or voice kind. A blank must come
-from the instrument or its own editor, never be assembled from a specification.
-
 ## Subsequent 37
 
 `subsequent37_panel_initialized.bin` is what the instrument's front-panel Initialize produces, stored to a slot and read back: the 488-byte program payload, name `Init Preset`, category byte `0x77` (none), checksum closing. The app packs it into a `05 01` write when it deletes a preset or empties the source of a move, and reads the slot back to confirm it.
 
 It is not what a slot that was never written holds. That program is also named `Init Preset` but differs at 60 byte offsets, and no write can recreate "never written". The app treats both as empty by their name alone.
+
+## Adding one
+
+Do not hand-construct a replacement for another instrument or voice kind. A blank must come
+from the instrument or its own editor, never be assembled from a specification.

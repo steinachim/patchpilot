@@ -144,8 +144,10 @@ class UsbMidiBulkTransport(
          */
         const val DEFAULT_READ_TIMEOUT_MS = 20
 
-        /** How long the reader idles after an empty read, so a driver returning instantly cannot
-         * turn the loop into a busy-spin. */
+        /**
+         * How long the reader idles after an empty read, so a driver returning instantly cannot
+         * turn the loop into a busy-spin.
+         */
         private const val IDLE_BACKOFF_MS = 1L
 
         /** Longer than [IDLE_BACKOFF_MS]: a failing read is not the normal idle case. */

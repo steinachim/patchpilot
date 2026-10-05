@@ -60,8 +60,9 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
      * The instrument's own state blocks this operation, and the app may be able to change it.
      *
      * Distinct from [NotSupported] ("never, on this device"): this is "not right now, and here is
-     * what would fix it", so the screen can offer the fix. The case it covers: a Motif XS
-     * silently ignores a voice selection unless it is in Voice mode.
+     * what would fix it", so the screen can offer the fix. The cases it covers: a Motif XS
+     * silently ignores a voice selection unless it is in Voice mode, and a Subsequent 37 answers
+     * nothing else while it sends its preset list.
      *
      * [remedy] changes the instrument, so it is never run without asking: switching a player out
      * of the Performance they are using is a visible change to their setup. [remedyDetail] is
@@ -81,9 +82,9 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
      *
      * The sibling of [BlockedByDeviceState] for the case where the app cannot send the fix,
      * because the instrument is not receiving what the app sends. [steps] is the button sequence
-     * the screen shows as a list. The case it covers: a Motif XS routes MIDI to exactly one of
+     * the screen shows as a list. The cases it covers: a Motif XS routes MIDI to exactly one of
      * its ports (DIN, USB or mLAN) and, set to any but USB, still enumerates and opens while
-     * answering nothing.
+     * answering nothing; and a Subsequent 37 ignores a Program Change while RCV PGM CHG is off.
      *
      * [alsoCheck] carries the other explanations for the same silence - a cable, another
      * application holding the device - since the cause is inferred from an absence.

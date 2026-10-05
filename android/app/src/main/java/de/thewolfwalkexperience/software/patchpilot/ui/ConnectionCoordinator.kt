@@ -81,7 +81,10 @@ internal class ConnectionCoordinator(
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
 
-    /** The session's instrument, or null; set and cleared under [instrumentMutex]. */
+    /**
+     * The session's instrument, or null; set and cleared under [instrumentMutex], except by
+     * [release], which clears it at once and closes it once the mutex is free.
+     */
     var instrument: Instrument? = null
         private set
 
@@ -314,8 +317,9 @@ internal class ConnectionCoordinator(
      * The MIDI scan is skipped where auto-connect already has its answer from USB alone:
      * `MidiDiscovery.scan` opens every port and waits up to 600 ms per port for a probe reply,
      * and [mergeCandidates] prefers a USB candidate for the same physical device anyway. A
-     * MIDI-only family (the Pro-800) is only ever found by running that scan, so it runs whenever
-     * the picker is forced, auto-connect is off, or USB found nothing recognised.
+     * MIDI-only family (the Pro-800, the Axe-Fx III, the Subsequent 37) is only ever found by
+     * running that scan, so it runs whenever the picker is forced, auto-connect is off, or USB
+     * found nothing recognised.
      */
     private suspend fun performConnect(forcePicker: Boolean) {
         _state.value = ConnectionState.Searching
@@ -489,8 +493,10 @@ internal class ConnectionCoordinator(
         }
     }
 
-    /** User picked a device from [ConnectionState.DeviceSelection] - show the "unsupported, at
-     * your own risk" warning before touching it. */
+    /**
+     * User picked a device from [ConnectionState.DeviceSelection] - show the "unsupported, at
+     * your own risk" warning before touching it.
+     */
     fun selectUnknownDevice(device: AttachedUsbDevice) {
         val refusal = "${device.label} is not a Clavia device, so there is no protocol " +
             "to try on it. Only an unrecognised Nord can be opened this way - everything else the " +
@@ -509,8 +515,10 @@ internal class ConnectionCoordinator(
         return false
     }
 
-    /** Backs out of [ConnectionState.UnknownDeviceWarning] back to the device picker (or the
-     * plain error state, if USB devices were unplugged in the meantime). */
+    /**
+     * Backs out of [ConnectionState.UnknownDeviceWarning] back to the device picker (or the
+     * plain error state, if USB devices were unplugged in the meantime).
+     */
     fun cancelUnknownDeviceSelection() {
         offerUnknownDeviceOrFail()
     }

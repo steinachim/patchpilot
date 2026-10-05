@@ -80,7 +80,7 @@ interface ThemeStyle {
     /** The decoration for the bank fast-scroll rail (`BankIndex`). */
     fun railDecoration(base: Modifier): Modifier
 
-    /** Stands in for a bare spinner while the connect screen is searching for/opening a device. */
+    /** Stands in for a bare spinner: while a device is searched for or opened, and while the preset screen waits for a session or a listing. */
     @Composable
     fun ProgressIndicator(modifier: Modifier = Modifier)
 

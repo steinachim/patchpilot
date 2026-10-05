@@ -112,8 +112,20 @@ internal data class RowRules(
 
 /**
  * The list: pull to refresh, the drag-to-reorder gesture, the rows and their bank headers, the
- * ghost of a dragged row, and the bank rail. [ProgramsScreen]'s doc says why the gesture sits on
- * the box around the list rather than on each row.
+ * ghost of a dragged row, and the bank rail.
+ *
+ * The drag gesture is detected on the box around the whole LazyColumn rather than on a row, and
+ * hit-tests the touch position against `listState.layoutInfo` plus a left-edge band for the
+ * handle's column: a per-row `pointerInput` would be cancelled the moment the dragged row
+ * scrolled out of the composed range. The dragged row stays in place, dimmed, and a separate
+ * ghost ListItem positioned from the finger's own y follows the finger, since LazyColumn composes
+ * from each item's untranslated layout slot and would tear the row down.
+ *
+ * Bank captions are interleaved into the same LazyColumn, so the drag indices are into
+ * `visibleRows` rather than the preset list, and headers and rows are not the same height - which
+ * is why a position resolves to a row through [ProgramListDragState] rather than by dividing by a
+ * row height. Row shading alternates, and the dragged row and its drop target are set through
+ * ListItem's own `colors`, which an external `Modifier.background()` would sit beneath.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -526,7 +538,7 @@ private fun DragGhost(program: PresetSlot, offsetY: Int) {
 }
 
 /**
- * Per-row Rename / Copy / Delete, behind one overflow button: in a 128-row bank always-visible
+ * Per-row actions (Rename, Copy, Move, Delete, favorite and categories), behind one overflow button: in a 128-row bank always-visible
  * buttons would be hundreds of controls competing with the preset names, with a destructive
  * action permanently a few dp from a benign one. Copy gets no confirmation of its own, being as
  * safe as Rename; choosing a destination in the list is the only decision it needs.
@@ -540,8 +552,10 @@ private fun RowActionsMenu(
     canDelete: Boolean,
     canSetFavorite: Boolean,
     canSetCategories: Boolean,
-    /** How many categories this instrument's presets hold - one on a Nord, two on a Motif XS.
-     * Decides whether the menu offers "Set category" or "Set categories". */
+    /**
+     * How many categories this instrument's presets hold - one on a Nord, two on a Motif XS.
+     * Decides whether the menu offers "Set category" or "Set categories".
+     */
     categoryCount: Int,
     onRename: () -> Unit,
     onCopy: () -> Unit,

@@ -79,8 +79,10 @@ sealed class ConnectionState {
         val message: String? = null,
     ) : ConnectionState()
 
-    /** The user picked a device in [DeviceSelection]; asks them to confirm before continuing,
-     * since this device is unrecognized and unsupported. */
+    /**
+     * The user picked a device in [DeviceSelection]; asks them to confirm before continuing,
+     * since this device is unrecognized and unsupported.
+     */
     data class UnknownDeviceWarning(val device: AttachedUsbDevice) : ConnectionState()
 
     /**
