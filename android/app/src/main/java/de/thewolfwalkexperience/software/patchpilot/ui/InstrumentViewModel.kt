@@ -74,9 +74,13 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             onSessionStarted = { listings.start() },
             onSessionEnding = { listings.cancelAndJoin() },
             onDeviceLost = { listings.invalidateUserCache() },
-            // A report only reads, so cancelling it changes nothing on the instrument, and a Nord's
-            // would otherwise hold the teardown for minutes.
-            onLeavingSession = { deviceReportRunner.cancel() },
+            onLeavingSession = {
+                // A report only reads, so cancelling it changes nothing on the instrument, and a
+                // Nord's would otherwise hold the teardown for minutes.
+                deviceReportRunner.cancel()
+                programs.reset()
+                lastSessionKey = null
+            },
         )
     }
 
@@ -101,6 +105,12 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
 
     /** The [Instrument.notices] entry the preset screen should show now, or null. */
     val pendingNotice: StateFlow<InstrumentNotice?> = _pendingNotice.asStateFlow()
+
+    /** The preset screen's operations and the state they own, held here so a rotation mid-edit keeps it - see [ProgramsController]. */
+    internal val programs = ProgramsController(this, strings)
+
+    /** The instrument the last session was on, so a session on another one starts [programs] afresh. */
+    private var lastSessionKey: String? = null
 
     /** The device report, held here so a minutes-long read survives the screen being torn down - see [DeviceReportRunner]. */
     internal val deviceReportRunner = DeviceReportRunner(
@@ -127,8 +137,24 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         viewModelScope.launch {
             state.collect { s ->
                 if (s is ConnectionState.Connected) offerNotice(s.instrument) else _pendingNotice.value = null
+                forgetOperationsOnSessionChange(s)
             }
         }
+    }
+
+    /**
+     * Resets [programs] where the session it described is over: the device was unplugged, or a
+     * session on another instrument began. A resume's rebuild of the same instrument keeps it, so
+     * a dialog open across a screen lock is still there.
+     */
+    private fun forgetOperationsOnSessionChange(state: ConnectionState) {
+        if (state is ConnectionState.DeviceLost) {
+            programs.reset()
+            lastSessionKey = null
+        }
+        val key = (state as? ConnectionState.Connected)?.instrument?.identity?.stableKey ?: return
+        if (key != lastSessionKey) programs.reset()
+        lastSessionKey = key
     }
 
     private suspend fun offerNotice(instrument: Instrument) {

@@ -3,14 +3,11 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalResources
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
@@ -35,8 +32,10 @@ internal data class TagTarget(val slot: PresetSlot, val tags: PresetTags)
  * the search text, the "show empty slots" tick, the refresh spinner, the scroll position - stays
  * in the composable.
  *
- * Held by `remember`, so it lives as long as the screen; the edits themselves outlive it (see
- * [InstrumentViewModel.launchEdit]).
+ * Held by the ViewModel, as the edits it starts are (see [InstrumentViewModel.launchEdit]): a
+ * rotation, a trip to Settings or any other configuration change mid-edit keeps the busy line,
+ * the result and an open dialog. The ViewModel calls [reset] when a session ends or another
+ * instrument's begins, so nothing carries over to a session it was not opened for.
  */
 @Stable
 internal class ProgramsController(
@@ -105,6 +104,26 @@ internal class ProgramsController(
     val picking: Boolean get() = pickSource != null
 
     /**
+     * Forgets every dialog, pick and result, for a session other than the one they were opened
+     * in. Operations still in flight keep their busy line until they end, since they hold the
+     * instrument either way.
+     */
+    fun reset() {
+        statusMessage = null
+        operationError = null
+        blocked = null
+        renameTarget = null
+        renameText = ""
+        deleteTarget = null
+        favoriteTarget = null
+        categoriesTarget = null
+        pendingShare = null
+        pickSource = null
+        pickIntent = PickIntent.COPY
+        scopeBeforePicking = null
+    }
+
+    /**
      * Runs one instrument operation, owning the busy line, the error path and the
      * blocked-by-state dialog for it.
      *
@@ -131,8 +150,8 @@ internal class ProgramsController(
         val mine = BusyOperation(busyLabel, showProgress)
         inFlight += mine
         // Not the screen's `rememberCoroutineScope()`: an edit outlives the screen - see
-        // [InstrumentViewModel.launchEdit]. Writing the result back into this object's state
-        // after the screen is gone is harmless, since nothing retains it.
+        // [InstrumentViewModel.launchEdit]. Its result lands in this object, which outlives the
+        // screen too, so it shows once the screen is back.
         viewModel.launchEdit {
             operationError = null
             statusMessage = null
@@ -345,14 +364,5 @@ internal class ProgramsController(
         // No confirmation, even for an emulated operation: the safety lives in the operation
         // itself - read-back verification, destructive step last, rollback on a half-done swap.
         runRelocation(source, target, targetWasEmpty)
-    }
-}
-
-/** Keyed on both collaborators, so a new session or configuration does not inherit a half-finished operation's dialog state. */
-@Composable
-internal fun rememberProgramsController(viewModel: InstrumentViewModel): ProgramsController {
-    val resources = LocalResources.current
-    return remember(viewModel, resources) {
-        ProgramsController(viewModel) { resId, args -> resources.getString(resId, *args) }
     }
 }

@@ -45,6 +45,19 @@ class InstrumentViewModelTest {
         assertEquals(ConnectionState.Searching, viewModel.state.value)
     }
 
+    /** The preset screen's state lives in the ViewModel, so leaving the session has to clear it. */
+    @Test
+    fun `leaving a session forgets the preset screen's open dialog`() {
+        val viewModel = viewModel().apply { awaitSettled() }
+        viewModel.connection.connectDemo()
+        viewModel.awaitSettled()
+        val slot = viewModel.listings.allSlots().first()
+        viewModel.programs.renameTarget = slot
+
+        viewModel.connection.disconnect()
+        assertEquals(null, viewModel.programs.renameTarget)
+    }
+
     /** The share button's gate can trail the session by a frame, so a tap may find no session at all. */
     @Test
     fun `a report is named only while a session can give one`() {

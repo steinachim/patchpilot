@@ -28,6 +28,7 @@
 - Moving a Yamaha Motif XS voice onto a slot that holds one, which an out-of-date list can show as empty, is now refused instead of overwriting that voice.
 - After an edit, the preset list updates only the changed rows, instead of re-reading the whole instrument whenever its list had a slot that could not be read (about 1½ minutes on a Yamaha Motif XS).
 - A preset slot that could not be read is shown as such and is no longer offered as an empty destination for a copy or move.
+- Rotating the phone, opening Settings or switching the theme while an edit runs no longer loses its progress line or result, or re-enables Back and other edits before it finishes; an open dialog or destination pick stays open too.
 
 ## 1.1
 

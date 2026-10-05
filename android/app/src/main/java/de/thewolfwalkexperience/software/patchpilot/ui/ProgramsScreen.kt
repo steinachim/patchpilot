@@ -128,7 +128,7 @@ fun ProgramsScreen(
 
     // Every instrument operation this screen can start, and the state each one owns - see
     // [ProgramsController]. What stays below is the state that only describes the view.
-    val ops = rememberProgramsController(viewModel)
+    val ops = viewModel.programs
 
     // Whether a row has room for its category badges beside the preset id: Material's medium
     // width breakpoint, a phone in landscape or a tablet. From the configuration rather than

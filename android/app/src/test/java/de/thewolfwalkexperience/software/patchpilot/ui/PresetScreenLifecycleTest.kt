@@ -5,6 +5,8 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 
 import androidx.annotation.StringRes
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -24,11 +26,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The app on Robolectric, in demo mode: leaving the preset screen while an operation holds the
- * instrument, as a device report does for minutes on a Nord.
+ * The app on Robolectric, in demo mode: the preset screen while an operation holds the
+ * instrument, as a device report does for minutes on a Nord - leaving it, and recreating it.
  */
 @RunWith(AndroidJUnit4::class)
-class LeaveSessionTest {
+class PresetScreenLifecycleTest {
 
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
@@ -41,17 +43,27 @@ class LeaveSessionTest {
     private fun awaitText(@StringRes id: Int) =
         compose.waitUntil(10_000) { compose.onAllNodesWithText(text(id)).fetchSemanticsNodes().isNotEmpty() }
 
-    @Test
-    fun `back while an operation holds the instrument leaves the preset screen at once`() {
+    /** Connects demo mode and waits for its preset screen. */
+    private fun openDemoPresets() {
         awaitText(R.string.action_try_demo)
         // Below the fold on Robolectric's small default screen.
         compose.onNodeWithText(text(R.string.action_try_demo)).performScrollTo().performClick()
         compose.waitUntil(10_000) {
             compose.onAllNodesWithContentDescription(text(R.string.cd_back)).fetchSemanticsNodes().isNotEmpty()
         }
+    }
 
+    /** Holds the operation mutex, as a report or a slow edit does, until the result is completed. */
+    private fun holdInstrument(): CompletableDeferred<Unit> {
         val release = CompletableDeferred<Unit>()
         viewModel.viewModelScope.launch { viewModel.connection.exclusive { release.await() } }
+        return release
+    }
+
+    @Test
+    fun `back while an operation holds the instrument leaves the preset screen at once`() {
+        openDemoPresets()
+        val release = holdInstrument()
         compose.onNodeWithContentDescription(text(R.string.cd_back)).performClick()
 
         // The connect screen, searching, while the operation still holds the instrument.
@@ -62,5 +74,34 @@ class LeaveSessionTest {
         release.complete(Unit)
         awaitText(R.string.connect_none_found)
         compose.onNodeWithContentDescription(text(R.string.cd_back)).assertDoesNotExist()
+    }
+
+    /**
+     * A rotation mid-edit keeps the edit's progress line and its gate on back, and the result
+     * still shows once the edit lands - all of which the controller owns, so it has to outlive
+     * the activity.
+     */
+    @Test
+    fun `recreating the activity mid-edit keeps the edit's progress, gate and result`() {
+        openDemoPresets()
+        compose.waitUntil(10_000) { viewModel.listings.userIndex.value.complete }
+        val slot = viewModel.listings.userIndex.value.slots.first { !it.isEmpty }
+        val busy = compose.activity.getString(R.string.programs_busy_deleting, slot.displayId)
+
+        val release = holdInstrument()
+        compose.runOnUiThread { viewModel.programs.onDeleteConfirmed(slot) }
+        compose.waitForIdle()
+        compose.onNodeWithText(busy).assertExists()
+        compose.onNodeWithContentDescription(text(R.string.cd_back)).assertIsNotEnabled()
+
+        compose.activityRule.scenario.recreate()
+        compose.waitForIdle()
+        compose.onNodeWithText(busy).assertExists()
+        compose.onNodeWithContentDescription(text(R.string.cd_back)).assertIsNotEnabled()
+
+        release.complete(Unit)
+        val result = compose.activity.getString(R.string.result_deleted, slot.displayId)
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(result).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription(text(R.string.cd_back)).assertIsEnabled()
     }
 }

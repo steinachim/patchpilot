@@ -299,6 +299,30 @@ class ProgramsControllerTest {
         assertTrue("show what went wrong against the copy that was about to be made", controller.picking)
     }
 
+    /**
+     * The controller outlives the screen, so the ViewModel resets it for a session other than the
+     * one its dialogs and picks were opened in. An edit still running keeps its line: it holds
+     * the instrument either way.
+     */
+    @Test
+    fun `reset forgets dialogs, picks and results but not an edit in flight`() = runTest {
+        val ops = FakeOperations(this)
+        val (controller, _) = controller(ops)
+        controller.beginPicking(slot(0, 1))
+        controller.renameTarget = slot(0, 2)
+        controller.deleteTarget = slot(0, 3)
+        controller.operationError = "earlier failure"
+        controller.onDeleteConfirmed(slot(0, 4))
+
+        controller.reset()
+
+        assertFalse(controller.picking)
+        assertNull(controller.renameTarget)
+        assertNull(controller.deleteTarget)
+        assertNull(controller.operationError)
+        assertNotNull("an edit in flight keeps its line until it ends", controller.busy)
+    }
+
     // ---- "Move to…", the reachable equivalent of the drag gesture ----
 
     @Test
