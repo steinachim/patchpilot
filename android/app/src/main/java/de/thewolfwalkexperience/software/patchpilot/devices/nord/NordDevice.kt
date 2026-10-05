@@ -483,7 +483,14 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     private suspend fun reloadPresetForDisplay(bank: Int, item: Int) {
         val payload = fileTransfer(FileTransferSubOp.SELECT_PRESET, uint32BE(bank) + uint32BE(item)).payload
-        requireEcho("display-refresh", payload, bank, item)
+        // The write before this is already stored. An answer that does not confirm the refresh
+        // leaves only the display stale, which is no reason to report the write as failed.
+        // Nothing in requireEcho suspends, so this catches only its verdicts on the reply.
+        try {
+            requireEcho("display-refresh", payload, bank, item, writes = false)
+        } catch (e: Exception) {
+            Log.w(TAG, "The display refresh after a write was not confirmed", e)
+        }
     }
 
     /**
@@ -620,15 +627,16 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     }
 
     /**
-     * Checks the `(status, bank, item)` triple most write sub-opcodes answer with: a non-zero
-     * status is a refusal, and an echo that does not match means the instrument acted on a
-     * different slot than the one asked for.
+     * Checks the `(status, bank, item)` triple most write sub-opcodes answer with. A non-zero
+     * status is a refusal ([NordStatusException]). An echo naming another slot means the
+     * instrument acted on that slot instead, so the request was not refused but went astray
+     * ([NordProtocolException]); where [writes], a preset nobody chose may have changed.
      */
-    private fun requireEcho(what: String, payload: ByteArray, bank: Int, item: Int) {
+    private fun requireEcho(what: String, payload: ByteArray, bank: Int, item: Int, writes: Boolean = true) {
         val status = readUInt32BE(payload, StatusEcho.STATUS)
         val echoBank = readUInt32BE(payload, StatusEcho.BANK)
         val echoItem = readUInt32BE(payload, StatusEcho.ITEM)
-        if (status != 0 || echoBank != bank || echoItem != item) {
+        if (status != 0) {
             throw NordStatusException(
                 what,
                 status,
@@ -636,7 +644,23 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                     "(requested bank=$bank item=$item)",
             )
         }
+        if (echoBank != bank || echoItem != item) {
+            val answered = "The instrument answered for ${slotLabel(echoBank, echoItem)} instead of " +
+                "${slotLabel(bank, item)}."
+            throw NordProtocolException(
+                if (writes) {
+                    "$answered A preset other than the chosen one may have changed. Refresh the " +
+                        "list to see what the instrument holds."
+                } else {
+                    answered
+                },
+            )
+        }
     }
+
+    /** [formatPresetId], or the raw numbers for an echo naming a slot outside the layout. */
+    private fun slotLabel(bank: Int, item: Int): String =
+        runCatching { formatPresetId(bank, item) }.getOrElse { "bank $bank, item $item" }
 
     /**
      * Selects [categoryIndex], runs [block], and always unlocks afterwards: a lock left standing
@@ -789,7 +813,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     suspend fun selectPreset(bank: Int, item: Int) {
         withProgramCategory {
             val payload = fileTransfer(FileTransferSubOp.SELECT_PRESET, uint32BE(bank) + uint32BE(item)).payload
-            requireEcho("select-preset", payload, bank, item)
+            requireEcho("select-preset", payload, bank, item, writes = false)
         }
     }
 

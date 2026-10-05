@@ -24,6 +24,7 @@
 - Returning to the app reconnects the instrument that was in use: with two attached it no longer switches to the other, and with auto-connect off it no longer asks which one every time.
 - Choosing demo mode on the untested-firmware warning releases the instrument, so the next search finds it.
 - An accepted firmware warning is no longer shown again each time the app returns from the background.
+- On a Nord, an edit the instrument applies to a different slot than the one chosen is reported as such, with a prompt to refresh the list, instead of as a refusal; and a write is no longer reported as failed when only the display refresh after it goes unconfirmed.
 
 ## 1.1
 

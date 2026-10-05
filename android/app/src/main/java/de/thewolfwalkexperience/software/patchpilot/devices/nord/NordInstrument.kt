@@ -344,8 +344,8 @@ private fun nordStatusExplanation(what: String, status: Int): String? = when (st
  *  - [NordStatusException] - the instrument answered and said no. Its code travels verbatim.
  *  - [UnsupportedProtocolVersionException] - answered clearly, in a protocol nobody has profiled.
  *  - [NordProtocolException] - answered with something this app cannot make sense of: a reply
- *    out of step with the request, a walk that does not add up, a read-back that contradicts
- *    the write.
+ *    out of step with the request, an echo naming another slot, a walk that does not add up, a
+ *    read-back that contradicts the write.
  *  - `IllegalArgumentException` - a reply this app cannot parse: a CRC mismatch, a short
  *    payload, an implausible field.
  *  - any other `IllegalStateException` - the transport's own ("USB bulk write failed", a dead
@@ -361,7 +361,7 @@ internal suspend fun <T> mapNordFailure(what: String, block: suspend () -> T): T
 } catch (e: CancellationException) {
     throw e
 } catch (e: NordStatusException) {
-    throw InstrumentException.DeviceRejected(what, e.status, nordStatusExplanation(what, e.status))
+    throw InstrumentException.DeviceRejected(what, e.status, nordStatusExplanation(what, e.status), e)
 } catch (e: UnsupportedProtocolVersionException) {
     throw InstrumentException.ProtocolDesync(e.message ?: "Unsupported protocol version", e)
 } catch (e: NordProtocolException) {

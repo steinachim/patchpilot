@@ -38,10 +38,15 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
      *   bare "(status 4)", which says nothing about what to do. [status] is still carried for the
      *   log.
      */
-    class DeviceRejected(what: String, val status: Int, val explanation: String? = null) :
-        InstrumentException(
-            explanation ?: "The instrument refused to $what (status $status).",
-        )
+    class DeviceRejected(
+        what: String,
+        val status: Int,
+        val explanation: String? = null,
+        cause: Throwable? = null,
+    ) : InstrumentException(
+        explanation ?: "The instrument refused to $what (status $status).",
+        cause,
+    )
 
     /** A reply arrived that this app cannot make sense of - a bug, or an unprofiled device. */
     class ProtocolDesync(detail: String, cause: Throwable? = null) :

@@ -383,15 +383,14 @@ class StorageCalibrationTest {
             5 to ByteArray(0),
             9 to count,
             7 to ByteArray(4),
-            // The walk: child list, select, count, first cursor step - and then the instrument
-            // goes silent, which the replay transport reports by running out of replies.
+            // The walk: child list, select, count - and then the instrument goes silent.
             3 to singleBankChildList(),
             5 to ByteArray(0),
             9 to count,
         )
 
         val failed = mutableListOf<String>()
-        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
+        val device = NordFixtures.device(ReplayTransport(responses, thenSilent = true), NordFixtures.GRAND_PROFILE)
         val areas = device.calibrateStorageUnits(onFailure = { name, _ -> failed += name })
 
         assertEquals(listOf("Wave Pool"), failed)
@@ -443,7 +442,7 @@ class StorageCalibrationTest {
         // other probe explained itself. Swallowing the cause here robbed both callers of it -
         // the device report wants it for its failure map, the connect path for its log - so this
         // throws, and null now means only "the instrument answered with no children".
-        val device = NordFixtures.device(ReplayTransport(emptyList()), NordFixtures.GRAND_PROFILE)
+        val device = NordFixtures.device(ReplayTransport(emptyList(), thenSilent = true), NordFixtures.GRAND_PROFILE)
 
         val thrown = try {
             device.deriveBankLayout()

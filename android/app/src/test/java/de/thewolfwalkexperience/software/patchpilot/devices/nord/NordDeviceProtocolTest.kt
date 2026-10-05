@@ -70,19 +70,24 @@ class NordDeviceProtocolTest {
     private fun deviceInfoPayload(protocolVersionFileTransfer: Int): ByteArray =
         byteArrayOf(5, 6, 1, 7, 0, 10, 2, 12, protocolVersionFileTransfer.toByte(), 13, 0)
 
+    /** Untested firmware is warned about, not refused: the connect completes with an advisory. */
     @Test
-    fun `connect rejects unsupported firmware version`() = runTest {
-        val device = NordFixtures.device(
-            ReplayTransport(emptyList(), firmwareVersion = 999),
-            NordFixtures.GRAND_PROFILE,
-        )
-        try {
-            device.connect()
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
-        // The firmware gate runs before anything is sent, so nothing was.
+    fun `untested firmware connects with an advisory naming both versions`() = runTest {
+        val transport = ReplayTransport(listOf(3 to deviceInfoPayload(10)), firmwareVersion = 999)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.connect()
+        transport.assertAllConsumed()
+        val advisory = device.firmwareAdvisory!!
+        assertTrue(advisory, advisory.contains("9.99"))
+        assertTrue(advisory, advisory.contains("1.68"))
+    }
+
+    @Test
+    fun `tested firmware connects with no advisory`() = runTest {
+        val transport = ReplayTransport(listOf(3 to deviceInfoPayload(10)), firmwareVersion = 168)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.connect()
+        assertEquals(null, device.firmwareAdvisory)
     }
 
     @Test
@@ -731,13 +736,16 @@ class NordDeviceProtocolTest {
                 responses += 33 to (uint32BE(0) + uint32BE(bank) + uint32BE(item))
                 responses += 31 to itemPayload
             }
-            responses += 33 to (uint32BE(1) + uint32BE(bank) + uint32BE(0)) // bank exhausted
+            // The walk stops once it holds as many items as the count promised, so the last
+            // bank's end is never asked for.
+            if (bank != perBank.lastIndex) responses += 33 to (uint32BE(1) + uint32BE(bank) + uint32BE(0))
         }
         responses += 7 to ByteArray(0) // UNLOCK_CATEGORY_SELECTION
 
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.STAGE2EX_PROFILE)
         assertEquals(25, device.fetchCategoryItems(1).size)
+        transport.assertAllConsumed()
         assertEquals(
             "the child list is read once per category, then cached",
             1,
@@ -809,8 +817,10 @@ class NordDeviceProtocolTest {
             48 to (uint32BE(0) + uint32BE(1) + uint32BE(6)), // SELECT_PRESET echo: flag=0 bank=1 item=6
             7 to ByteArray(0), // UNLOCK_CATEGORY_SELECTION -> unlock
         )
-        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
-        device.selectPreset(1, 6) // no exception == success
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.selectPreset(1, 6)
+        transport.assertAllConsumed()
     }
 
     @Test
@@ -824,13 +834,9 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        try {
-            device.selectPreset(1, 6)
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        thrownBy<NordProtocolException> { device.selectPreset(1, 6) }
         assertEquals(NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code, transport.sentRequests.last().subOp)
+        transport.assertAllConsumed()
     }
 
     @Test
@@ -846,7 +852,8 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        device.swapPrograms(0, 0, 0, 3) // no exception == success
+        device.swapPrograms(0, 0, 0, 3)
+        transport.assertAllConsumed()
         assertEquals(NordDevice.FileTransferSubOp.SWAP_PROGRAMS.code, transport.sentRequests[2].subOp)
     }
 
@@ -866,7 +873,8 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        device.deleteProgram(8, 12) // no exception == success
+        device.deleteProgram(8, 12)
+        transport.assertAllConsumed()
 
         val delete = transport.sentRequests[2]
         assertEquals(NordDevice.FileTransferSubOp.DELETE_ITEM.code, delete.subOp)
@@ -889,13 +897,12 @@ class NordDeviceProtocolTest {
             21 to (uint32BE(0) + uint32BE(8) + uint32BE(13)), // status 0, but item 13 not 12
             7 to ByteArray(0), // unlock still runs
         )
-        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
-        try {
-            device.deleteProgram(8, 12)
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        // Not a refusal: the instrument acted, on another slot.
+        val failure = thrownBy<NordProtocolException> { device.deleteProgram(8, 12) }
+        assertTrue(failure.message!!, failure.message!!.contains("may have changed"))
+        transport.assertAllConsumed()
     }
 
     /** A non-zero status is a refusal, whatever the echo says. */
@@ -908,13 +915,10 @@ class NordDeviceProtocolTest {
             21 to (uint32BE(9) + uint32BE(8) + uint32BE(12)),
             7 to ByteArray(0),
         )
-        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
-        try {
-            device.deleteProgram(8, 12)
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        assertEquals(9, thrownBy<NordStatusException> { device.deleteProgram(8, 12) }.status)
+        transport.assertAllConsumed()
     }
 
     /**
@@ -936,7 +940,8 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        device.moveProgram(7, 24, 8, 0) // H:5:5 -> empty I:1:1; no exception == success
+        device.moveProgram(7, 24, 8, 0) // H:5:5 -> empty I:1:1
+        transport.assertAllConsumed()
         val move = transport.sentRequests[2]
         assertEquals(NordDevice.FileTransferSubOp.MOVE_PROGRAM.code, move.subOp)
         assertTrue((uint32BE(7) + uint32BE(24) + uint32BE(8) + uint32BE(0)).contentEquals(move.payload))
@@ -952,12 +957,10 @@ class NordDeviceProtocolTest {
             25 to (uint32BE(0) + uint32BE(7) + uint32BE(24) + uint32BE(9) + uint32BE(0)),
             7 to ByteArray(0), // UNLOCK_CATEGORY_SELECTION -> unlock still runs
         )
-        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
-        try {
-            device.moveProgram(7, 24, 8, 0)
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-        }
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        thrownBy<NordProtocolException> { device.moveProgram(7, 24, 8, 0) }
+        transport.assertAllConsumed()
     }
 
     /**
@@ -980,6 +983,7 @@ class NordDeviceProtocolTest {
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
         assertEquals("Synth Strings 2", device.copyProgram(7, 23, 8, 12))
+        transport.assertAllConsumed()
 
         val copy = transport.sentRequests[2]
         assertEquals(NordDevice.FileTransferSubOp.COPY_PROGRAM.code, copy.subOp)
@@ -1001,13 +1005,10 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        try {
-            device.copyProgram(7, 23, 8, 12)
-            fail("expected IllegalStateException")
-        } catch (e: IllegalStateException) {
-            assertTrue(e.message!!.contains("occupied"))
-        }
+        val failure = thrownBy<NordStatusException> { device.copyProgram(7, 23, 8, 12) }
+        assertTrue(failure.message!!.contains("occupied"))
         assertEquals(NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code, transport.sentRequests.last().subOp)
+        transport.assertAllConsumed()
     }
 
     @Test
@@ -1020,13 +1021,10 @@ class NordDeviceProtocolTest {
             23 to (uint32BE(0) + uint32BE(7) + uint32BE(23) + uint32BE(9) + uint32BE(12)),
             7 to ByteArray(0),
         )
-        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
-        try {
-            device.copyProgram(7, 23, 8, 12)
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        thrownBy<NordProtocolException> { device.copyProgram(7, 23, 8, 12) }
+        transport.assertAllConsumed()
     }
 
     /**
@@ -1054,7 +1052,8 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        device.renamePreset(1, 11, "Black Upright") // no exception == success
+        device.renamePreset(1, 11, "Black Upright")
+        transport.assertAllConsumed()
 
         // SET_NAME's payload is bank(4) + item(4) + nameLen(4) + name
         val sent = transport.sentRequests.first { it.subOp == NordDevice.FileTransferSubOp.SET_NAME.code }
@@ -1075,13 +1074,29 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        try {
-            device.renamePreset(1, 11, "Black Upright")
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        thrownBy<NordProtocolException> { device.renamePreset(1, 11, "Black Upright") }
         assertEquals(NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code, transport.sentRequests.last().subOp)
+        transport.assertAllConsumed()
+    }
+
+    /**
+     * The re-select after a write only redraws the panel. The name is already stored, so a
+     * refresh the instrument does not confirm leaves the display stale and fails nothing.
+     */
+    @Test
+    fun `renamePreset succeeds when only the display refresh is not confirmed`() = runTest {
+        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val responses = listOf(
+            1 to rootList,
+            5 to ByteArray(0),
+            29 to (uint32BE(0) + uint32BE(1) + uint32BE(11)), // SET_NAME confirmed
+            48 to (uint32BE(0) + uint32BE(1) + uint32BE(12)), // the refresh answers for another slot
+            7 to ByteArray(0),
+        )
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.renamePreset(1, 11, "Black Upright")
+        transport.assertAllConsumed()
     }
 
     @Test

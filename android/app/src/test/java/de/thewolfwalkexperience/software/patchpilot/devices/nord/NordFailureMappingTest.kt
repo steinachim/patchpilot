@@ -66,11 +66,12 @@ class NordFailureMappingTest {
     }
 
     /**
-     * An echo for a slot other than the one asked for is a refusal too, not a desync: the
-     * instrument answered, it just did not do what was asked.
+     * An echo for a slot other than the one asked for is a desync, not a refusal: the instrument
+     * acted, on another slot, so the user is told the list may be out of date rather than that
+     * nothing happened.
      */
     @Test
-    fun `an echo for the wrong slot becomes DeviceRejected`() = runTest {
+    fun `an echo for the wrong slot becomes ProtocolDesync`() = runTest {
         val instrument = instrument(
             listOf(
                 1 to rootList(),
@@ -79,9 +80,10 @@ class NordFailureMappingTest {
                 7 to ByteArray(0),
             ),
         )
-        assertThrows(InstrumentException.DeviceRejected::class.java) {
+        val failure = assertThrows(InstrumentException.ProtocolDesync::class.java) {
             kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
         }
+        assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
     }
 
     /** Status 4 is the one code the protocol names - "file exists" (§3.3.12). */

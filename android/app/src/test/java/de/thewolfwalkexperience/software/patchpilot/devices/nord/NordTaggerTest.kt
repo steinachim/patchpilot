@@ -127,16 +127,12 @@ class NordTaggerTest {
             ),
         )
         val device = NordFixtures.device(transport, profile)
-        try {
-            device.setPresetCategory(1, 11, 22)
-            fail("a mismatched echo should be refused")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        thrownBy<NordProtocolException> { device.setPresetCategory(1, 11, 22) }
         assertEquals(
             NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code,
             transport.sentRequests.last().subOp,
         )
+        transport.assertAllConsumed()
     }
 
     @Test
@@ -150,12 +146,8 @@ class NordTaggerTest {
             ),
         )
         val device = NordFixtures.device(transport, profile)
-        try {
-            device.setPresetCategory(1, 11, 22)
-            fail("a non-zero status should be refused")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        assertEquals(2, thrownBy<NordStatusException> { device.setPresetCategory(1, 11, 22) }.status)
+        transport.assertAllConsumed()
     }
 
     // ---- The facet ----
