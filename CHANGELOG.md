@@ -25,6 +25,7 @@
 - Choosing demo mode on the untested-firmware warning releases the instrument, so the next search finds it.
 - An accepted firmware warning is no longer shown again each time the app returns from the background.
 - On a Nord, an edit the instrument applies to a different slot than the one chosen is reported as such, with a prompt to refresh the list, instead of as a refusal; and a write is no longer reported as failed when only the display refresh after it goes unconfirmed.
+- Moving a Yamaha Motif XS voice onto a slot that holds one, which an out-of-date list can show as empty, is now refused instead of overwriting that voice.
 
 ## 1.1
 

@@ -1300,7 +1300,7 @@ class MotifXsInstrumentTest {
     fun `move carries the voice across and empties the slot it came from`() = runTest {
         val (motif, _) = instrument(backgroundScope)
         val from = SlotAddress(0, 0) // named
-        val to = SlotAddress(1, 0) // named, in the other bank - will be overwritten
+        val to = SlotAddress(1, 1) // empty, in the other bank
         val moving = motif.browser.refresh(from).name
         assertNotNull(moving)
 
@@ -1359,6 +1359,35 @@ class MotifXsInstrumentTest {
         val (motif, transport) = instrument(backgroundScope)
         val refusal = runCatching {
             motif.editor!!.copyProgram(SlotAddress(0, 1), SlotAddress(1, 1))
+        }.exceptionOrNull()
+
+        assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.NotSupported)
+        assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
+    }
+
+    /**
+     * A move onto an occupied slot is refused before anything is written, as a copy is: the
+     * instrument would overwrite the voice there, and a listing out of date offers it as empty.
+     */
+    @Test
+    fun `move onto an occupied slot is refused and leaves it untouched`() = runTest {
+        val (motif, transport) = instrument(backgroundScope)
+        val occupant = motif.browser.refresh(SlotAddress(1, 0)).name
+        assertNotNull(occupant)
+        val refusal = runCatching {
+            motif.editor!!.move(SlotAddress(0, 0), SlotAddress(1, 0))
+        }.exceptionOrNull()
+
+        assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.NotSupported)
+        assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
+        assertEquals(occupant, motif.browser.refresh(SlotAddress(1, 0)).name)
+    }
+
+    @Test
+    fun `move of an empty slot is refused without writing`() = runTest {
+        val (motif, transport) = instrument(backgroundScope)
+        val refusal = runCatching {
+            motif.editor!!.move(SlotAddress(0, 1), SlotAddress(1, 1))
         }.exceptionOrNull()
 
         assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.NotSupported)

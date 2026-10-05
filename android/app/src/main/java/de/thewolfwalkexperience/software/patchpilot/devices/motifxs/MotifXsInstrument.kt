@@ -330,10 +330,10 @@ class MotifXsInstrument(
         }
 
         /**
-         * Move: write the voice to the destination, then clear the source with the shipped blank
-         * ([blankPayloadFor]). Both writes precede the single commit, so a refused clear leaves
-         * nothing committed; destination first, so a partial commit would leave the voice in two
-         * places rather than none.
+         * Move: write the voice to an empty destination, then clear the source with the shipped
+         * blank ([blankPayloadFor]). Both writes precede the single commit, so a refused clear
+         * leaves nothing committed; destination first, so a partial commit would leave the voice
+         * in two places rather than none.
          */
         override suspend fun move(from: SlotAddress, to: SlotAddress) {
             requireWritable(from)
@@ -341,6 +341,12 @@ class MotifXsInstrument(
             requireSameKind(from, to)
             if (from == to) return
             val payload = readVoicePayload(from)
+            if (MotifXsVoice.nameOf(payload) == null) throw InstrumentException.NotSupported("move an empty slot")
+            // As in [copyProgram]: the instrument would overwrite an occupied slot without
+            // complaint, and a listing out of date offers one as empty.
+            if (MotifXsVoice.nameOf(readVoicePayload(to)) != null) {
+                throw InstrumentException.NotSupported("move onto an occupied slot")
+            }
             // Sourced before the first write, so a bank with no blank to copy fails before
             // anything has been changed rather than after the destination is already written.
             val blank = blankPayloadFor(from.bank)

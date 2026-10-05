@@ -239,7 +239,7 @@ Delete, copy, move and swap are composed from one primitive: write a whole voice
 
 - Delete: write a blank payload, commit, verify.
 - Copy: read the source (refusing an empty source or an occupied destination, which the instrument does not), write it to the destination, commit, verify. The copy carries the source's name unchanged.
-- Move: read the source, write it to the destination and the blank to the source, one commit, verify both.
+- Move: read the source (refusing an empty source or an occupied destination, as copy does), write it to the destination and the blank to the source, one commit, verify both.
 - Swap: read both, write each to the other's address, one commit, verify both.
 
 The blank payloads ship with the app (`devices/blanks/`): one initialized Normal Voice and one initialized Drum Voice, each read off an instrument with its name bytes cleared through the documented path. A drum kit and a normal voice are different objects (about 12.6 kB against 1.9 kB, with different block sequences), and the instrument acknowledges a payload of the wrong kind at either address without complaint, so the app refuses any copy or move between a drum bank and a normal bank itself.
