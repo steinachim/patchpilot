@@ -123,7 +123,8 @@ internal class RegressionRunner(
         fun restore(saved: List<String>): FinishedRun? {
             if (saved.size < 2 || (saved.size - 2) % 3 != 0) return null
             val results = saved.drop(2).chunked(3).map { (name, status, detail) ->
-                RegressionResult(name, Status.valueOf(status), detail)
+                // A name this build does not know restores as nothing, never as a crash at launch.
+                RegressionResult(name, Status.entries.firstOrNull { it.name == status } ?: return null, detail)
             }
             return FinishedRun(RegressionReport(results, saved[1]), saved[0])
         }

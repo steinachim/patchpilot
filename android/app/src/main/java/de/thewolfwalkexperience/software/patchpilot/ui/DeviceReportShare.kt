@@ -31,12 +31,15 @@ internal class DeviceReportShare(
     val error: String?,
     val label: String,
     val clearError: () -> Unit,
-    private val makeDialog: () -> PendingShare,
+    private val makeDialog: () -> PendingShare?,
 ) {
     val running: Boolean get() = step != null
 
-    /** The filename prompt that starts a read; see [ShareFilenameDialog]. */
-    fun dialog(): PendingShare = makeDialog()
+    /**
+     * The filename prompt that starts a read ([ShareFilenameDialog]), or null where the session
+     * has no report by the time of the tap: the button's gate can trail the session by a frame.
+     */
+    fun dialog(): PendingShare? = makeDialog()
 }
 
 /**
@@ -86,12 +89,13 @@ internal fun rememberDeviceReportShare(
         label = step ?: title,
         clearError = runner::clearError,
     ) {
+        // Supplied by the instrument's own reporter, since the families read different things.
+        val (initialStem, description) = viewModel.reportNaming() ?: return@DeviceReportShare null
         PendingShare(
             title = title,
-            // Supplied by the instrument's own reporter, since the families read different things.
-            description = viewModel.reportDescription,
+            description = description,
             suffix = suffix,
-            initialStem = viewModel.suggestedReportFilename(),
+            initialStem = initialStem,
             onConfirm = { stem ->
                 pendingStem = stem
                 currentOnStarted()

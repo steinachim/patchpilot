@@ -69,4 +69,14 @@ class RegressionRunnerTest {
 
         assertEquals(RunState.Idle, runner(this, saved).state.value)
     }
+
+    /** Restore runs as the ViewModel is built, so a status it cannot read must not throw. */
+    @Test
+    fun `a saved report with a status this build does not know restores as nothing`() = runTest {
+        // The runner's own key and layout: stem, summary, then name, status, detail per result.
+        val saved = SavedStateHandle(
+            mapOf("regressionRun" to arrayOf("demo_instrument", "summary", "Load a preset", "RENAMED", "detail")),
+        )
+        assertEquals(RunState.Idle, runner(this, saved).state.value)
+    }
 }

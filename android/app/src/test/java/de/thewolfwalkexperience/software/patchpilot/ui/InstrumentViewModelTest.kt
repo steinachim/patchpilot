@@ -45,6 +45,13 @@ class InstrumentViewModelTest {
         assertEquals(ConnectionState.Searching, viewModel.state.value)
     }
 
+    /** The share button's gate can trail the session by a frame, so a tap may find no session at all. */
+    @Test
+    fun `a report is named only while a session can give one`() {
+        val viewModel = viewModel().apply { awaitSettled() }
+        assertEquals(null, viewModel.reportNaming())
+    }
+
     /**
      * Runs the main looper until the attempt in flight has landed. Polls rather than idling once:
      * the attempt reads the auto-connect preference on a DataStore thread.

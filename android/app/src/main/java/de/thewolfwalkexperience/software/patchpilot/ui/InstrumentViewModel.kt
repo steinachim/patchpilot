@@ -319,6 +319,13 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         requireFacet(current().report, "describe itself").suggestedFilename()
 
     /**
+     * The report's filename stem and description, or null with no reporter connected: read at a
+     * tap, which can land after the session it was offered for has ended.
+     */
+    fun reportNaming(): Pair<String, String>? =
+        connection.instrument?.report?.let { it.suggestedFilename() to it.description }
+
+    /**
      * A filename stem for anything shared about this instrument, facet or no facet:
      * [suggestedReportFilename] requires the reporter, and the regression test is offered for
      * every family, including one whose `report` is null.
