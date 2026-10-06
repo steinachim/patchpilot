@@ -81,7 +81,7 @@ class Pro800Instrument(
     /** A Pro-800 preset has no category and no favorite mark. */
     override val tagger: PresetTagger? = null
 
-    override val report: DeviceReporter = Pro800Reporter(exchange, layout, ::programNumberOf) {
+    override val report: DeviceReporter = Pro800Reporter(exchange, layout, ::readReply) {
         Pro800ReportIdentity(deviceName, firmware, descriptorId)
     }
 
@@ -218,8 +218,14 @@ class Pro800Instrument(
         while (true) {
             val readBack = Pro800Settings.fromEncoded(readSettings())
             if (readBack.currentPresetNumber == programNumber && readBack.currentBank == address.bank) {
-                exchange.exchange(Pro800SysEx.reloadPreset(), what = "loading $displayId") {
+                val status = exchange.exchange(Pro800SysEx.reloadPreset(), what = "loading $displayId") {
                     Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_STATUS
+                }
+                if (!Pro800SysEx.isStatusOk(status)) {
+                    throw InstrumentException.DeviceRejected(
+                        "load $displayId",
+                        status = Pro800SysEx.statusCodeOf(status) ?: -1,
+                    )
                 }
                 Log.i(TAG, "$deviceName: selected $displayId (program $programNumber)")
                 return
@@ -238,13 +244,16 @@ class Pro800Instrument(
     // ---- PresetTransfer ----
 
     /** One preset's raw, still-encoded blob. The browser is built on this. */
-    override suspend fun read(address: SlotAddress): ByteArray {
+    override suspend fun read(address: SlotAddress): ByteArray = payloadOf(readReply(address))
+
+    /** [read]'s whole reply, a dump or a bare `F0 F7`. The report measures it. */
+    private suspend fun readReply(address: SlotAddress): ByteArray {
         val first = readOnce(address)
 
         // A suspiciously short record is read again and accepted only if both reads agree: a
         // truncated splice is indistinguishable from a legitimately short preset by inspection,
         // but truncation reproduces and a splice does not (see Pro800Program.isSuspiciouslyShort).
-        if (Pro800Program.fromEncoded(first).isSuspiciouslyShort) {
+        if (Pro800Program.fromEncoded(payloadOf(first)).isSuspiciouslyShort) {
             val second = readOnce(address)
             if (!first.contentEquals(second)) {
                 throw InstrumentException.ProtocolDesync(
@@ -288,9 +297,12 @@ class Pro800Instrument(
                 status = Pro800SysEx.statusCodeOf(reply) ?: -1,
             )
         }
-        // An empty reply decodes to an empty record, which Pro800Program reports as an empty slot.
-        return if (Pro800SysEx.isEmptyReply(reply)) ByteArray(0) else Pro800SysEx.dumpPayload(reply)
+        return reply
     }
+
+    /** An empty reply decodes to an empty record, which Pro800Program reports as an empty slot. */
+    private fun payloadOf(reply: ByteArray): ByteArray =
+        if (Pro800SysEx.isEmptyReply(reply)) ByteArray(0) else Pro800SysEx.dumpPayload(reply)
 
     /**
      * Stores a preset's raw blob at [address], or clears the address when [blob] is empty.

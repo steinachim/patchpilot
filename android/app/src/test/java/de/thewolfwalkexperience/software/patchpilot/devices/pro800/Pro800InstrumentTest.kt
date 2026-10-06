@@ -13,6 +13,11 @@ import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -185,6 +190,40 @@ class Pro800InstrumentTest {
             slots.single { it.address == SlotAddress(0, 0) }.name,
         )
         assertFalse("the splice was consumed, not left to the next read", firstAnswer)
+    }
+
+    /** The report reads as the browser does, so a spliced reply is retried rather than counted. */
+    @Test
+    fun `the report retries a spliced reply rather than counting it`() = runTest {
+        var firstAnswer = true
+        val transport = FakeMidiTransport { request ->
+            if (Pro800SysEx.typeOf(request) != Pro800SysEx.TYPE_REQUEST_DUMP) {
+                emptyList()
+            } else {
+                val number = Pro800SysEx.addressOf(request)!!
+                if (number == 0 && firstAnswer) {
+                    firstAnswer = false
+                    listOf(oversizedDumpFor(number))
+                } else {
+                    listOf(dumpFor(number, names[number]))
+                }
+            }
+        }
+        val pro800 = Pro800Instrument(
+            SysExExchange(
+                transport,
+                backgroundScope,
+                defaultTimeout = kotlin.time.Duration.parse("20ms"),
+                retries = 1,
+            ),
+            config,
+        )
+
+        val json = Json.parseToJsonElement(pro800.report.buildReport().json).jsonObject
+        val lengths = json["messageLengths"]!!.jsonArray.map { it.jsonPrimitive.int }
+        assertFalse("the splice was consumed", firstAnswer)
+        assertEquals(listOf(dumpFor(0, names[0]).size), lengths)
+        assertEquals(3, json["occupiedCount"]!!.jsonPrimitive.int)
     }
 
     /**
@@ -440,6 +479,17 @@ class Pro800InstrumentTest {
             "no reload may be sent when the pointer never landed",
             fake.requestLog.none { Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_RESET_MODE },
         )
+    }
+
+    /** A reload the instrument refuses is reported, not taken as a load. */
+    @Test
+    fun `a refused reload fails the selection`() = runTest {
+        val fake = FakePro800(reloadStatus = 1)
+        val pro800 = fullSizeInstrument(fake, backgroundScope)
+
+        val failure = runCatching { pro800.selector!!.select(SlotAddress(bank = 1, slot = 5)) }.exceptionOrNull()
+        assertTrue("expected a refusal, got $failure", failure is InstrumentException.DeviceRejected)
+        assertEquals(1, (failure as InstrumentException.DeviceRejected).status)
     }
 
     /**

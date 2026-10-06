@@ -24,8 +24,11 @@ import kotlinx.serialization.encodeToString
 class Pro800Reporter(
     private val exchange: SysExExchange,
     private val layout: SlotLayout,
-    /** The instrument's own program number for an address - see `Pro800Instrument`. */
-    private val programNumberOf: (SlotAddress) -> Int,
+    /**
+     * One address's whole reply, read as the browser reads it (`Pro800Instrument`), so a reply
+     * spliced on a shared port is retried or refused rather than counted.
+     */
+    private val readReply: suspend (SlotAddress) -> ByteArray,
     private val identity: () -> Pro800ReportIdentity,
 ) : DeviceReporter {
 
@@ -70,16 +73,7 @@ class Pro800Reporter(
 
         for (address in layout.allAddresses()) {
             val displayId = layout.format.format(address)
-            val programNumber = programNumberOf(address)
-            val message = probes.probe("dump[$displayId]", ByteArray(0)) {
-                exchangeRaw(Pro800SysEx.requestDump(programNumber), "dump $displayId") { reply ->
-                    Pro800SysEx.isEmptyReply(reply) ||
-                        (
-                            Pro800SysEx.typeOf(reply) == Pro800SysEx.TYPE_DUMP &&
-                                Pro800SysEx.addressOf(reply) == programNumber
-                            )
-                }
-            }
+            val message = probes.probe("dump[$displayId]", ByteArray(0)) { readReply(address) }
             done++
             if (done % 50 == 0) progress?.invoke("Scanning presets ($done/$total)...")
             if (message.isEmpty()) continue

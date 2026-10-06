@@ -34,6 +34,8 @@ class FakePro800(
      * over a second to commit. Zero is the common case; anything above it exercises the poll loop.
      */
     var staleSettingsReads: Int = 0,
+    /** The status the preset reload answers with; anything but OK is a refusal. */
+    var reloadStatus: Int = Pro800SysEx.STATUS_OK,
 ) {
     /** Program number -> the encoded payload stored there. Absent means an empty address. */
     private val stored = initial.toMutableMap()
@@ -83,10 +85,10 @@ class FakePro800(
                 emptyList()
             }
 
-            // The preset reload. Answers a plain OK status, like every other command.
+            // The preset reload. Answers a status, as every other command does.
             Pro800SysEx.TYPE_RESET_MODE -> listOf(
                 Pro800SysEx.HEADER +
-                    byteArrayOf(Pro800SysEx.TYPE_STATUS.toByte(), 0x00, Pro800SysEx.STATUS_OK.toByte()) +
+                    byteArrayOf(Pro800SysEx.TYPE_STATUS.toByte(), 0x00, reloadStatus.toByte()) +
                     Pro800SysEx.SYSEX_END,
             )
 
