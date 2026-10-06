@@ -327,6 +327,8 @@ class MotifXsInstrumentTest {
         damagedFavorites: Set<Int> = emptySet(),
         /** The names the factory listing draws on; empty means no factory scope is offered. */
         factoryVoices: MotifXsFactoryVoices = MotifXsFactoryVoices(),
+        /** Sees every request before the device answers it - where a test cancels mid-operation. */
+        onRequest: (ByteArray) -> Unit = {},
     ): Pair<MotifXsInstrument, FakeMidiTransport> {
         val slots = FakeSlots(readOnlyBanks)
         var currentMode = mode
@@ -337,6 +339,7 @@ class MotifXsInstrumentTest {
         // whole reason a rename can leave the panel showing a stale name.
         var loadedVoice: String? = loadedVoiceName
         val transport = FakeMidiTransport { request ->
+            onRequest(request)
             val address = MotifXsSysEx.addressOf(request)
             when {
                 request.size > 4 && request[1].toInt() == 0x7E ->
@@ -1612,6 +1615,37 @@ class MotifXsInstrumentTest {
                 "commit would apply it",
             committed,
         )
+    }
+
+    /**
+     * A move cancelled as its first write goes out still sends the second write and the commit:
+     * the source is cleared and the destination holds the voice, never one without the other.
+     */
+    @Test
+    fun `a cancelled move still completes both writes and the commit`() = runTest {
+        var job: Job? = null
+        val (motif, _) = instrument(
+            backgroundScope,
+            onRequest = { request ->
+                if (MotifXsSysEx.typeOf(request) == MotifXsSysEx.TYPE_BULK_DUMP &&
+                    MotifXsSysEx.addressOf(request)?.first == 0x0C
+                ) {
+                    job?.cancel()
+                }
+            },
+        )
+        val from = SlotAddress(0, 0)
+        val to = SlotAddress(1, 1)
+        val moving = motif.browser.refresh(from).name
+        assertNotNull(moving)
+
+        job = launch(start = CoroutineStart.LAZY) { motif.editor!!.move(from, to) }
+        job!!.start()
+        job!!.join()
+
+        assertTrue(job!!.isCancelled)
+        assertEquals(moving, motif.browser.refresh(to).name)
+        assertNull("the source must be cleared in the same commit", motif.browser.refresh(from).name)
     }
 }
 

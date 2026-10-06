@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -126,5 +127,72 @@ class NordCancellationTest {
             "a cancelled walk must propagate the cancellation, but it caught ${caught?.let { it::class.simpleName }}",
             caught is CancellationException,
         )
+    }
+
+    /**
+     * [ReplayTransport], but the caller's job is cancelled the moment a request for [cancelOn]
+     * goes out - the user leaving mid-operation, at the worst moment.
+     */
+    private class CancelMidOperation(
+        private val replay: ReplayTransport,
+        private val cancelOn: Int,
+    ) : UsbBulkTransport by replay {
+        var job: Job? = null
+
+        override fun bulkWrite(data: ByteArray) {
+            replay.bulkWrite(data)
+            if (parseMessage(data).subOp == cancelOn) job?.cancel()
+        }
+    }
+
+    /**
+     * **A cancelled operation still unlocks the instrument.** The unlock runs under
+     * `NonCancellable`: without it, leaving mid-rename would leave the category lock set and the
+     * front panel unresponsive until the session ended.
+     */
+    @Test
+    fun `a rename cancelled mid-write still unlocks the instrument`() = runTest {
+        val replay = ReplayTransport(
+            listOf(
+                1 to rootListPayload(listOf("Piano", "Program", "Settings")),
+                5 to ByteArray(0), // SELECT_CATEGORY
+                // No SET_NAME reply: the job is cancelled as the request goes out, before the read.
+                7 to ByteArray(0), // UNLOCK_CATEGORY_SELECTION, sent anyway
+            ),
+        )
+        val transport = CancelMidOperation(replay, cancelOn = NordDevice.FileTransferSubOp.SET_NAME.code)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        val job = launch(start = CoroutineStart.LAZY) { device.renamePreset(1, 11, "Black Upright") }
+        transport.job = job
+        job.start()
+        job.join()
+
+        assertTrue(job.isCancelled)
+        assertEquals(
+            NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code,
+            replay.sentRequests.last().subOp,
+        )
+        replay.assertAllConsumed()
+    }
+
+    /** A sub-opcode 0/1 root category list carrying [names], each with a 29-byte trailer (protocol version 10). */
+    private fun rootListPayload(names: List<String>): ByteArray {
+        val out = mutableListOf<Byte>()
+        repeat(4) { out += 0.toByte() }
+        out += names.size.toByte()
+        for (name in names) {
+            val bytes = name.toByteArray(Charsets.US_ASCII)
+            out +=
+                listOf(
+                    (bytes.size ushr 24).toByte(),
+                    (bytes.size ushr 16).toByte(),
+                    (bytes.size ushr 8).toByte(),
+                    bytes.size.toByte(),
+                )
+            out += bytes.toList()
+            out += List(29) { 0.toByte() }
+        }
+        return out.toByteArray()
     }
 }

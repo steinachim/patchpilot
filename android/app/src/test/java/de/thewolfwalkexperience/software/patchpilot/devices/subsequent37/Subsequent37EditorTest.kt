@@ -5,6 +5,9 @@ package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
 
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
@@ -171,5 +174,28 @@ class Subsequent37EditorTest {
         assertArrayEquals(blankPacked, fake.packed[2])
         editor.delete(address(Subsequent37Fixtures.emptyPrograms(1).single()))
         assertEquals(1, fake.writes.size)
+    }
+
+    /**
+     * A swap cancelled as its first write lands still writes the second: both writes run under
+     * `NonCancellable`, so leaving mid-swap cannot leave one preset in two slots and the other
+     * nowhere.
+     */
+    @Test
+    fun `a cancelled swap still writes both slots`() = runTest {
+        val fake = FakeSubsequent37(backgroundScope)
+        val editor = connected(fake).editor
+        val nameA = fake.programAt(0).name
+        val nameB = fake.programAt(1).name
+        var job: Job? = null
+        fake.onWrite = { job?.cancel() }
+
+        job = launch(start = CoroutineStart.LAZY) { editor.swap(address(0), address(1)) }
+        job!!.start()
+        job!!.join()
+
+        assertTrue(job!!.isCancelled)
+        assertEquals(nameB, fake.programAt(0).name)
+        assertEquals(nameA, fake.programAt(1).name)
     }
 }

@@ -70,6 +70,9 @@ class FakeSubsequent37(private val scope: CoroutineScope) {
     /** The next this-many program reads go unanswered. */
     var unansweredReads = 0
 
+    /** Called with the program number after each write lands - where a test cancels mid-edit. */
+    var onWrite: (Int) -> Unit = {}
+
     /** Virtual time the last dump piece went out, if one did. */
     var dumpEndedAt: Long? = null
         private set
@@ -171,6 +174,7 @@ class FakeSubsequent37(private val scope: CoroutineScope) {
         before[number] = packed[number]
         staleLeft[number] = staleReadsAfterWrite
         packed[number] = message.copyOfRange(23, 23 + 732)
+        onWrite(number)
     }
 
     private fun startDump() {
