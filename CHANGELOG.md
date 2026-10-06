@@ -35,6 +35,7 @@
 - A preset list stops with a message once three presets in a row go unanswered, instead of waiting out every remaining one - minutes on a Pro-800 or Motif XS whose MIDI connection has stopped answering.
 - On a Nord Electro 7 and Stage 4, the category list shows <None> last, as on the other Nords.
 - A Fractal Audio Axe-Fx III preset name with control characters in it is shown without them, as on the other instruments.
+- On a Nord, a reply that does not come in time is reported as such, rather than as a lost connection.
 
 ## 1.1
 

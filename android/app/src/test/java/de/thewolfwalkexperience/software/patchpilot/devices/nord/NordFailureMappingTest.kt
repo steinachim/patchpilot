@@ -5,6 +5,8 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.transport.UsbReadTimeoutException
+import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -172,16 +174,43 @@ class NordFailureMappingTest {
 
     /** What a detached device looks like to the protocol layer: every transfer fails at once. */
     private class FailingTransport : de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport {
-        override fun bulkWrite(
-            data: ByteArray,
-        ) = throw IllegalStateException("USB bulk write failed: sent -1 of ${data.size} bytes")
+        override fun bulkWrite(data: ByteArray) =
+            throw UsbTransferException("USB bulk write failed: sent -1 of ${data.size} bytes")
         override fun bulkRead(
             bufferSize: Int,
-        ): ByteArray = throw IllegalStateException("USB bulk read failed (result=-1)")
+        ): ByteArray = throw UsbTransferException("USB bulk read failed (result=-1)")
         override fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int): ByteArray =
-            throw IllegalStateException("USB control transfer failed")
+            throw UsbTransferException("USB control transfer failed")
         override fun close() = Unit
         override val rebuildOnResume = true
+    }
+
+    /** A read that waits out its timeout is a silent instrument, not a lost link: a retry may work. */
+    @Test
+    fun `a read that times out becomes Timeout`() = runTest {
+        val instrument = NordInstrument(NordFixtures.device(SilentTransport(), NordFixtures.GRAND_PROFILE))
+        assertThrows(InstrumentException.Timeout::class.java) {
+            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
+        }
+    }
+
+    /** Takes every request, then never answers within the timeout. */
+    private class SilentTransport : de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport {
+        override fun bulkWrite(data: ByteArray) = Unit
+        override fun bulkRead(bufferSize: Int): ByteArray = throw UsbReadTimeoutException("No reply within 3000 ms")
+        override fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int): ByteArray =
+            ByteArray(length)
+        override fun close() = Unit
+        override val rebuildOnResume = true
+    }
+
+    /** A `check()` failing inside this app's own code is a bug, not a cable: it must not read as "connection lost". */
+    @Test
+    fun `an unexpected internal state becomes ProtocolDesync, not TransportLost`() = runTest {
+        val failure = assertThrows(InstrumentException.ProtocolDesync::class.java) {
+            kotlinx.coroutines.runBlocking { mapNordFailure("delete a preset") { check(false) { "impossible state" } } }
+        }
+        assertTrue(failure.message!!.contains("impossible state"))
     }
 
     /**

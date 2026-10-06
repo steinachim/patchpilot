@@ -25,6 +25,8 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.slugifyDeviceId
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
+import de.thewolfwalkexperience.software.patchpilot.transport.UsbReadTimeoutException
+import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferException
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -348,8 +350,12 @@ private fun nordStatusExplanation(what: String, status: Int): String? = when (st
  *    read-back that contradicts the write.
  *  - `IllegalArgumentException` - a reply this app cannot parse: a CRC mismatch, a short
  *    payload, an implausible field.
- *  - any other `IllegalStateException` - the transport's own ("USB bulk write failed", a dead
- *    endpoint): the link is gone, which is the one case a retry can actually fix.
+ *  - [UsbReadTimeoutException] - no reply within the read timeout: the instrument was silent,
+ *    and a retry may well work.
+ *  - [UsbTransferException] - the transport's own ("USB bulk write failed", a dead endpoint): the
+ *    link is gone, which a reconnect can fix.
+ *  - any other `IllegalStateException` - a state this code did not expect, which is a bug rather
+ *    than anything the connection did.
  *
  * [what] is the operation in the user's terms, so [InstrumentException.NotSupported]'s and
  * [InstrumentException.DeviceRejected]'s sentences read correctly: "rename presets", not
@@ -368,6 +374,10 @@ internal suspend fun <T> mapNordFailure(what: String, block: suspend () -> T): T
     throw InstrumentException.ProtocolDesync(e.message ?: "Unexpected reply while $what", e)
 } catch (e: IllegalArgumentException) {
     throw InstrumentException.ProtocolDesync(e.message ?: "Unreadable reply while $what", e)
-} catch (e: IllegalStateException) {
+} catch (e: UsbReadTimeoutException) {
+    throw InstrumentException.Timeout(what, e)
+} catch (e: UsbTransferException) {
     throw InstrumentException.TransportLost(e.message ?: "The connection failed while $what", e)
+} catch (e: IllegalStateException) {
+    throw InstrumentException.ProtocolDesync(e.message ?: "Unexpected state while $what", e)
 }

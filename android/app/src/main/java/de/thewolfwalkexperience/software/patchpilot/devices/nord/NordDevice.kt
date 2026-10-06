@@ -9,6 +9,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.printableAscii
 import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareAdvisory
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
+import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Locale
@@ -411,7 +412,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 if (++emptyReads >= MAX_EMPTY_READS) {
                     val buffered = readBuffer.size
                     readBuffer = ByteArray(0)
-                    error(
+                    throw UsbTransferException(
                         "the instrument returned $emptyReads empty replies in a row with " +
                             "$buffered bytes buffered; treating the endpoint as dead",
                     )
