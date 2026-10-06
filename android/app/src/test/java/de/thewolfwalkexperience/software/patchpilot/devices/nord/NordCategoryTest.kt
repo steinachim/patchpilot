@@ -115,6 +115,19 @@ class NordCategoryTest {
         assertEquals("Acoustic", names.first())
     }
 
+    /** On every model, by id: an Electro 7 and a Stage 4 relabel it `<None>`, which sorts first by name. */
+    @Test
+    fun `every model lists its none category last, whatever it calls it`() {
+        for (device in catalog.devices) {
+            val categories = NordCategories.resolve(device, catalog.programCategories) ?: continue
+            val none = categories.nameOf(NordCategories.NONE_ID) ?: continue
+            val names = categories.taxonomy.mains.map { it.name }
+            assertEquals(device.id, none, names.last())
+            val rest = names.dropLast(1)
+            assertEquals(device.id, rest.sortedBy { it.lowercase() }, rest)
+        }
+    }
+
     /**
      * **An index is not a wire id.** A Nord's ids are sparse, so the taxonomy's positions and the
      * bytes sub-opcode 51 carries are different numbers - this is the mapping that keeps them

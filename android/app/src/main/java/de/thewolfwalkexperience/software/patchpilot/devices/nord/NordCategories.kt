@@ -39,6 +39,9 @@ internal class NordCategories private constructor(
         /** The category every Nord lists last: a real category with a real id, not the absence of one. */
         const val NONE = "None"
 
+        /** [NONE]'s id, which identifies it where a model relabels it (`<None>` on an Electro 7 or a Stage 4). */
+        const val NONE_ID = 17
+
         /**
          * Resolves [profile]'s subset against the catalog's [master] list. Null - and so no
          * tagging facet - when the profile declares no ids, or when any declared id cannot be
@@ -66,7 +69,7 @@ internal class NordCategories private constructor(
             }
 
             val ordered = named.sortedWith(
-                compareBy({ it.second == NONE }, { it.second.lowercase() }),
+                compareBy({ it.first == NONE_ID }, { it.second.lowercase() }),
             )
             return NordCategories(
                 ids = ordered.map { it.first },
