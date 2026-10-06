@@ -851,17 +851,23 @@ class MotifXsInstrument(
                 address.slot,
                 bank.selectMsb,
             )
-            // The first two are told, not asked: only the third echo - the program - means the
-            // selection landed.
-            exchange.tell(sets[0])
-            exchange.tell(sets[1])
-            exchange.exchange(
-                request = sets[2],
-                what = "selecting ${layout.format.format(address)}",
-                timeout = VOICE_TIMEOUT,
-            ) { reply ->
-                MotifXsSysEx.isSelectEcho(reply) &&
-                    reply.size > 8 && (reply[7].toInt() and 0xFF) == MotifXsSysEx.SELECT_PROGRAM
+            // All three under one lock, so a listing's dump request cannot land between the bank
+            // select and the program. Only the third echo - the program, carrying the value sent -
+            // means the selection landed. A selection is idempotent, so a missing echo sends all
+            // three again, as often as the exchange retries anything else.
+            val what = "selecting ${layout.format.format(address)}"
+            var retriesLeft = SELECT_RETRIES
+            while (true) {
+                try {
+                    exchange.exchangeAfterAll(sets, what, timeout = VOICE_TIMEOUT) { reply ->
+                        MotifXsSysEx.isSelectEcho(reply) && reply.size > 8 &&
+                            (reply[7].toInt() and 0xFF) == MotifXsSysEx.SELECT_PROGRAM &&
+                            (reply[8].toInt() and 0x7F) == address.slot
+                    }
+                    return
+                } catch (e: InstrumentException.Timeout) {
+                    if (retriesLeft-- == 0) throw e
+                }
             }
         }
     }
@@ -1155,6 +1161,9 @@ class MotifXsInstrument(
 
         /** Sized for the slowest voice: a drum voice is ~12.6 kB and takes ~1.02 s against a user voice's ~160 ms. */
         private val VOICE_TIMEOUT = 5.seconds
+
+        /** As many as the exchange the family builds (`MotifXsFamily`) allows any other request. */
+        private const val SELECT_RETRIES = 2
 
         /**
          * A write's acknowledgement takes ~158 ms for a 1,916-byte voice. Generous, since too

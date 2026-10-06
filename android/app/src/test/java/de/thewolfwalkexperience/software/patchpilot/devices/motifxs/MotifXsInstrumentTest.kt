@@ -349,6 +349,8 @@ class MotifXsInstrumentTest {
         silentCommit: Boolean = false,
         /** See [FakeSlots.misstore]. */
         misstore: Boolean = false,
+        /** Echoes the program set with the next program's number, as if another selection had landed. */
+        echoesOtherProgram: Boolean = false,
     ): Pair<MotifXsInstrument, FakeMidiTransport> {
         val slots = FakeSlots(readOnlyBanks).also {
             it.silentCommit = silentCommit
@@ -438,7 +440,11 @@ class MotifXsInstrumentTest {
                             defaultVoiceAt(0x0C, 0x0A, slot),
                         )?.let { MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(it)) }
                     }
-                    listOf(selectEcho(request))
+                    val echo = selectEcho(request)
+                    if (echoesOtherProgram && (request[7].toInt() and 0xFF) == MotifXsSysEx.SELECT_PROGRAM) {
+                        echo[8] = ((echo[8].toInt() + 1) and 0x7F).toByte()
+                    }
+                    listOf(echo)
                 }
 
                 // The edit buffer's name, one byte per request - what the panel is showing.
@@ -1709,6 +1715,20 @@ class MotifXsInstrumentTest {
 
         assertTrue("expected a desync, got $failure", failure is InstrumentException.ProtocolDesync)
         assertTrue(failure!!.message!!, failure.message!!.contains("read back something different"))
+    }
+
+    /**
+     * Only the echo of the program sent confirms a selection: one naming another program is some
+     * other selection, so all three sets go out again, as often as the exchange retries anything.
+     */
+    @Test
+    fun `an echo naming another program does not confirm a selection`() = runTest {
+        val (motif, transport) = instrument(backgroundScope, echoesOtherProgram = true)
+
+        val failure = runCatching { motif.selector.select(SlotAddress(0, 1)) }.exceptionOrNull()
+
+        assertTrue("expected a timeout, got $failure", failure is InstrumentException.Timeout)
+        assertEquals(9, transport.sent.count { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_SELECT })
     }
 }
 
