@@ -32,6 +32,7 @@
 - A preset edited while the user list was still loading no longer appears unedited after returning to the app.
 - Pulling to refresh while the preset list is still loading no longer starts the list over.
 - The system Back gesture on the preset list now does what the Back arrow does: it returns to the instrument list, after ending a “Copy to…” or “Move to…” pick, instead of closing the app on Android 8 to 11.
+- A preset list stops with a message once three presets in a row go unanswered, instead of waiting out every remaining one - minutes on a Pro-800 or Motif XS whose MIDI connection has stopped answering.
 
 ## 1.1
 

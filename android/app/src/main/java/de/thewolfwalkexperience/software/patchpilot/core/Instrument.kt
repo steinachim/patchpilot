@@ -184,6 +184,9 @@ sealed interface IndexUpdate {
     data object Complete : IndexUpdate
 }
 
+/** How many timeouts in a row end an [indexWalk]: one or two are a slot, three are a silent instrument. */
+internal const val SILENT_SLOTS_BEFORE_GIVING_UP = 3
+
 /**
  * The sequential read-every-slot walk, for the families that have no directory to read instead
  * (Pro-800, Motif XS, Axe-Fx III). Rows are emitted as they arrive, one unreadable slot costs only
@@ -195,8 +198,11 @@ sealed interface IndexUpdate {
  *   reason string.
  * @param addresses walked in order; [total] is stated separately so a [Sequence] need not be
  *   counted twice.
- * @param readSlot may throw - anything but [kotlinx.coroutines.CancellationException] becomes an
- *   [IndexUpdate.Failed] and the walk goes on. Cancellation is always propagated.
+ * @param readSlot may throw. A failure becomes an [IndexUpdate.Failed] and the walk goes on, with
+ *   two exceptions that end it, keeping the rows already read: [InstrumentException.TransportLost],
+ *   and [SILENT_SLOTS_BEFORE_GIVING_UP] timeouts in a row, since an instrument that has gone
+ *   silent would otherwise cost the full timeout on every remaining slot. Cancellation is always
+ *   propagated.
  */
 fun indexWalk(
     addresses: Iterable<SlotAddress>,
@@ -208,16 +214,31 @@ fun indexWalk(
 ): Flow<IndexUpdate> = flow {
     val batch = mutableListOf<PresetSlot>()
     var done = 0
+    var silentInARow = 0
 
     for (address in addresses) {
         val displayId = layout.format.format(address)
         try {
             batch += readSlot(address, displayId)
+            silentInARow = 0
         } catch (e: CancellationException) {
+            throw e
+        } catch (e: InstrumentException.TransportLost) {
+            if (batch.isNotEmpty()) emit(IndexUpdate.Slots(batch.toList()))
             throw e
         } catch (e: Exception) {
             onFailure(displayId, e)
             emit(IndexUpdate.Failed(address, e.message ?: "unreadable"))
+            silentInARow = if (e is InstrumentException.Timeout) silentInARow + 1 else 0
+            if (silentInARow >= SILENT_SLOTS_BEFORE_GIVING_UP) {
+                if (batch.isNotEmpty()) emit(IndexUpdate.Slots(batch.toList()))
+                throw InstrumentException.Timeout(
+                    "listing presets",
+                    e,
+                    explanation = "The instrument stopped answering: $silentInARow presets in a row went " +
+                        "unanswered. Check the cable and the instrument's MIDI settings, then refresh the list.",
+                )
+            }
         }
         done++
         // `done == total` flushes a short final batch.
