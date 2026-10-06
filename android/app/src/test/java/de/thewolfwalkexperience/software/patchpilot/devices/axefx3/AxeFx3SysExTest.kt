@@ -59,6 +59,13 @@ class AxeFx3SysExTest {
         assertEquals(AxeFx3SysEx.DUMP_CHUNK_DATA_BYTES, AxeFx3SysEx.decodeChunk(chunk).size)
     }
 
+    /** A name reaches the list, the report and logcat, so a control byte in it is dropped, as every family drops it. */
+    @Test
+    fun `a name field drops control bytes and stops at its terminator`() {
+        val field = "Lead\nPad\u0001".toByteArray(Charsets.US_ASCII) + byteArrayOf(0) + "stale".toByteArray()
+        assertEquals("LeadPad", AxeFx3SysEx.nameFromField(field))
+    }
+
     @Test
     fun `the firmware reply decodes to its version and build stamp`() {
         val firmware = AxeFx3SysEx.decodeFirmware(AxeFx3Fixtures.FIRMWARE_REPLY)!!

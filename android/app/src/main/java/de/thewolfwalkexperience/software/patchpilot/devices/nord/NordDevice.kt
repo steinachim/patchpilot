@@ -6,6 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.printableAscii
 import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareAdvisory
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import java.nio.ByteBuffer
@@ -615,14 +616,6 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         if (tag != PROGRAM_CONTENT_TAG) return null
         return readUInt32BE(payload, ItemRecord.CATEGORY_ID)
     }
-
-    /**
-     * Strips control characters from a name the instrument chose: US-ASCII decoding already
-     * replaces anything above 0x7F, but NUL, CR and LF would pass through into the browser, the
-     * report JSON and logcat. Strips rather than rejects, so one odd byte does not fail a listing.
-     */
-    private fun printableAscii(raw: String): String =
-        raw.filter { it.code in 0x20..0x7E }
 
     fun collectItemNames(itemPayloads: List<ByteArray>): List<NamedItem> = itemPayloads.map { payload ->
         val bank = readUInt32BE(payload, ItemRecord.BANK)

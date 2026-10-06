@@ -3,6 +3,8 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.axefx3
 
+import de.thewolfwalkexperience.software.patchpilot.core.printableAscii
+
 /**
  * The Axe-Fx III's SysEx messages: builders, matchers and decoders, with no I/O.
  * `docs/PROTOCOLS.md` has the wire format.
@@ -228,11 +230,12 @@ object AxeFx3SysEx {
     /**
      * A name field as text. It is a C string in a fixed buffer: whatever follows the first NUL is
      * left over from an earlier name (a delete writes `<EMPTY>` and a NUL over only the first
-     * eight bytes), so it is cut there.
+     * eight bytes), so it is cut there. Control bytes before it are dropped, as every family
+     * drops them from a name it shows.
      */
     fun nameFromField(field: ByteArray): String {
         val end = field.indexOf(0).let { if (it < 0) field.size else it }
-        return String(field, 0, end, Charsets.US_ASCII).trimEnd()
+        return printableAscii(String(field, 0, end, Charsets.US_ASCII)).trimEnd()
     }
 
     /** Whether bytes other than NUL follow the name's terminator, which a delete leaves behind. */

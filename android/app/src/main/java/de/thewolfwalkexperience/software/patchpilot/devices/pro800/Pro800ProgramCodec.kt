@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import androidx.annotation.VisibleForTesting
+import de.thewolfwalkexperience.software.patchpilot.core.printableAscii
 
 /**
  * The Pro-800's 7-bit-safe encoding. SysEx cannot carry a byte above `0x7F`, so Behringer inserts
@@ -138,9 +139,7 @@ object Pro800ProgramCodec {
     fun readString(dense: ByteArray, denseOffset: Int, length: Int): String {
         if (denseOffset >= dense.size) return ""
         val end = minOf(denseOffset + length, dense.size)
-        return String(dense, denseOffset, end - denseOffset, Charsets.US_ASCII)
-            .filter { it.code in 0x20..0x7E }
-            .trim()
+        return printableAscii(String(dense, denseOffset, end - denseOffset, Charsets.US_ASCII)).trim()
     }
 
     /**
