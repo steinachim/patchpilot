@@ -130,6 +130,12 @@ class MotifXsInstrumentTest {
         private val written = mutableMapOf<Triple<Int, Int, Int>, ByteArray>()
         private val pending = mutableMapOf<Triple<Int, Int, Int>, ByteArray>()
 
+        /** Applies a commit but leaves it unacknowledged, so whether it took cannot be told. */
+        var silentCommit = false
+
+        /** Stores every committed write with one data bit flipped, so a read-back disagrees. */
+        var misstore = false
+
         /**
          * Answers a host bulk dump the way the instrument does: a write is acknowledged and
          * *held*, and only `11 00 00` stores it. Writes wait in [pending] until a marker arrives,
@@ -144,9 +150,19 @@ class MotifXsInstrumentTest {
             val address = MotifXsSysEx.addressOf(request) ?: return emptyList()
             if (address == Triple(MotifXsSysEx.STORE_HI, MotifXsSysEx.STORE_MID, MotifXsSysEx.STORE_LO)) {
                 // Commits everything outstanding, not merely the write before it.
-                written.putAll(pending)
+                pending.forEach { (where, payload) ->
+                    written[where] =
+                        if (misstore) {
+                            payload.copyOf().also {
+                                it[it.size / 2] =
+                                    (it[it.size / 2].toInt() xor 0x01).toByte()
+                            }
+                        } else {
+                            payload
+                        }
+                }
                 pending.clear()
-                return listOf(ACK)
+                return if (silentCommit) emptyList() else listOf(ACK)
             }
             if (!MotifXsSysEx.isWellFormedBulkDump(request)) return emptyList()
             if (address.second in readOnly) return emptyList()
@@ -329,8 +345,15 @@ class MotifXsInstrumentTest {
         factoryVoices: MotifXsFactoryVoices = MotifXsFactoryVoices(),
         /** Sees every request before the device answers it - where a test cancels mid-operation. */
         onRequest: (ByteArray) -> Unit = {},
+        /** See [FakeSlots.silentCommit]. */
+        silentCommit: Boolean = false,
+        /** See [FakeSlots.misstore]. */
+        misstore: Boolean = false,
     ): Pair<MotifXsInstrument, FakeMidiTransport> {
-        val slots = FakeSlots(readOnlyBanks)
+        val slots = FakeSlots(readOnlyBanks).also {
+            it.silentCommit = silentCommit
+            it.misstore = misstore
+        }
         var currentMode = mode
         var pendingMode: MotifXsMode? = null
         var readsBeforeSettled = 0
@@ -1646,6 +1669,46 @@ class MotifXsInstrumentTest {
         assertTrue(job!!.isCancelled)
         assertEquals(moving, motif.browser.refresh(to).name)
         assertNull("the source must be cleared in the same commit", motif.browser.refresh(from).name)
+    }
+
+    // ---- When a write or its commit fails ----
+
+    /**
+     * A refused second write leaves the first armed, not stored. The move says so, with the
+     * warning about the armed write, and no commit follows that would apply half of it.
+     */
+    @Test
+    fun `a move whose second write is refused commits nothing and says why`() = runTest {
+        // Bank 0 (USR1, address-mid 0x0A) refuses writes: the move's second write clears its source there.
+        val (motif, transport) = instrument(backgroundScope, readOnlyBanks = setOf(0x0A))
+        val to = SlotAddress(1, 1)
+
+        val failure = runCatching { motif.editor!!.move(SlotAddress(0, 0), to) }.exceptionOrNull()
+
+        assertTrue("expected a timeout, got $failure", failure is InstrumentException.Timeout)
+        assertTrue(failure!!.message!!, failure.message!!.contains("accepted-but-uncommitted"))
+        assertTrue(transport.sent.none { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.STORE_HI })
+        assertNull("nothing was committed, so the destination is still empty", motif.browser.refresh(to).name)
+    }
+
+    @Test
+    fun `a commit the instrument does not confirm says to re-read the bank`() = runTest {
+        val (motif, _) = instrument(backgroundScope, silentCommit = true)
+
+        val failure = runCatching { motif.editor!!.delete(SlotAddress(0, 0)) }.exceptionOrNull()
+
+        assertTrue("expected a timeout, got $failure", failure is InstrumentException.Timeout)
+        assertTrue(failure!!.message!!, failure.message!!.contains("Re-read the bank"))
+    }
+
+    @Test
+    fun `a read-back that differs from the write is reported`() = runTest {
+        val (motif, _) = instrument(backgroundScope, misstore = true)
+
+        val failure = runCatching { motif.editor!!.delete(SlotAddress(0, 0)) }.exceptionOrNull()
+
+        assertTrue("expected a desync, got $failure", failure is InstrumentException.ProtocolDesync)
+        assertTrue(failure!!.message!!, failure.message!!.contains("read back something different"))
     }
 }
 
