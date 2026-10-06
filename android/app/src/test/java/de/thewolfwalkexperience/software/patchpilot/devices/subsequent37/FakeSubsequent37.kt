@@ -61,6 +61,9 @@ class FakeSubsequent37(private val scope: CoroutineScope) {
     /** How many bytes go out per piece, one piece a second. */
     var dumpPieceBytes = 1_435
 
+    /** The dump stops arriving once this many of its bytes have gone out, and never finishes. */
+    var stallAfterBytes: Int? = null
+
     /** Writes to these programs are not stored. */
     var ignoreWritesTo: Set<Int> = emptySet()
 
@@ -191,7 +194,8 @@ class FakeSubsequent37(private val scope: CoroutineScope) {
             val inject = injectIntoDumpAt
             while (sent < dump.size) {
                 delay(1.seconds)
-                val end = minOf(sent + dumpPieceBytes, dump.size)
+                val end = minOf(sent + dumpPieceBytes, dump.size, stallAfterBytes ?: Int.MAX_VALUE)
+                if (end <= sent) break
                 if (inject != null && inject.first in sent until end) {
                     transport.inject(dump.copyOfRange(sent, inject.first))
                     transport.inject(inject.second)

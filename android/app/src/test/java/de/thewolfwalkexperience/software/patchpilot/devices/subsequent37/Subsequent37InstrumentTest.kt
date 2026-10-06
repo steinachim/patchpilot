@@ -144,6 +144,39 @@ class Subsequent37InstrumentTest {
         assertTrue(updates.none { it is IndexUpdate.Failed })
     }
 
+    /** A dump that stops arriving part way is given up on once nothing has come for a while, and finished by single reads. */
+    @Test
+    fun `a dump that stops arriving is completed by single reads`() = runTest {
+        val fake = FakeSubsequent37(backgroundScope).apply { stallAfterBytes = 23 + 10 * 796 + 300 }
+        val instrument = subsequent37(fake).apply { connect() }
+        assertWholeLibrary(slotsOf(instrument.index().toList()))
+        val reads = fake.requests.filter { Subsequent37SysEx.isCommand(it, 0x06, 0x01) }
+        assertEquals((10 until 256).toList(), reads.map { Subsequent37SysEx.addressOf(it) })
+    }
+
+    /**
+     * Single reads that go unanswered are given up on after three slots in a row: the rest are
+     * reported failed without being asked for, rather than costing a timeout each.
+     */
+    @Test
+    fun `after three unanswered slots the rest are reported failed unread`() = runTest {
+        val fake = FakeSubsequent37(backgroundScope).apply {
+            damageDump =
+                { dump ->
+                    dump.copyOf().also { it[23 + 5 * 796 + 100] = (it[23 + 5 * 796 + 100].toInt() xor 1).toByte() }
+                }
+            unansweredReads = 1_000
+        }
+        val instrument = subsequent37(fake).apply { connect() }
+        val updates = instrument.index().toList()
+        val asked = fake.requests.filter { Subsequent37SysEx.isCommand(it, 0x06, 0x01) }
+            .map { Subsequent37SysEx.addressOf(it) }.distinct()
+        assertEquals(listOf(5, 6, 7), asked)
+        val failed = updates.filterIsInstance<IndexUpdate.Failed>()
+        assertEquals(251, failed.size)
+        assertTrue(failed.last().reason.contains("not read"))
+    }
+
     @Test
     fun `a dump with bytes missing is completed by single reads`() = runTest {
         val fake = FakeSubsequent37(backgroundScope).apply {
