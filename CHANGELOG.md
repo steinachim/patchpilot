@@ -31,6 +31,7 @@
 - Rotating the phone, opening Settings or switching the theme while an edit runs no longer loses its progress line or result, or re-enables Back and other edits before it finishes; an open dialog or destination pick stays open too.
 - A preset edited while the user list was still loading no longer appears unedited after returning to the app.
 - Pulling to refresh while the preset list is still loading no longer starts the list over.
+- The system Back gesture on the preset list now does what the Back arrow does: it returns to the instrument list, after ending a “Copy to…” or “Move to…” pick, instead of closing the app on Android 8 to 11.
 
 ## 1.1
 

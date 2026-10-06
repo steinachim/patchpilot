@@ -21,6 +21,7 @@ import de.thewolfwalkexperience.software.patchpilot.MainActivity
 import de.thewolfwalkexperience.software.patchpilot.R
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
+import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -103,5 +104,31 @@ class PresetScreenLifecycleTest {
         val result = compose.activity.getString(R.string.result_deleted, slot.displayId)
         compose.waitUntil(10_000) { compose.onAllNodesWithText(result).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription(text(R.string.cd_back)).assertIsEnabled()
+    }
+
+    /** System back does what the arrow does, rather than finishing or backgrounding the activity. */
+    @Test
+    fun `system back leaves the preset screen for the picker, as the arrow does`() {
+        openDemoPresets()
+
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+
+        awaitText(R.string.connect_none_found)
+        assertFalse(compose.activity.isFinishing)
+    }
+
+    /** In pick mode, back ends the pick and stays on the presets. */
+    @Test
+    fun `system back while picking a destination ends the pick`() {
+        openDemoPresets()
+        compose.waitUntil(10_000) { viewModel.listings.userIndex.value.complete }
+        val slot = viewModel.listings.userIndex.value.slots.first { !it.isEmpty }
+        compose.runOnUiThread { viewModel.programs.beginPicking(slot) }
+
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
+
+        assertFalse(viewModel.programs.picking)
+        compose.onNodeWithContentDescription(text(R.string.cd_back)).assertExists()
     }
 }

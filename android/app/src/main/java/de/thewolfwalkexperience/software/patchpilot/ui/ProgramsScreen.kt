@@ -275,12 +275,20 @@ fun ProgramsScreen(
         drag.autoScroll { i -> visibleRows.getOrNull(i) is ProgramRow.ProgramEntry }
     }
 
-    // The system-back half of `backEnabled` below: disabling the arrow does nothing for the
-    // gesture or the hardware key, and with `enableOnBackInvokedCallback` set a predictive-back
-    // swipe would animate this screen away mid-write. Enabled only while an edit is running, so
-    // predictive back is not intercepted the rest of the time.
-    BackHandler(enabled = ops.busy != null) {
-        // Empty: refusing the gesture is the behaviour, and the progress line says what is running.
+    // System back does what the arrow does, so it never reaches the activity: there it would
+    // finish the activity and close the session on Android 8 to 11, and only send the task to the
+    // back from 12 on. In pick mode it ends the pick first. While an edit runs it is refused, the
+    // system-back half of `backEnabled` below: with `enableOnBackInvokedCallback` set, a
+    // predictive-back swipe would otherwise animate this screen away mid-write.
+    BackHandler {
+        when {
+            // Refused; the progress line says what is running.
+            ops.busy != null -> Unit
+
+            ops.picking -> ops.endPicking()
+
+            else -> onBack()
+        }
     }
 
     PatchPilotScaffold(

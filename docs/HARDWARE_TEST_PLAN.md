@@ -53,6 +53,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | X26 | Back during a device report | Start a report from the debug menu, go back to the presets, press Back | The picker appears at once; the report is cancelled | – | – |
 | X27 | Rotation mid edit (any instrument) | Start a copy, rotate while it runs | The progress line stays, Back stays off until it lands, and the result shows | – | – |
 | X28 | Demo mode from an advisory | Behind an advisory (as N2 or P9), tap "Try demo mode"; then leave demo mode and search | The instrument is found again | – | – |
+| X29 | System back on the presets | Use the back gesture or key on the presets; then again while picking a "Copy to…" destination | Back lands on the picker, as the arrow does; while picking, it ends the pick and stays | – | – |
 
 ## 3. Nord
 
