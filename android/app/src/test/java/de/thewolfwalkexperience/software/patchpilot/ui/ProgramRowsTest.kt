@@ -3,9 +3,11 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
+import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -219,5 +221,21 @@ class ProgramRowsTest {
         assertTrue(listing.freeSlots.none { it.address in unreadable })
         assertEquals(unreadable, listing.unreadable)
         assertTrue(freeSlots(nordReported, allSlots(), unreadable).none { it.address in unreadable })
+    }
+
+    /**
+     * A refresh never restarts a listing still arriving: the pull gesture has no `enabled` of its
+     * own, so this rule is the only thing between an over-pull and a 93-second restart.
+     */
+    @Test
+    fun `a refresh waits for the listing to settle and for any edit`() {
+        val arriving = PresetIndexState().plus(IndexUpdate.Slots(listOf(slot(0, 0, "Grand"))))
+        val done = arriving.plus(IndexUpdate.Complete)
+        val failed = PresetIndexState(error = "timed out")
+
+        assertFalse(refreshAllowed(arriving, editRunning = false))
+        assertTrue(refreshAllowed(done, editRunning = false))
+        assertTrue(refreshAllowed(failed, editRunning = false))
+        assertFalse(refreshAllowed(done, editRunning = true))
     }
 }

@@ -80,6 +80,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | M7 | Favorites | Set and clear a favorite several times | Each shows within 3 s; no hang. Never send a malformed favorites write: it can hang the instrument's MIDI until a power cycle | 2026-09-20, Motif XS | ✓ |
 | M8 | XS7 and XS8 product ids | Connect an XS7 or XS8 | Recognised (the ids are assumed) | – | – (no unit) |
 | M9 | Move onto a slot changed on the panel | Store a voice from the panel into a slot the list shows as empty, then "Move to…" that slot in the app | Refused; the voice stored there is unchanged | – | – |
+| M10 | Pull to refresh mid listing | Over-pull at the top of the list while the user banks are still arriving | Nothing restarts; the listing goes on to the end | – | – |
 
 ## 5. Behringer Pro-800
 

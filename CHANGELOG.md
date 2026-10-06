@@ -30,6 +30,7 @@
 - A preset slot that could not be read is shown as such and is no longer offered as an empty destination for a copy or move.
 - Rotating the phone, opening Settings or switching the theme while an edit runs no longer loses its progress line or result, or re-enables Back and other edits before it finishes; an open dialog or destination pick stays open too.
 - A preset edited while the user list was still loading no longer appears unedited after returning to the app.
+- Pulling to refresh while the preset list is still loading no longer starts the list over.
 
 ## 1.1
 

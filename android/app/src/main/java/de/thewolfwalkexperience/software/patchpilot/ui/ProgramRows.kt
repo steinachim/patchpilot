@@ -140,3 +140,10 @@ internal fun buildProgramListing(
             .toMap(),
     )
 }
+
+/**
+ * Whether a refresh may start: never while the listing is still arriving, which a refresh would
+ * restart from zero (93 s on a Motif XS), nor while an edit runs, whose own re-read follows it.
+ * The app bar's button and the pull gesture both ask this, so they cannot disagree.
+ */
+internal fun refreshAllowed(index: PresetIndexState, editRunning: Boolean): Boolean = !index.loading && !editRunning

@@ -209,13 +209,13 @@ fun ProgramsScreen(
         if (index.generation != pendingRefresh) return@LaunchedEffect
         if (index.complete || index.error != null) isRefreshing = false
     }
-    // Shared by the pull gesture and the app bar's button, so both give the same feedback.
-    // Guards re-entry itself rather than trusting `enabled`, which only reflects the last
-    // recomposition: `isRefreshing` is local Compose state, so the second of two quick taps sees
-    // the first's write in the same snapshot. Not while an edit is running either, since the
-    // edit's own reload follows it.
+    // Shared by the pull gesture and the app bar's button, so both give the same feedback and
+    // obey the same rule ([refreshAllowed]). Guards re-entry itself rather than trusting
+    // `enabled`, which only reflects the last recomposition, and which the pull gesture does not
+    // have at all: `isRefreshing` is local Compose state, so the second of two quick taps sees the
+    // first's write in the same snapshot.
     fun startRefresh() {
-        if (isRefreshing || ops.busy != null) return
+        if (isRefreshing || !refreshAllowed(index, editRunning = ops.busy != null)) return
         isRefreshing = true
         pendingRefresh = viewModel.listings.refresh()
     }
@@ -310,7 +310,7 @@ fun ProgramsScreen(
             IconButton(
                 // Same as the pull gesture: drop the cache, then re-read from the instrument.
                 onClick = ::startRefresh,
-                enabled = (index.complete || index.error != null) && ops.busy == null,
+                enabled = refreshAllowed(index, editRunning = ops.busy != null),
             ) {
                 // Composed only while refreshing: an infinite transition keeps the frame clock
                 // ticking for as long as it is in the composition, whether or not its value is
