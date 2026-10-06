@@ -275,9 +275,10 @@ interface PresetSelector {
     /**
      * What to tell the user after [select] returns.
      *
-     * Every family verifies its own selection before returning (a Nord checks the echoed
-     * address, a Pro-800 reads its pointer back), so the default states it as a fact. Overridable
-     * because what a family can honestly claim is a property of its wire protocol.
+     * The default states the selection as a fact, for a family that verifies it before returning
+     * (a Nord checks the echoed address, a Pro-800 reads its pointer back). Overridable because
+     * what a family can honestly claim is a property of its wire protocol: an Axe-Fx III whose
+     * loaded-preset query goes unanswered says it asked.
      */
     fun confirmationFor(displayId: String): String = "Selected $displayId."
 }

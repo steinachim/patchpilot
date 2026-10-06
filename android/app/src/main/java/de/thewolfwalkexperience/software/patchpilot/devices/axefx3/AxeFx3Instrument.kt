@@ -237,23 +237,34 @@ class AxeFx3Instrument(
 
     // ---- PresetSelector ----
 
+    /** Whether the last [select] was confirmed by the loaded-preset query; see [confirmationFor]. */
+    private var selectionConfirmed = false
+
     /**
      * The editor channel's select, which is acknowledged. Where the instrument says which preset
      * is loaded, that is checked too.
      */
     override suspend fun select(address: SlotAddress): Unit = lock.withLock {
         val number = numberOf(address)
+        selectionConfirmed = false
         device.select(number)
-        if (loadedQueryWorks) {
-            val loaded = loadedPresetOrNull()
-            if (loaded != null && loaded != number) {
-                throw InstrumentException.ProtocolDesync(
-                    "Asked the Axe-Fx III to load ${displayIdOf(number)}, but it reports " +
-                        "${displayIdOf(loaded)} as loaded.",
-                )
-            }
+        if (!loadedQueryWorks) return@withLock
+        var loaded = loadedPresetOrNull()
+        // A late answer to an earlier name query has the same shape as this one, so a mismatch
+        // is asked once more before it counts: the first ask has taken the stray reply.
+        if (loaded != null && loaded != number) loaded = loadedPresetOrNull()
+        if (loaded != null && loaded != number) {
+            throw InstrumentException.ProtocolDesync(
+                "Asked the Axe-Fx III to load ${displayIdOf(number)}, but it reports " +
+                    "${displayIdOf(loaded)} as loaded.",
+            )
         }
+        selectionConfirmed = loaded == number
     }
+
+    /** "Selected" only where the instrument named the preset it loaded; the acknowledgement does not. */
+    override fun confirmationFor(displayId: String): String =
+        if (selectionConfirmed) super.confirmationFor(displayId) else "Asked the instrument to load $displayId."
 
     // ---- PresetTransfer ----
 

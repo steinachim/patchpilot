@@ -123,6 +123,29 @@ class AxeFx3InstrumentTest {
     }
 
     @Test
+    fun `a selection the loaded-preset query confirms says selected`() = runTest {
+        val instrument = axeFx3(FakeAxeFx3()).apply { connect() }
+        instrument.select(SlotAddress(2, 100))
+        assertEquals("Selected 356.", instrument.confirmationFor("356"))
+    }
+
+    @Test
+    fun `a selection nothing confirms says it asked`() = runTest {
+        val instrument = axeFx3(FakeAxeFx3().apply { loadedQueryEchoesNumber = false }).apply { connect() }
+        instrument.select(SlotAddress(2, 100))
+        assertEquals("Asked the instrument to load 356.", instrument.confirmationFor("356"))
+    }
+
+    @Test
+    fun `a late name reply does not fail a selection`() = runTest {
+        val fake = FakeAxeFx3()
+        val instrument = axeFx3(fake).apply { connect() }
+        fake.strayLoadedAnswer = 5
+        instrument.select(SlotAddress(2, 100))
+        assertEquals("Selected 356.", instrument.confirmationFor("356"))
+    }
+
+    @Test
     fun `a number the unit does not have is refused before anything is sent`() = runTest {
         val fake = FakeAxeFx3()
         val instrument = axeFx3(fake).apply { connect() }

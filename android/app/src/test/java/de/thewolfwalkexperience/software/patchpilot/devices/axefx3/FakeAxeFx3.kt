@@ -53,6 +53,9 @@ class FakeAxeFx3(
     var loadedQueryEchoesNumber = true
     var loadedQuerySilent = false
 
+    /** Answered once in place of the loaded preset's number, as a late reply to a name query would be. */
+    var strayLoadedAnswer: Int? = null
+
     var beginStatus = 0
 
     /** The status the end of dump write n (1-based) is acknowledged with; non-zero stores nothing. */
@@ -146,7 +149,10 @@ class FakeAxeFx3(
     private fun nameReply(lo: Int, hi: Int): List<ByteArray> {
         if (lo == 0x7F && hi == 0x7F) {
             if (loadedQuerySilent) return emptyList()
-            val echo = if (loadedQueryEchoesNumber) {
+            val stray = strayLoadedAnswer?.also { strayLoadedAnswer = null }
+            val echo = if (stray != null) {
+                intArrayOf(stray and 0x7F, stray shr 7)
+            } else if (loadedQueryEchoesNumber) {
                 intArrayOf(selected and 0x7F, selected shr 7)
             } else {
                 intArrayOf(0x7F, 0x7F)
