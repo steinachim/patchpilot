@@ -7,7 +7,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
  * CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflection, xorout 0), used to checksum
  * every message on the Nord wire protocol.
  */
-fun crc16CcittFalse(data: ByteArray, offset: Int = 0, length: Int = data.size): Int {
+internal fun crc16CcittFalse(data: ByteArray, offset: Int = 0, length: Int = data.size): Int {
     var crc = 0xFFFF
     for (i in offset until offset + length) {
         crc = crc xor ((data[i].toInt() and 0xFF) shl 8)

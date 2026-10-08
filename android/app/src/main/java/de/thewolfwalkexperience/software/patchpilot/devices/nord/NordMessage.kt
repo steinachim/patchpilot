@@ -7,26 +7,35 @@ import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
+/** The fixed header: total length, protocol id, protocol version and sub-opcode, four bytes each. */
+internal const val MESSAGE_HEADER_LEN = 16
+
+/** The trailing CRC-16/CCITT-FALSE. */
+internal const val MESSAGE_CRC_LEN = 2
+
 /**
- * Message framing for the Nord vendor USB protocol:
+ * One message of the Nord vendor USB protocol:
  * `[4B total length][4B protocol ID][4B protocol version][4B sub-opcode][payload][2B CRC-16/CCITT-FALSE]`,
  * all big-endian, CRC over everything before it.
  *
  * The two middle words carry which protocol the message belongs to (6 = UI, 7 = Ctrl, 12 = file
- * transfer) and the version that protocol was negotiated at - the same names [NordMessage]'s own
- * fields and docs/PROTOCOLS.md use for them.
+ * transfer) and the version that protocol was negotiated at - the names docs/PROTOCOLS.md uses
+ * for them. Equal by content, payload included.
  */
-const val MESSAGE_HEADER_LEN = 16
-const val MESSAGE_CRC_LEN = 2
-
-data class NordMessage(
+internal data class NordMessage(
     val protocolId: Int,
     val protocolVersion: Int,
     val subOp: Int,
     val payload: ByteArray,
-)
+) {
+    override fun equals(other: Any?): Boolean =
+        other is NordMessage && protocolId == other.protocolId && protocolVersion == other.protocolVersion &&
+            subOp == other.subOp && payload.contentEquals(other.payload)
 
-fun buildMessage(
+    override fun hashCode(): Int = ((protocolId * 31 + protocolVersion) * 31 + subOp) * 31 + payload.contentHashCode()
+}
+
+internal fun buildMessage(
     protocolId: Int,
     protocolVersion: Int,
     subOp: Int,
@@ -54,7 +63,7 @@ fun buildMessage(
  * not `data.size`: a bulk read may hold more than one message. Bytes past the declared length
  * are ignored here; [NordDevice.readReply] keeps them for the next call.
  */
-fun parseMessage(data: ByteArray): NordMessage {
+internal fun parseMessage(data: ByteArray): NordMessage {
     require(data.size >= MESSAGE_HEADER_LEN + MESSAGE_CRC_LEN) {
         "message too short (${data.size} bytes): ${data.toHex()}"
     }

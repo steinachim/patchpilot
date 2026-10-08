@@ -19,7 +19,7 @@ import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
  * @param thenSilent the instrument stops answering after the last reply: a further read fails as
  *   the USB transport's does, with an `IllegalStateException` the code under test may handle.
  */
-class ReplayTransport(
+internal class ReplayTransport(
     responses: List<Pair<Int, ByteArray>>,
     private val firmwareVersion: Int = 0,
     private val thenSilent: Boolean = false,
