@@ -577,6 +577,52 @@ class NordDeviceProtocolTest {
         assertEquals("Rhodes", device.readProgram(bank = 0, item = 4)?.name)
     }
 
+    /** The walk answers for every slot it holds; one it does not hold is empty. */
+    @Test
+    fun `readProgram's walk fallback reports a slot it does not find as empty`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList,
+                5 to ByteArray(0),
+                31 to (uint32BE(3) + ByteArray(32)), // FETCH_ITEM -> status 3
+                7 to ByteArray(0),
+                3 to childListPayload(listOf("Bank 1" to 25)),
+                5 to ByteArray(0),
+                9 to (uint32BE(0) + uint32BE(1)),
+                33 to (uint32BE(0) + uint32BE(0) + uint32BE(4)), // CURSOR_NEXT_ITEM -> item 4
+                31 to itemRecordPayload(bank = 0, item = 4, name = "Rhodes"),
+                7 to ByteArray(0),
+            ),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        assertNull(device.readProgram(bank = 0, item = 5))
+        transport.assertAllConsumed()
+    }
+
+    /** A reply too short to carry a status is no answer about the slot, so the walk is asked. */
+    @Test
+    fun `readProgram walks the program list when the fetch reply is too short for a status`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList,
+                5 to ByteArray(0),
+                31 to ByteArray(4),
+                7 to ByteArray(0),
+                3 to childListPayload(listOf("Bank 1" to 25)),
+                5 to ByteArray(0),
+                9 to (uint32BE(0) + uint32BE(1)),
+                33 to (uint32BE(0) + uint32BE(0) + uint32BE(4)),
+                31 to itemRecordPayload(bank = 0, item = 4, name = "Rhodes"),
+                7 to ByteArray(0),
+            ),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        assertEquals("Rhodes", device.readProgram(bank = 0, item = 4)?.name)
+        transport.assertAllConsumed()
+    }
+
     @Test
     fun `readProgram refuses a record for another slot, after unlocking`() = runTest {
         val transport = ReplayTransport(
