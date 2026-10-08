@@ -27,6 +27,8 @@ jobs:
         with:
           persist-credentials: false
 
+      # Floats: the newest Temurin 17 on the current ubuntu-latest image. This step's log names
+      # the exact JDK; docs/RELEASING.md treats a change from the last release as a JDK bump.
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
