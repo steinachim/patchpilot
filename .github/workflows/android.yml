@@ -1,5 +1,9 @@
 # Builds and tests the app on every pull request and on every push to main. Plain pushes to dev
-# or a feature branch do not run this - open a PR to get a build.
+# or a feature branch do not run this - open a PR, or start it by hand on any branch from the
+# Actions tab (workflow_dispatch).
+#
+# Actions are pinned to a commit, with the tag it was taken from beside it, so a moved tag cannot
+# change what runs with the repository's token and secrets.
 #
 # Signing only happens on main: the keystore and its passwords come from repository secrets (see
 # docs/RELEASING.md, "Signing"), written into the same android/local.properties the local build
@@ -11,6 +15,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # A new push to a PR cancels the run for the previous head; main pushes are never cancelled.
 concurrency:
@@ -30,18 +35,18 @@ jobs:
 
     steps:
       # The token stays off the disk the build and its plugins run on.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       # The JDK the build runs on. Nothing else is provisioned: AGP 9 needs 17 or newer, and the
       # bytecode target is 17 whatever the build JDK is.
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin
           java-version: 17
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
         with:
           # The action only writes its cache from the repository's default branch, which is dev -
           # a branch this workflow never runs on - so without this nothing would ever be written.
@@ -90,7 +95,7 @@ jobs:
 
       - name: Upload test and lint reports
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: reports
           path: |
@@ -100,7 +105,7 @@ jobs:
 
       - name: Upload signed release
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: patchpilot-release
           path: |
