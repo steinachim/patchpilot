@@ -93,26 +93,11 @@ class Pro800Instrument(
         validateFirmware()
     }
 
-    /**
-     * Raises an advisory on a firmware this app has not been tested against, as
-     * `NordDevice.validateFirmwareVersion` does. An empty
-     * [Pro800Config.supportedFirmwareVersions] skips the check.
-     */
+    /** Raises an advisory on a firmware this app has not been tested against. */
     private fun validateFirmware() {
-        val supported = config.supportedFirmwareVersions
-        if (supported.isEmpty() || firmware in supported) return
-        // A version that could not be read is not evidence of one that is unsupported.
-        if (firmware == UNKNOWN_FIRMWARE) {
-            Log.w(
-                TAG,
-                "Couldn't read $deviceName's firmware version; continuing without the check.",
-            )
-            return
-        }
         // Warn, do not refuse - see Instrument.advisory.
-        val warning = untestedFirmwareAdvisory(deviceName, firmware, supported.sorted())
-        advisory = warning
-        Log.w(TAG, warning)
+        advisory = untestedFirmwareAdvisory(deviceName, firmware, config.supportedFirmwareVersions.sorted())
+            ?.also { Log.w(TAG, it) }
     }
 
     /**

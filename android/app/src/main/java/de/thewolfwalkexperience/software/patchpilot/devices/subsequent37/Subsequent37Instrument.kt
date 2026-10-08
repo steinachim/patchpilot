@@ -162,12 +162,9 @@ class Subsequent37Instrument(
         }
     }
 
-    /** A firmware that could not be read is not evidence of one that is unsupported. */
-    private fun advisoryText(): String? {
-        val supported = config.supportedFirmwareVersions
-        if (supported.isEmpty() || firmware == UNKNOWN_FIRMWARE || firmware in supported) return null
-        return untestedFirmwareAdvisory(catalogName, firmware, supported.sorted()).also { Log.w(TAG, it) }
-    }
+    private fun advisoryText(): String? =
+        untestedFirmwareAdvisory(catalogName, firmware, config.supportedFirmwareVersions.sorted())
+            ?.also { Log.w(TAG, it) }
 
     /** Releases the MIDI port - see [SysExExchange.close]. */
     override fun close() = exchange.close()

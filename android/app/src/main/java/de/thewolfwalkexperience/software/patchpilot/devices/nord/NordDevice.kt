@@ -299,18 +299,13 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     var firmwareAdvisory: String? = null
         private set
 
+    /** Warns, does not refuse - see Instrument.advisory. An empty set (DeviceProfile.unknown) skips the check. */
     private fun validateFirmwareVersion() {
-        // An empty set (DeviceProfile.unknown) skips the check.
-        if (supportedFirmwareVersions.isNotEmpty() && firmwareVersion !in supportedFirmwareVersions) {
-            // Warn, do not refuse - see Instrument.advisory.
-            val advisory = untestedFirmwareAdvisory(
-                name,
-                formatFirmwareVersion(firmwareVersion),
-                supportedFirmwareVersions.sorted().map { formatFirmwareVersion(it) },
-            )
-            firmwareAdvisory = advisory
-            Log.w(TAG, advisory)
-        }
+        firmwareAdvisory = untestedFirmwareAdvisory(
+            name,
+            formatFirmwareVersion(firmwareVersion),
+            supportedFirmwareVersions.sorted().map { formatFirmwareVersion(it) },
+        )?.also { Log.w(TAG, it) }
     }
 
     /** Raw USB teardown only; every operation that locks the instrument unlocks it itself. */

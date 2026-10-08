@@ -26,12 +26,16 @@ val REPORT_JSON: Json = Json {
 }
 
 /**
- * The sentence an [Instrument.advisory] opens with for firmware this app has not been tested
- * against. [tested] is shown in the order given.
+ * The sentence an [Instrument.advisory] opens with where [firmware] is not among [tested], shown
+ * in the order given. Null where it is, where [tested] is empty (no check is configured), and
+ * where the firmware is [UNKNOWN_FIRMWARE]: a version that could not be read is not evidence of
+ * one that is unsupported.
  */
-fun untestedFirmwareWarning(name: String, firmware: String, tested: List<String>): String =
-    "$name reports firmware version $firmware, which this app has not been tested against " +
+fun untestedFirmwareWarning(name: String, firmware: String, tested: List<String>): String? {
+    if (tested.isEmpty() || firmware == UNKNOWN_FIRMWARE || firmware in tested) return null
+    return "$name reports firmware version $firmware, which this app has not been tested against " +
         "(tested: ${tested.joinToString(", ")})."
+}
 
 /** How every untested-firmware or untested-model advisory ends: a warning, not a refusal. */
 const val UNTESTED_ADVISORY_CLOSING =
@@ -39,6 +43,6 @@ const val UNTESTED_ADVISORY_CLOSING =
         "correctly. Please consider sending in a device report, so support can be confirmed in " +
         "future."
 
-/** The whole [Instrument.advisory] for an untested firmware - see [untestedFirmwareWarning]. */
-fun untestedFirmwareAdvisory(name: String, firmware: String, tested: List<String>): String =
-    "${untestedFirmwareWarning(name, firmware, tested)} $UNTESTED_ADVISORY_CLOSING"
+/** The whole [Instrument.advisory] for an untested firmware, or null - see [untestedFirmwareWarning]. */
+fun untestedFirmwareAdvisory(name: String, firmware: String, tested: List<String>): String? =
+    untestedFirmwareWarning(name, firmware, tested)?.let { "$it $UNTESTED_ADVISORY_CLOSING" }

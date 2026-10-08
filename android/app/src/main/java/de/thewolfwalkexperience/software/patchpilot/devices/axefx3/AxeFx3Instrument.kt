@@ -175,17 +175,10 @@ class AxeFx3Instrument(
         )
     }
 
-    /**
-     * Warns on a firmware or a model this app has not been tested against, as
-     * `Pro800Instrument.validateFirmware` does. A firmware that could not be read is not evidence
-     * of one that is unsupported.
-     */
+    /** Warns on a firmware or a model this app has not been tested against. */
     private fun advisoryText(): String? {
         val warnings = buildList {
-            val supported = config.supportedFirmwareVersions
-            if (supported.isNotEmpty() && firmware != UNKNOWN_FIRMWARE && firmware !in supported) {
-                add(untestedFirmwareWarning(identity.name, firmware, supported.sorted()))
-            }
+            untestedFirmwareWarning(identity.name, firmware, config.supportedFirmwareVersions.sorted())?.let(::add)
             if (config.testedPresetCounts.isNotEmpty() && presetCount !in config.testedPresetCounts) {
                 add(
                     "This app has not been tested with an Axe-Fx III ${model ?: ""} " +
