@@ -66,27 +66,34 @@ class InstrumentViewModelTest {
     @Test
     fun `a rebuilt session keeps the open dialog but drops a remedy offer`() {
         val viewModel = viewModel().apply { awaitSettled() }
+        // The session's start resets the screen's state, which clears this marker: the state can
+        // be published off the main thread, so seeing it here does not mean the ViewModel's
+        // collector has run yet, and a reset landing after the dialog opens would close it.
+        viewModel.programs.blocked = remedyOffer()
         viewModel.connection.connectDemo()
-        viewModel.awaitSettled()
-        // Lets the ViewModel see the session begin, which resets the screen's state.
-        shadowOf(Looper.getMainLooper()).idle()
+        viewModel.awaitRemedyDropped("The first session did not reset the screen")
         val first = viewModel.connection.instrument
         val slot = viewModel.listings.allSlots().first()
         viewModel.programs.renameTarget = slot
-        viewModel.programs.blocked = BlockedOperation("Blocked.", null, "Fix", apply = {}, retry = {})
+        viewModel.programs.blocked = remedyOffer()
 
         viewModel.connection.connectDemo()
-        // Until the ViewModel has seen the new session: the state can be published off the main
-        // thread, so seeing it here does not mean the ViewModel's collector has run yet.
-        val deadline = System.nanoTime() + 10_000_000_000
-        while (viewModel.programs.blocked != null) {
-            check(System.nanoTime() < deadline) { "The remedy offer survived the rebuild (${viewModel.state.value})" }
-            shadowOf(Looper.getMainLooper()).idle()
-            Thread.sleep(10)
-        }
+        viewModel.awaitRemedyDropped("The remedy offer survived the rebuild")
 
         assertNotSame(first, viewModel.connection.instrument)
         assertEquals(slot, viewModel.programs.renameTarget)
+    }
+
+    private fun remedyOffer() = BlockedOperation("Blocked.", null, "Fix", apply = {}, retry = {})
+
+    /** Runs the main looper until the ViewModel's session collector has cleared the remedy offer. */
+    private fun InstrumentViewModel.awaitRemedyDropped(failure: String) {
+        val deadline = System.nanoTime() + 10_000_000_000
+        while (programs.blocked != null) {
+            check(System.nanoTime() < deadline) { "$failure (${state.value})" }
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(10)
+        }
     }
 
     /** The share button's gate can trail the session by a frame, so a tap may find no session at all. */
