@@ -119,7 +119,7 @@ class FakeNordTransport(private val catalog: FakeNordCatalog = FakeNordCatalog()
     /**
      * Sub-opcode 0/1: 4 unused bytes, a count byte, then per category a
      * length-prefixed name and a fixed trailer - the same shape
-     * NordDeviceProtocolTest.buildRootCategoryListPayload() builds and round-trips in tests, with
+     * [NordFixtures.rootListPayload] builds and the protocol tests round-trip, with
      * the same trailer length (29, proven to detect uniquely there too).
      */
     private fun rootCategoryListReply(): ByteArray {
