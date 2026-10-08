@@ -48,13 +48,14 @@ class Subsequent37Device(
      * does; the pair is also what makes the instrument answer a program read. A short block
      * does not match and is asked for again.
      */
-    suspend fun settingsReply(): ByteArray = attempt(READ_ATTEMPTS, "reading the settings") {
+    suspend fun settingsReply(): ByteArray = attempt(READ_ATTEMPTS, "reading the settings") { settingsOnce() }
+
+    private suspend fun settingsOnce(): ByteArray =
         exchange.exchangeAfterAll(
             listOf(Subsequent37SysEx.settingsRequest(), Subsequent37SysEx.settingsPair()),
             "reading the settings",
             SETTINGS_TIMEOUT,
         ) { Subsequent37SysEx.isSettingsReply(it) }
-    }
 
     suspend fun settings(): Subsequent37Settings =
         Subsequent37Settings.parse(settingsReply())
@@ -64,10 +65,12 @@ class Subsequent37Device(
      * Stored program [number] as the `02 07` message that carries it, read with `06 01`: about
      * 1.7 s with the settings pair sent first, nothing selected, nothing heard. A damaged reply
      * does not match and is asked for again; `06 01` is a read, so asking twice is harmless.
+     * Each attempt sends the pair once: retrying the pair inside an attempt as well would double
+     * what a silent instrument costs.
      */
     suspend fun readStoredMessage(number: Int): ByteArray =
         attempt(READ_ATTEMPTS, "reading program $number") {
-            settingsReply()
+            settingsOnce()
             exchange.exchange(
                 Subsequent37SysEx.readProgram(number),
                 "reading program $number",

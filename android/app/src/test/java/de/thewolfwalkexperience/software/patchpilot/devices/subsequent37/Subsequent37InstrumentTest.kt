@@ -341,6 +341,20 @@ class Subsequent37InstrumentTest {
         assertEquals(2, fake.requests.count { Subsequent37SysEx.isCommand(it, 0x06, 0x01) })
     }
 
+    @Test
+    fun `an unanswered read asks for the settings once per attempt`() = runTest {
+        val fake = FakeSubsequent37(backgroundScope)
+        val instrument = subsequent37(fake).apply { connect() }
+        fake.settingsReply = null
+        val before = fake.requests.size
+
+        val failure = runCatching { instrument.refresh(SlotAddress(0, 1)) }.exceptionOrNull()
+
+        assertTrue("got $failure", failure is InstrumentException.Timeout)
+        val settingsRequests = fake.requests.drop(before).count { Subsequent37SysEx.isCommand(it, 0x06, 0x04) }
+        assertEquals(Subsequent37Device.READ_ATTEMPTS, settingsRequests)
+    }
+
     /** The fake builds its replies from the captured headers; this pins that it matches a real one. */
     @Test
     fun `a transfer read is the stored program's message as the instrument sends it`() = runTest {
