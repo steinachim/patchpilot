@@ -9,10 +9,12 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,6 +25,14 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 class AxeFx3InstrumentTest {
+
+    /** Refused as the catalog is decoded, before a factory has started an exchange it would leak. */
+    @Test
+    fun `a catalog with no presets per bank is refused as it is decoded`() {
+        thrownBy<IllegalArgumentException> {
+            Json.decodeFromString(AxeFx3Config.serializer(), """{"presetsPerBank": 0}""")
+        }
+    }
 
     private val markIIReply = FakeAxeFx3.message(
         AxeFx3SysEx.CMD_CAPABILITIES, 0x50, 0x02, 0x00, 0x10, 0x00, 0x10, 0x10, 0x00, 0x00, 0x08,

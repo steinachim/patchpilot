@@ -39,7 +39,13 @@ data class AxeFx3Config(
     val testedPresetCounts: Set<Int> = setOf(AxeFx3SysEx.PRESET_COUNT_MARK_I),
     /** Whether an edit loads the previously loaded preset again once it is done. */
     val restoreLoadedPresetAfterEdit: Boolean = true,
-)
+) {
+    // Checked as the catalog is decoded, before the factory starts an exchange - see
+    // familyExchange. LinearAddressFormat checks it again, too late for that.
+    init {
+        require(presetsPerBank > 0) { "presetsPerBank must be positive, was $presetsPerBank" }
+    }
+}
 
 /** The Axe-Fx III family: `devices/fractal_axefx3.json`, in the generic [FamilyCatalog] shape, plus a factory. */
 object AxeFx3Family : InstrumentFamily {
