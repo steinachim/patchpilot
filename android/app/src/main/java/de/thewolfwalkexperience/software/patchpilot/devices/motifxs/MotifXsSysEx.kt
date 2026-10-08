@@ -63,6 +63,9 @@ object MotifXsSysEx {
      */
     const val BULK_OVERHEAD = 12
 
+    /** The largest count two 7-bit bytes can declare. */
+    const val MAX_BULK_PAYLOAD = 0x3FFF
+
     /** `F0 43 2n 7F 03 <addr> F7` - nine bytes, no payload. */
     fun requestDump(device: Int, addressHi: Int, addressMid: Int, addressLo: Int): ByteArray =
         byteArrayOf(
@@ -177,12 +180,14 @@ object MotifXsSysEx {
 
     /**
      * A bulk dump addressed to [addressHi]/[addressMid]/[addressLo] carrying [payload]. The byte
-     * count and checksum are computed here; the payload is passed through untouched.
+     * count and checksum are computed here; the payload is passed through untouched. The count is
+     * two 7-bit bytes, so a payload past [MAX_BULK_PAYLOAD] cannot be described and is refused.
      */
     fun bulkDump(device: Int, addressHi: Int, addressMid: Int, addressLo: Int, payload: ByteArray): ByteArray {
         // The counted region is the payload only: a 1,903-byte dump declares 1,891, its payload
         // length, and 1,891 + BULK_OVERHEAD = 1,903.
         val count = payload.size
+        require(count <= MAX_BULK_PAYLOAD) { "a bulk dump carries at most $MAX_BULK_PAYLOAD bytes, not $count" }
         val out = ByteArray(payload.size + BULK_OVERHEAD)
         out[0] = SYSEX_START
         out[1] = MANUFACTURER.toByte()
@@ -191,9 +196,9 @@ object MotifXsSysEx {
         out[4] = MODEL_HOST.toByte()
         out[5] = ((count shr 7) and 0x7F).toByte()
         out[6] = (count and 0x7F).toByte()
-        out[7] = addressHi.toByte()
-        out[8] = addressMid.toByte()
-        out[9] = addressLo.toByte()
+        out[7] = (addressHi and 0x7F).toByte()
+        out[8] = (addressMid and 0x7F).toByte()
+        out[9] = (addressLo and 0x7F).toByte()
         payload.copyInto(out, 10)
         out[out.size - 2] = checksumOf(out).toByte()
         out[out.size - 1] = SYSEX_END

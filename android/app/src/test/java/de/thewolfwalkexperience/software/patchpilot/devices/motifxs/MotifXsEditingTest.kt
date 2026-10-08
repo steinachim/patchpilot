@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -134,5 +135,14 @@ class MotifXsEditingTest {
         assertArrayEquals("f0 43 00 7f 03 00 00 11 00 00 6f f7".hexToBytes(), marker)
         assertEquals(MotifXsSysEx.BULK_OVERHEAD, marker.size)
         assertTrue(MotifXsSysEx.isWellFormedBulkDump(marker))
+    }
+
+    /** The count is two 7-bit bytes: a payload it cannot describe is refused, not wrapped. */
+    @Test
+    fun `a bulk dump refuses a payload its count cannot describe`() {
+        MotifXsSysEx.bulkDump(0, 0x0C, 0x0A, 0, ByteArray(MotifXsSysEx.MAX_BULK_PAYLOAD))
+        thrownBy<IllegalArgumentException> {
+            MotifXsSysEx.bulkDump(0, 0x0C, 0x0A, 0, ByteArray(MotifXsSysEx.MAX_BULK_PAYLOAD + 1))
+        }
     }
 }
