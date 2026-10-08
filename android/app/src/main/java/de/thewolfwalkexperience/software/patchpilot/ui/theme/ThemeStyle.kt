@@ -22,7 +22,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
-import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -215,6 +215,8 @@ val AppTheme.style: ThemeStyle
 
 /**
  * The active [ThemeStyle], provided by [PatchPilotTheme]. Defaults to [DefaultThemeStyle], so a
- * composable previewed outside it degrades to the plain look rather than crashing.
+ * composable previewed outside it degrades to the plain look rather than crashing. Static: it
+ * changes only on a theme switch, which recomposes everything below anyway, so tracking its
+ * readers would cost on every composition for nothing.
  */
-val LocalThemeStyle = compositionLocalOf<ThemeStyle> { DefaultThemeStyle }
+val LocalThemeStyle = staticCompositionLocalOf<ThemeStyle> { DefaultThemeStyle }
