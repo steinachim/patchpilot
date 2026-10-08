@@ -29,8 +29,8 @@ class StorageCalibrationTest {
     }
 
     private fun check(sizes: List<Int>, unit: Int, overhead: Int) {
-        val used = (NordDevice.storageUnitsAt(sizes, unit) + overhead).toInt()
-        val solved = NordDevice.solveStorageUnit(sizes, used)
+        val used = (NordStorageCalibration.storageUnitsAt(sizes, unit) + overhead).toInt()
+        val solved = NordStorageCalibration.solveStorageUnit(sizes, used)
         assertEquals(solved.reason, unit, solved.unitBytes)
         assertEquals(overhead, solved.residual)
         assertTrue("$unit outside ${solved.candidateRange}", solved.candidateRange!!.first <= unit)
@@ -74,7 +74,7 @@ class StorageCalibrationTest {
         // used of 219. One unit per item, so no block size is determinable - and a
         // fitted answer here would be worse than none.
         val sizes = List(202) { 90 } + List(5) { 400 } + listOf(200)
-        val solved = NordDevice.solveStorageUnit(sizes, 219)
+        val solved = NordStorageCalibration.solveStorageUnit(sizes, 219)
 
         assertNull(solved.unitBytes)
         assertNull(solved.residual)
@@ -86,33 +86,34 @@ class StorageCalibrationTest {
         // What makes the fit trustworthy: neighbouring candidates are off by tens of percent
         // where the accepted residual is under one.
         val sizes = sizes(235, 200_000, 5_000_000, seed = 1)
-        val used = NordDevice.storageUnitsAt(sizes, 64 * 1024)
+        val used = NordStorageCalibration.storageUnitsAt(sizes, 64 * 1024)
         for (candidate in listOf(32 * 1024, 128 * 1024, 192 * 1024)) {
-            val error = kotlin.math.abs(used - NordDevice.storageUnitsAt(sizes, candidate)).toDouble() / used
+            val error =
+                kotlin.math.abs(used - NordStorageCalibration.storageUnitsAt(sizes, candidate)).toDouble() / used
             assertTrue("$candidate is too close to call", error > 0.25)
         }
     }
 
     @Test
     fun `reports no answer rather than a bad one`() {
-        assertNull(NordDevice.solveStorageUnit(emptyList(), 100).unitBytes)
-        assertNull(NordDevice.solveStorageUnit(listOf(1000), 0).unitBytes)
+        assertNull(NordStorageCalibration.solveStorageUnit(emptyList(), 100).unitBytes)
+        assertNull(NordStorageCalibration.solveStorageUnit(listOf(1000), 0).unitBytes)
         assertTrue(
-            NordDevice.solveStorageUnit(List(10) { 1000 }, 4).reason.contains("fewer units than items"),
+            NordStorageCalibration.solveStorageUnit(List(10) { 1000 }, 4).reason.contains("fewer units than items"),
         )
         // 10 items of 1,000 bytes total 10 units or 20, never 15.
         assertTrue(
-            NordDevice.solveStorageUnit(List(10) { 1000 }, 15).reason.contains("no unit size reproduces"),
+            NordStorageCalibration.solveStorageUnit(List(10) { 1000 }, 15).reason.contains("no unit size reproduces"),
         )
     }
 
     @Test
     fun `rounds to the unit a real instrument would use`() {
-        assertEquals(65536, NordDevice.roundestInRange(65_000, 66_000))
-        assertEquals(196608, NordDevice.roundestInRange(195_000, 198_000))
-        assertEquals(262144, NordDevice.roundestInRange(261_000, 264_000))
+        assertEquals(65536, NordStorageCalibration.roundestInRange(65_000, 66_000))
+        assertEquals(196608, NordStorageCalibration.roundestInRange(195_000, 198_000))
+        assertEquals(262144, NordStorageCalibration.roundestInRange(261_000, 264_000))
         // Nothing round in range: the lower edge stands.
-        assertEquals(1001, NordDevice.roundestInRange(1001, 1001))
+        assertEquals(1001, NordStorageCalibration.roundestInRange(1001, 1001))
     }
 
     // ---- Item identity ----
@@ -153,7 +154,7 @@ class StorageCalibrationTest {
         // ...and a record carrying a content id keys on that instead.
         val real = parseMessage(NordFixtures.NSMP_RECORD_RESPONSE).payload
         assertNotNull(NordDevice.parseItemContentId(real))
-        assertEquals(NordDevice.ItemIdentity.Content(NordDevice.parseItemContentId(real)!!), device.itemIdentity(real))
+        assertEquals(ItemIdentity.Content(NordDevice.parseItemContentId(real)!!), device.itemIdentity(real))
     }
 
     // ---- The category child list (sub-opcode 2/3) ----
@@ -320,7 +321,7 @@ class StorageCalibrationTest {
         // or not at all. One category refusing is no reason to lose the eight that answered.
         val sizes = listOf(200_000, 1_600_000, 5_000_000)
         val unit = 64 * 1024
-        val used = NordDevice.storageUnitsAt(sizes, unit).toInt()
+        val used = NordStorageCalibration.storageUnitsAt(sizes, unit).toInt()
         val records = sizes.mapIndexed { i, size -> itemRecord(0, i, size, name = "sample$i") }
         val count = countPayload(3, 100, used, 0, 4)
 
@@ -387,7 +388,7 @@ class StorageCalibrationTest {
         val unit = 1024
         val shared = listOf(1000, 2000, 3000) // what Program holds
         val copies = listOf(1000, 2000) // Live, byte-identical to two of them
-        val used = NordDevice.storageUnitsAt(shared + copies, unit).toInt()
+        val used = NordStorageCalibration.storageUnitsAt(shared + copies, unit).toInt()
         assertEquals("1+2+3 for the programs, 1+2 for the copies", 9, used)
 
         val programCount = countPayload(shared.size, 100, used, 0, 2)
@@ -461,7 +462,7 @@ class StorageCalibrationTest {
     fun `two views of one area are merged, not summed`() = runTest {
         val sampleSizes = listOf(200_000, 1_600_000, 5_000_000)
         val unit = 64 * 1024
-        val used = NordDevice.storageUnitsAt(sampleSizes, unit).toInt()
+        val used = NordStorageCalibration.storageUnitsAt(sampleSizes, unit).toInt()
         // The "(Native)" view lists the same three items at different addresses, as a real Nord
         // Grand does. Same storage triple (which is what groups them), own item count.
         val plain = sampleSizes.mapIndexed { i, size -> itemRecord(0, i, size, name = "sample$i") }
@@ -510,7 +511,7 @@ class StorageCalibrationTest {
     fun `the residual is also measured at the reported unit`() = runTest {
         val reported = 130_816
         val sizes = listOf(reported * 1960, reported * 30 + 5, reported * 7)
-        val used = NordDevice.storageUnitsAt(sizes, reported).toInt()
+        val used = NordStorageCalibration.storageUnitsAt(sizes, reported).toInt()
         val names = listOf("Piano (Native)", "Piano")
         val count = countPayload(3, 100, used, 0, 2)
         val records = sizes.mapIndexed { i, size -> itemRecord(0, i, size, name = "piano$i") }

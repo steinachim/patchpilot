@@ -157,7 +157,7 @@ class FakeNordTransport(private val catalog: FakeNordCatalog = FakeNordCatalog()
     /**
      * Sub-opcode 8/9: status, item count, then free/used/reclaimable/unitCode. Always
      * answers unitCode=0 ("counted in bytes"), which is what tells
-     * [NordDevice.calibrateStorageUnits] there is nothing to calibrate for a fake category - there
+     * [calibrateStorageUnits] there is nothing to calibrate for a fake category - there
      * is no real allocation scheme behind this data to simulate.
      */
     private fun itemCountReply(categoryIndex: Int): ByteArray {
