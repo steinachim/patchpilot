@@ -97,7 +97,7 @@ class MotifXsFactoryReadsTest {
                 MotifXsSysEx.typeOf(request) != MotifXsSysEx.TYPE_DUMP_REQUEST -> emptyList()
 
                 address?.first == MotifXsSysEx.FAVORITES_ADDRESS_HI ->
-                    listOf(favoritesDump(address.second, byteArrayOf(0, 2, 0, 0)))
+                    listOf(deviceDump(MotifXsSysEx.FAVORITES_ADDRESS_HI, address.second, 0, byteArrayOf(0, 2, 0, 0)))
 
                 // The read-only bank's own address mid. Silence, and remembered.
                 address?.first == 0x0C && address.second == 0x00 -> {
@@ -106,7 +106,7 @@ class MotifXsFactoryReadsTest {
                 }
 
                 address?.first == 0x0C -> listOf(
-                    voiceDump(MotifXsFixtures.namedVoice, address.second, address.third),
+                    dumpAt(MotifXsFixtures.namedVoice, 0x0C, address.second, address.third),
                 )
 
                 else -> emptyList()
@@ -183,21 +183,5 @@ class MotifXsFactoryReadsTest {
     fun `a user row is still read from the instrument`() = runTest {
         val motif = instrument(backgroundScope)
         assertEquals("TWE2 Wolf Walk", motif.browser.refresh(SlotAddress(1, 0)).name)
-    }
-
-    private fun voiceDump(source: ByteArray, mid: Int, lo: Int): ByteArray {
-        val out = source.copyOf()
-        out[MotifXsSysEx.BULK_ADDRESS_INDEX] = 0x0C
-        out[MotifXsSysEx.BULK_ADDRESS_INDEX + 1] = mid.toByte()
-        out[MotifXsSysEx.BULK_ADDRESS_INDEX + 2] = lo.toByte()
-        out[out.size - 2] = MotifXsSysEx.checksumOf(out).toByte()
-        return out
-    }
-
-    private fun favoritesDump(mid: Int, marks: ByteArray): ByteArray {
-        val dump = MotifXsSysEx.bulkDump(0, MotifXsSysEx.FAVORITES_ADDRESS_HI, mid, 0, marks)
-        dump[4] = MotifXsSysEx.MODEL_DEVICE.toByte()
-        dump[dump.size - 2] = MotifXsSysEx.checksumOf(dump).toByte()
-        return dump
     }
 }

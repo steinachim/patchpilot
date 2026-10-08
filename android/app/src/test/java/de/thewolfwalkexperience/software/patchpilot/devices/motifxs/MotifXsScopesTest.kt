@@ -65,24 +65,6 @@ class MotifXsScopesTest {
             drum = MotifXsSysEx.dumpPayload(MotifXsFixtures.emptyVoice),
         )
 
-    /** A voice dump re-addressed to [mid]/[lo] and re-checksummed - the fake's stored voices. */
-    private fun voiceDump(source: ByteArray, mid: Int, lo: Int): ByteArray {
-        val out = source.copyOf()
-        out[MotifXsSysEx.BULK_ADDRESS_INDEX] = 0x0C
-        out[MotifXsSysEx.BULK_ADDRESS_INDEX + 1] = mid.toByte()
-        out[MotifXsSysEx.BULK_ADDRESS_INDEX + 2] = lo.toByte()
-        out[out.size - 2] = MotifXsSysEx.checksumOf(out).toByte()
-        return out
-    }
-
-    /** One bank's marks, framed the way the device sends them. */
-    private fun favoritesDump(mid: Int, marks: ByteArray): ByteArray {
-        val dump = MotifXsSysEx.bulkDump(0, MotifXsSysEx.FAVORITES_ADDRESS_HI, mid, 0, marks)
-        dump[4] = MotifXsSysEx.MODEL_DEVICE.toByte()
-        dump[dump.size - 2] = MotifXsSysEx.checksumOf(dump).toByte()
-        return dump
-    }
-
     private fun instrument(
         scope: CoroutineScope,
         favorites: Map<Int, ByteArray> = emptyMap(),
@@ -100,18 +82,20 @@ class MotifXsScopesTest {
                         // Truncated mid-message: the declared count promises more than arrives,
                         // which is what a dropped packet looks like and what the retry is for.
                         mid in damaged -> listOf(
-                            favoritesDump(mid, favorites[mid] ?: ByteArray(4))
+                            deviceDump(MotifXsSysEx.FAVORITES_ADDRESS_HI, mid, 0, favorites[mid] ?: ByteArray(4))
                                 .copyOfRange(0, 11) + MotifXsSysEx.SYSEX_END,
                         )
 
-                        favorites.containsKey(mid) -> listOf(favoritesDump(mid, favorites.getValue(mid)))
+                        favorites.containsKey(
+                            mid,
+                        ) -> listOf(deviceDump(MotifXsSysEx.FAVORITES_ADDRESS_HI, mid, 0, favorites.getValue(mid)))
 
                         else -> emptyList()
                     }
                 }
 
                 address?.first == 0x0C -> listOf(
-                    voiceDump(MotifXsFixtures.namedVoice, address.second, address.third),
+                    dumpAt(MotifXsFixtures.namedVoice, 0x0C, address.second, address.third),
                 )
 
                 else -> emptyList()
