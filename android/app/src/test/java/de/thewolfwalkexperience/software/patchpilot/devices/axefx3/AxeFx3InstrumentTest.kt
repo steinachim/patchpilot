@@ -194,7 +194,7 @@ class AxeFx3InstrumentTest {
     }
 
     @Test
-    fun `transfer reads the raw preset and writes one back, refusing anything else`() = runTest {
+    fun `transfer reads the raw preset`() = runTest {
         val fake = FakeAxeFx3()
         val image = fake.put(1, "Lead")
         val instrument = axeFx3(fake).apply { connect() }
@@ -202,19 +202,6 @@ class AxeFx3InstrumentTest {
         val read = instrument.transfer.read(SlotAddress(0, 1))
         assertArrayEquals(image, read)
         assertEquals(49_323, read.size)
-        assertEquals("syx", instrument.transfer.fileExtension)
-
-        instrument.transfer.write(SlotAddress(0, 9), read)
-        assertEquals("Lead", fake.nameAt(9))
-
-        val before = fake.requests.size
-        try {
-            instrument.transfer.write(SlotAddress(0, 10), ByteArray(43_008))
-            fail("expected a refusal")
-        } catch (e: IllegalArgumentException) {
-            // expected
-        }
-        assertEquals(before, fake.requests.size)
     }
 
     @Test

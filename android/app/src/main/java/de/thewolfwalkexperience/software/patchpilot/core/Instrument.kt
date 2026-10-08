@@ -353,17 +353,16 @@ fun printableAsciiNameProblem(name: String, maxLength: Int?): String? {
 }
 
 /**
- * Reads and writes a preset's own data blob - backup and restore.
+ * Reads one preset's own data blob, as the instrument stores it. The regression test checks it,
+ * and the Pro-800's browser is built on it.
  *
- * The Pro-800, the Axe-Fx III and the Subsequent 37 implement it: a whole-preset read and write
- * is the only way any of them has to move a preset. The Pro-800's editor is built on this facet;
- * the other two compose their edits from the same device operations directly. The Nord and the
- * Motif XS return null until an item-data read/write path is implemented.
+ * The Pro-800, the Axe-Fx III and the Subsequent 37 implement it: a whole-preset read is how each
+ * of them is read at all. The Nord and the Motif XS return null, having no item-data read path.
+ * There is no write here: the app has no backup or restore, and each family's editor writes
+ * through its own device operations.
  */
 interface PresetTransfer {
     suspend fun read(address: SlotAddress): ByteArray
-    suspend fun write(address: SlotAddress, blob: ByteArray)
-    val fileExtension: String
 }
 
 /**

@@ -421,10 +421,9 @@ class Pro800EditorTest {
     @Test
     fun `every edit this instrument can do is declared, and all are emulated`() = runTest {
         val editor = Pro800Editor(
-            transfer = object : de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer {
+            store = object : Pro800Store {
                 override suspend fun read(address: SlotAddress) = ByteArray(0)
                 override suspend fun write(address: SlotAddress, blob: ByteArray) = Unit
-                override val fileExtension = "syx"
             },
             layout = Pro800Instrument(
                 SysExExchange(FakePro800().transport, backgroundScope),

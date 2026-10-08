@@ -265,18 +265,6 @@ class AxeFx3Instrument(
     override suspend fun read(address: SlotAddress): ByteArray =
         lock.withLock { device.readDump(numberOf(address)).raw }
 
-    /**
-     * Stores a preset read by [read] at [address], overwriting whatever is there, and reads it
-     * back. Refuses anything that is not such a dump before sending anything.
-     */
-    override suspend fun write(address: SlotAddress, blob: ByteArray) {
-        val image = AxeFx3DumpImage.parse(blob)
-        val number = numberOf(address)
-        operation { writeVerified(number, image) }
-    }
-
-    override val fileExtension = "syx"
-
     // ---- Shared by the editor and the reporter; see the class doc on locking ----
 
     /** The instrument's own preset number for [address], refusing one this unit does not have. */

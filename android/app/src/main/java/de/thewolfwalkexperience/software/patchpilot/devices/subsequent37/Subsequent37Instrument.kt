@@ -413,23 +413,6 @@ class Subsequent37Instrument(
         return operation { device.readStoredMessage(number) }
     }
 
-    /**
-     * Stores [blob] at [address], overwriting it, and reads it back. Accepts one program as a
-     * single-program SysEx message (as [read] returns it, or as the vendor's files carry it) or
-     * as a bare 488-byte payload, with a checksum that closes. Only the program is sent, inside
-     * a write built here: never a file's own bytes.
-     */
-    override suspend fun write(address: SlotAddress, blob: ByteArray) {
-        val payload = when (blob.size) {
-            Subsequent37SysEx.PAYLOAD_BYTES -> blob.takeIf { Subsequent37SysEx.checksumCloses(it) }
-            else -> Subsequent37SysEx.programOf(blob)
-        } ?: throw IllegalArgumentException("This is not one Subsequent 37 preset with a checksum that closes.")
-        val number = numberOf(address)
-        operation { device.writeVerified(number, Subsequent37Program(payload), displayIdOf(number)) }
-    }
-
-    override val fileExtension = "syx"
-
     // ---- Shared by the editor, the tagger and the reporter ----
 
     internal fun numberOf(address: SlotAddress): Int = Subsequent37AddressFormat.numberOf(address)

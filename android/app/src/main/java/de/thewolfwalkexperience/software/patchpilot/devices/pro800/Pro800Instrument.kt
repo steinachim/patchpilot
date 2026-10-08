@@ -44,7 +44,7 @@ class Pro800Instrument(
     /** The catalog entry's id and name; defaulted so the JVM tests can build this with no catalog. */
     private val descriptorId: String = "behringer_pro800",
     private val catalogName: String = "Behringer Pro-800",
-) : Instrument, PresetBrowser, PresetSelector, PresetTransfer {
+) : Instrument, PresetBrowser, PresetSelector, PresetTransfer, Pro800Store {
 
     /** Four banks of a hundred, displayed `A00`-`D99` - how the instrument's own panel splits its flat 0..399 numbering. */
     override val layout = SlotLayout.uniform(
@@ -306,8 +306,6 @@ class Pro800Instrument(
         val programNumber = programNumberOf(address)
         exchange.tell(Pro800SysEx.writeDump(programNumber, blob))
     }
-
-    override val fileExtension = "syx"
 
     /**
      * Flattens an address into the instrument's own program number, bounded to the 400 presets:

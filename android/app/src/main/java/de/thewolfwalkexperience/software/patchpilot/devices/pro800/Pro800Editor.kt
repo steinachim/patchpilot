@@ -8,7 +8,6 @@ import androidx.annotation.VisibleForTesting
 import de.thewolfwalkexperience.software.patchpilot.BuildConfig
 import de.thewolfwalkexperience.software.patchpilot.core.ComposedEditor
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
-import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
@@ -16,6 +15,14 @@ import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import kotlinx.coroutines.delay
 
 private const val TAG = "Pro800Editor"
+
+/** What [Pro800Editor] reads and writes through: one preset's raw, still-encoded blob, by address. */
+internal interface Pro800Store {
+    suspend fun read(address: SlotAddress): ByteArray
+
+    /** Stores [blob] at [address], or clears the address when [blob] is empty. Not verified here. */
+    suspend fun write(address: SlotAddress, blob: ByteArray)
+}
 
 /**
  * Every edit on an instrument that has none of them as a command, composed by [ComposedEditor]
@@ -25,8 +32,8 @@ private const val TAG = "Pro800Editor"
  *     not waited for (see [Pro800Instrument.write]).
  *  2. Keep what was overwritten in [undoBuffer] for the session.
  */
-class Pro800Editor(
-    private val transfer: PresetTransfer,
+class Pro800Editor internal constructor(
+    private val store: Pro800Store,
     private val layout: SlotLayout,
 ) : ComposedEditor<Pro800Program>() {
 
@@ -54,7 +61,7 @@ class Pro800Editor(
 
     override fun displayIdOf(address: SlotAddress): String = layout.format.format(address)
 
-    override suspend fun peek(address: SlotAddress) = Pro800Program.fromEncoded(transfer.read(address))
+    override suspend fun peek(address: SlotAddress) = Pro800Program.fromEncoded(store.read(address))
 
     override fun isEmpty(preset: Pro800Program) = preset.isEmpty
 
@@ -87,7 +94,7 @@ class Pro800Editor(
      */
     private suspend fun writeRecord(address: SlotAddress, program: Pro800Program, expectName: String?) {
         val displayId = displayIdOf(address)
-        transfer.write(address, Pro800ProgramCodec.encode(program.dense))
+        store.write(address, Pro800ProgramCodec.encode(program.dense))
         settle()
 
         val readBack = peek(address)
@@ -126,7 +133,7 @@ class Pro800Editor(
     /** Sets an address back to uninitialized - a `0x78` with no data - and proves it took. */
     private suspend fun writeEmptyVerified(address: SlotAddress) {
         val displayId = displayIdOf(address)
-        transfer.write(address, ByteArray(0))
+        store.write(address, ByteArray(0))
         settle()
 
         if (!peek(address).isEmpty) {

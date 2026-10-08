@@ -395,27 +395,4 @@ class Subsequent37InstrumentTest {
         assertArrayEquals(Subsequent37Fixtures.READ_P001[1], instrument.read(SlotAddress(0, 1)))
         assertArrayEquals(Subsequent37Fixtures.READ_P255[1], instrument.read(SlotAddress(15, 15)))
     }
-
-    @Test
-    fun `a transfer write takes a program message or a bare payload, and nothing broken`() = runTest {
-        val fake = FakeSubsequent37(backgroundScope)
-        val instrument = subsequent37(fake).apply { connect() }
-        val target = Subsequent37Fixtures.emptyPrograms(2)
-
-        instrument.write(Subsequent37AddressFormat.addressOf(target[0]), Subsequent37Fixtures.WRITE_RENAME)
-        assertEquals("Preset 000  Test", fake.programAt(target[0]).name)
-        // Only the program travels: the file's own header, addressed to program 0, is never sent.
-        assertEquals(target[0], Subsequent37SysEx.addressOf(fake.writes.last()))
-
-        instrument.write(Subsequent37AddressFormat.addressOf(target[1]), Subsequent37Fixtures.unpackBlock(1))
-        assertEquals("Preset 001", fake.programAt(target[1]).name)
-
-        val broken = Subsequent37Fixtures.unpackBlock(1).also { it[200] = (it[200] + 1).toByte() }
-        try {
-            instrument.write(SlotAddress(0, 0), broken)
-            fail("a payload with a broken checksum was written")
-        } catch (expected: IllegalArgumentException) {
-        }
-        assertEquals(2, fake.writes.size)
-    }
 }
