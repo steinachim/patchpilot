@@ -9,6 +9,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -75,17 +76,17 @@ class InstrumentViewModelTest {
         viewModel.programs.blocked = BlockedOperation("Blocked.", null, "Fix", apply = {}, retry = {})
 
         viewModel.connection.connectDemo()
+        // Until the ViewModel has seen the new session: the state can be published off the main
+        // thread, so seeing it here does not mean the ViewModel's collector has run yet.
         val deadline = System.nanoTime() + 10_000_000_000
-        // Until the new session is published, not merely opened: the ViewModel reacts to the state.
-        while ((viewModel.state.value as? ConnectionState.Connected)?.instrument.let { it == null || it === first }) {
-            check(System.nanoTime() < deadline) { "Still ${viewModel.state.value} after 10 s" }
+        while (viewModel.programs.blocked != null) {
+            check(System.nanoTime() < deadline) { "The remedy offer survived the rebuild (${viewModel.state.value})" }
             shadowOf(Looper.getMainLooper()).idle()
             Thread.sleep(10)
         }
-        shadowOf(Looper.getMainLooper()).idle()
 
+        assertNotSame(first, viewModel.connection.instrument)
         assertEquals(slot, viewModel.programs.renameTarget)
-        assertEquals(null, viewModel.programs.blocked)
     }
 
     /** The share button's gate can trail the session by a frame, so a tap may find no session at all. */
