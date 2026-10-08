@@ -7,6 +7,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

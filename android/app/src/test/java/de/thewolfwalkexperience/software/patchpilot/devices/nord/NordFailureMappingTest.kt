@@ -7,6 +7,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbReadTimeoutException
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferException
 import kotlinx.coroutines.test.runTest
@@ -39,9 +40,7 @@ class NordFailureMappingTest {
                 7 to ByteArray(0), // unlock still runs
             ),
         )
-        val failure = assertThrows(InstrumentException.DeviceRejected::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        val failure = thrownBy<InstrumentException.DeviceRejected> { instrument.delete(SlotAddress(8, 12)) }
         assertEquals(9, failure.status)
         assertTrue(failure.message!!.contains("delete a preset"))
     }
@@ -61,9 +60,7 @@ class NordFailureMappingTest {
                 7 to ByteArray(0),
             ),
         )
-        val failure = assertThrows(InstrumentException.ProtocolDesync::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        val failure = thrownBy<InstrumentException.ProtocolDesync> { instrument.delete(SlotAddress(8, 12)) }
         assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
     }
 
@@ -81,11 +78,10 @@ class NordFailureMappingTest {
                 7 to ByteArray(0),
             ),
         )
-        val failure = assertThrows(InstrumentException.SlotStateChanged::class.java) {
-            kotlinx.coroutines.runBlocking {
+        val failure =
+            thrownBy<InstrumentException.SlotStateChanged> {
                 instrument.copyProgram(SlotAddress(0, 0), SlotAddress(0, 1))
             }
-        }
         assertEquals(NordDevice.STATUS_FILE_EXISTS, (failure.cause as NordStatusException).status)
         assertTrue(failure.message!!, failure.message!!.contains("holds a preset"))
         assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
@@ -102,11 +98,8 @@ class NordFailureMappingTest {
                 7 to ByteArray(0),
             ),
         )
-        val failure = assertThrows(InstrumentException.SlotStateChanged::class.java) {
-            kotlinx.coroutines.runBlocking {
-                instrument.swap(SlotAddress(0, 0), SlotAddress(0, 1))
-            }
-        }
+        val failure =
+            thrownBy<InstrumentException.SlotStateChanged> { instrument.swap(SlotAddress(0, 0), SlotAddress(0, 1)) }
         assertEquals(NordDevice.STATUS_NOT_FOUND, (failure.cause as NordStatusException).status)
         assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
     }
@@ -125,9 +118,7 @@ class NordFailureMappingTest {
                 7 to ByteArray(0),
             ),
         )
-        val failure = assertThrows(InstrumentException.DeviceRejected::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        val failure = thrownBy<InstrumentException.DeviceRejected> { instrument.delete(SlotAddress(8, 12)) }
         assertNull(failure.explanation)
         assertTrue(failure.message!!.contains("status 9"))
     }
@@ -142,9 +133,7 @@ class NordFailureMappingTest {
         val instrument = NordInstrument(
             NordFixtures.device(OutOfStepTransport(), NordFixtures.GRAND_PROFILE),
         )
-        assertThrows(InstrumentException.ProtocolDesync::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        thrownBy<InstrumentException.ProtocolDesync> { instrument.delete(SlotAddress(8, 12)) }
     }
 
     /** Answers every request with a well-formed reply to some other one. */
@@ -164,9 +153,7 @@ class NordFailureMappingTest {
         val instrument = NordInstrument(
             NordFixtures.device(FailingTransport(), NordFixtures.GRAND_PROFILE),
         )
-        assertThrows(InstrumentException.TransportLost::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        thrownBy<InstrumentException.TransportLost> { instrument.delete(SlotAddress(8, 12)) }
     }
 
     /** What a detached device looks like to the protocol layer: every transfer fails at once. */
@@ -186,9 +173,7 @@ class NordFailureMappingTest {
     @Test
     fun `a read that times out becomes Timeout`() = runTest {
         val instrument = NordInstrument(NordFixtures.device(SilentTransport(), NordFixtures.GRAND_PROFILE))
-        assertThrows(InstrumentException.Timeout::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        thrownBy<InstrumentException.Timeout> { instrument.delete(SlotAddress(8, 12)) }
     }
 
     /** Takes every request, then never answers within the timeout. */
@@ -204,9 +189,10 @@ class NordFailureMappingTest {
     /** A `check()` failing inside this app's own code is a bug, not a cable: it must not read as "connection lost". */
     @Test
     fun `an unexpected internal state becomes ProtocolDesync, not TransportLost`() = runTest {
-        val failure = assertThrows(InstrumentException.ProtocolDesync::class.java) {
-            kotlinx.coroutines.runBlocking { mapNordFailure("delete a preset") { check(false) { "impossible state" } } }
-        }
+        val failure =
+            thrownBy<InstrumentException.ProtocolDesync> {
+                mapNordFailure("delete a preset") { check(false) { "impossible state" } }
+            }
         assertTrue(failure.message!!.contains("impossible state"))
     }
 
@@ -224,8 +210,6 @@ class NordFailureMappingTest {
                 7 to ByteArray(0),
             ),
         )
-        assertThrows(InstrumentException.ProtocolDesync::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        thrownBy<InstrumentException.ProtocolDesync> { instrument.delete(SlotAddress(8, 12)) }
     }
 }

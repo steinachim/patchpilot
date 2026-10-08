@@ -7,6 +7,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -25,17 +26,6 @@ class AxeFx3EditorTest {
 
     private suspend fun TestScope.connected(fake: FakeAxeFx3, config: AxeFx3Config = AxeFx3Config()) =
         axeFx3(fake, config).apply { connect() }
-
-    private suspend inline fun <reified T : Throwable> thrownBy(crossinline block: suspend () -> Unit): T {
-        try {
-            block()
-        } catch (e: Throwable) {
-            if (e is T) return e
-            throw e
-        }
-        fail("expected ${T::class.simpleName}")
-        error("unreachable")
-    }
 
     /** The commands sent from [from] on, for checking one edit's sequence after connect. */
     private fun FakeAxeFx3.commandsSince(from: Int) = commands().drop(from)

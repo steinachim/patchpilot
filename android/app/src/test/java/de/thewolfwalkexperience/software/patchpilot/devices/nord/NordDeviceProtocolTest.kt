@@ -6,6 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -166,7 +167,7 @@ class NordDeviceProtocolTest {
     fun `a reply that never matches its request fails after a bounded number of reads`() = runTest {
         val transport = LeftoverTransport(emptyList(), deviceInfoPayload(10), answerSubOp = { it + 2 })
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        val exc = assertThrows(IllegalStateException::class.java) { runBlocking { device.connect() } }
+        val exc = thrownBy<IllegalStateException> { device.connect() }
         val cause = generateSequence<Throwable>(exc) { it.cause }.first { "out of step" in it.message.orEmpty() }
         assertTrue(cause.message, cause.message!!.contains("sub-op=2 with a reply for protocol=7 sub-op=4"))
         // MAX_STALE_REPLIES are discarded; the one after that is the refusal.
@@ -407,9 +408,7 @@ class NordDeviceProtocolTest {
                 NordDevice.PROTOCOL_FILE_TRANSFER to 10,
             ),
         )
-        val failure = assertThrows(IllegalStateException::class.java) {
-            kotlinx.coroutines.runBlocking { device.capabilityQueryPayload() }
-        }
+        val failure = thrownBy<IllegalStateException> { device.capabilityQueryPayload() }
         assertTrue(failure.message!!.contains("skipped"))
         assertTrue("nothing went on the wire", transport.sentRequests.isEmpty())
     }
@@ -1232,9 +1231,7 @@ class NordDeviceProtocolTest {
     @Test
     fun `a device that only returns empty reads is given up on`() = runTest {
         val device = NordFixtures.device(EmptyReadTransport(), NordFixtures.GRAND_PROFILE)
-        val caught = assertThrows(IllegalStateException::class.java) {
-            runBlocking { device.readReply() }
-        }
+        val caught = thrownBy<IllegalStateException> { device.readReply() }
         assertTrue(caught.message!!, caught.message!!.contains("empty replies in a row"))
     }
 
@@ -1249,9 +1246,7 @@ class NordDeviceProtocolTest {
             EmptyReadTransport(first = built.copyOfRange(0, 64)),
             NordFixtures.GRAND_PROFILE,
         )
-        val caught = assertThrows(IllegalStateException::class.java) {
-            runBlocking { device.readReply() }
-        }
+        val caught = thrownBy<IllegalStateException> { device.readReply() }
         assertTrue(caught.message!!, caught.message!!.contains("empty replies in a row"))
     }
 
@@ -1293,7 +1288,7 @@ class NordDeviceProtocolTest {
     @Test
     fun `an unusable declared length is refused rather than awaited`() = runTest {
         val device = chunkedDevice("ffffffff".hexToBytes() + ByteArray(32))
-        val caught = assertThrows(IllegalStateException::class.java) { runBlocking { device.readReply() } }
+        val caught = thrownBy<IllegalStateException> { device.readReply() }
         assertTrue(caught.message!!, caught.message!!.contains("unusable length"))
     }
 }

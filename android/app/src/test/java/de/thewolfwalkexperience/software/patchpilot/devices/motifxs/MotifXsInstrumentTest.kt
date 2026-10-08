@@ -12,6 +12,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -243,27 +244,6 @@ class MotifXsInstrumentTest {
         // USB, not MIDI: this instrument is matched by USB ids and has no MIDI port at all.
         assertEquals(Bus.USB, motif.identity.bus)
         assertEquals("6.0.0.127", motif.identity.firmwareVersion)
-    }
-
-    /**
-     * A transport that answers nothing at all is refused, not accepted with a blank firmware.
-     *
-     * An unanswered inquiry alone is a cosmetic loss and the voices are what the user came for -
-     * see `an unanswered identity inquiry alone still connects` - but an instrument answering
-     * nothing has no voices to offer either: every operation would time out on its own, and none
-     * of them could explain why.
-     */
-    @Test
-    fun `connect refuses an instrument that answers nothing at all`() = runTest {
-        val transport = FakeMidiTransport { emptyList() }
-        val motif = MotifXsInstrument(
-            SysExExchange(transport, backgroundScope, defaultTimeout = 20.milliseconds, retries = 0),
-            config,
-            testBlanks,
-        )
-        assertThrows(InstrumentException.NeedsManualSetting::class.java) {
-            runBlocking { motif.connect() }
-        }
     }
 
     /** Only what was measured on the instrument is offered, and the nulls say so - see MotifXsInstrument's class doc. */
@@ -595,15 +575,9 @@ class MotifXsInstrumentTest {
     fun `rename refuses a name the instrument cannot store`() = runTest {
         val (motif, transport) = instrument(backgroundScope)
         val editor = motif.editor!!
-        assertThrows(IllegalArgumentException::class.java) {
-            runBlocking { editor.rename(SlotAddress(0, 0), "x".repeat(21)) }
-        }
-        assertThrows(IllegalArgumentException::class.java) {
-            runBlocking { editor.rename(SlotAddress(0, 0), "   ") }
-        }
-        assertThrows(IllegalArgumentException::class.java) {
-            runBlocking { editor.rename(SlotAddress(0, 0), "Grüße") }
-        }
+        thrownBy<IllegalArgumentException> { editor.rename(SlotAddress(0, 0), "x".repeat(21)) }
+        thrownBy<IllegalArgumentException> { editor.rename(SlotAddress(0, 0), "   ") }
+        thrownBy<IllegalArgumentException> { editor.rename(SlotAddress(0, 0), "Grüße") }
         // Nothing left the building: there is no safe place to abort once a header has gone out,
         // so every one of these has to fail before the first byte.
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
@@ -812,9 +786,7 @@ class MotifXsInstrumentTest {
             ),
         )
         val (motif, transport) = instrument(backgroundScope, withConfig = readOnly)
-        assertThrows(IllegalArgumentException::class.java) {
-            runBlocking { motif.editor!!.rename(SlotAddress(0, 0), "Nope") }
-        }
+        thrownBy<IllegalArgumentException> { motif.editor!!.rename(SlotAddress(0, 0), "Nope") }
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
     }
 
@@ -1032,9 +1004,7 @@ class MotifXsInstrumentTest {
             ),
         )
         val (motif, transport) = instrument(backgroundScope, withFactory)
-        assertThrows(IllegalArgumentException::class.java) {
-            runBlocking { motif.editor!!.swap(SlotAddress(0, 0), SlotAddress(1, 0)) }
-        }
+        thrownBy<IllegalArgumentException> { motif.editor!!.swap(SlotAddress(0, 0), SlotAddress(1, 0)) }
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
     }
 

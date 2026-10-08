@@ -9,6 +9,8 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -344,12 +346,10 @@ class Pro800EditorTest {
     fun `a cancelled swap finishes rather than stopping half done`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        val swap = launch { pro800.editor!!.swap(a(0), a(1)) }
-        while (fake.writeLog.isEmpty()) {
-            runCurrent()
-            advanceTimeBy(10)
-        }
-        swap.cancel()
+        var swap: Job? = null
+        fake.onWrite = { swap?.cancel() }
+        swap = launch(start = CoroutineStart.LAZY) { pro800.editor!!.swap(a(0), a(1)) }
+        swap.start()
         // Joined rather than run to idle: the replies arrive through the exchange's collector in
         // backgroundScope, which advanceUntilIdle does not wait for.
         swap.join()

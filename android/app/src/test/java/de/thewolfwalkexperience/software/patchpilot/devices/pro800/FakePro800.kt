@@ -37,6 +37,9 @@ class FakePro800(
     /** The status the preset reload answers with; anything but OK is a refusal. */
     var reloadStatus: Int = Pro800SysEx.STATUS_OK,
 ) {
+    /** Called with the program number after each write lands - where a test cancels mid-edit. */
+    var onWrite: (Int) -> Unit = {}
+
     /** Program number -> the encoded payload stored there. Absent means an empty address. */
     private val stored = initial.toMutableMap()
 
@@ -107,6 +110,7 @@ class FakePro800(
             return
         }
         if (payload.isEmpty()) stored.remove(programNumber) else stored[programNumber] = payload
+        onWrite(programNumber)
     }
 
     private fun dumpFor(programNumber: Int): ByteArray {

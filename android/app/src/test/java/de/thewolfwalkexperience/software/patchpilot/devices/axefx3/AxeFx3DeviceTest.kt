@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.axefx3
 
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
@@ -18,17 +19,6 @@ import org.junit.Test
 class AxeFx3DeviceTest {
 
     private fun TestScope.device(fake: FakeAxeFx3) = AxeFx3Device(SysExExchange(fake.transport, backgroundScope))
-
-    private suspend inline fun <reified T : Throwable> thrownBy(crossinline block: suspend () -> Unit): T {
-        try {
-            block()
-        } catch (e: Throwable) {
-            if (e is T) return e
-            throw e
-        }
-        fail("expected ${T::class.simpleName}")
-        error("unreachable")
-    }
 
     @Test
     fun `a dump read returns the preset exactly as it was sent`() = runTest {
