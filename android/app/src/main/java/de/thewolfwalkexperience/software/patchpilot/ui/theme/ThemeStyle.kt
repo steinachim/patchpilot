@@ -117,8 +117,8 @@ interface ThemeStyle {
 /** The actions a top bar can carry, whichever screen puts them there. */
 enum class BarAction { Back, Refresh, Settings }
 
-/** Material's disabled alpha, for the pieces a theme dims for itself rather than by token. */
-internal const val DISABLED_HANDLE_ALPHA = 0.38f
+/** Material's disabled alpha, for what is dimmed by hand rather than by a component's own token. */
+internal const val DISABLED_ALPHA = 0.38f
 
 /** Plain Material: every function hands back [base] untouched or renders the stock component. */
 object DefaultThemeStyle : ThemeStyle {
@@ -151,7 +151,7 @@ object DefaultThemeStyle : ThemeStyle {
             color = if (enabled) {
                 LocalContentColor.current
             } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_HANDLE_ALPHA)
+                MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
             },
             modifier = modifier,
         )

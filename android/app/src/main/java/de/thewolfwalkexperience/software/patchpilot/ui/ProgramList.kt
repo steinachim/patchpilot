@@ -63,6 +63,7 @@ import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.ui.theme.DISABLED_ALPHA
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 import kotlinx.coroutines.launch
 
@@ -79,9 +80,6 @@ private object ProgramListMetrics {
 
     /** The dragged row, left in place and dimmed while the ghost follows the finger. */
     const val DRAGGED_ALPHA = 0.3f
-
-    /** Material's disabled alpha - what a row that cannot be tapped right now reads as. */
-    const val DISABLED_ALPHA = 0.38f
 
     /** An empty slot: legible, clearly not a preset. */
     const val EMPTY_SLOT_ALPHA = 0.5f
@@ -471,7 +469,7 @@ private fun ProgramRowItem(
             .alpha(
                 when {
                     isDragged -> ProgramListMetrics.DRAGGED_ALPHA
-                    ops.picking && !isPickTarget -> ProgramListMetrics.DISABLED_ALPHA
+                    ops.picking && !isPickTarget -> DISABLED_ALPHA
                     isEmpty && !ops.picking -> ProgramListMetrics.EMPTY_SLOT_ALPHA
                     else -> 1f
                 },

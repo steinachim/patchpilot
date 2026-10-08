@@ -44,6 +44,9 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Ends the regression report's filename stem, after the instrument's own. */
+private const val REGRESSION_STEM_SUFFIX = "_regression"
+
 /**
  * The hidden debug menu, reached by tapping the instrument name five times on the preset screen.
  * A route of its own rather than a dialog, because the regression test needs room for a progress
@@ -236,7 +239,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             title = regressionShareTitle,
                             description = finished.report.summary,
                             suffix = txtSuffix,
-                            initialStem = "${finished.stem}_capabilities",
+                            initialStem = "${finished.stem}$REGRESSION_STEM_SUFFIX",
                             onConfirm = { stem ->
                                 scope.launch {
                                     shareTextReport(
@@ -250,7 +253,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             },
                         )
                     },
-                    onSave = { saveTextLauncher.launch("${finished.stem}_capabilities$txtSuffix") },
+                    onSave = { saveTextLauncher.launch("${finished.stem}$REGRESSION_STEM_SUFFIX$txtSuffix") },
                     onBackToMenu = ::backToMenu,
                 )
 

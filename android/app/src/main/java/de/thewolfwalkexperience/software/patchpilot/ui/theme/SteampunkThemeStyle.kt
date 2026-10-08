@@ -128,7 +128,7 @@ object SteampunkThemeStyle : ThemeStyle {
             modifier = modifier
                 .height(dragHandleHeight)
                 .aspectRatio(DRAG_ARROW_ASPECT)
-                .alpha(if (enabled) 1f else DISABLED_HANDLE_ALPHA),
+                .alpha(if (enabled) 1f else DISABLED_ALPHA),
         )
     }
 
@@ -192,7 +192,7 @@ object SteampunkThemeStyle : ThemeStyle {
                 .clip(shape)
                 .steampunkBrassFill(
                     image = R.drawable.steampunk_plaque_mid,
-                    alpha = if (enabled) 1f else DISABLED_HANDLE_ALPHA,
+                    alpha = if (enabled) 1f else DISABLED_ALPHA,
                 ),
             enabled = enabled,
             shape = shape,
