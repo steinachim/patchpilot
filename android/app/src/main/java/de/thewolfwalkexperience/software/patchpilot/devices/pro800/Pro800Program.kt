@@ -7,7 +7,12 @@ package de.thewolfwalkexperience.software.patchpilot.devices.pro800
  * One decoded program record. A zero-length record is an empty slot, and a short one is a normal
  * truncated preset; neither is an error.
  */
-class Pro800Program(val dense: ByteArray) {
+class Pro800Program(dense: ByteArray) {
+
+    private val bytes = dense.copyOf()
+
+    /** The decoded record; a copy, so nothing outside can change this program. */
+    val dense: ByteArray get() = bytes.copyOf()
 
     /**
      * True where this address holds nothing: the instrument answers an empty address with a bare
@@ -15,12 +20,12 @@ class Pro800Program(val dense: ByteArray) {
      * nor name can stand in: records are variable length (173, 166, 158 and 157 dense bytes for
      * four consecutive populated slots), and a preset may carry no name at all.
      */
-    val isEmpty: Boolean get() = dense.isEmpty()
+    val isEmpty: Boolean get() = bytes.isEmpty()
 
     val version: Int?
-        get() = if (dense.size > Pro800ProgramFields.VERSION.denseOffset) {
+        get() = if (bytes.size > Pro800ProgramFields.VERSION.denseOffset) {
             Pro800ProgramCodec.readValue(
-                dense,
+                bytes,
                 Pro800ProgramFields.VERSION.denseOffset,
                 Pro800ProgramFields.VERSION.byteCount,
             )
@@ -37,7 +42,7 @@ class Pro800Program(val dense: ByteArray) {
      * Not a proof: a splice that drops enough of the middle lands back inside the range.
      */
     val outrunsDeclaredVersion: Boolean
-        get() = !isEmpty && dense.size > Pro800ProgramFields.maxDenseSizeFor(version)
+        get() = !isEmpty && bytes.size > Pro800ProgramFields.maxDenseSizeFor(version)
 
     /**
      * Is this record short enough that it might be a truncated splice rather than a preset? A
@@ -49,7 +54,7 @@ class Pro800Program(val dense: ByteArray) {
      * instrument is 155 dense bytes or more, so this rarely fires.
      */
     val isSuspiciouslyShort: Boolean
-        get() = !isEmpty && dense.size < Pro800ProgramFields.NAME_DENSE_OFFSET
+        get() = !isEmpty && bytes.size < Pro800ProgramFields.NAME_DENSE_OFFSET
 
     /**
      * The preset's name, or null where it has none - distinct from [isEmpty], since one of the
@@ -61,7 +66,7 @@ class Pro800Program(val dense: ByteArray) {
             null
         } else {
             Pro800ProgramCodec
-                .readString(dense, Pro800ProgramFields.NAME_DENSE_OFFSET, Pro800ProgramFields.NAME_LENGTH)
+                .readString(bytes, Pro800ProgramFields.NAME_DENSE_OFFSET, Pro800ProgramFields.NAME_LENGTH)
                 .ifBlank { null }
         }
 
@@ -74,7 +79,7 @@ class Pro800Program(val dense: ByteArray) {
         check(!isEmpty) { "cannot rename an uninitialized slot" }
         // Records arrive truncated after their last meaningful byte, so a short old name leaves
         // no room for a longer one; grow the record to the end of the name field.
-        val target = maxOf(dense.size, Pro800ProgramFields.NAME_DENSE_END)
+        val target = maxOf(bytes.size, Pro800ProgramFields.NAME_DENSE_END)
 
         // Growth must never reach a field this record's format does not declare - see
         // maxDenseSizeFor. NAME_DENSE_END is never above the permitted maximum, so a failure
@@ -87,7 +92,7 @@ class Pro800Program(val dense: ByteArray) {
                 "and should have been rejected when it was read"
         }
 
-        val copy = dense.copyOf(target)
+        val copy = bytes.copyOf(target)
         Pro800ProgramCodec.writeString(
             copy,
             Pro800ProgramFields.NAME_DENSE_OFFSET,

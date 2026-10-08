@@ -19,13 +19,18 @@ import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.AxeFx3SysEx.D
  * verbatim: the end marker checksums the chunks' wire bytes, including padding bits that are not
  * always zero, and the instrument stores nothing from a dump whose marker does not match. The
  * constructor is private and nothing here encodes, so an image can only come from the instrument
- * (or from a file it once sent).
+ * (or from the shipped empty preset, which it once sent).
  */
 class AxeFx3DumpImage private constructor(
-    val raw: ByteArray,
-    val chunks: List<ByteArray>,
-    val end: ByteArray,
+    private val rawBytes: ByteArray,
+    /** The 16 chunk messages as they arrived, sent back verbatim by a write; nothing changes them. */
+    internal val chunks: List<ByteArray>,
+    /** The end-of-transfer message, likewise. */
+    internal val end: ByteArray,
 ) {
+    /** The image as the instrument sent it; a copy, so nothing outside can change this image. */
+    val raw: ByteArray get() = rawBytes.copyOf()
+
     /** The preset's data, for comparing two images. Never written back. */
     val decodedData: ByteArray by lazy {
         val out = java.io.ByteArrayOutputStream(DUMP_CHUNK_COUNT * AxeFx3SysEx.DUMP_CHUNK_DATA_BYTES)
