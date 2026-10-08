@@ -7,9 +7,6 @@ android/.idea/
 android/*.iml
 android/.kotlin/
 
-# Generated at build time from devices/*.json - never hand-edit.
-android/app/src/main/assets/
-
 .DS_Store
 .vscode
 

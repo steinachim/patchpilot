@@ -1,5 +1,5 @@
 import java.util.Properties
-import org.gradle.api.tasks.Copy
+import javax.inject.Inject
 import org.gradle.api.tasks.PathSensitivity
 
 // Release signing credentials live in local.properties (gitignored, never committed) rather than
@@ -114,7 +114,7 @@ android {
             // Robolectric just for logging.
             isReturnDefaultValues = true
             // The Robolectric tests (the ViewModel and the screens) read the app's resources and
-            // the catalog assets synced into src/main/assets.
+            // the generated catalog assets.
             isIncludeAndroidResources = true
         }
     }
@@ -175,47 +175,93 @@ dependencies {
 }
 
 // devices/*.json (repo root) are the source of truth for per-instrument constants. Android can
-// only load bundled assets at runtime, so this always overwrites the assets copies before every
-// build. Never hand-edit anything in android/app/src/main/assets/; the whole directory is
-// generated and git-ignored.
+// only load bundled assets at runtime, so the build copies them into a generated assets directory
+// (build/generated/assets/) on every build; nothing under src/main holds a copy.
 //
 // A catalog file is named for what it holds: nord_devices.json covers several Nord models,
 // behringer_pro800.json covers one instrument. The name is cosmetic - each file declares its own
-// `family`, and that is what the registry dispatches on. Schemas (*.schema.json) are excluded:
-// they describe the catalogs, they are not catalogs.
+// `family`, and that is what the registry dispatches on.
 val deviceCatalogDir = rootDir.parentFile.resolve("devices")
 
-val syncDeviceCatalog = tasks.register<Copy>("syncDeviceCatalog") {
-    from(deviceCatalogDir) {
-        include("*.json")
-        exclude("*.schema.json")
-    }
-    // devices/blanks/*.bin - payloads a family writes over a slot to erase it. Captured off an
-    // instrument rather than constructed, and therefore sources like the catalogs beside them,
-    // even though they are binary. See devices/blanks/README.md.
-    from(deviceCatalogDir.resolve("blanks")) {
-        include("*.bin")
-    }
-    into("src/main/assets")
-}
+/**
+ * Copies the catalogs into the variant's generated assets.
+ *
+ * Schemas (`.schema.json`) are excluded: they describe the catalogs, they are not catalogs. The
+ * `.bin` files in devices/blanks are payloads a family writes over a slot to erase it; they are
+ * captured off an instrument rather than constructed, and therefore sources like the catalogs
+ * beside them, even though they are binary (see devices/blanks/README.md).
+ *
+ * A sync, not a copy: a file removed from devices/ is removed from the APK too.
+ */
+abstract class SyncDeviceCatalog : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val catalogDir: DirectoryProperty
 
-// The repo-root LICENSE (GPLv3, covering this app) plus the third-party license texts named in
-// NOTICE.md - Apache-2.0 for AndroidX/Compose/Kotlin/kotlinx, OFL-1.1 for the two bundled fonts -
-// copied into assets so the in-app "Open Source Licenses" screen (OpenSourceLicensesScreen.kt)
-// can show the real text offline, with no INTERNET permission needed. Source of truth for the
-// GPL text is the repo root LICENSE; source of truth for the others is android/licenses/.
-val syncLicenses = tasks.register<Copy>("syncLicenses") {
-    from(rootDir.parentFile.resolve("LICENSE")) {
-        rename { "LICENSE-GPL-3.0.txt" }
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @get:Inject
+    abstract val files: FileSystemOperations
+
+    @TaskAction
+    fun sync() {
+        files.sync {
+            from(catalogDir) {
+                include("*.json")
+                exclude("*.schema.json")
+            }
+            from(catalogDir.dir("blanks")) {
+                include("*.bin")
+            }
+            into(outputDir)
+        }
     }
-    from(rootDir.resolve("licenses")) {
-        include("*.txt")
-    }
-    into("src/main/assets/licenses")
 }
 
 /**
- * Generates res/xml/device_filter.xml from the catalogs' USB matches.
+ * Copies the license texts into the variant's generated assets, under licenses/.
+ *
+ * The repo-root LICENSE (GPLv3, covering this app) plus the third-party texts named in NOTICE.md -
+ * Apache-2.0 for AndroidX/Compose/Kotlin/kotlinx, OFL-1.1 for the two bundled fonts - so the in-app
+ * "Open Source Licenses" screen (OpenSourceLicensesScreen.kt) can show the real text offline, with
+ * no INTERNET permission needed. Source of truth for the GPL text is the repo root LICENSE; for the
+ * others it is android/licenses/.
+ */
+abstract class SyncLicenses : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val gplLicense: RegularFileProperty
+
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val thirdPartyDir: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @get:Inject
+    abstract val files: FileSystemOperations
+
+    @TaskAction
+    fun sync() {
+        files.sync {
+            from(gplLicense) {
+                rename { "LICENSE-GPL-3.0.txt" }
+                into("licenses")
+            }
+            from(thirdPartyDir) {
+                include("*.txt")
+                into("licenses")
+            }
+            into(outputDir)
+        }
+    }
+}
+
+/**
+ * Generates xml/device_filter.xml, in the variant's generated resources, from the catalogs' USB
+ * matches.
  *
  * Generated rather than maintained by hand, because a hand-kept copy fails silently when a device
  * is added to the catalog and not to it (the app simply never launches on attach). It cannot be
@@ -226,11 +272,16 @@ val syncLicenses = tasks.register<Copy>("syncLicenses") {
  * and needs no USB permission, so it contributes one only where its entry sets
  * `launchOnUsbAttach` - which is what makes Android offer the app when it is plugged in.
  */
-val generateUsbDeviceFilter = tasks.register("generateUsbDeviceFilter") {
-    val outputFile = file("src/main/res/xml/device_filter.xml")
-    inputs.dir(deviceCatalogDir)
-    outputs.file(outputFile)
-    doLast {
+abstract class GenerateUsbDeviceFilter : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val catalogDir: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
         val entries = linkedSetOf<Pair<Int, Int>>()
 
         // Parsed, not pattern-matched, so only the fields that mean "launch on attach" count: a
@@ -245,7 +296,7 @@ val generateUsbDeviceFilter = tasks.register("generateUsbDeviceFilter") {
             val productId = (map["productId"] as? Number)?.toInt() ?: return null
             return vendorId to productId
         }
-        deviceCatalogDir.listFiles()
+        catalogDir.get().asFile.listFiles()
             ?.filter { it.name.endsWith(".json") && !it.name.endsWith(".schema.json") }
             ?.sortedBy { it.name }
             ?.forEach { file ->
@@ -261,12 +312,13 @@ val generateUsbDeviceFilter = tasks.register("generateUsbDeviceFilter") {
                 }
             }
 
+        val outputFile = outputDir.file("xml/device_filter.xml").get().asFile
         outputFile.parentFile.mkdirs()
         outputFile.writeText(
             buildString {
                 appendLine("""<?xml version="1.0" encoding="utf-8"?>""")
                 appendLine("<!--")
-                appendLine("    GENERATED by the generateUsbDeviceFilter Gradle task from devices/*.json.")
+                appendLine("    GENERATED by the generate<Variant>UsbDeviceFilter Gradle task from devices/*.json.")
                 appendLine("    Do not edit by hand - add the device to its family's catalog instead.")
                 appendLine("-->")
                 appendLine("<resources>")
@@ -279,11 +331,44 @@ val generateUsbDeviceFilter = tasks.register("generateUsbDeviceFilter") {
     }
 }
 
-tasks.named("preBuild") {
-    dependsOn(syncDeviceCatalog, generateUsbDeviceFilter, syncLicenses)
+// One task of each per variant, as the Variant API expects: AGP picks each output directory and
+// makes every consumer (asset and resource merging, lint, the unit tests' merged assets) depend on
+// the task that fills it.
+androidComponents {
+    onVariants { variant ->
+        val variantName = variant.name.replaceFirstChar { it.uppercase() }
+
+        val catalog = tasks.register<SyncDeviceCatalog>("sync${variantName}DeviceCatalog") {
+            catalogDir.set(deviceCatalogDir)
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(catalog, SyncDeviceCatalog::outputDir)
+
+        val licenses = tasks.register<SyncLicenses>("sync${variantName}Licenses") {
+            gplLicense.set(rootDir.parentFile.resolve("LICENSE"))
+            thirdPartyDir.set(rootDir.resolve("licenses"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(licenses, SyncLicenses::outputDir)
+
+        val filter = tasks.register<GenerateUsbDeviceFilter>("generate${variantName}UsbDeviceFilter") {
+            catalogDir.set(deviceCatalogDir)
+        }
+        variant.sources.res?.addGeneratedSourceDirectory(filter, GenerateUsbDeviceFilter::outputDir)
+
+        // CatalogParsesTest compares the generated filter with the catalogs. Declared as an input,
+        // so the test task depends on the generator and re-runs when its output changes.
+        val filterFile = filter.flatMap { it.outputDir.file("xml/device_filter.xml") }
+        tasks.withType<Test>().named { it == "test${variantName}UnitTest" }.configureEach {
+            inputs.file(filterFile)
+                .withPropertyName("usbDeviceFilter")
+                .withPathSensitivity(PathSensitivity.NONE)
+            jvmArgumentProviders += CommandLineArgumentProvider {
+                listOf("-DusbDeviceFilter=${filterFile.get().asFile.absolutePath}")
+            }
+        }
+    }
 }
 
-// Unit tests cannot read src/main/assets, so hand them the catalog directory itself. This is what
+// Plain unit tests cannot read the app's assets, so hand them the catalog directory itself. This is what
 // lets CatalogParsesTest decode the real files rather than a copy that agrees with the code - a
 // malformed catalog is otherwise a defect that only appears on a phone, with the instrument simply
 // missing from the connect screen.

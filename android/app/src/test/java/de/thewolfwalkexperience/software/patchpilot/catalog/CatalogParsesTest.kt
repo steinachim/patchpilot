@@ -344,13 +344,15 @@ class CatalogParsesTest {
     }
 
     /**
-     * The launch-on-attach filter the build generates (`generateUsbDeviceFilter`) lists exactly
-     * the catalogs' launch ids: each USB match's, each MIDI match's `launchOnUsbAttach` and never
-     * its `usbHint`, and every Nord's.
+     * The launch-on-attach filter the build generates (`generate<Variant>UsbDeviceFilter`) lists
+     * exactly the catalogs' launch ids: each USB match's, each MIDI match's `launchOnUsbAttach` and
+     * never its `usbHint`, and every Nord's.
      */
     @Test
     fun `the USB device filter lists exactly the catalogs' launch ids`() {
-        val filter = File("src/main/res/xml/device_filter.xml")
+        val path = System.getProperty("usbDeviceFilter")
+            ?: error("usbDeviceFilter is not set; see the Test task config in app/build.gradle.kts")
+        val filter = File(path)
         assertTrue("$filter does not exist", filter.isFile)
         val listed = Regex("""vendor-id="(\d+)" product-id="(\d+)"""").findAll(filter.readText())
             .map { it.groupValues[1].toInt() to it.groupValues[2].toInt() }
