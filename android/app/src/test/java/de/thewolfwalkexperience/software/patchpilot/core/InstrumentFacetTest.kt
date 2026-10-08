@@ -10,8 +10,8 @@ import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsBank
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsBlanks
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsInstrument
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordProfile
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordTransport
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
 import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.FakeSubsequent37
@@ -40,7 +40,7 @@ import org.junit.Test
  */
 class InstrumentFacetTest {
 
-    private fun nord(): NordInstrument = NordInstrument(NordDevice(DemoUsbTransport(), DemoProfile.profile()))
+    private fun nord(): NordInstrument = NordInstrument(NordDevice(FakeNordTransport(), FakeNordProfile.profile()))
 
     /** A Motif XS with no transport behind it - enough to ask what its editor declares. */
     private fun motifXs(scope: CoroutineScope = CoroutineScope(SupervisorJob())): MotifXsInstrument =

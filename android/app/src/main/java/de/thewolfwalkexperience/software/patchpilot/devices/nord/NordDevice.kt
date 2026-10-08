@@ -1315,7 +1315,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
          */
         internal const val FALLBACK_MAX_BANKS = 256
 
-        // internal: DemoUsbTransport in the test sources answers on these ids.
+        // internal: FakeNordTransport in the test sources answers on these ids.
         internal const val PROTOCOL_CTRL = 7 // version 0 - device info query
         internal const val PROTOCOL_UI = 6 // version 1 - capability query, status display
         internal const val PROTOCOL_FILE_TRANSFER = 12 // version per device - content database

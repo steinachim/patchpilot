@@ -3,8 +3,8 @@
 
 package de.thewolfwalkexperience.software.patchpilot.core
 
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordProfile
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordTransport
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -51,10 +51,10 @@ class AddressFormatTest {
      */
     @Test
     fun `grouped format agrees with NordDevice for every address it can hold`() {
-        val device = NordDevice(DemoUsbTransport(), DemoProfile.profile())
+        val device = NordDevice(FakeNordTransport(), FakeNordProfile.profile())
         val format = GroupedBankAddressFormat(
-            groupsPerBank = DemoProfile.profile().maxGroup,
-            slotsPerGroup = DemoProfile.profile().slotsPerGroup,
+            groupsPerBank = FakeNordProfile.profile().maxGroup,
+            slotsPerGroup = FakeNordProfile.profile().slotsPerGroup,
         )
         for (bank in 0 until 4) {
             for (item in 0 until 25) {

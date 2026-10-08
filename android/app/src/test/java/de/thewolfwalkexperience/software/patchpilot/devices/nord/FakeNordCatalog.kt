@@ -4,19 +4,19 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 /**
- * The instrument [DemoUsbTransport] pretends to be: a fixed set of root categories, each holding
+ * The instrument [FakeNordTransport] pretends to be: a fixed set of root categories, each holding
  * a handful of dummy patches, mutable exactly where a real instrument would let program-list
- * editing change them (rename/move/swap on "Program"). This is small, static, UI-only content -
- * there is no real instrument's catalog behind it, unlike devices/nord_devices.json.
+ * editing change them (rename/move/swap on "Program"). This is small, static test content - there
+ * is no real instrument's catalog behind it, unlike devices/nord_devices.json.
  *
- * Bank/item bounds match [DemoProfile.profile]: banks 0-3 ('A'-'D'), 25 items each.
+ * Bank/item bounds match [FakeNordProfile.profile]: banks 0-3 ('A'-'D'), 25 items each.
  */
-class DemoCatalog {
+class FakeNordCatalog {
     data class Slot(val bank: Int, val item: Int)
 
     /**
      * Category name -> (bank, item) -> patch name, insertion order preserved for both, since
-     * that order is what [DemoUsbTransport] hands out as root-list/cursor-walk indexes.
+     * that order is what [FakeNordTransport] hands out as root-list/cursor-walk indexes.
      */
     private val categories: LinkedHashMap<String, LinkedHashMap<Slot, String>> = linkedMapOf(
         "Program" to programBank(),

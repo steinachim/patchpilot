@@ -31,7 +31,7 @@ import kotlinx.coroutines.flow.flow
  * rather than a fake transport, so showing the UI needs no fake wire protocol per family. Mirrors
  * a Nord: grouped addressing, one category per preset, native edits, no favorites.
  *
- * `DemoUsbTransport` and `core.NoCopyFixtureInstrument` in the test source set are the fixtures
+ * `FakeNordTransport` and `core.NoCopyFixtureInstrument` in the test source set are the fixtures
  * that do fabricate wire bytes and a second facet shape.
  */
 class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, DeviceReporter {

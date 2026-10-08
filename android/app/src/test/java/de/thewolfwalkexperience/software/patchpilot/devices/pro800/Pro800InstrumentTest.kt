@@ -28,7 +28,7 @@ import org.junit.Test
 
 /**
  * The Pro-800 driven end to end against a scripted MIDI device - the SysEx sibling of what
- * `DemoUsbTransport` does for the Nord: real message construction, real framing, real decoding,
+ * `FakeNordTransport` does for the Nord: real message construction, real framing, real decoding,
  * with only the wire replaced.
  */
 class Pro800InstrumentTest {

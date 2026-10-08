@@ -5,8 +5,8 @@ package de.thewolfwalkexperience.software.patchpilot.core
 
 import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.FakeAxeFx3
 import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.axeFx3
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordProfile
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordTransport
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
 import kotlinx.coroutines.flow.toList
@@ -30,7 +30,7 @@ class RegressionTesterTest {
 
     /** A Nord whose wire is answered by the stateful fake: real protocol code, no hardware. */
     private suspend fun nord(): NordInstrument =
-        NordInstrument(NordDevice(DemoUsbTransport(), DemoProfile.profile())).also { it.connect() }
+        NordInstrument(NordDevice(FakeNordTransport(), FakeNordProfile.profile())).also { it.connect() }
 
     /** A family with no copy of its own - see [NoCopyFixtureInstrument]. */
     private suspend fun noCopyFamily(): NoCopyFixtureInstrument =

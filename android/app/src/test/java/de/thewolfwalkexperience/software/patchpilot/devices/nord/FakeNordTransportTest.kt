@@ -9,35 +9,35 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Exercises [DemoUsbTransport] through a real [NordDevice] - the same shape as
+ * Exercises [FakeNordTransport] through a real [NordDevice] - the same shape as
  * NordDeviceProtocolTest, but proving the fake instrument itself answers the wire protocol
  * correctly (round-trips through [NordMessage]'s CRC framing, not just returns plausible-looking
  * data), and that mutations (rename/move/swap) persist across calls within a session.
  */
-class DemoUsbTransportTest {
+class FakeNordTransportTest {
 
-    private fun demoDevice(catalog: DemoCatalog = DemoCatalog()): NordDevice =
-        NordFixtures.device(DemoUsbTransport(catalog), DemoProfile.profile())
+    private fun fakeNord(catalog: FakeNordCatalog = FakeNordCatalog()): NordDevice =
+        NordFixtures.device(FakeNordTransport(catalog), FakeNordProfile.profile())
 
     @Test
     fun `connect succeeds against the fake firmware and protocol version table`() = runTest {
-        val device = demoDevice()
+        val device = fakeNord()
         device.connect()
-        assertEquals(DemoProfile.FIRMWARE_VERSION, device.firmwareVersion)
+        assertEquals(FakeNordProfile.FIRMWARE_VERSION, device.firmwareVersion)
     }
 
     @Test
     fun `listRootCategories returns the catalog's categories in order`() = runTest {
-        val catalog = DemoCatalog()
-        val device = demoDevice(catalog)
+        val catalog = FakeNordCatalog()
+        val device = fakeNord(catalog)
         device.connect()
         assertEquals(catalog.rootCategoryNames, device.listRootCategories())
     }
 
     @Test
     fun `listPrograms round-trips the Program category's occupied slots`() = runTest {
-        val catalog = DemoCatalog()
-        val device = demoDevice(catalog)
+        val catalog = FakeNordCatalog()
+        val device = fakeNord(catalog)
         device.connect()
 
         val programIndex = device.getCategoryIndexByName("Program")
@@ -54,8 +54,8 @@ class DemoUsbTransportTest {
 
     @Test
     fun `listCategoryItems works for a non-Program category too`() = runTest {
-        val catalog = DemoCatalog()
-        val device = demoDevice(catalog)
+        val catalog = FakeNordCatalog()
+        val device = fakeNord(catalog)
         device.connect()
 
         val pianoIndex = device.getCategoryIndexByName("Piano")
@@ -65,14 +65,14 @@ class DemoUsbTransportTest {
 
     @Test
     fun `selectPreset succeeds for an occupied slot`() = runTest {
-        val device = demoDevice()
+        val device = fakeNord()
         device.connect()
-        device.selectPreset(0, 0) // "Init Program" in DemoCatalog
+        device.selectPreset(0, 0) // "Init Program" in FakeNordCatalog
     }
 
     @Test
     fun `renamePreset persists and is visible on the next listPrograms`() = runTest {
-        val device = demoDevice()
+        val device = fakeNord()
         device.connect()
         device.renamePreset(0, 0, "Renamed Patch")
 
@@ -83,9 +83,9 @@ class DemoUsbTransportTest {
 
     @Test
     fun `moveProgram relocates a program to an empty slot`() = runTest {
-        val device = demoDevice()
+        val device = fakeNord()
         device.connect()
-        // (0, 0) is occupied ("Init Program"); (3, 24) is left empty by DemoCatalog.
+        // (0, 0) is occupied ("Init Program"); (3, 24) is left empty by FakeNordCatalog.
         device.moveProgram(0, 0, 3, 24)
 
         val programIndex = device.getProgramCategoryIndex()
@@ -96,9 +96,9 @@ class DemoUsbTransportTest {
 
     @Test
     fun `swapPrograms exchanges two occupied slots`() = runTest {
-        val device = demoDevice()
+        val device = fakeNord()
         device.connect()
-        // (0, 0) = "Init Program", (0, 1) = "Warm Pad" in DemoCatalog.
+        // (0, 0) = "Init Program", (0, 1) = "Warm Pad" in FakeNordCatalog.
         device.swapPrograms(0, 0, 0, 1)
 
         val programIndex = device.getProgramCategoryIndex()

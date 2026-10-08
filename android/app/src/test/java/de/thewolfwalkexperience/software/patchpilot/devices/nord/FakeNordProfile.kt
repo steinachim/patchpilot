@@ -6,28 +6,28 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 /**
  * The fictitious Nord the protocol tests run against.
  *
- * **A test fixture**, with its collaborators [DemoUsbTransport] and `DemoCatalog`. The app's own
- * demo mode is `demo.DemoInstrument`; nothing here reaches the APK.
+ * A test fixture, with its collaborators [FakeNordTransport] and [FakeNordCatalog]; nothing here
+ * reaches the APK.
  */
-object DemoProfile {
+object FakeNordProfile {
 
-    /** Profile id for a session backed by the [DemoUsbTransport] fixture rather than hardware. */
-    const val ID = "demo"
+    /** Profile id for a session backed by the [FakeNordTransport] fixture rather than hardware. */
+    const val ID = "fake_nord"
 
     /**
-     * Firmware version [DemoUsbTransport] reports on its fake control read. Kept beside [profile]
+     * Firmware version [FakeNordTransport] reports on its fake control read. Kept beside [profile]
      * so the two can't drift apart - if they ever disagreed, `NordDevice.connect()` would reject
      * the fixture's own fake firmware.
      */
     const val FIRMWARE_VERSION = 100
 
     /**
-     * Four banks of 25 slots, matching the `DemoCatalog` fixture's dummy program layout. Not
+     * Four banks of 25 slots, matching the `FakeNordCatalog` fixture's dummy program layout. Not
      * backed by any USB device - vendorId/productId are never dialed, only carried for display.
      */
     fun profile() = DeviceProfile(
         id = ID,
-        name = "Demo Instrument",
+        name = "Fake Nord",
         vendorId = -1,
         productId = -1,
         maxBankLetter = 'D',

@@ -9,11 +9,9 @@ import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
  * A synthetic Nord instrument: answers every request [NordDevice] can send with a
  * protocol-correct reply built from [catalog], instead of talking to real hardware.
  *
- * **This is a test fixture, not what the app's demo mode runs on.** Being a *wire-level* fake is
- * what makes it valuable in a test - the real [NordDevice] parses these bytes, so its framing, its
- * cursor walk and its lock discipline are all genuinely exercised. Demo mode lives one layer up,
- * in [de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument], so that showing the UI
- * needs no fake wire per family.
+ * Being a *wire-level* fake is what makes it valuable in a test: the real [NordDevice] parses
+ * these bytes, so its framing, its cursor walk and its lock discipline are all genuinely
+ * exercised.
  *
  * Structurally this is [ReplayTransport] with a live instrument's state machine instead of a
  * fixed script: it tracks which category is currently SELECT_CATEGORY-locked (mirroring the lock
@@ -25,7 +23,7 @@ import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
  * replies with exactly that and never needs to track more than the pending message and, for the
  * content database, the current lock.
  */
-class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBulkTransport {
+class FakeNordTransport(private val catalog: FakeNordCatalog = FakeNordCatalog()) : UsbBulkTransport {
 
     private var selectedCategoryIndex: Int = -1
 
@@ -34,14 +32,14 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
     }
 
     override fun bulkRead(bufferSize: Int): ByteArray {
-        val msg = pending ?: error("DemoUsbTransport.bulkRead() called with no pending request")
+        val msg = pending ?: error("FakeNordTransport.bulkRead() called with no pending request")
         return buildMessage(msg.protocolId, msg.protocolVersion, msg.subOp + 1, respond(msg))
     }
 
     override fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int) =
         byteArrayOf(
-            (DemoProfile.FIRMWARE_VERSION and 0xFF).toByte(),
-            ((DemoProfile.FIRMWARE_VERSION shr 8) and 0xFF).toByte(),
+            (FakeNordProfile.FIRMWARE_VERSION and 0xFF).toByte(),
+            ((FakeNordProfile.FIRMWARE_VERSION shr 8) and 0xFF).toByte(),
         )
 
     override val rebuildOnResume = true
@@ -54,7 +52,7 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
         NordDevice.PROTOCOL_CTRL -> deviceInfoReply()
         NordDevice.PROTOCOL_UI -> capsReply(msg.subOp)
         NordDevice.PROTOCOL_FILE_TRANSFER -> dbReply(msg.subOp, msg.payload)
-        else -> error("DemoUsbTransport can't answer cmd=${msg.protocolId} sub-op=${msg.subOp}")
+        else -> error("FakeNordTransport can't answer cmd=${msg.protocolId} sub-op=${msg.subOp}")
     }
 
     /**
@@ -155,7 +153,7 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
     /**
      * Sub-opcode 8/9: status, item count, then free/used/reclaimable/unitCode. Always
      * answers unitCode=0 ("counted in bytes"), which is what tells
-     * [NordDevice.calibrateStorageUnits] there is nothing to calibrate for a demo category - there
+     * [NordDevice.calibrateStorageUnits] there is nothing to calibrate for a fake category - there
      * is no real allocation scheme behind this data to simulate.
      */
     private fun itemCountReply(categoryIndex: Int): ByteArray {
@@ -222,7 +220,7 @@ class DemoUsbTransport(private val catalog: DemoCatalog = DemoCatalog()) : UsbBu
     private fun fetchItemReply(payload: ByteArray): ByteArray {
         val bank = readU32(payload, 0)
         val item = readU32(payload, 4)
-        val name = catalog.itemsInCategory(selectedCategoryIndex)[DemoCatalog.Slot(bank, item)]
+        val name = catalog.itemsInCategory(selectedCategoryIndex)[FakeNordCatalog.Slot(bank, item)]
             ?: return u32(1) + lastRecord.copyOfRange(4, lastRecord.size)
         val nameBytes = name.toByteArray(Charsets.US_ASCII)
         val record = ByteArray(36)
