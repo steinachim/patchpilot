@@ -188,6 +188,26 @@ class CachingBrowserTest {
         assertEquals(2, delegate.indexRuns)
     }
 
+    /** An unplug drops what was cached for the device's port, whichever model it was read as. */
+    @Test
+    fun `invalidating a device drops its keys and fences a listing in flight`() {
+        val cache = PresetIndexCache()
+        val otherModel = key.copy(instrument = "inst-b", descriptorId = "desc-b")
+        val otherPort = key.copy(physicalDevice = "usb:/dev/bus/usb/001/005")
+        listOf(key, otherModel, otherPort).forEach { cache.put(it, listOf(slot(0, 0, "Pad"))) }
+        val inFlight = cache.version(key)
+
+        cache.invalidateDevice(key.physicalDevice)
+
+        assertNull(cache.get(key))
+        assertNull(cache.get(otherModel))
+        assertEquals(1, cache.get(otherPort)?.size)
+        assertFalse(
+            "a listing started before the unplug must not be stored",
+            cache.putIfUnchanged(key, emptyList(), inFlight),
+        )
+    }
+
     /**
      * Two instruments must not see each other's presets.
      *

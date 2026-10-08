@@ -44,6 +44,7 @@
 - A Behringer Pro-800 preset whose reply keeps arriving damaged is reported as damaged, instead of as the instrument not answering.
 - On a Yamaha Motif XS, switching to Voice mode from the load dialog shows its progress and keeps other edits and Back off until it is done.
 - An instrument plugged in while the app is still searching is now found, instead of the search ending with "Nothing found".
+- Plugging a different unit of the same instrument into the same USB port no longer shows the previous unit's preset list.
 
 ## 1.1
 

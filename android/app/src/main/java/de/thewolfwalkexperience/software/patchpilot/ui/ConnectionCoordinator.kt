@@ -48,8 +48,8 @@ private const val TAG = "ConnectionCoordinator"
  * @param onSessionStarted a session became usable: start its listing.
  * @param onSessionEnding a session is about to be closed: stop whatever reads from it, and return
  *   once that has finished its cleanup. Runs under the operation mutex, right before the close.
- * @param onDeviceLost the connected device was unplugged. Runs before the teardown, which clears
- *   the [deviceHandle] a cache key is built from.
+ * @param onUsbDetached a USB device was unplugged, the connected one or any other, with its
+ *   device handle, the one a cache key is built from. Runs first, before any teardown.
  * @param onLeavingSession the user is leaving the session ([disconnect]): cancel work that only
  *   reads from it, such as a device report, so the teardown does not wait it out. Runs before the
  *   teardown asks for the operation mutex.
@@ -65,7 +65,7 @@ internal class ConnectionCoordinator(
     private val strings: StringResolver,
     private val onSessionStarted: () -> Unit = {},
     private val onSessionEnding: suspend () -> Unit = {},
-    private val onDeviceLost: () -> Unit = {},
+    private val onUsbDetached: (handle: String) -> Unit = {},
     private val onLeavingSession: () -> Unit = {},
     private val demo: () -> Instrument = { DemoInstrument() },
 ) {
@@ -188,6 +188,10 @@ internal class ConnectionCoordinator(
      * Ignores everything else: every device Android has seen fires this broadcast on unplug.
      */
     private fun handleUsbDetach(device: AttachedUsbDevice) {
+        // The device's cached listings go with it, connected or not: its contents may change
+        // before it is next seen, and Android hands a replug - or another unit of the same model
+        // in the same port - the same USB device path, so the cache key does not notice.
+        onUsbDetached(device.handle)
         val detachedKey = device.physicalKey
         if (detachedKey == connectedPhysicalKey) {
             val name = (state.value as? ConnectionState.Connected)?.instrument?.identity?.name
@@ -199,10 +203,6 @@ internal class ConnectionCoordinator(
             lastConfirmedUnknownDevice = null
             acceptedAdvisory = null
             scope.launch {
-                // The device's cached listing goes with it: once the instrument has left the bus
-                // its contents may change before it is next seen, and Android hands a replug the
-                // same USB device path, so the cache key does not notice.
-                onDeviceLost()
                 teardownCurrentInstrument()
                 _state.value = ConnectionState.DeviceLost(name, detachedKey)
             }

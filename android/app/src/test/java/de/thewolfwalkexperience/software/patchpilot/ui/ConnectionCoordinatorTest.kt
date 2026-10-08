@@ -127,7 +127,7 @@ class ConnectionCoordinatorTest {
         strings = StringResolver { id, _ -> "string $id" },
         onSessionStarted = { events += "started" },
         onSessionEnding = onSessionEnding,
-        onDeviceLost = { events += "lost" },
+        onUsbDetached = { handle -> events += "detached $handle" },
         onLeavingSession = { events += "leaving" },
     ).also { it.start() }
 
@@ -224,7 +224,22 @@ class ConnectionCoordinatorTest {
         assertEquals(stageKey, lost.physicalKey)
         assertEquals(null, coordinator.instrument)
         // The cache is dropped while the handle it is keyed on still exists.
-        assertEquals(listOf("started", "lost", "ending"), events)
+        assertEquals(listOf("started", "detached usb:/dev/bus/usb/001/002", "ending"), events)
+    }
+
+    /** Another unit of the same model may be plugged into the same port next, under the same handle. */
+    @Test
+    fun `unplugging a device no session uses still drops its cache`() = runSession { session ->
+        val usb = FakeUsbHost()
+        val events = mutableListOf<String>()
+        val coordinator = coordinator(session, usb, FakeDiscovery(emptyList()) { FakeTransport() }, events = events)
+        coordinator.connect()
+        advanceUntilIdle()
+
+        usb.detaches.emit(FakeDevice(grandKey, handle = "usb:/dev/bus/usb/001/007"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("detached usb:/dev/bus/usb/001/007"), events)
     }
 
     /**

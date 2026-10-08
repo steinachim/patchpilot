@@ -238,6 +238,9 @@ internal class PresetListings(
         invalidateUserCache()
     }
 
+    /** Drops every cached listing of the device at [handle], connected or not - see [PresetIndexCache.invalidateDevice]. */
+    fun forgetDevice(handle: String) = indexCache.invalidateDevice(handle)
+
     /**
      * Drops the cached user listing whichever scope is on screen. Separate from [invalidate]: a
      * failed re-read after an edit makes the cached user listing untrustworthy whichever listing

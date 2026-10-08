@@ -64,6 +64,9 @@ class PresetIndexCache {
     /** Bumped by every write-through and invalidation, so a listing that ran across one can tell - see [putIfUnchanged]. */
     private val versions = mutableMapOf<CacheKey, Int>()
 
+    /** Bumped by [invalidateDevice], and counted into every key's [version] for that device. */
+    private val deviceVersions = mutableMapOf<String, Int>()
+
     /**
      * The cached index, or null if there is none. Null and empty mean different things: an
      * instrument with nothing stored has a legitimately empty *completed* index.
@@ -80,7 +83,9 @@ class PresetIndexCache {
     }
 
     /** Where [key]'s writes stand; a listing reads it as it starts - see [putIfUnchanged]. */
-    fun version(key: CacheKey): Int = synchronized(lock) { versions[key] ?: 0 }
+    fun version(key: CacheKey): Int = synchronized(lock) { versionOf(key) }
+
+    private fun versionOf(key: CacheKey): Int = (versions[key] ?: 0) + (deviceVersions[key.physicalDevice] ?: 0)
 
     /**
      * [put], unless [key] was written through or invalidated since [version]. An edit made while
@@ -89,7 +94,7 @@ class PresetIndexCache {
      * was already corrected by the edit's own re-read. Returns whether it stored.
      */
     fun putIfUnchanged(key: CacheKey, slots: List<PresetSlot>, version: Int): Boolean = synchronized(lock) {
-        if ((versions[key] ?: 0) != version) return false
+        if (versionOf(key) != version) return false
         put(key, slots)
         true
     }
@@ -126,6 +131,16 @@ class PresetIndexCache {
     fun invalidate(key: CacheKey) = synchronized(lock) {
         bump(key)
         entries.remove(key)
+        Unit
+    }
+
+    /**
+     * Forgets every index cached for [physicalDevice], whichever instrument it was read as, and
+     * fences off any listing of it still being collected.
+     */
+    fun invalidateDevice(physicalDevice: String) = synchronized(lock) {
+        deviceVersions[physicalDevice] = (deviceVersions[physicalDevice] ?: 0) + 1
+        entries.keys.removeAll { it.physicalDevice == physicalDevice }
         Unit
     }
 

@@ -73,7 +73,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             strings = strings,
             onSessionStarted = { listings.start() },
             onSessionEnding = { listings.cancelAndJoin() },
-            onDeviceLost = { listings.invalidateUserCache() },
+            onUsbDetached = listings::forgetDevice,
             onLeavingSession = {
                 // A report only reads, so cancelling it changes nothing on the instrument, and a
                 // Nord's would otherwise hold the teardown for minutes.
