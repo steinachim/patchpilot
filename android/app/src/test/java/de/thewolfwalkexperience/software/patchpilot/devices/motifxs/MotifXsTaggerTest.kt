@@ -149,7 +149,7 @@ class MotifXsTaggerTest {
             val dense = voiceName?.toByteArray(Charsets.ISO_8859_1)
                 ?.let { name -> prefix + name + ByteArray(6) + name }
                 ?: (prefix + ByteArray(32))
-            return byteArrayOf(0, 0) + pack(dense)
+            return byteArrayOf(0, 0) + packMsb(dense)
         }
 
         fun respond(request: ByteArray): List<ByteArray> {
@@ -187,7 +187,7 @@ class MotifXsTaggerTest {
                     staleTable = marks[mid]?.copyOf()
                     stale = favoriteSettlesAfterReads
                     marks[mid] = MotifXsSysEx.dumpPayload(request)
-                    listOf(ACK)
+                    listOf(FakeMotifXsSlots.ACK)
                 }
 
                 MotifXsSysEx.BULK_HEADER_HI -> {
@@ -208,7 +208,7 @@ class MotifXsTaggerTest {
                         userFigures = (payload[o] * 16 + payload[o + 1]) to
                             (payload[o + 2] * 16 + payload[o + 3])
                     }
-                    listOf(ACK)
+                    listOf(FakeMotifXsSlots.ACK)
                 }
 
                 else -> {
@@ -593,31 +593,5 @@ class MotifXsTaggerTest {
                 tagger.setCategories(userSlot, listOf(CategoryRef(bass, 4), null))
             }.exceptionOrNull(),
         )
-    }
-
-    private companion object {
-        val ACK = byteArrayOf(0xF0.toByte(), 0x43, 0x60, 0x02, 0xF7.toByte())
-
-        fun deviceDump(hi: Int, mid: Int, lo: Int, payload: ByteArray): ByteArray {
-            val dump = MotifXsSysEx.bulkDump(0, hi, mid, lo, payload)
-            dump[4] = MotifXsSysEx.MODEL_DEVICE.toByte()
-            dump[dump.size - 2] = MotifXsSysEx.checksumOf(dump).toByte()
-            return dump
-        }
-
-        /** Yamaha MSB packing, the inverse of [MotifXsVoice.unpack]. */
-        fun pack(dense: ByteArray): ByteArray {
-            val out = ArrayList<Byte>(dense.size + dense.size / 7 + 1)
-            var i = 0
-            while (i < dense.size) {
-                val group = dense.copyOfRange(i, minOf(i + 7, dense.size))
-                var msb = 0
-                group.forEachIndexed { j, b -> if (b.toInt() and 0x80 != 0) msb = msb or (1 shl j) }
-                out.add(msb.toByte())
-                group.forEach { out.add((it.toInt() and 0x7F).toByte()) }
-                i += 7
-            }
-            return out.toByteArray()
-        }
     }
 }
