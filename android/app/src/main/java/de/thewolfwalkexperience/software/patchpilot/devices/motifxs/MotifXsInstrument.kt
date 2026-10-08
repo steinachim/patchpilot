@@ -1199,8 +1199,7 @@ class MotifXsInstrument(
 
 /**
  * Renders a voice address the way the instrument's own display does: `USER 3 - D:05`, not a flat
- * slot number, since the Motif XS groups its banks into lettered sets of sixteen. [parse] also
- * accepts the flat `USR3:053` form as a shorthand.
+ * slot number, since the Motif XS groups its banks into lettered sets of sixteen.
  */
 class MotifXsAddressFormat(
     private val bankLabels: List<String>,
@@ -1213,33 +1212,6 @@ class MotifXsAddressFormat(
         return "${displayLabel(address.bank)} - $group:${within.toString().padStart(2, '0')}"
     }
 
-    override fun parse(id: String): SlotAddress {
-        val text = id.trim()
-        GROUPED.matchEntire(text)?.let { match ->
-            val (label, group, within) = match.destructured
-            val bank = displayLabels.indexOfFirst { it.equals(label.trim(), ignoreCase = true) }
-                .takeIf { it >= 0 }
-                ?: bankLabels.indexOfFirst { it.equals(label.trim(), ignoreCase = true) }
-            require(bank >= 0) { "Invalid voice id '$id': no bank called '${label.trim()}'" }
-            val number = within.toInt()
-            require(number in 1..GROUP_SIZE) {
-                "Invalid voice id '$id': group positions run 1..$GROUP_SIZE"
-            }
-            return SlotAddress(bank, (group[0].uppercaseChar() - 'A') * GROUP_SIZE + number - 1)
-        }
-        val (label, slot) = text.split(':', limit = 2).let {
-            require(it.size == 2) {
-                "Invalid voice id '$id'; expected 'USER 3 - D:05' or 'USR3:053'"
-            }
-            it[0] to it[1]
-        }
-        val bank = bankLabels.indexOfFirst { it.equals(label, ignoreCase = true) }
-        require(bank >= 0) { "Invalid voice id '$id': no bank called '$label'" }
-        val number = slot.toIntOrNull() ?: throw IllegalArgumentException("Invalid voice id '$id'")
-        require(number >= 1) { "Invalid voice id '$id': slot numbers start at 1" }
-        return SlotAddress(bank, number - 1)
-    }
-
     /** The display label, which is what the rows carry and the bank headers group by. */
     override fun bankLabel(bank: Int): String = displayLabel(bank)
 
@@ -1249,6 +1221,5 @@ class MotifXsAddressFormat(
     private companion object {
         /** Sixteen slots per lettered group, what the instrument's own A..H buttons select. */
         const val GROUP_SIZE = 16
-        val GROUPED = Regex("""(.+?)\s*-\s*([A-Ha-h]):(\d{1,2})""")
     }
 }

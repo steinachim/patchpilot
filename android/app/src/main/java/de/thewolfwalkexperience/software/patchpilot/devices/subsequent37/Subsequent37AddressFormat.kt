@@ -20,17 +20,6 @@ object Subsequent37AddressFormat : AddressFormat {
     override fun format(address: SlotAddress): String =
         "B${two(address.bank + 1)}/P${two(address.slot + 1)}"
 
-    override fun parse(id: String): SlotAddress {
-        val match = PATTERN.matchEntire(id.trim())
-            ?: throw IllegalArgumentException("Invalid preset id '$id'; expected a form like 'B01/P01'")
-        val (bank, slot) = match.destructured
-        val address = SlotAddress(bank.toInt() - 1, slot.toInt() - 1)
-        require(address.bank in 0 until BANKS && address.slot in 0 until SLOTS_PER_BANK) {
-            "Invalid preset id '$id': banks and presets run 1-16"
-        }
-        return address
-    }
-
     /** The number alone, as the panel's BANK buttons show it; the list's header adds the word. */
     override fun bankLabel(bank: Int): String = "${bank + 1}"
 
@@ -57,6 +46,4 @@ object Subsequent37AddressFormat : AddressFormat {
 
     /** Not `"%02d".format`, whose digits follow the device locale. */
     private fun two(value: Int): String = value.toString().padStart(2, '0')
-
-    private val PATTERN = Regex("""[Bb](\d{1,2})/[Pp](\d{1,2})""")
 }

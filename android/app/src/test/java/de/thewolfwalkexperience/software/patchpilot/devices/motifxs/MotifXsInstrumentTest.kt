@@ -1117,18 +1117,14 @@ class MotifXsInstrumentTest {
     }
 
     @Test
-    fun `the displayed form round-trips, and the flat form still parses`() {
+    fun `every voice address has its own displayed id`() {
         val format = MotifXsAddressFormat(
             listOf("USR1", "USR2", "USR3", "DRUM"),
             listOf("USER 1", "USER 2", "USER 3", "USER DR"),
         )
-        for (address in listOf(SlotAddress(3, 30), SlotAddress(2, 52), SlotAddress(0, 0))) {
-            assertEquals(address, format.parse(format.format(address)))
-        }
-        // The flat form is a plain shorthand still worth supporting, so it has to keep working.
-        assertEquals(SlotAddress(3, 0), format.parse("DRUM:001"))
-        assertEquals(SlotAddress(1, 44), format.parse("USR2:045"))
-        assertEquals(SlotAddress(2, 52), format.parse("USR3:053"))
+        val ids = (0 until 4).flatMap { bank -> (0 until 128).map { format.format(SlotAddress(bank, it)) } }
+        assertEquals(ids.size, ids.toSet().size)
+        assertEquals("USER DR - B:15", format.format(SlotAddress(3, 30)))
     }
 
     /**

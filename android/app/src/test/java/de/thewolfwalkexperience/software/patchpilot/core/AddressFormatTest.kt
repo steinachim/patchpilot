@@ -25,29 +25,13 @@ class AddressFormatTest {
     }
 
     @Test
-    fun `grouped format round-trips every address in a bank`() {
-        for (slot in 0 until 25) {
-            val address = SlotAddress(3, slot)
-            assertEquals(address, grand.parse(grand.format(address)))
-        }
-    }
-
-    @Test
-    fun `grouped format accepts leading zeros, lowercase and surrounding spaces`() {
-        assertEquals(SlotAddress(0, 0), grand.parse("a:01:01"))
-        assertEquals(SlotAddress(1, 12), grand.parse(" B:3:3 "))
-    }
-
-    @Test
-    fun `grouped format rejects an out-of-range group or slot`() {
-        assertThrows(IllegalArgumentException::class.java) { grand.parse("A:6:1") }
-        assertThrows(IllegalArgumentException::class.java) { grand.parse("A:1:6") }
-        assertThrows(IllegalArgumentException::class.java) { grand.parse("A00") }
+    fun `grouped format gives every address in a bank its own id`() {
+        assertDistinct(grand, (0 until 25).map { SlotAddress(3, it) })
     }
 
     /**
      * `NordDevice` names its items through this format, built from its profile; the ids it logs
-     * and reports have to be the ones the browser shows, and each has to parse back to its address.
+     * and reports have to be the ones the browser shows.
      */
     @Test
     fun `grouped format agrees with NordDevice for every address it can hold`() {
@@ -60,7 +44,6 @@ class AddressFormatTest {
             for (item in 0 until 25) {
                 val fromDevice = device.formatPresetId(bank, item)
                 assertEquals(fromDevice, format.format(SlotAddress(bank, item)))
-                assertEquals(SlotAddress(bank, item), format.parse(fromDevice))
             }
         }
     }
@@ -74,13 +57,8 @@ class AddressFormatTest {
     }
 
     @Test
-    fun `flat format round-trips the whole Pro-800 address space`() {
-        for (bank in 0 until 4) {
-            for (slot in 0 until 100) {
-                val address = SlotAddress(bank, slot)
-                assertEquals(address, pro800.parse(pro800.format(address)))
-            }
-        }
+    fun `flat format gives every Pro-800 address its own id`() {
+        assertDistinct(pro800, (0 until 4).flatMap { bank -> (0 until 100).map { SlotAddress(bank, it) } })
     }
 
     /**
@@ -116,26 +94,17 @@ class AddressFormatTest {
     }
 
     @Test
-    fun `linear format round-trips every preset and maps to the wire number`() {
+    fun `linear format maps every preset to its wire number and its own id`() {
         for (number in 0 until 512) {
             val address = markI.addressOf(number)
             assertEquals(number, markI.numberOf(address))
-            assertEquals(address, markI.parse(markI.format(address)))
+            assertEquals(number.toString().padStart(3, '0'), markI.format(address))
         }
     }
 
     @Test
-    fun `linear format accepts a number with or without leading zeros`() {
-        assertEquals(SlotAddress(0, 7), markI.parse("7"))
-        assertEquals(SlotAddress(0, 7), markI.parse("007"))
-        assertEquals(SlotAddress(1, 0), markI.parse(" 128 "))
-    }
-
-    @Test
-    fun `linear format refuses a number it does not have, a letter, or nothing`() {
-        for (id in listOf("512", "-1", "A00", "", "1.5")) {
-            assertThrows(IllegalArgumentException::class.java) { markI.parse(id) }
-        }
+    fun `linear format refuses an address or a number it does not have`() {
+        assertThrows(IllegalArgumentException::class.java) { markI.addressOf(512) }
         assertThrows(IllegalArgumentException::class.java) { markI.numberOf(SlotAddress(4, 0)) }
         assertThrows(IllegalArgumentException::class.java) { markI.numberOf(SlotAddress(0, 128)) }
     }
@@ -178,5 +147,11 @@ class AddressFormatTest {
     fun `a negative address is refused at construction`() {
         assertThrows(IllegalArgumentException::class.java) { SlotAddress(-1, 0) }
         assertThrows(IllegalArgumentException::class.java) { SlotAddress(0, -1) }
+    }
+
+    /** The property a row's id has to have: no two addresses share one. */
+    private fun assertDistinct(format: AddressFormat, addresses: List<SlotAddress>) {
+        val ids = addresses.map { format.format(it) }
+        assertEquals("ids repeat: $ids", ids.size, ids.toSet().size)
     }
 }

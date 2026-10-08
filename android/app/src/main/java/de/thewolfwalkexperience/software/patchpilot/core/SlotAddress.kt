@@ -22,16 +22,13 @@ data class SlotAddress(val bank: Int, val slot: Int) {
 }
 
 /**
- * Renders and parses the ids an instrument's own UI and manual use, so that nothing above this
- * has to know what they look like. The UI never takes an id apart itself; [PresetSlot.bankLabel]
+ * Renders the ids an instrument's own UI and manual use, so that nothing above this has to know
+ * what they look like. The UI never takes an id apart itself; [PresetSlot.bankLabel]
  * travels on the row instead.
  */
 interface AddressFormat {
     /** e.g. `"A:1:1"` on a Nord Grand, `"A00"` on a Pro-800. */
     fun format(address: SlotAddress): String
-
-    /** Inverse of [format]. Throws [IllegalArgumentException] on anything it does not recognize. */
-    fun parse(id: String): SlotAddress
 
     /** The bank's own label, e.g. `"A"` - what bank headers and the fast-scroll index show. */
     fun bankLabel(bank: Int): String
@@ -54,29 +51,7 @@ class GroupedBankAddressFormat(
         return "${bankLabel(address.bank)}:${group + 1}:${slot + 1}"
     }
 
-    override fun parse(id: String): SlotAddress {
-        val match = PATTERN.matchEntire(id.trim())
-            ?: throw IllegalArgumentException("Invalid preset id '$id'; expected a form like 'A:1:1'")
-        val (bankLetter, groupText, slotText) = match.destructured
-        val group = groupText.toInt()
-        val slot = slotText.toInt()
-        require(group in 1..groupsPerBank) {
-            "Invalid preset id '$id': group $group is outside 1..$groupsPerBank"
-        }
-        require(slot in 1..slotsPerGroup) {
-            "Invalid preset id '$id': slot $slot is outside 1..$slotsPerGroup"
-        }
-        return SlotAddress(
-            bank = bankLetter.uppercase()[0] - 'A',
-            slot = (group - 1) * slotsPerGroup + (slot - 1),
-        )
-    }
-
     override fun bankLabel(bank: Int): String = ('A' + bank).toString()
-
-    private companion object {
-        val PATTERN = Regex("""([A-Za-z]):0*(\d+):0*(\d+)""")
-    }
 }
 
 /**
@@ -89,19 +64,7 @@ class FlatBankAddressFormat(private val slotDigits: Int) : AddressFormat {
     override fun format(address: SlotAddress): String =
         bankLabel(address.bank) + address.slot.toString().padStart(slotDigits, '0')
 
-    override fun parse(id: String): SlotAddress {
-        val trimmed = id.trim()
-        val match = PATTERN.matchEntire(trimmed)
-            ?: throw IllegalArgumentException("Invalid preset id '$id'; expected a form like 'A00'")
-        val (bankLetter, slotText) = match.destructured
-        return SlotAddress(bank = bankLetter.uppercase()[0] - 'A', slot = slotText.toInt())
-    }
-
     override fun bankLabel(bank: Int): String = ('A' + bank).toString()
-
-    private companion object {
-        val PATTERN = Regex("""([A-Za-z])(\d+)""")
-    }
 }
 
 /**
@@ -141,17 +104,6 @@ class LinearAddressFormat(
 
     override fun format(address: SlotAddress): String = render(address.bank * presetsPerBank + address.slot)
 
-    override fun parse(id: String): SlotAddress {
-        val trimmed = id.trim()
-        require(PATTERN.matches(trimmed)) { "Invalid preset id '$id'; expected a number like '042'" }
-        val number = trimmed.toIntOrNull()
-            ?: throw IllegalArgumentException("Invalid preset id '$id'")
-        require(number in 0 until presetCount) {
-            "Invalid preset id '$id': outside 0..${presetCount - 1}"
-        }
-        return addressOf(number)
-    }
-
     /** The range a virtual bank covers, e.g. `"000–127"`; the last bank stops at the last preset. */
     override fun bankLabel(bank: Int): String {
         val first = bank * presetsPerBank
@@ -176,10 +128,6 @@ class LinearAddressFormat(
     )
 
     private fun render(number: Int): String = number.toString().padStart(digits, '0')
-
-    private companion object {
-        val PATTERN = Regex("""\d+""")
-    }
 }
 
 /** One bank: what to call it, and how many slots it holds. */
