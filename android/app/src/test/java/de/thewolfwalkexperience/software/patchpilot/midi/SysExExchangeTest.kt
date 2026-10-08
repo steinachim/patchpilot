@@ -106,6 +106,35 @@ class SysExExchangeTest {
         assertEquals(9, Pro800SysEx.addressOf(reply))
     }
 
+    /** A matching reply that fails the intact check is asked for again, and reported as damaged if it never arrives intact. */
+    @Test
+    fun `a damaged reply is retried, and one that stays damaged is reported as such`() = runTest {
+        val twoBytes: (ByteArray) -> Boolean = { Pro800SysEx.dumpPayload(it).size == 2 }
+        val isDump: (ByteArray) -> Boolean = { Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_DUMP }
+
+        var answers = 0
+        val recovers = SysExExchange(
+            FakeMidiTransport { listOf(if (answers++ == 0) dump(7, byteArrayOf(0x7F)) else dump(7)) },
+            backgroundScope,
+            defaultTimeout = 20.milliseconds,
+            retries = 1,
+        )
+        val reply = recovers.exchange(Pro800SysEx.requestDump(7), "reading 7", intact = twoBytes, matches = isDump)
+        assertEquals(2, Pro800SysEx.dumpPayload(reply).size)
+        assertEquals(2, answers)
+
+        val staysDamaged = SysExExchange(
+            FakeMidiTransport { listOf(dump(7, byteArrayOf(0x7F))) },
+            backgroundScope,
+            defaultTimeout = 20.milliseconds,
+            retries = 1,
+        )
+        val failure = runCatching {
+            staysDamaged.exchange(Pro800SysEx.requestDump(7), "reading 7", intact = twoBytes, matches = isDump)
+        }.exceptionOrNull()
+        assertTrue("got $failure", failure is InstrumentException.ReplyDamaged)
+    }
+
     @Test
     fun `a silent instrument times out with a message naming what was being done`() = runTest {
         val transport = FakeMidiTransport { emptyList() }

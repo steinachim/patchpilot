@@ -590,32 +590,14 @@ class MotifXsInstrument(
     internal suspend fun readVoicePayload(address: SlotAddress): ByteArray {
         val bank = config.banks[address.bank]
         val where = layout.format.format(address)
-        // Set by the matcher when a reply arrived but was malformed, so exhausting the retries
-        // reports "arrived damaged" rather than the silence a bare timeout would claim.
-        var damaged = false
-        val reply = try {
-            exchange.exchange(
-                MotifXsSysEx.requestDump(config.deviceNumber, bank.addressHi, bank.addressMid, address.slot),
-                what = "reading voice $where",
-                timeout = VOICE_TIMEOUT,
-            ) { message ->
-                MotifXsSysEx.typeOf(message) == MotifXsSysEx.TYPE_BULK_DUMP &&
-                    MotifXsSysEx.addressOf(message) ==
-                    Triple(bank.addressHi, bank.addressMid, address.slot) &&
-                    MotifXsSysEx.isWellFormedBulkDump(message).also { intact ->
-                        if (!intact) damaged = true
-                    }
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (damaged) {
-                throw InstrumentException.ProtocolDesync(
-                    "Voice $where arrived damaged (bad length or checksum) on every attempt.",
-                    e,
-                )
-            }
-            throw e
+        val reply = exchange.exchange(
+            MotifXsSysEx.requestDump(config.deviceNumber, bank.addressHi, bank.addressMid, address.slot),
+            what = "reading voice $where",
+            timeout = VOICE_TIMEOUT,
+            intact = MotifXsSysEx::isWellFormedBulkDump,
+        ) { message ->
+            MotifXsSysEx.typeOf(message) == MotifXsSysEx.TYPE_BULK_DUMP &&
+                MotifXsSysEx.addressOf(message) == Triple(bank.addressHi, bank.addressMid, address.slot)
         }
         return MotifXsSysEx.dumpPayload(reply)
     }

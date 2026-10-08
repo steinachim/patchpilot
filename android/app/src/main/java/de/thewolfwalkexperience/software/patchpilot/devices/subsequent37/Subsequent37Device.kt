@@ -76,9 +76,8 @@ class Subsequent37Device(
                 "reading program $number",
                 READ_TIMEOUT,
                 retries = 0,
-            ) {
-                Subsequent37SysEx.isStoredProgramReply(it, number) && Subsequent37SysEx.programOf(it) != null
-            }
+                intact = { Subsequent37SysEx.programOf(it) != null },
+            ) { Subsequent37SysEx.isStoredProgramReply(it, number) }
         }
 
     suspend fun readProgram(number: Int): Subsequent37Program =
@@ -158,15 +157,16 @@ class Subsequent37Device(
         }
     }
 
-    /** [block], repeated on a timeout up to [times] in all. */
+    /** [block], repeated on a timeout or a damaged reply up to [times] in all. */
     private suspend fun <T> attempt(times: Int, what: String, block: suspend () -> T): T {
-        var last: InstrumentException.Timeout? = null
+        var last: InstrumentException? = null
         repeat(times) { index ->
             try {
                 return block()
-            } catch (e: InstrumentException.Timeout) {
+            } catch (e: InstrumentException) {
+                if (e !is InstrumentException.Timeout && e !is InstrumentException.ReplyDamaged) throw e
                 last = e
-                Log.w(TAG, "'$what' went unanswered (attempt ${index + 1} of $times)")
+                Log.w(TAG, "'$what' got no usable answer (attempt ${index + 1} of $times)")
             }
         }
         throw last ?: InstrumentException.Timeout(what)

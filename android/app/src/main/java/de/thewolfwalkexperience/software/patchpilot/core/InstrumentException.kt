@@ -7,9 +7,9 @@ package de.thewolfwalkexperience.software.patchpilot.core
  * What went wrong, in terms the UI can act on without matching on message strings, which would
  * stop working the moment a second family worded its failures differently.
  *
- * The distinction that matters to a screen is "would retrying help?": [Timeout] and
- * [TransportLost] may, [NotSupported] and [DeviceRejected] will not, and [SlotStateChanged] will
- * after a refresh.
+ * The distinction that matters to a screen is "would retrying help?": [Timeout], [ReplyDamaged]
+ * and [TransportLost] may, [NotSupported] and [DeviceRejected] will not, and [SlotStateChanged]
+ * will after a refresh.
  *
  * The convention every family follows: anything the instrument or the link causes is one of
  * these, with the underlying exception kept as its cause. A bad argument from the caller is an
@@ -51,6 +51,13 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
      */
     class Timeout(what: String, cause: Throwable? = null, explanation: String? = null) :
         InstrumentException(explanation ?: "The instrument did not answer while $what.", cause)
+
+    /**
+     * A reply arrived on every attempt, but damaged: a wrong length, a checksum that does not
+     * close, a record spliced with another. Distinct from [Timeout], since something is answering.
+     */
+    class ReplyDamaged(what: String, cause: Throwable? = null) :
+        InstrumentException("The instrument's answer while $what arrived damaged on every attempt.", cause)
 
     /**
      * The instrument answered, and said no. [status] is its own code, verbatim.

@@ -73,6 +73,9 @@ class FakeSubsequent37(private val scope: CoroutineScope) {
     /** The next this-many program reads go unanswered. */
     var unansweredReads = 0
 
+    /** The next this-many program reads arrive with one bit flipped, so their checksum does not close. */
+    var damagedReads = 0
+
     /** Called with the program number after each write lands - where a test cancels mid-edit. */
     var onWrite: (Int) -> Unit = {}
 
@@ -152,11 +155,17 @@ class FakeSubsequent37(private val scope: CoroutineScope) {
             return emptyList()
         }
         val stale = staleLeft[number] ?: 0
-        val stored = if (stale > 0) {
+        val clean = if (stale > 0) {
             staleLeft[number] = stale - 1
             before.getValue(number)
         } else {
             packed[number]
+        }
+        val stored = if (damagedReads > 0) {
+            damagedReads--
+            clean.copyOf().also { it[100] = (it[100].toInt() xor 1).toByte() }
+        } else {
+            clean
         }
         val bufferHeader = Subsequent37Fixtures.READ_P001[0].copyOfRange(0, 23)
         val storedHeader = Subsequent37Fixtures.READ_P001[1].copyOfRange(0, 23).also {

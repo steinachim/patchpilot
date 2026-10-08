@@ -342,6 +342,22 @@ class Subsequent37InstrumentTest {
     }
 
     @Test
+    fun `a damaged read is asked for once more`() = runTest {
+        val fake = FakeSubsequent37(backgroundScope).apply { damagedReads = 1 }
+        val instrument = subsequent37(fake).apply { connect() }
+        assertEquals("Preset 001", instrument.refresh(SlotAddress(0, 1)).name)
+        assertEquals(2, fake.requests.count { Subsequent37SysEx.isCommand(it, 0x06, 0x01) })
+    }
+
+    @Test
+    fun `a read damaged on every attempt is reported as damaged, not as silence`() = runTest {
+        val fake = FakeSubsequent37(backgroundScope).apply { damagedReads = 1_000 }
+        val instrument = subsequent37(fake).apply { connect() }
+        val failure = runCatching { instrument.refresh(SlotAddress(0, 1)) }.exceptionOrNull()
+        assertTrue("got $failure", failure is InstrumentException.ReplyDamaged)
+    }
+
+    @Test
     fun `an unanswered read asks for the settings once per attempt`() = runTest {
         val fake = FakeSubsequent37(backgroundScope)
         val instrument = subsequent37(fake).apply { connect() }

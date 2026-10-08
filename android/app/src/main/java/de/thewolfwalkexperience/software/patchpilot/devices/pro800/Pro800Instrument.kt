@@ -258,20 +258,22 @@ class Pro800Instrument(
         val reply = exchange.exchange(
             Pro800SysEx.requestDump(programNumber),
             what = "reading preset ${layout.format.format(address)}",
+            // The address is not sufficient: on a shared bus a reply that lost its F7 merges with
+            // the next, carrying our address and another record's tail, so a record outrunning
+            // its own version byte is damaged and the exchange's retry asks again.
+            intact = { message ->
+                Pro800SysEx.typeOf(message) != Pro800SysEx.TYPE_DUMP ||
+                    !Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(message)).outrunsDeclaredVersion
+            },
         ) { message ->
             // A dump is matched on its echoed address, since a late reply to the previous request
             // is still a dump. A bare F0 F7 (an empty slot) carries no address and is accepted as
             // the answer to whatever is in flight, which is safe because exchanges are serialized.
-            // The address is not sufficient: on a shared bus a reply that lost its F7 merges with
-            // the next, carrying our address and another record's tail, so a record outrunning
-            // its own version byte is left unmatched and the exchange's retry asks again.
             Pro800SysEx.isEmptyReply(message) ||
                 Pro800SysEx.isStatusFailure(message) ||
                 (
                     Pro800SysEx.typeOf(message) == Pro800SysEx.TYPE_DUMP &&
-                        Pro800SysEx.addressOf(message) == programNumber &&
-                        !Pro800Program.fromEncoded(Pro800SysEx.dumpPayload(message))
-                            .outrunsDeclaredVersion
+                        Pro800SysEx.addressOf(message) == programNumber
                     )
         }
         // An address the instrument will not read answers `01 00 01`; leaving that unmatched

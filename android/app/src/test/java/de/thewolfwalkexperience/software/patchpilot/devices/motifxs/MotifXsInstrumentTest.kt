@@ -676,7 +676,9 @@ class MotifXsInstrumentTest {
         )
         val updates = motif.browser.index().toList()
 
-        assertEquals(2, updates.filterIsInstance<IndexUpdate.Failed>().size)
+        val failed = updates.filterIsInstance<IndexUpdate.Failed>()
+        assertEquals(2, failed.size)
+        assertTrue(failed.first().reason, failed.first().reason.contains("arrived damaged"))
         assertEquals(4, updates.filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }.size)
         assertTrue(updates.last() is IndexUpdate.Complete)
     }

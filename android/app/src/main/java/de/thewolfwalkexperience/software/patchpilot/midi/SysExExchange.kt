@@ -140,14 +140,20 @@ class SysExExchange(
      * Each retry starts after [drainStale], so a late reply to the previous attempt cannot
      * satisfy this one. A retry re-sends [request], so a step that must not reach the instrument
      * twice (one chunk of a multi-message write, say) passes `retries = 0`.
+     *
+     * [intact] checks a reply [matches] picked out: one that fails it is left unmatched, so the
+     * retry asks again, and where no intact reply arrives the failure is
+     * [InstrumentException.ReplyDamaged] rather than [InstrumentException.Timeout].
      */
     suspend fun exchange(
         request: ByteArray,
         what: String,
         timeout: Duration = defaultTimeout,
         retries: Int = this.retries,
+        intact: (ByteArray) -> Boolean = { true },
         matches: (ByteArray) -> Boolean,
     ): ByteArray = lock.withLock {
+        var damaged = false
         repeat(retries + 1) { attempt ->
             if (attempt > 0) {
                 Log.w(TAG, "retrying '$what' (attempt ${attempt + 1})")
@@ -161,7 +167,7 @@ class SysExExchange(
                     // Subscribed before the send - see the class doc.
                     val awaited = async(start = CoroutineStart.UNDISPATCHED) {
                         messages.first { message ->
-                            matches(message).also { matched ->
+                            (matches(message) && (intact(message) || false.also { damaged = true })).also { matched ->
                                 // A rejected reply and silence are indistinguishable from a
                                 // timeout alone.
                                 if (!matched && BuildConfig.DEBUG) {
@@ -176,6 +182,7 @@ class SysExExchange(
             }
             if (reply != null) return@withLock reply
         }
+        if (damaged) throw InstrumentException.ReplyDamaged(what)
         throw InstrumentException.Timeout(what)
     }
 
