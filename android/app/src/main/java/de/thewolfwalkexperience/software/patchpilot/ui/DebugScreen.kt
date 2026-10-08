@@ -274,7 +274,8 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     theme.FilledButton(
                         onClick = { runner.start(regressionStartingLabel) },
-                        enabled = verifyProgress == null,
+                        // Only with a session: a run without one would fail with "Not connected".
+                        enabled = capabilities.instrumentName != null && verifyProgress == null,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.debug_regression_action))
