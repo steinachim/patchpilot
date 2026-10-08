@@ -64,10 +64,12 @@ class FakeNordTransportTest {
     }
 
     @Test
-    fun `selectPreset succeeds for an occupied slot`() = runTest {
-        val device = fakeNord()
+    fun `selectPreset loads the slot it names`() = runTest {
+        val transport = FakeNordTransport()
+        val device = NordFixtures.device(transport, FakeNordProfile.profile())
         device.connect()
-        device.selectPreset(0, 0) // "Init Program" in FakeNordCatalog
+        device.selectPreset(0, 3)
+        assertEquals(0 to 3, transport.selectedPreset)
     }
 
     @Test

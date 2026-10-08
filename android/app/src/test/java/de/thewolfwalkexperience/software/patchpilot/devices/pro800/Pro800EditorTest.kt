@@ -439,7 +439,5 @@ class Pro800EditorTest {
         )
         assertEquals("every EditOp there is", EditOp.entries.toSet(), editor.supported)
         EditOp.entries.forEach { assertTrue("$it should be emulated", editor.isEmulated(it)) }
-        assertFalse(editor.supported.isEmpty())
-        assertNull(null)
     }
 }

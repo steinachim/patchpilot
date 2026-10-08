@@ -323,11 +323,15 @@ class CatalogParsesTest {
 
     /**
      * A probe must be a read-only enquiry. Every family uses a universal or documented identity
-     * query for exactly the reason in `MidiDiscovery`'s class doc.
+     * query for exactly the reason in `MidiDiscovery`'s class doc. Every catalog in the generic
+     * shape is checked: all but the Nord's own and the factory-voice table.
      */
     @Test
     fun `every MIDI probe is a single well-formed SysEx message`() {
-        for (name in listOf("behringer_pro800.json", "yamaha_motif_xs.json", "fractal_axefx3.json")) {
+        val generic = catalogDir.listFiles { file -> file.extension == "json" }!!.map { it.name }
+            .filterNot { it.startsWith("nord_devices") || it == "motifxs_factory_voices.json" }
+        assertTrue("found $generic", generic.size >= 4)
+        for (name in generic) {
             for (descriptor in catalog(name).devices) {
                 val match = descriptor.match as? DeviceMatch.MidiIdentity ?: continue
                 val probe = match.probe

@@ -163,6 +163,16 @@ class InstrumentFacetTest {
         editor.swap(SlotAddress(0, 1), SlotAddress(3, 24))
         assertEquals("Renamed", instrument.refresh(SlotAddress(0, 1)).name)
         assertEquals(before, instrument.refresh(SlotAddress(3, 24)).name)
+
+        // (0, 0) was emptied by the move.
+        assertTrue(EditOp.COPY in editor.supported)
+        val copyName = editor.copyProgram(SlotAddress(0, 1), SlotAddress(0, 0))
+        assertEquals(copyName, instrument.refresh(SlotAddress(0, 0)).name)
+        assertEquals("Renamed", instrument.refresh(SlotAddress(0, 1)).name)
+
+        assertTrue(EditOp.DELETE in editor.supported)
+        editor.delete(SlotAddress(0, 0))
+        assertNull(instrument.refresh(SlotAddress(0, 0)).name)
     }
 
     /** Shared by both instruments below - the property is the same regardless of shape. */
@@ -195,6 +205,13 @@ class InstrumentFacetTest {
             assertEquals(other.name, instrument.browser.refresh(at).name)
             assertEquals(moving, instrument.browser.refresh(other.address).name)
             at = other.address
+        }
+        if (EditOp.COPY in editor.supported) {
+            val stillEmpty = instrument.layout.allAddresses().first { address ->
+                instrument.browser.refresh(address).name == null
+            }
+            val copyName = editor.copyProgram(at, stillEmpty)
+            assertEquals(copyName, instrument.browser.refresh(stillEmpty).name)
         }
         if (EditOp.DELETE in editor.supported) {
             editor.delete(at)

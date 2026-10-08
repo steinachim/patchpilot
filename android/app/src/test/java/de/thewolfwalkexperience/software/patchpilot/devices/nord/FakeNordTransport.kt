@@ -27,6 +27,10 @@ class FakeNordTransport(private val catalog: FakeNordCatalog = FakeNordCatalog()
 
     private var selectedCategoryIndex: Int = -1
 
+    /** The (bank, item) the last select-preset loaded; null before any. */
+    var selectedPreset: Pair<Int, Int>? = null
+        private set
+
     override fun bulkWrite(data: ByteArray) {
         pending = parseMessage(data)
     }
@@ -255,8 +259,10 @@ class FakeNordTransport(private val catalog: FakeNordCatalog = FakeNordCatalog()
      * Sub-opcode 47/48 (select/load) and the reload-for-display call inside rename/move/swap's
      * lock both send (bank, item) and expect the same triple echoed back with a zero flag.
      */
-    private fun selectPresetReply(payload: ByteArray): ByteArray =
-        u32(0) + u32(readU32(payload, 0)) + u32(readU32(payload, 4))
+    private fun selectPresetReply(payload: ByteArray): ByteArray {
+        selectedPreset = readU32(payload, 0) to readU32(payload, 4)
+        return u32(0) + u32(readU32(payload, 0)) + u32(readU32(payload, 4))
+    }
 
     private fun readU32(data: ByteArray, offset: Int): Int =
         ((data[offset].toInt() and 0xFF) shl 24) or ((data[offset + 1].toInt() and 0xFF) shl 16) or
