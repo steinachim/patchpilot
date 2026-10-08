@@ -29,7 +29,7 @@ Run each pass on its own. Check every finding in the code before it goes into th
 
 - Correctness: bounds, nullability, off-by-one, error paths.
 - Coroutines: `CancellationException` rethrown before any other catch; `NonCancellable` where a sequence must not split; blocking I/O off the main thread; every scope has an owner.
-- Error model: the `InstrumentException` subtype fits the condition. `NotSupported` means "never on this device", not "not in this state".
+- Error model: the `InstrumentException` subtype fits the condition. `NotSupported` means "never on this device", not "not in this state"; a slot that is not as the list showed it is `SlotStateChanged`.
 - Dead code, production API only tests use, unused imports and parameters.
 - Comments and KDoc against the code beside them.
 

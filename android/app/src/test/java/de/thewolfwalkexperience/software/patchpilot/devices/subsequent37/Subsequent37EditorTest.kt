@@ -25,13 +25,9 @@ class Subsequent37EditorTest {
     private suspend fun TestScope.connected(fake: FakeSubsequent37 = FakeSubsequent37(backgroundScope)) =
         subsequent37(fake).apply { connect() }
 
-    private suspend fun refused(block: suspend () -> Unit) {
-        try {
-            block()
-            fail("expected a refusal")
-        } catch (expected: InstrumentException.NotSupported) {
-        } catch (expected: IllegalArgumentException) {
-        }
+    private suspend inline fun <reified T : Throwable> refused(crossinline block: suspend () -> Unit) {
+        val failure = runCatching { block() }.exceptionOrNull()
+        assertTrue("expected ${T::class.simpleName}, got $failure", failure is T)
     }
 
     private val blankPacked get() = Subsequent37SysEx.pack(Subsequent37Fixtures.BLANK)
@@ -61,10 +57,10 @@ class Subsequent37EditorTest {
         val empty = Subsequent37Fixtures.emptyPrograms(1).single()
         for (name in listOf("x".repeat(25), "Café", "   ", "Init Preset")) {
             assertNotNull("the rename dialog refuses '$name' too", editor.nameProblem(name))
-            refused { editor.rename(address(1), name) }
+            refused<IllegalArgumentException> { editor.rename(address(1), name) }
         }
         assertNull(editor.nameProblem("Preset 002"))
-        refused { editor.rename(address(empty), "Something") }
+        refused<InstrumentException.SlotStateChanged> { editor.rename(address(empty), "Something") }
         assertTrue(fake.writes.isEmpty())
         // Renaming to the name it already has writes nothing.
         editor.rename(address(1), "Preset 001")
@@ -108,9 +104,9 @@ class Subsequent37EditorTest {
         val fake = FakeSubsequent37(backgroundScope)
         val editor = connected(fake).editor
         val empty = Subsequent37Fixtures.emptyPrograms(2)
-        refused { editor.copyProgram(address(2), address(3)) }
-        refused { editor.copyProgram(address(empty[0]), address(empty[1])) }
-        refused { editor.copyProgram(address(2), address(2)) }
+        refused<InstrumentException.SlotStateChanged> { editor.copyProgram(address(2), address(3)) }
+        refused<InstrumentException.SlotStateChanged> { editor.copyProgram(address(empty[0]), address(empty[1])) }
+        refused<InstrumentException.NotSupported> { editor.copyProgram(address(2), address(2)) }
         assertTrue(fake.writes.isEmpty())
     }
 

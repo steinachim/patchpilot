@@ -86,7 +86,7 @@ class AxeFx3EditorTest {
         val fake = FakeAxeFx3()
         fake.put(10, "Same")
         val instrument = connected(fake)
-        thrownBy<InstrumentException.NotSupported> { instrument.editor.rename(at(11), "Name") }
+        thrownBy<InstrumentException.SlotStateChanged> { instrument.editor.rename(at(11), "Name") }
         val start = fake.requests.size
         instrument.editor.rename(at(10), "Same")
         assertFalse(fake.commandsSince(start).contains("01/26"))
@@ -133,8 +133,8 @@ class AxeFx3EditorTest {
         val instrument = connected(fake)
         val start = fake.requests.size
         thrownBy<InstrumentException.NotSupported> { instrument.editor.copyProgram(at(1), at(1)) }
-        thrownBy<InstrumentException.NotSupported> { instrument.editor.copyProgram(at(3), at(4)) }
-        thrownBy<InstrumentException.NotSupported> { instrument.editor.copyProgram(at(1), at(2)) }
+        thrownBy<InstrumentException.SlotStateChanged> { instrument.editor.copyProgram(at(3), at(4)) }
+        thrownBy<InstrumentException.SlotStateChanged> { instrument.editor.copyProgram(at(1), at(2)) }
         assertFalse(fake.commandsSince(start).contains("01/27"))
         assertEquals("Pad", fake.nameAt(2))
     }

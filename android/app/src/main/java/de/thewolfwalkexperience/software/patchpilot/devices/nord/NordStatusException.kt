@@ -7,11 +7,12 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
  * The instrument answered a write sub-opcode with a non-zero status. Its own type so the status
  * reaches `NordInstrument`, which turns it into
  * [de.thewolfwalkexperience.software.patchpilot.core.InstrumentException.DeviceRejected] with the
- * code verbatim. An echo naming another slot is a [NordProtocolException] instead.
+ * code verbatim, or into `SlotStateChanged` where the code says a slot is not as the list showed
+ * it. An echo naming another slot is a [NordProtocolException] instead.
  *
  * @param what the operation, in the wire's own words - `"delete-item"`, `"copy-program"`.
- * @param status the instrument's code. `4` means the destination already holds an item; the rest
- *   have no known meaning.
+ * @param status the instrument's code. `4` means the destination already holds an item, and `1`
+ *   from a swap that one of its slots is empty; the rest have no known meaning.
  */
 class NordStatusException(
     val what: String,

@@ -27,13 +27,13 @@ import kotlinx.coroutines.flow.flow
  */
 class NoCopyFixtureInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor {
 
-    private val library = DemoLibrary(NAMES, slotsPerBank = SLOTS_PER_BANK)
-
     override val layout: SlotLayout = SlotLayout.uniform(
         bankCount = 4,
         slotsPerBank = SLOTS_PER_BANK,
         format = FlatBankAddressFormat(slotDigits = 2),
     )
+
+    private val library = DemoLibrary(NAMES, slotsPerBank = SLOTS_PER_BANK, format = layout.format)
 
     override val identity = InstrumentIdentity(
         descriptorId = "no-copy-fixture",

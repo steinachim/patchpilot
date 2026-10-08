@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
@@ -128,6 +129,8 @@ class MotifXsTaggerTest {
         favorites: Map<Int, ByteArray> = emptyMap(),
         /** How many read-backs still report the old table after a favorites write is acked. */
         private val favoriteSettlesAfterReads: Int = 0,
+        /** Null answers the `0C` read as an empty slot does. */
+        val voiceName: String? = "Scratch Voice",
     ) {
         val marks = favorites.mapValues { it.value.copyOf() }.toMutableMap()
         private var stale = 0
@@ -142,9 +145,10 @@ class MotifXsTaggerTest {
          * corroborates a printable run against, and without it this voice reads as empty.
          */
         private fun voicePayload(): ByteArray {
-            val name = "Scratch Voice".toByteArray(Charsets.ISO_8859_1)
             val prefix = "${userFigures.first}:${userFigures.second}:".toByteArray(Charsets.ISO_8859_1)
-            val dense = prefix + name + ByteArray(6) + name
+            val dense = voiceName?.toByteArray(Charsets.ISO_8859_1)
+                ?.let { name -> prefix + name + ByteArray(6) + name }
+                ?: (prefix + ByteArray(32))
             return byteArrayOf(0, 0) + pack(dense)
         }
 
@@ -556,6 +560,22 @@ class MotifXsTaggerTest {
             tagger.setCategories(factorySlot, listOf(CategoryRef(piano, 0), null))
         }.exceptionOrNull()
         assertNotNull("a factory bank should be refused", failure)
+        assertTrue(
+            "nothing should have gone out",
+            transport.sent.none { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.BULK_HEADER_HI },
+        )
+    }
+
+    /** An empty slot answers the read too, and would gain a voice with no name. */
+    @Test
+    fun `setting categories refuses an empty slot`() = runTest {
+        val device = Device(favorites = mapOf(0x00 to ByteArray(4)), voiceName = null)
+        val (_, tagger, transport) = instrument(backgroundScope, device)
+
+        val failure = runCatching {
+            tagger.setCategories(userSlot, listOf(CategoryRef(piano, 0), null))
+        }.exceptionOrNull()
+        assertTrue("expected SlotStateChanged, got $failure", failure is InstrumentException.SlotStateChanged)
         assertTrue(
             "nothing should have gone out",
             transport.sent.none { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.BULK_HEADER_HI },

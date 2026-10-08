@@ -226,7 +226,7 @@ class MotifXsInstrument(
             // An empty slot still answers the documented read with a full sequence, so without
             // this a rename would succeed and leave a named voice with nothing in it.
             val previousName = MotifXsVoice.nameOf(readVoicePayload(address))
-                ?: throw InstrumentException.NotSupported("rename an empty slot")
+                ?: throw InstrumentException.SlotStateChanged.empty(where)
 
             editCommonBlock(address, "renaming $where", "rename of $where") { payload ->
                 if (payload.size < MotifXsVoice.NAME_LENGTH) {
@@ -314,12 +314,12 @@ class MotifXsInstrument(
 
             val payload = readVoicePayload(src)
             val name = MotifXsVoice.nameOf(payload)
-                ?: throw InstrumentException.NotSupported("copy an empty slot")
+                ?: throw InstrumentException.SlotStateChanged.empty(layout.format.format(src))
 
             // The instrument accepts a well-formed dump to an occupied writable slot, so this
             // has to refuse one.
             if (MotifXsVoice.nameOf(readVoicePayload(dst)) != null) {
-                throw InstrumentException.NotSupported("copy onto an occupied slot")
+                throw InstrumentException.SlotStateChanged.occupied(layout.format.format(dst))
             }
 
             committed {
@@ -341,11 +341,13 @@ class MotifXsInstrument(
             requireSameKind(from, to)
             if (from == to) return
             val payload = readVoicePayload(from)
-            if (MotifXsVoice.nameOf(payload) == null) throw InstrumentException.NotSupported("move an empty slot")
+            if (MotifXsVoice.nameOf(payload) == null) {
+                throw InstrumentException.SlotStateChanged.empty(layout.format.format(from))
+            }
             // As in [copyProgram]: the instrument would overwrite an occupied slot without
             // complaint, and a listing out of date offers one as empty.
             if (MotifXsVoice.nameOf(readVoicePayload(to)) != null) {
-                throw InstrumentException.NotSupported("move onto an occupied slot")
+                throw InstrumentException.SlotStateChanged.occupied(layout.format.format(to))
             }
             // Sourced before the first write, so a bank with no blank to copy fails before
             // anything has been changed rather than after the destination is already written.
@@ -685,6 +687,10 @@ class MotifXsInstrument(
             "a Motif XS voice has ${MotifXsSysEx.CATEGORY_LENGTH} category bytes, not ${bytes.size}"
         }
         require(bytes.all { it in 0..0x7F }) { "a category byte has to fit in seven bits" }
+        // As for a rename: an empty slot answers the read too, and would gain a nameless voice.
+        if (MotifXsVoice.nameOf(readVoicePayload(address)) == null) {
+            throw InstrumentException.SlotStateChanged.empty(where)
+        }
         editCommonBlock(
             address,
             "setting the categories of $where",

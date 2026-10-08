@@ -57,7 +57,7 @@ class Subsequent37Editor(private val instrument: Subsequent37Instrument) : Prese
         nameProblem(name)?.let { throw IllegalArgumentException(it) }
         val number = instrument.numberOf(address)
         instrument.operation {
-            val current = requireOccupied(number, "rename")
+            val current = requireOccupied(number)
             if (current.name == name) return@operation
             device.writeVerified(number, current.withName(name), instrument.displayIdOf(number))
         }
@@ -69,8 +69,8 @@ class Subsequent37Editor(private val instrument: Subsequent37Instrument) : Prese
         val from = instrument.numberOf(src)
         val to = instrument.numberOf(dst)
         return instrument.operation {
-            val source = requireOccupied(from, "copy")
-            requireEmpty(to, "copy onto an occupied slot")
+            val source = requireOccupied(from)
+            requireEmpty(to)
             device.writeVerified(to, source, instrument.displayIdOf(to))
             source.name.ifEmpty { UNNAMED_PRESET }
         }
@@ -82,8 +82,8 @@ class Subsequent37Editor(private val instrument: Subsequent37Instrument) : Prese
         val source = instrument.numberOf(from)
         val destination = instrument.numberOf(to)
         instrument.operation {
-            val program = requireOccupied(source, "move")
-            requireEmpty(destination, "move onto an occupied slot - use swap instead")
+            val program = requireOccupied(source)
+            requireEmpty(destination)
             withContext(NonCancellable) {
                 device.writeVerified(destination, program, instrument.displayIdOf(destination))
                 try {
@@ -155,13 +155,16 @@ class Subsequent37Editor(private val instrument: Subsequent37Instrument) : Prese
         }
     }
 
-    private suspend fun requireOccupied(number: Int, what: String): Subsequent37Program {
+    /** The preset, read fresh rather than trusted from the list, which may predate a change on the panel. */
+    private suspend fun requireOccupied(number: Int): Subsequent37Program {
         val program = device.readProgram(number)
-        if (program.isEmpty) throw InstrumentException.NotSupported("$what an empty slot")
+        if (program.isEmpty) throw InstrumentException.SlotStateChanged.empty(instrument.displayIdOf(number))
         return program
     }
 
-    private suspend fun requireEmpty(number: Int, what: String) {
-        if (!device.readProgram(number).isEmpty) throw InstrumentException.NotSupported(what)
+    private suspend fun requireEmpty(number: Int) {
+        if (!device.readProgram(number).isEmpty) {
+            throw InstrumentException.SlotStateChanged.occupied(instrument.displayIdOf(number))
+        }
     }
 }

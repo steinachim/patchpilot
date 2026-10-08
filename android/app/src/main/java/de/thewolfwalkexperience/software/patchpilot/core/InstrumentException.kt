@@ -8,7 +8,8 @@ package de.thewolfwalkexperience.software.patchpilot.core
  * stop working the moment a second family worded its failures differently.
  *
  * The distinction that matters to a screen is "would retrying help?": [Timeout] and
- * [TransportLost] may, [NotSupported] and [DeviceRejected] will not.
+ * [TransportLost] may, [NotSupported] and [DeviceRejected] will not, and [SlotStateChanged] will
+ * after a refresh.
  *
  * The convention every family follows: anything the instrument or the link causes is one of
  * these, with the underlying exception kept as its cause. A bad argument from the caller is an
@@ -21,6 +22,26 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
 
     /** The instrument, or this app's support for it, has no such operation. */
     class NotSupported(what: String) : InstrumentException("This instrument cannot $what.")
+
+    /**
+     * A slot is not in the state the list showed: it holds a preset where the list showed it
+     * empty, or the other way round. The list is older than the instrument's contents (a preset
+     * stored or deleted on the panel since the last read), so the remedy is a refresh. Distinct
+     * from [NotSupported] ("never, on this device") and from [DeviceRejected] (a refusal with no
+     * known reason). Built with [occupied] and [empty], so every family says the same thing.
+     */
+    class SlotStateChanged(detail: String, cause: Throwable? = null) :
+        InstrumentException("$detail Refresh the list and try again.", cause) {
+        companion object {
+            /** [displayId] holds a preset where the operation needs an empty slot. */
+            fun occupied(displayId: String, cause: Throwable? = null) =
+                SlotStateChanged("$displayId holds a preset, though the list shows it as empty.", cause)
+
+            /** [displayId] is empty where the operation needs a preset. */
+            fun empty(displayId: String, cause: Throwable? = null) =
+                SlotStateChanged("$displayId is empty, though the list shows a preset there.", cause)
+        }
+    }
 
     /**
      * No reply arrived in time.

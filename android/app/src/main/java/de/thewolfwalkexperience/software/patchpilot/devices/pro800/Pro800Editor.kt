@@ -71,7 +71,7 @@ class Pro800Editor(
         nameProblem(newName)?.let { throw IllegalArgumentException(it) }
 
         val before = readProgram(address)
-        if (before.isEmpty) throw InstrumentException.NotSupported("rename an empty slot")
+        if (before.isEmpty) throw InstrumentException.SlotStateChanged.empty(layout.format.format(address))
         writeVerified(address, before.withName(newName), expectName = newName)
     }
 
@@ -86,11 +86,9 @@ class Pro800Editor(
     override suspend fun move(from: SlotAddress, to: SlotAddress) {
         if (from == to) return
         val source = readProgram(from)
-        if (source.isEmpty) throw InstrumentException.NotSupported("move an empty slot")
+        if (source.isEmpty) throw InstrumentException.SlotStateChanged.empty(layout.format.format(from))
         val destination = readProgram(to)
-        if (!destination.isEmpty) {
-            throw InstrumentException.NotSupported("move onto an occupied slot - use swap instead")
-        }
+        if (!destination.isEmpty) throw InstrumentException.SlotStateChanged.occupied(layout.format.format(to))
 
         remember(from, source)
         withContext(NonCancellable) {
@@ -110,13 +108,11 @@ class Pro800Editor(
         if (src == dst) throw InstrumentException.NotSupported("copy a preset onto itself")
 
         val source = readProgram(src)
-        if (source.isEmpty) throw InstrumentException.NotSupported("copy an empty slot")
+        if (source.isEmpty) throw InstrumentException.SlotStateChanged.empty(layout.format.format(src))
 
         // Nothing on the instrument refuses an occupied destination, so this has to.
         val destination = readProgram(dst)
-        if (!destination.isEmpty) {
-            throw InstrumentException.NotSupported("copy onto an occupied slot")
-        }
+        if (!destination.isEmpty) throw InstrumentException.SlotStateChanged.occupied(layout.format.format(dst))
 
         writeVerified(dst, source, expectName = source.name)
         return source.name ?: UNNAMED_PRESET

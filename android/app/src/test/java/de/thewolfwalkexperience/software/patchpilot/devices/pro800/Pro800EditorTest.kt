@@ -91,8 +91,8 @@ class Pro800EditorTest {
         try {
             pro800.editor!!.copyProgram(a(1), a(0))
             throw AssertionError("expected a refusal")
-        } catch (e: InstrumentException.NotSupported) {
-            assertTrue(e.message!!.contains("occupied"))
+        } catch (e: InstrumentException.SlotStateChanged) {
+            assertTrue(e.message!!.contains("holds a preset"))
         }
         assertArrayEquals("the destination must be untouched", before, fake.contentsOf(0))
         assertEquals("Strings", fake.nameAt(1))
@@ -105,7 +105,7 @@ class Pro800EditorTest {
         try {
             pro800.editor!!.copyProgram(a(3), b(3))
             throw AssertionError("expected a refusal")
-        } catch (e: InstrumentException.NotSupported) {
+        } catch (e: InstrumentException.SlotStateChanged) {
             assertTrue(e.message!!.contains("empty"))
         }
         assertNull("no preset may be conjured at the destination", fake.contentsOf(8))
@@ -173,7 +173,7 @@ class Pro800EditorTest {
         try {
             pro800.editor!!.rename(a(3), "New")
             throw AssertionError("renamed a slot that holds nothing")
-        } catch (expected: InstrumentException.NotSupported) {
+        } catch (expected: InstrumentException.SlotStateChanged) {
             assertTrue(fake.isEmptyAt(3))
         }
     }
@@ -296,7 +296,7 @@ class Pro800EditorTest {
         try {
             pro800.editor!!.move(a(0), a(1))
             throw AssertionError("moved onto an occupied slot")
-        } catch (expected: InstrumentException.NotSupported) {
+        } catch (expected: InstrumentException.SlotStateChanged) {
             assertEquals("Organ I", fake.nameAt(0))
             assertEquals("Strings", fake.nameAt(1))
         }

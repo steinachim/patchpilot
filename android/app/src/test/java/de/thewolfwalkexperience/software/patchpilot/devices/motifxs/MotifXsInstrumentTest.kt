@@ -1055,7 +1055,7 @@ class MotifXsInstrumentTest {
         val failure = try {
             motif.editor!!.rename(SlotAddress(0, 1), "Not A Voice")
             null
-        } catch (e: InstrumentException.NotSupported) {
+        } catch (e: InstrumentException.SlotStateChanged) {
             e
         }
         assertNotNull("an empty slot should be refused", failure)
@@ -1382,7 +1382,7 @@ class MotifXsInstrumentTest {
             motif.editor!!.copyProgram(SlotAddress(0, 0), SlotAddress(1, 0))
         }.exceptionOrNull()
 
-        assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.NotSupported)
+        assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.SlotStateChanged)
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
     }
 
@@ -1394,7 +1394,7 @@ class MotifXsInstrumentTest {
             motif.editor!!.copyProgram(SlotAddress(0, 1), SlotAddress(1, 1))
         }.exceptionOrNull()
 
-        assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.NotSupported)
+        assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.SlotStateChanged)
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
     }
 
@@ -1411,7 +1411,7 @@ class MotifXsInstrumentTest {
             motif.editor!!.move(SlotAddress(0, 0), SlotAddress(1, 0))
         }.exceptionOrNull()
 
-        assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.NotSupported)
+        assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.SlotStateChanged)
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
         assertEquals(occupant, motif.browser.refresh(SlotAddress(1, 0)).name)
     }
@@ -1423,7 +1423,7 @@ class MotifXsInstrumentTest {
             motif.editor!!.move(SlotAddress(0, 1), SlotAddress(1, 1))
         }.exceptionOrNull()
 
-        assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.NotSupported)
+        assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.SlotStateChanged)
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
     }
 

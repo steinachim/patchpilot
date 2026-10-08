@@ -186,10 +186,21 @@ class NordInstrument(
     }
 
     override suspend fun move(from: SlotAddress, to: SlotAddress) =
-        exclusive("move a preset") { device.moveProgram(from.bank, from.slot, to.bank, to.slot) }
+        exclusive("move a preset") { intoEmpty(to) { device.moveProgram(from.bank, from.slot, to.bank, to.slot) } }
 
-    override suspend fun swap(a: SlotAddress, b: SlotAddress) =
-        exclusive("swap two presets") { device.swapPrograms(a.bank, a.slot, b.bank, b.slot) }
+    /** Both slots must hold a preset; an empty one answers status 1, which does not say which. */
+    override suspend fun swap(a: SlotAddress, b: SlotAddress) = exclusive("swap two presets") {
+        try {
+            device.swapPrograms(a.bank, a.slot, b.bank, b.slot)
+        } catch (e: NordStatusException) {
+            if (e.status != NordDevice.STATUS_NOT_FOUND) throw e
+            throw InstrumentException.SlotStateChanged(
+                "${layout.format.format(a)} or ${layout.format.format(b)} is empty, though the list " +
+                    "shows a preset in both.",
+                e,
+            )
+        }
+    }
 
     /** Sub-opcode 20/21: the instrument empties the slot itself. Frees no space until its own reclaim runs. */
     override suspend fun delete(address: SlotAddress) =
@@ -197,7 +208,20 @@ class NordInstrument(
 
     /** Sub-opcode 22/23: the instrument duplicates the record and names the copy itself. */
     override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String =
-        exclusive("copy a preset") { device.copyProgram(src.bank, src.slot, dst.bank, dst.slot) }
+        exclusive("copy a preset") { intoEmpty(dst) { device.copyProgram(src.bank, src.slot, dst.bank, dst.slot) } }
+
+    /**
+     * Status 4 ("file exists") from [block] as [InstrumentException.SlotStateChanged]: the app
+     * never offers an occupied destination, so [destination] was filled since the list was read.
+     * Measured for a copy; *assumed* for a move, whose refusal code is unrecorded. Any other code
+     * stays a plain refusal.
+     */
+    private suspend fun <T> intoEmpty(destination: SlotAddress, block: suspend () -> T): T = try {
+        block()
+    } catch (e: NordStatusException) {
+        if (e.status != NordDevice.STATUS_FILE_EXISTS) throw e
+        throw InstrumentException.SlotStateChanged.occupied(layout.format.format(destination), e)
+    }
 
     // ---- DeviceReporter ----
 
@@ -324,21 +348,6 @@ class NordInstrument(
 }
 
 /**
- * Plain-language meaning for the one status code the protocol names,
- * [NordDevice.STATUS_FILE_EXISTS]; null for the rest, which keep the generic "refused (status
- * N)". The app never offers an occupied destination, so status 4 means the listing and the
- * instrument disagree - a preset stored from the front panel since the last read - and the
- * wording says what to do about it.
- */
-private fun nordStatusExplanation(what: String, status: Int): String? = when (status) {
-    NordDevice.STATUS_FILE_EXISTS ->
-        "Couldn't $what: the instrument says that slot already holds one, though the listing " +
-            "shows it as empty. Refresh the listing."
-
-    else -> null
-}
-
-/**
  * Translates a Nord failure into the [InstrumentException] the screens act on.
  *
  * The classification is by type, not by message:
@@ -367,7 +376,7 @@ internal suspend fun <T> mapNordFailure(what: String, block: suspend () -> T): T
 } catch (e: CancellationException) {
     throw e
 } catch (e: NordStatusException) {
-    throw InstrumentException.DeviceRejected(what, e.status, nordStatusExplanation(what, e.status), e)
+    throw InstrumentException.DeviceRejected(what, e.status, cause = e)
 } catch (e: UnsupportedProtocolVersionException) {
     throw InstrumentException.ProtocolDesync(e.message ?: "Unsupported protocol version", e)
 } catch (e: NordProtocolException) {

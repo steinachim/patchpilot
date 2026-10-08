@@ -51,8 +51,7 @@ class AxeFx3Editor(private val instrument: AxeFx3Instrument) : PresetEditor {
         nameProblem(name)?.let { throw IllegalArgumentException(it) }
         val number = instrument.numberOf(address)
         instrument.operation {
-            val current = device.name(number)
-            if (current == AxeFx3SysEx.EMPTY_NAME) throw InstrumentException.NotSupported("rename an empty slot")
+            val current = requireOccupied(number)
             if (current == name) return@operation
 
             withContext(NonCancellable) {
@@ -79,8 +78,8 @@ class AxeFx3Editor(private val instrument: AxeFx3Instrument) : PresetEditor {
         val from = instrument.numberOf(src)
         val to = instrument.numberOf(dst)
         return instrument.operation {
-            val name = requireOccupied(from, "copy")
-            requireEmpty(to, "copy onto an occupied slot")
+            val name = requireOccupied(from)
+            requireEmpty(to)
             instrument.writeVerified(to, device.readDump(from))
             val stored = device.name(to)
             if (stored != name) {
@@ -99,8 +98,8 @@ class AxeFx3Editor(private val instrument: AxeFx3Instrument) : PresetEditor {
         val source = instrument.numberOf(from)
         val destination = instrument.numberOf(to)
         instrument.operation(follow = { if (it == source) destination else it }) {
-            requireOccupied(source, "move")
-            requireEmpty(destination, "move onto an occupied slot - use swap instead")
+            requireOccupied(source)
+            requireEmpty(destination)
             val image = device.readDump(source)
             withContext(NonCancellable) {
                 instrument.writeVerified(destination, image)
@@ -194,15 +193,19 @@ class AxeFx3Editor(private val instrument: AxeFx3Instrument) : PresetEditor {
         }
     }
 
-    private suspend fun requireOccupied(number: Int, what: String): String {
+    /** The preset's name, read fresh rather than trusted from the list, which may predate a change on the panel. */
+    private suspend fun requireOccupied(number: Int): String {
         val name = device.name(number)
-        if (name == AxeFx3SysEx.EMPTY_NAME) throw InstrumentException.NotSupported("$what an empty slot")
+        if (name == AxeFx3SysEx.EMPTY_NAME) {
+            throw InstrumentException.SlotStateChanged.empty(instrument.displayIdOf(number))
+        }
         return name
     }
 
-    /** Read fresh rather than trusted from the listing, which may predate a change on the panel. */
-    private suspend fun requireEmpty(number: Int, what: String) {
-        if (device.name(number) != AxeFx3SysEx.EMPTY_NAME) throw InstrumentException.NotSupported(what)
+    private suspend fun requireEmpty(number: Int) {
+        if (device.name(number) != AxeFx3SysEx.EMPTY_NAME) {
+            throw InstrumentException.SlotStateChanged.occupied(instrument.displayIdOf(number))
+        }
     }
 
     companion object {

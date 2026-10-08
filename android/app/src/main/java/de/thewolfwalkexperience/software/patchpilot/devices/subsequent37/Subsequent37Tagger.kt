@@ -59,7 +59,7 @@ class Subsequent37Tagger(private val instrument: Subsequent37Instrument) : Prese
         val number = instrument.numberOf(address)
         instrument.operation {
             val current = device.readProgram(number)
-            if (current.isEmpty) throw InstrumentException.NotSupported("set the category of an empty slot")
+            if (current.isEmpty) throw InstrumentException.SlotStateChanged.empty(instrument.displayIdOf(number))
             if (current.category == value) return@operation
             device.writeVerified(number, current.withCategory(value), instrument.displayIdOf(number))
         }

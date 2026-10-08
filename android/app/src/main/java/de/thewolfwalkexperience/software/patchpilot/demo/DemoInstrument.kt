@@ -36,16 +36,17 @@ import kotlinx.coroutines.flow.flow
  */
 class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, DeviceReporter {
 
-    private val library = DemoLibrary(
-        NAMES,
-        slotsPerBank = SLOTS_PER_BANK,
-        categoryByName = DemoCategories.BY_PRESET,
-    )
-
     override val layout: SlotLayout = SlotLayout.uniform(
         bankCount = BANK_COUNT,
         slotsPerBank = SLOTS_PER_BANK,
         format = GroupedBankAddressFormat(groupsPerBank = GROUPS_PER_BANK, slotsPerGroup = SLOTS_PER_GROUP),
+    )
+
+    private val library = DemoLibrary(
+        NAMES,
+        slotsPerBank = SLOTS_PER_BANK,
+        format = layout.format,
+        categoryByName = DemoCategories.BY_PRESET,
     )
 
     override val identity = InstrumentIdentity(

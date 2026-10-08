@@ -1327,7 +1327,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         /** The instrument's "file exists" status, answered by a copy onto an occupied slot. */
         const val STATUS_FILE_EXISTS = 4
 
-        /** "Not found": a fetch of an empty slot inside the area - see [readProgram]. */
+        /** "Not found": an empty slot, answered by a fetch inside the area ([readProgram]) and by a swap. */
         const val STATUS_NOT_FOUND = 1
 
         // Upper bounds for detectRootCategoryTrailerLen's search, far above anything real

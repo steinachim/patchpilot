@@ -88,9 +88,12 @@ class NordFailureMappingTest {
         assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
     }
 
-    /** Status 4 is the one code with a known meaning - "file exists"; see `docs/PROTOCOLS.md`, sub-opcode 22/23. */
+    /**
+     * Status 4 ("file exists"; `docs/PROTOCOLS.md`, sub-opcode 22/23) means the list is out of
+     * date, which is what the user is told. The code survives in the cause, for the log.
+     */
     @Test
-    fun `copying onto an occupied slot reports status 4`() = runTest {
+    fun `copying onto an occupied slot asks for a refresh`() = runTest {
         val instrument = instrument(
             listOf(
                 1 to rootList(),
@@ -99,19 +102,34 @@ class NordFailureMappingTest {
                 7 to ByteArray(0),
             ),
         )
-        val failure = assertThrows(InstrumentException.DeviceRejected::class.java) {
+        val failure = assertThrows(InstrumentException.SlotStateChanged::class.java) {
             kotlinx.coroutines.runBlocking {
                 instrument.copyProgram(SlotAddress(0, 0), SlotAddress(0, 1))
             }
         }
-        assertEquals(NordDevice.STATUS_FILE_EXISTS, failure.status)
-        // The status survives for the log; what the *user* is shown has to be the condition, not
-        // the code. "(status 4)" says something went wrong without saying what or what to do.
-        assertEquals(
-            "Couldn't copy a preset: the instrument says that slot already holds one, though the " +
-                "listing shows it as empty. Refresh the listing.",
-            failure.message,
+        assertEquals(NordDevice.STATUS_FILE_EXISTS, (failure.cause as NordStatusException).status)
+        assertTrue(failure.message!!, failure.message!!.contains("holds a preset"))
+        assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
+    }
+
+    /** A swap needs two presets; status 1 says one slot is empty, though not which. */
+    @Test
+    fun `swapping with an empty slot asks for a refresh`() = runTest {
+        val instrument = instrument(
+            listOf(
+                1 to rootList(),
+                5 to ByteArray(0),
+                27 to uint32BE(NordDevice.STATUS_NOT_FOUND),
+                7 to ByteArray(0),
+            ),
         )
+        val failure = assertThrows(InstrumentException.SlotStateChanged::class.java) {
+            kotlinx.coroutines.runBlocking {
+                instrument.swap(SlotAddress(0, 0), SlotAddress(0, 1))
+            }
+        }
+        assertEquals(NordDevice.STATUS_NOT_FOUND, (failure.cause as NordStatusException).status)
+        assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
     }
 
     /**

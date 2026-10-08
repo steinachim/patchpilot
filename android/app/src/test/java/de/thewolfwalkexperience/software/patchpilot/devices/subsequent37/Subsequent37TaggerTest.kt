@@ -81,7 +81,7 @@ class Subsequent37TaggerTest {
         try {
             tagger.setCategories(address(Subsequent37Fixtures.emptyPrograms(1).single()), listOf(CategoryRef(vox)))
             fail("an empty slot was given a category")
-        } catch (expected: InstrumentException.NotSupported) {
+        } catch (expected: InstrumentException.SlotStateChanged) {
         }
         assertTrue(fake.writes.isEmpty())
     }
