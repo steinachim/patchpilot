@@ -7,6 +7,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
 import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
+import de.thewolfwalkexperience.software.patchpilot.core.ReportIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import kotlin.time.TimeSource
 import kotlinx.coroutines.sync.withLock
@@ -56,11 +57,7 @@ class Subsequent37Reporter(
 
         val report = Subsequent37Report(
             note = "Read-only report generated from the connected instrument. Nothing was written or selected.",
-            identity = Subsequent37ReportIdentity(
-                name = instrument.identity.name,
-                firmwareVersion = instrument.identity.firmwareVersion,
-                descriptorId = instrument.identity.descriptorId,
-            ),
+            identity = ReportIdentity.of(instrument.identity),
             pingReplyHex = pingHex,
             identityReplyHex = identity?.toHex().orEmpty(),
             identityFirmware = identity?.let { Subsequent37SysEx.decodeFirmware(it) },
@@ -99,13 +96,6 @@ class Subsequent37Reporter(
     private class TimedRead(val raw: ByteArray, val summary: Subsequent37ProgramReadReport)
 }
 
-@Serializable
-data class Subsequent37ReportIdentity(
-    val name: String,
-    val firmwareVersion: String,
-    val descriptorId: String,
-)
-
 /** One timed `06 01` read, with the settings pair sent first. */
 @Serializable
 data class Subsequent37ProgramReadReport(
@@ -121,7 +111,7 @@ data class Subsequent37ProgramReadReport(
 @Serializable
 data class Subsequent37Report(
     val note: String,
-    val identity: Subsequent37ReportIdentity,
+    val identity: ReportIdentity,
     val pingReplyHex: String,
     val identityReplyHex: String,
     /** What the app reads from the Identity Reply; the panel shows two versions, M and P. */

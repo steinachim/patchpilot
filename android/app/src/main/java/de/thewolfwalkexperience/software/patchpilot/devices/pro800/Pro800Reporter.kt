@@ -8,6 +8,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
 import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
+import de.thewolfwalkexperience.software.patchpilot.core.ReportIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
@@ -29,7 +30,7 @@ class Pro800Reporter(
      * spliced on a shared port is retried or refused rather than counted.
      */
     private val readReply: suspend (SlotAddress) -> ByteArray,
-    private val identity: () -> Pro800ReportIdentity,
+    private val identity: () -> ReportIdentity,
 ) : DeviceReporter {
 
     override fun suggestedFilename() = "behringer_pro800"
@@ -121,14 +122,6 @@ class Pro800Reporter(
     ): ByteArray = exchange.exchange(request, what, matches = matches)
 }
 
-/** Who answered, as the report records it. */
-@Serializable
-data class Pro800ReportIdentity(
-    val name: String,
-    val firmwareVersion: String,
-    val descriptorId: String,
-)
-
 /** One address, reduced to what the aggregates need; nothing here identifies the preset. */
 private data class Pro800SlotReport(
     val empty: Boolean,
@@ -141,7 +134,7 @@ private data class Pro800SlotReport(
 @Serializable
 data class Pro800Report(
     val note: String,
-    val identity: Pro800ReportIdentity,
+    val identity: ReportIdentity,
     val deviceNameReplyHex: String,
     val firmwareReplyHex: String,
     val type02ReplyHex: String,

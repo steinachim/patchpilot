@@ -18,6 +18,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
+import de.thewolfwalkexperience.software.patchpilot.core.ReportIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
@@ -82,7 +83,7 @@ class Pro800Instrument(
     override val tagger: PresetTagger? = null
 
     override val report: DeviceReporter = Pro800Reporter(exchange, layout, ::readReply) {
-        Pro800ReportIdentity(deviceName, firmware, descriptorId)
+        ReportIdentity.of(identity)
     }
 
     /** Reads the instrument's name and firmware version; neither is a prerequisite for anything below. */

@@ -7,6 +7,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
 import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
+import de.thewolfwalkexperience.software.patchpilot.core.ReportIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import kotlin.time.ComparableTimeMark
 import kotlin.time.TimeSource
@@ -74,11 +75,7 @@ class AxeFx3Reporter(
 
         val report = AxeFx3Report(
             note = "Read-only report generated from the connected instrument. Nothing was written or loaded.",
-            identity = AxeFx3ReportIdentity(
-                name = instrument.identity.name,
-                firmwareVersion = instrument.identity.firmwareVersion,
-                descriptorId = instrument.identity.descriptorId,
-            ),
+            identity = ReportIdentity.of(instrument.identity),
             firmwareReplyHex = firmwareHex,
             capabilitiesReplyHex = capabilitiesHex,
             capabilities = instrument.capabilities,
@@ -126,14 +123,6 @@ class AxeFx3Reporter(
     private class TimedRead(val raw: ByteArray, val summary: AxeFx3DumpReadReport)
 }
 
-/** Who answered, as the report records it. */
-@Serializable
-data class AxeFx3ReportIdentity(
-    val name: String,
-    val firmwareVersion: String,
-    val descriptorId: String,
-)
-
 /** One timed dump read: sizes and timings, nothing of the preset itself. */
 @Serializable
 data class AxeFx3DumpReadReport(
@@ -151,7 +140,7 @@ data class AxeFx3DumpReadReport(
 @Serializable
 data class AxeFx3Report(
     val note: String,
-    val identity: AxeFx3ReportIdentity,
+    val identity: ReportIdentity,
     val firmwareReplyHex: String,
     /** The model record; its fifth value is the preset count, the other four are not decoded. */
     val capabilitiesReplyHex: String,
