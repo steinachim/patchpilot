@@ -790,18 +790,26 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
     /**
      * The program at ([bank], [item]), or null where the slot is empty: one 30/31 fetch at its
-     * address inside the `Program` lock, rather than a walk of the whole category. Status 0 is the
-     * record and [STATUS_NOT_FOUND] an empty slot; an edit shows in the next fetch, a slot it
-     * vacated included (measured on a Stage 2 EX, firmware 3.00). The status is read first, since
-     * an empty slot's reply carries the previous record's bytes.
+     * address inside the `Program` lock, rather than a walk of the whole category. An edit shows
+     * in the next fetch, a slot it vacated included (measured on a Stage 2 EX, firmware 3.00).
+     */
+    suspend fun readProgram(bank: Int, item: Int): NamedItem? {
+        val record = withProgramCategory { fetchItem(bank, item) }
+        return programFromFetch(record, bank, item)
+    }
+
+    private suspend fun fetchItem(bank: Int, item: Int): ByteArray =
+        fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(bank) + uint32BE(item)).payload
+
+    /**
+     * What a 30/31 fetch at ([bank], [item]) answered: status 0 is the record, checked to be that
+     * slot's, and [STATUS_NOT_FOUND] an empty slot. The status is read first, since an empty
+     * slot's reply carries the previous record's bytes, name included.
      *
      * Any other status falls back to the walk, which answers the same question on every model:
      * the Grand's answers to a fetch by address are unmeasured.
      */
-    suspend fun readProgram(bank: Int, item: Int): NamedItem? {
-        val record = withProgramCategory {
-            fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(bank) + uint32BE(item)).payload
-        }
+    private suspend fun programFromFetch(record: ByteArray, bank: Int, item: Int): NamedItem? {
         val status = if (record.size >= ItemRecord.ITEM + 4) readUInt32BE(record, ItemRecord.STATUS) else null
         when (status) {
             0 -> {
@@ -919,16 +927,21 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * Strings" -> "Synth Strings 2"), so the name is read back off the destination's record and
      * returned. Status 4 ("file exists") is the occupied-destination refusal.
      */
-    suspend fun copyProgram(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int): String = withProgramCategory {
-        val payload = fileTransfer(
-            FileTransferSubOp.COPY_PROGRAM,
-            uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
-        ).payload
-        requireTransferEcho("copy-program", payload, srcBank, srcItem, dstBank, dstItem)
-        val record = fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(dstBank) + uint32BE(dstItem)).payload
-        val newName = parseItemName(record)
-        reloadPresetForDisplay(dstBank, dstItem)
-        newName
+    suspend fun copyProgram(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int): String {
+        val record = withProgramCategory {
+            val payload = fileTransfer(
+                FileTransferSubOp.COPY_PROGRAM,
+                uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
+            ).payload
+            requireTransferEcho("copy-program", payload, srcBank, srcItem, dstBank, dstItem)
+            fetchItem(dstBank, dstItem).also { reloadPresetForDisplay(dstBank, dstItem) }
+        }
+        val copy = programFromFetch(record, dstBank, dstItem)
+            ?: throw NordProtocolException(
+                "Copied to ${slotLabel(dstBank, dstItem)}, but the instrument reports that slot as " +
+                    "empty. Refresh the list to see what it holds.",
+            )
+        return copy.name
     }
 
     /**

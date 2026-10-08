@@ -40,6 +40,7 @@
 - A Behringer Pro-800 that refuses to load a preset now says so, instead of the app reporting the preset as selected.
 - When a preset was saved or deleted on the instrument since the list was read, an edit that finds the slot changed now names the slot and asks for a refresh, instead of saying the instrument cannot do it.
 - A Behringer Pro-800 move that copies the preset but cannot empty its old slot now says the preset is in both slots, as the other instruments do.
+- On a Nord, a copy is no longer reported under another preset's name when the instrument's answer about the new copy is not the copy's own record.
 
 ## 1.1
 

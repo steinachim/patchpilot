@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -988,6 +989,25 @@ class NordDeviceProtocolTest {
         assertTrue((uint32BE(7) + uint32BE(23) + uint32BE(8) + uint32BE(12)).contentEquals(copy.payload))
     }
 
+    /** A fetch of an empty slot carries the previous record's name, which is not the copy's. */
+    @Test
+    fun `copyProgram does not report the name a not-found fetch carries`() = runTest {
+        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val responses = listOf(
+            1 to rootList,
+            5 to ByteArray(0),
+            23 to (uint32BE(0) + uint32BE(7) + uint32BE(23) + uint32BE(8) + uint32BE(12)),
+            31 to itemRecordPayload(8, 12, "Previous Record", status = NordDevice.STATUS_NOT_FOUND),
+            48 to (uint32BE(0) + uint32BE(8) + uint32BE(12)),
+            7 to ByteArray(0),
+        )
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        val failure = thrownBy<NordProtocolException> { device.copyProgram(7, 23, 8, 12) }
+        assertFalse(failure.message!!, failure.message!!.contains("Previous Record"))
+        transport.assertAllConsumed()
+    }
+
     /**
      * Status 4 is the instrument's "file exists". The code travels to `NordInstrument`, which
      * names the occupied slot to the user (`NordFailureMappingTest`).
@@ -1029,9 +1049,10 @@ class NordDeviceProtocolTest {
      * A sub-opcode 30/31 item record carrying [name]. Only the fields NordDevice.parseItemName
      * reads are filled: the length prefix at offset 32 and the name from 36.
      */
-    private fun itemRecordPayload(bank: Int, item: Int, name: String): ByteArray {
+    private fun itemRecordPayload(bank: Int, item: Int, name: String, status: Int = 0): ByteArray {
         val nameBytes = name.toByteArray(Charsets.US_ASCII)
         val record = ByteArray(36)
+        uint32BE(status).copyInto(record, 0)
         uint32BE(bank).copyInto(record, 4)
         uint32BE(item).copyInto(record, 8)
         uint32BE(nameBytes.size).copyInto(record, 32)
