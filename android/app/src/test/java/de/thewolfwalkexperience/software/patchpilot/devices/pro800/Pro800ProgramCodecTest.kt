@@ -92,11 +92,10 @@ class Pro800ProgramCodecTest {
     }
 
     @Test
-    fun `values are little-endian and can be sign-extended`() {
+    fun `values are little-endian and unsigned`() {
         val dense = byteArrayOf(0x34, 0x12, 0xFF.toByte(), 0xFF.toByte())
         assertEquals(0x1234, Pro800ProgramCodec.readValue(dense, 0, 2))
         assertEquals(0xFFFF, Pro800ProgramCodec.readValue(dense, 2, 2))
-        assertEquals(-1, Pro800ProgramCodec.readValue(dense, 2, 2, signed = true))
     }
 
     @Test

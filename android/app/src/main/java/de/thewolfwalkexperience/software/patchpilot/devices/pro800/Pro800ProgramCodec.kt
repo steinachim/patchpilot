@@ -103,8 +103,8 @@ object Pro800ProgramCodec {
         return patched
     }
 
-    /** [byteCount] little-endian bytes at [denseOffset], optionally sign-extended. */
-    fun readValue(dense: ByteArray, denseOffset: Int, byteCount: Int, signed: Boolean = false): Int {
+    /** [byteCount] little-endian bytes at [denseOffset], unsigned. */
+    fun readValue(dense: ByteArray, denseOffset: Int, byteCount: Int): Int {
         require(byteCount in 1..4) { "only 1..4 byte values are defined, asked for $byteCount" }
         require(denseOffset >= 0 && denseOffset + byteCount <= dense.size) {
             "value at $denseOffset..${denseOffset + byteCount - 1} runs past a ${dense.size}-byte record"
@@ -112,10 +112,6 @@ object Pro800ProgramCodec {
         var value = 0
         for (i in 0 until byteCount) {
             value = value or ((dense[denseOffset + i].toInt() and 0xFF) shl (i * 8))
-        }
-        if (signed) {
-            val signBit = 1 shl (byteCount * 8 - 1)
-            if (value and signBit != 0) value = value or (-1 shl (byteCount * 8))
         }
         return value
     }
