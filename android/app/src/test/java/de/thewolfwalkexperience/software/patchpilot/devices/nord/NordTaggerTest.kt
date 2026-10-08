@@ -5,6 +5,8 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,26 +41,9 @@ class NordTaggerTest {
 
     private val categories = NordCategories.resolve(profile, master)!!
 
-    private fun uint32BE(value: Int) = byteArrayOf(
-        (value ushr 24).toByte(),
-        (value ushr 16).toByte(),
-        (value ushr 8).toByte(),
-        value.toByte(),
-    )
-
     private fun readUInt32BE(b: ByteArray, off: Int): Int =
         ((b[off].toInt() and 0xFF) shl 24) or ((b[off + 1].toInt() and 0xFF) shl 16) or
             ((b[off + 2].toInt() and 0xFF) shl 8) or (b[off + 3].toInt() and 0xFF)
-
-    /** The sub-opcode 1 reply, with `Program` at index 1 - what getProgramCategoryIndex reads. */
-    private fun rootList(): ByteArray {
-        val names = listOf("Piano", "Program", "Settings")
-        var out = uint32BE(0) + byteArrayOf(names.size.toByte())
-        for (name in names) {
-            out += uint32BE(name.length) + name.toByteArray(Charsets.US_ASCII) + ByteArray(29)
-        }
-        return out
-    }
 
     // ---- The wire ----
 
@@ -66,7 +51,7 @@ class NordTaggerTest {
     fun `setPresetCategory sends sub-op 51 with bank, item and id`() = runTest {
         val transport = ReplayTransport(
             listOf(
-                1 to rootList(), // ROOT_CATEGORY_LIST, via getProgramCategoryIndex
+                1 to rootListPayload(), // ROOT_CATEGORY_LIST, via getProgramCategoryIndex
                 5 to ByteArray(0), // SELECT_CATEGORY - locks the instrument
                 52 to (uint32BE(0) + uint32BE(1) + uint32BE(11)), // SET_CATEGORY echo
                 48 to (uint32BE(0) + uint32BE(1) + uint32BE(11)), // the display re-select
@@ -93,7 +78,7 @@ class NordTaggerTest {
     fun `the write is bracketed by the category select and the unlock`() = runTest {
         val transport = ReplayTransport(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 52 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
                 48 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
@@ -120,7 +105,7 @@ class NordTaggerTest {
     fun `a mismatched echo fails the write but still unlocks`() = runTest {
         val transport = ReplayTransport(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 52 to (uint32BE(0) + uint32BE(1) + uint32BE(12)), // wrong item echoed back
                 7 to ByteArray(0),
@@ -139,7 +124,7 @@ class NordTaggerTest {
     fun `a non-zero status fails the write`() = runTest {
         val transport = ReplayTransport(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 52 to (uint32BE(2) + uint32BE(1) + uint32BE(11)), // status 2 = refused
                 7 to ByteArray(0),
@@ -201,7 +186,7 @@ class NordTaggerTest {
 
         val transport = ReplayTransport(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 52 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
                 48 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),

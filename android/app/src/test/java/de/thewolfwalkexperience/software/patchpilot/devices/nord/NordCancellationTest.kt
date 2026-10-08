@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -174,25 +175,5 @@ class NordCancellationTest {
             replay.sentRequests.last().subOp,
         )
         replay.assertAllConsumed()
-    }
-
-    /** A sub-opcode 0/1 root category list carrying [names], each with a 29-byte trailer (protocol version 10). */
-    private fun rootListPayload(names: List<String>): ByteArray {
-        val out = mutableListOf<Byte>()
-        repeat(4) { out += 0.toByte() }
-        out += names.size.toByte()
-        for (name in names) {
-            val bytes = name.toByteArray(Charsets.US_ASCII)
-            out +=
-                listOf(
-                    (bytes.size ushr 24).toByte(),
-                    (bytes.size ushr 16).toByte(),
-                    (bytes.size ushr 8).toByte(),
-                    bytes.size.toByte(),
-                )
-            out += bytes.toList()
-            out += List(29) { 0.toByte() }
-        }
-        return out.toByteArray()
     }
 }

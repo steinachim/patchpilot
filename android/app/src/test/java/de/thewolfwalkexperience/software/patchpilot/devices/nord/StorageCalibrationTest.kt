@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
 import kotlin.random.Random
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -262,30 +263,6 @@ class StorageCalibrationTest {
     }
 
     // ---- The area walk, end to end over a replayed instrument ----
-
-    /**
-     * A sub-opcode 0/1 payload listing [names]. [units], if given, is one allocation unit per
-     * name to write into the first word of its trailer.
-     * Left out, every trailer is zeros, i.e. "states no unit".
-     */
-    private fun rootListPayload(
-        names: List<String>,
-        trailerLen: Int = 29,
-        units: List<Int>? = null,
-    ): ByteArray {
-        val body = names.flatMapIndexed { i, name ->
-            val bytes = name.toByteArray(Charsets.US_ASCII)
-            val unit = units?.getOrNull(i)
-            val trailer = if (unit == null) {
-                List(trailerLen) { 0.toByte() }
-            } else {
-                listOf(unit ushr 24, unit ushr 16, unit ushr 8, unit).map { it.toByte() } +
-                    List(trailerLen - 4) { 0.toByte() }
-            }
-            listOf(0, 0, 0, bytes.size).map { it.toByte() } + bytes.toList() + trailer
-        }
-        return (List(4) { 0.toByte() } + names.size.toByte() + body).toByteArray()
-    }
 
     private fun countPayload(itemCount: Int, free: Int, used: Int, reclaimable: Int, unitCode: Int): ByteArray {
         val out = ByteArray(24)

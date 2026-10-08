@@ -5,6 +5,8 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbReadTimeoutException
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferException
 import kotlinx.coroutines.test.runTest
@@ -23,29 +25,6 @@ import org.junit.Test
  */
 class NordFailureMappingTest {
 
-    // Same two builders NordDeviceProtocolTest uses; private there, so restated rather than
-    // widened - these tests are about the adapter, not about that class's fixtures.
-    private fun uint32BE(value: Int): ByteArray = byteArrayOf(
-        (value ushr 24).toByte(),
-        (value ushr 16).toByte(),
-        (value ushr 8).toByte(),
-        value.toByte(),
-    )
-
-    private fun rootList(trailerLen: Int = 29): ByteArray {
-        val names = listOf("Piano", "Program", "Settings")
-        val out = mutableListOf<Byte>()
-        repeat(4) { out += 0.toByte() }
-        out += names.size.toByte()
-        for (name in names) {
-            val nameBytes = name.toByteArray(Charsets.US_ASCII)
-            out += uint32BE(nameBytes.size).toList()
-            out += nameBytes.toList()
-            out += List(trailerLen) { 0.toByte() }
-        }
-        return out.toByteArray()
-    }
-
     private fun instrument(responses: List<Pair<Int, ByteArray>>) =
         NordInstrument(NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE))
 
@@ -54,7 +33,7 @@ class NordFailureMappingTest {
     fun `a refused delete becomes DeviceRejected carrying the instrument's own status`() = runTest {
         val instrument = instrument(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0), // SELECT_CATEGORY
                 21 to (uint32BE(9) + uint32BE(8) + uint32BE(12)), // status 9
                 7 to ByteArray(0), // unlock still runs
@@ -76,7 +55,7 @@ class NordFailureMappingTest {
     fun `an echo for the wrong slot becomes ProtocolDesync`() = runTest {
         val instrument = instrument(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 21 to (uint32BE(0) + uint32BE(8) + uint32BE(13)), // status 0, wrong item
                 7 to ByteArray(0),
@@ -96,7 +75,7 @@ class NordFailureMappingTest {
     fun `copying onto an occupied slot asks for a refresh`() = runTest {
         val instrument = instrument(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 23 to uint32BE(NordDevice.STATUS_FILE_EXISTS),
                 7 to ByteArray(0),
@@ -117,7 +96,7 @@ class NordFailureMappingTest {
     fun `swapping with an empty slot asks for a refresh`() = runTest {
         val instrument = instrument(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 27 to uint32BE(NordDevice.STATUS_NOT_FOUND),
                 7 to ByteArray(0),
@@ -140,7 +119,7 @@ class NordFailureMappingTest {
     fun `a status the protocol does not name keeps the generic wording`() = runTest {
         val instrument = instrument(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 21 to (uint32BE(9) + uint32BE(8) + uint32BE(12)),
                 7 to ByteArray(0),
@@ -239,7 +218,7 @@ class NordFailureMappingTest {
     fun `an unparseable reply becomes ProtocolDesync`() = runTest {
         val instrument = instrument(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 21 to uint32BE(0), // too short for the (status, bank, item) triple
                 7 to ByteArray(0),

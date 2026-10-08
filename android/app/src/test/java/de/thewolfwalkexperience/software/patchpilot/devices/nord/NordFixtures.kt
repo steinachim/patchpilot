@@ -10,6 +10,33 @@ import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
  * Used to keep the decoding byte-for-byte compatible with real device output.
  */
 object NordFixtures {
+
+    /** A big-endian 32-bit word, as every Nord payload field is. */
+    fun uint32BE(value: Int): ByteArray = byteArrayOf(
+        (value ushr 24).toByte(),
+        (value ushr 16).toByte(),
+        (value ushr 8).toByte(),
+        value.toByte(),
+    )
+
+    /**
+     * A root category list reply (sub-opcode 1): four unused bytes, the count, then each name
+     * with its length and a [trailerLen]-byte trailer, which opens with that category's word from
+     * [units] where one is given.
+     */
+    fun rootListPayload(
+        names: List<String> = listOf("Piano", "Program", "Settings"),
+        trailerLen: Int = 29,
+        units: List<Int>? = null,
+    ): ByteArray {
+        val body = names.flatMapIndexed { i, name ->
+            val bytes = name.toByteArray(Charsets.US_ASCII)
+            val trailer = units?.getOrNull(i)?.let { uint32BE(it) + ByteArray(trailerLen - 4) } ?: ByteArray(trailerLen)
+            (uint32BE(bytes.size) + bytes + trailer).toList()
+        }
+        return ByteArray(4) + names.size.toByte() + body
+    }
+
     /**
      * The file-transfer protocol version each instrument reports. Not part of any profile -
      * the instrument is asked at connect time - so tests that bypass connect() state it here.

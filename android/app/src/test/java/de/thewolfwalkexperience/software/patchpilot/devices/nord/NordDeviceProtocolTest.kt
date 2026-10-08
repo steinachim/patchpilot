@@ -4,6 +4,8 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -22,26 +24,6 @@ import org.junit.Test
  * synthetic response sequences for operations the fixture subset doesn't cover end-to-end.
  */
 class NordDeviceProtocolTest {
-
-    private fun buildRootCategoryListPayload(names: List<String>, trailerLen: Int): ByteArray {
-        val out = mutableListOf<Byte>()
-        repeat(4) { out += 0.toByte() } // unused leading 4 bytes (real devices vary these)
-        out += names.size.toByte()
-        for (name in names) {
-            val nameBytes = name.toByteArray(Charsets.US_ASCII)
-            out += uint32BE(nameBytes.size).toList()
-            out += nameBytes.toList()
-            out += List(trailerLen) { 0.toByte() }
-        }
-        return out.toByteArray()
-    }
-
-    private fun uint32BE(value: Int): ByteArray = byteArrayOf(
-        (value ushr 24).toByte(),
-        (value ushr 16).toByte(),
-        (value ushr 8).toByte(),
-        value.toByte(),
-    )
 
     /**
      * A sub-opcode 2/3 (GET_CATEGORY_CHILD) reply payload for [children], each a
@@ -534,7 +516,7 @@ class NordDeviceProtocolTest {
     // ---- readProgram: one slot by address ----
 
     private val programRootList get() =
-        buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
 
     @Test
     fun `readProgram fetches the slot by address inside the Program lock`() = runTest {
@@ -808,7 +790,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `selectPreset succeeds when the device echoes the request`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList, // ROOT_CATEGORY_LIST (via getProgramCategoryIndex)
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -823,7 +805,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `selectPreset throws when the echoed response does not match, but still unlocks`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
@@ -839,7 +821,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `swapPrograms succeeds on status zero`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -861,7 +843,7 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `deleteProgram uses sub-op 20 and accepts the echoed request`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -888,7 +870,7 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `deleteProgram rejects an echo for a different slot`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
@@ -906,7 +888,7 @@ class NordDeviceProtocolTest {
     /** A non-zero status is a refusal, whatever the echo says. */
     @Test
     fun `deleteProgram rejects a non-zero status`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
@@ -926,7 +908,7 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `moveProgram uses sub-op 24 and accepts the echoed request`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -947,7 +929,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `moveProgram rejects a mismatched echo`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -968,7 +950,7 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `copyProgram uses sub-op 22 and returns the name the instrument chose`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -991,7 +973,7 @@ class NordDeviceProtocolTest {
     /** A fetch of an empty slot carries the previous record's name, which is not the copy's. */
     @Test
     fun `copyProgram does not report the name a not-found fetch carries`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
@@ -1013,7 +995,7 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `copyProgram refuses an occupied destination, but still unlocks`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
@@ -1030,7 +1012,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `copyProgram rejects a mismatched echo`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
@@ -1060,7 +1042,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `renamePreset succeeds when the device echoes the request`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList, // ROOT_CATEGORY_LIST (via getProgramCategoryIndex)
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -1083,7 +1065,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `renamePreset throws when the echoed response does not match, but still unlocks`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
@@ -1103,7 +1085,7 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `renamePreset succeeds when only the display refresh is not confirmed`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
