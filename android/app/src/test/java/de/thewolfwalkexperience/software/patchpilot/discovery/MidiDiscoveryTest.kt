@@ -6,6 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.discovery
 import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
 import de.thewolfwalkexperience.software.patchpilot.catalog.UsbIds
+import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
@@ -46,8 +47,6 @@ class MidiDiscoveryTest {
         }
     }
 
-    private fun hex(s: String) = s.split(' ').map { it.toInt(16).toByte() }.toByteArray()
-
     private fun descriptor(
         id: String,
         probe: String,
@@ -70,7 +69,7 @@ class MidiDiscoveryTest {
     private val pro800 = descriptor("pro800", "f0 00 20 32 00 01 24 00 06 f7", "f0 00 20 32 00 01 24 00 07")
     private val axeFx3 = descriptor("axefx3", "f0 00 01 74 10 08 1d f7", "f0 00 01 74 10 08")
 
-    private val pro800Reply = hex("f0 00 20 32 00 01 24 00 07 50 52 4f 2d 38 30 30 f7")
+    private val pro800Reply = "f0 00 20 32 00 01 24 00 07 50 52 4f 2d 38 30 30 f7".hexToBytes()
 
     private fun answering(vararg replies: ByteArray) = FakeMidiTransport { replies.toList() }
 
@@ -104,8 +103,8 @@ class MidiDiscoveryTest {
 
     @Test
     fun `a reply in pieces after unrelated traffic is still an answer`() = runTest {
-        val stray = hex("f0 7e 7f 06 02 00 f7") // another device's identity reply
-        val clock = hex("f8")
+        val stray = "f0 7e 7f 06 02 00 f7".hexToBytes() // another device's identity reply
+        val clock = "f8".hexToBytes()
         val ports = FakePorts(listOf(FakePort("PRO 800"))) { _, _ ->
             answering(stray, clock, pro800Reply.copyOfRange(0, 5), pro800Reply.copyOfRange(5, pro800Reply.size))
         }

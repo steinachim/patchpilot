@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
+import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
 import kotlin.random.Random
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -175,7 +176,7 @@ class StorageCalibrationTest {
 
     @Test
     fun `the Program child list gives the Grand's real bank layout`() {
-        val children = NordDevice.parseCategoryChildren(NordFixtures.hex(GrandChildLists.PROGRAM))
+        val children = NordDevice.parseCategoryChildren(GrandChildLists.PROGRAM.hexToBytes())
 
         assertEquals(16, children.size)
         assertEquals("Bank A", children.first().name)
@@ -190,7 +191,7 @@ class StorageCalibrationTest {
     fun `a category's children are not always banks`() {
         // Piano lists named piano *types*, not banks - which is why the decode reads a
         // length-prefixed name rather than assuming "Bank X".
-        val children = NordDevice.parseCategoryChildren(NordFixtures.hex(GrandChildLists.PIANO))
+        val children = NordDevice.parseCategoryChildren(GrandChildLists.PIANO.hexToBytes())
 
         assertEquals(
             listOf("Grand", "Upright", "Electric", "Clav", "Digital", "Misc"),
@@ -204,19 +205,19 @@ class StorageCalibrationTest {
         // The evidence for reading it as a slot capacity: on this instrument Live holds 5 items
         // and Settings 1, and those are exactly the figures. (The Stage 2 EX's figures don't
         // line up under that reading; on a Grand they do.)
-        assertEquals(5, NordDevice.parseCategoryChildren(NordFixtures.hex(GrandChildLists.LIVE)).single().capacity)
-        assertEquals(1, NordDevice.parseCategoryChildren(NordFixtures.hex(GrandChildLists.SETTINGS)).single().capacity)
+        assertEquals(5, NordDevice.parseCategoryChildren(GrandChildLists.LIVE.hexToBytes()).single().capacity)
+        assertEquals(1, NordDevice.parseCategoryChildren(GrandChildLists.SETTINGS.hexToBytes()).single().capacity)
     }
 
     @Test
     fun `a child list that doesn't walk cleanly throws rather than guessing`() {
         // A wrong parse here would hand deriveBankLayout a wrong addressing range, so the
         // leftover-bytes check is load-bearing rather than defensive.
-        val truncated = NordFixtures.hex(GrandChildLists.LIVE).copyOfRange(0, 20)
+        val truncated = GrandChildLists.LIVE.hexToBytes().copyOfRange(0, 20)
         assertThrows(IllegalArgumentException::class.java) {
             NordDevice.parseCategoryChildren(truncated)
         }
-        val trailingJunk = NordFixtures.hex(GrandChildLists.LIVE) + byteArrayOf(0, 0)
+        val trailingJunk = GrandChildLists.LIVE.hexToBytes() + byteArrayOf(0, 0)
         assertThrows(IllegalArgumentException::class.java) {
             NordDevice.parseCategoryChildren(trailingJunk)
         }
@@ -231,7 +232,7 @@ class StorageCalibrationTest {
         // already read off the instrument. Without one, every request below would fail before it
         // was sent.
         val device = NordFixtures.device(
-            ReplayTransport(listOf(1 to rootList, 3 to NordFixtures.hex(GrandChildLists.PROGRAM))),
+            ReplayTransport(listOf(1 to rootList, 3 to GrandChildLists.PROGRAM.hexToBytes())),
             DeviceProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
         ).apply { detectedProtocolVersionFileTransfer = NordFixtures.GRAND_PROTOCOL_VERSION }
 

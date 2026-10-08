@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.transport
 
+import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsFixtures
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,9 +27,6 @@ import org.junit.Test
  */
 class UsbMidiBulkTransportTest {
 
-    private fun hex(s: String) = s.split(" ").filter { it.isNotEmpty() }
-        .map { it.toInt(16).toByte() }.toByteArray()
-
     /**
      * The Universal Device Inquiry, packed on cable 3 - the exact bytes a Motif XS answers when
      * written to the bulk OUT endpoint.
@@ -39,9 +37,9 @@ class UsbMidiBulkTransportTest {
      */
     @Test
     fun `an inquiry packs into the bytes the instrument answered`() {
-        val request = hex("f0 7e 00 06 01 f7")
+        val request = "f0 7e 00 06 01 f7".hexToBytes()
         assertArrayEquals(
-            hex("34 f0 7e 00 37 06 01 f7"),
+            "34 f0 7e 00 37 06 01 f7".hexToBytes(),
             UsbMidiBulkTransport.packSysEx(request, cable = 3),
         )
     }
@@ -50,20 +48,20 @@ class UsbMidiBulkTransportTest {
     @Test
     fun `the final packet's code index states how many bytes it carries`() {
         // 15 bytes: four full packets of three, then three left over -> CIN 7.
-        val reply = hex("f0 7e 7f 06 02 43 00 41 35 06 06 00 00 7f f7")
+        val reply = "f0 7e 7f 06 02 43 00 41 35 06 06 00 00 7f f7".hexToBytes()
         assertArrayEquals(
-            hex("34 f0 7e 7f 34 06 02 43 34 00 41 35 34 06 06 00 37 00 7f f7"),
+            "34 f0 7e 7f 34 06 02 43 34 00 41 35 34 06 06 00 37 00 7f f7".hexToBytes(),
             UsbMidiBulkTransport.packSysEx(reply, cable = 3),
         )
         // 7 bytes: two full packets, one left over -> CIN 5, and the packet is zero-padded.
         assertArrayEquals(
-            hex("34 f0 43 20 34 7f 03 0c 35 f7 00 00"),
-            UsbMidiBulkTransport.packSysEx(hex("f0 43 20 7f 03 0c f7"), cable = 3),
+            "34 f0 43 20 34 7f 03 0c 35 f7 00 00".hexToBytes(),
+            UsbMidiBulkTransport.packSysEx("f0 43 20 7f 03 0c f7".hexToBytes(), cable = 3),
         )
         // 8 bytes: two full packets, two left over -> CIN 6.
         assertArrayEquals(
-            hex("34 f0 43 20 34 7f 03 0c 36 0a f7 00"),
-            UsbMidiBulkTransport.packSysEx(hex("f0 43 20 7f 03 0c 0a f7"), cable = 3),
+            "34 f0 43 20 34 7f 03 0c 36 0a f7 00".hexToBytes(),
+            UsbMidiBulkTransport.packSysEx("f0 43 20 7f 03 0c 0a f7".hexToBytes(), cable = 3),
         )
     }
 
@@ -85,14 +83,14 @@ class UsbMidiBulkTransportTest {
      */
     @Test
     fun `another cable's traffic is dropped rather than spliced in`() {
-        val mixed = hex(
-            "34 f0 7e 7f 34 06 02 43 0f fe 00 00 34 00 41 35 34 06 06 00 37 00 7f f7",
-        ) + ByteArray(40) // zero padding to the 64-byte transfer
+        // Zero padding to the 64-byte transfer.
+        val mixed =
+            "34 f0 7e 7f 34 06 02 43 0f fe 00 00 34 00 41 35 34 06 06 00 37 00 7f f7".hexToBytes() + ByteArray(40)
         assertArrayEquals(
-            hex("f0 7e 7f 06 02 43 00 41 35 06 06 00 00 7f f7"),
+            "f0 7e 7f 06 02 43 00 41 35 06 06 00 00 7f f7".hexToBytes(),
             UsbMidiBulkTransport.unpackEvents(mixed, cable = 3),
         )
-        assertArrayEquals(hex("fe"), UsbMidiBulkTransport.unpackEvents(mixed, cable = 0))
+        assertArrayEquals("fe".hexToBytes(), UsbMidiBulkTransport.unpackEvents(mixed, cable = 0))
         assertEquals(0, UsbMidiBulkTransport.unpackEvents(mixed, cable = 1).size)
     }
 
@@ -100,16 +98,16 @@ class UsbMidiBulkTransportTest {
     @Test
     fun `padding and reserved code index numbers contribute nothing`() {
         assertEquals(0, UsbMidiBulkTransport.unpackEvents(ByteArray(64), cable = 0).size)
-        assertEquals(0, UsbMidiBulkTransport.unpackEvents(hex("30 01 02 03"), cable = 3).size)
-        assertEquals(0, UsbMidiBulkTransport.unpackEvents(hex("31 01 02 03"), cable = 3).size)
+        assertEquals(0, UsbMidiBulkTransport.unpackEvents("30 01 02 03".hexToBytes(), cable = 3).size)
+        assertEquals(0, UsbMidiBulkTransport.unpackEvents("31 01 02 03".hexToBytes(), cable = 3).size)
     }
 
     /** A trailing part-packet is ignored rather than read past the end of the buffer. */
     @Test
     fun `a truncated transfer does not run off the end`() {
         assertArrayEquals(
-            hex("f0 7e 00"),
-            UsbMidiBulkTransport.unpackEvents(hex("34 f0 7e 00 37 06"), cable = 3),
+            "f0 7e 00".hexToBytes(),
+            UsbMidiBulkTransport.unpackEvents("34 f0 7e 00 37 06".hexToBytes(), cable = 3),
         )
     }
 
@@ -117,7 +115,7 @@ class UsbMidiBulkTransportTest {
     @Test
     fun `sending anything but a complete message is refused`() = withTransport(FakeBulk()) { transport, bulk ->
         assertThrows(IllegalArgumentException::class.java) {
-            runBlocking { transport.send(hex("f0 7e 00 06 01")) }
+            runBlocking { transport.send("f0 7e 00 06 01".hexToBytes()) }
         }
         assertTrue(bulk.written.isEmpty())
     }
@@ -133,12 +131,12 @@ class UsbMidiBulkTransportTest {
      */
     @Test
     fun `a reply on the right cable reaches the incoming flow`() {
-        val reply = hex("f0 7e 7f 06 02 43 00 41 35 06 06 00 00 7f f7")
+        val reply = "f0 7e 7f 06 02 43 00 41 35 06 06 00 00 7f f7".hexToBytes()
         // Served on every read, so the collector cannot miss it by subscribing a moment late.
         val bulk = FakeBulk(always = UsbMidiBulkTransport.packSysEx(reply, cable = 3) + ByteArray(20))
         withTransport(bulk) { transport, _ ->
-            runBlocking { transport.send(hex("f0 7e 00 06 01 f7")) }
-            assertArrayEquals(hex("34 f0 7e 00 37 06 01 f7"), bulk.written.single())
+            runBlocking { transport.send("f0 7e 00 06 01 f7".hexToBytes()) }
+            assertArrayEquals("34 f0 7e 00 37 06 01 f7".hexToBytes(), bulk.written.single())
             runBlocking {
                 assertArrayEquals(reply, withTimeout(5_000) { transport.incoming.first() })
             }

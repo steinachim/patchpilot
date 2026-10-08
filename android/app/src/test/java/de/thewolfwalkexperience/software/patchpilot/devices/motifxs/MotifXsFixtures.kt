@@ -3,6 +3,8 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
+import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
+
 /**
  * Recorded bulk-dump byte sequences: what the instrument actually sends.
  *
@@ -76,18 +78,12 @@ object MotifXsFixtures {
     /** The Universal Device Inquiry reply. */
     const val IDENTITY_REPLY_HEX = "f07e7f060243004135060600007ff7"
 
-    val identityReply: ByteArray get() = IDENTITY_REPLY_HEX.fromHex()
+    val identityReply: ByteArray get() = IDENTITY_REPLY_HEX.hexToBytes()
 
     private fun load(name: String): ByteArray {
         val text = javaClass.classLoader!!.getResourceAsStream("motifxs/$name")
             ?.bufferedReader()?.use { it.readText() }
             ?: error("Missing fixture motifxs/$name")
-        return text.fromHex()
+        return text.hexToBytes()
     }
-}
-
-internal fun String.fromHex(): ByteArray {
-    val cleaned = filterNot { it.isWhitespace() }
-    require(cleaned.length % 2 == 0) { "hex has an odd number of digits" }
-    return ByteArray(cleaned.length / 2) { cleaned.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
 }

@@ -14,23 +14,30 @@ import org.junit.Test
 /** Every expected request is written out as hex, as sent to the instrument in the measurements `docs/PROTOCOLS.md` records. */
 class Subsequent37SysExTest {
 
-    private fun hex(text: String) = text.hexToBytes()
-
     @Test
     fun `the short requests are 13 command bytes, zero-padded`() {
-        assertArrayEquals(hex("f0 04 0c 32 00 00 00 00 00 00 00 00 00 00 00 00 f7"), Subsequent37SysEx.ping())
+        assertArrayEquals("f0 04 0c 32 00 00 00 00 00 00 00 00 00 00 00 00 f7".hexToBytes(), Subsequent37SysEx.ping())
         assertArrayEquals(
-            hex("f0 04 0c 06 03 00 00 00 00 00 00 00 00 00 00 00 f7"),
+            "f0 04 0c 06 03 00 00 00 00 00 00 00 00 00 00 00 f7".hexToBytes(),
             Subsequent37SysEx.bulkDumpRequest(),
         )
         assertArrayEquals(
-            hex("f0 04 0c 06 04 00 00 00 00 00 00 00 00 00 00 00 f7"),
+            "f0 04 0c 06 04 00 00 00 00 00 00 00 00 00 00 00 f7".hexToBytes(),
             Subsequent37SysEx.settingsRequest(),
         )
-        assertArrayEquals(hex("f0 04 0c 06 00 00 00 00 00 00 00 00 00 00 00 00 f7"), Subsequent37SysEx.settingsPair())
-        assertArrayEquals(hex("f0 04 0c 06 01 00 01 00 00 00 00 00 00 00 00 00 f7"), Subsequent37SysEx.readProgram(1))
-        assertArrayEquals(hex("f0 04 0c 06 01 01 7f 00 00 00 00 00 00 00 00 00 f7"), Subsequent37SysEx.readProgram(255))
-        assertArrayEquals(hex("f0 7e 7f 06 01 f7"), Subsequent37SysEx.IDENTITY_REQUEST)
+        assertArrayEquals(
+            "f0 04 0c 06 00 00 00 00 00 00 00 00 00 00 00 00 f7".hexToBytes(),
+            Subsequent37SysEx.settingsPair(),
+        )
+        assertArrayEquals(
+            "f0 04 0c 06 01 00 01 00 00 00 00 00 00 00 00 00 f7".hexToBytes(),
+            Subsequent37SysEx.readProgram(1),
+        )
+        assertArrayEquals(
+            "f0 04 0c 06 01 01 7f 00 00 00 00 00 00 00 00 00 f7".hexToBytes(),
+            Subsequent37SysEx.readProgram(255),
+        )
+        assertArrayEquals("f0 7e 7f 06 01 f7".hexToBytes(), Subsequent37SysEx.IDENTITY_REQUEST)
     }
 
     /** The four headers the vendor editor was captured writing: a rename, both halves of a swap, an upload. */
@@ -47,7 +54,7 @@ class Subsequent37SysExTest {
             val message = Subsequent37SysEx.writeProgram(number, payload)
             assertArrayEquals(
                 "program $number",
-                hex("f0 04 0c 05 01 $address 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01"),
+                "f0 04 0c 05 01 $address 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01".hexToBytes(),
                 message.copyOfRange(0, 23),
             )
             assertEquals(756, message.size)
@@ -73,8 +80,8 @@ class Subsequent37SysExTest {
     /** A captured selection: bank 16 / slot 13 on channel 4, sent as CC32 1 and Program Change 0x7C. */
     @Test
     fun `a selection is bank select and Program Change on the given channel`() {
-        assertArrayEquals(hex("b3 00 00 b3 20 01 c3 7c"), Subsequent37SysEx.select(channel = 3, number = 252))
-        assertArrayEquals(hex("b0 00 00 b0 20 00 c0 06"), Subsequent37SysEx.select(channel = 0, number = 6))
+        assertArrayEquals("b3 00 00 b3 20 01 c3 7c".hexToBytes(), Subsequent37SysEx.select(channel = 3, number = 252))
+        assertArrayEquals("b0 00 00 b0 20 00 c0 06".hexToBytes(), Subsequent37SysEx.select(channel = 0, number = 6))
     }
 
     @Test
@@ -105,7 +112,7 @@ class Subsequent37SysExTest {
     @Test
     fun `the Identity Reply carries firmware 1_2_0`() {
         assertEquals("1.2.0", Subsequent37SysEx.decodeFirmware(Subsequent37Fixtures.IDENTITY_REPLY))
-        assertNull(Subsequent37SysEx.decodeFirmware(hex("f0 7e 7f 06 02 43 00 41 35 06 06 00 00 7f f7")))
+        assertNull(Subsequent37SysEx.decodeFirmware("f0 7e 7f 06 02 43 00 41 35 06 06 00 00 7f f7".hexToBytes()))
     }
 
     @Test
@@ -119,9 +126,9 @@ class Subsequent37SysExTest {
 
     @Test
     fun `a record with a wrong marker or value bits does not unpack`() {
-        assertNull(Subsequent37SysEx.unpack(hex("30 00 00"), 0, 1))
-        assertNull(Subsequent37SysEx.unpack(hex("40 40 00"), 0, 1))
-        assertNull(Subsequent37SysEx.unpack(hex("40 00"), 0, 1))
+        assertNull(Subsequent37SysEx.unpack("30 00 00".hexToBytes(), 0, 1))
+        assertNull(Subsequent37SysEx.unpack("40 40 00".hexToBytes(), 0, 1))
+        assertNull(Subsequent37SysEx.unpack("40 00".hexToBytes(), 0, 1))
     }
 
     /** What the app sends must never be a reply shape or an unexplained command. */

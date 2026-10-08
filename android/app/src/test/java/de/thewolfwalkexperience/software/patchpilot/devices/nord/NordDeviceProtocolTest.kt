@@ -3,7 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.hex
+import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -1155,7 +1155,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `hex helper decodes as expected`() {
-        assertTrue(hex("00ff").contentEquals(byteArrayOf(0x00, 0xFF.toByte())))
+        assertTrue("00ff".hexToBytes().contentEquals(byteArrayOf(0x00, 0xFF.toByte())))
     }
 
     // ---- Reply framing ----
@@ -1310,7 +1310,7 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `an unusable declared length is refused rather than awaited`() = runTest {
-        val device = chunkedDevice(hex("ffffffff") + ByteArray(32))
+        val device = chunkedDevice("ffffffff".hexToBytes() + ByteArray(32))
         val caught = assertThrows(IllegalStateException::class.java) { runBlocking { device.readReply() } }
         assertTrue(caught.message!!, caught.message!!.contains("unusable length"))
     }

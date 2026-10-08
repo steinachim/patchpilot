@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
+import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -18,17 +19,14 @@ import org.junit.Test
  */
 class MotifXsEditingTest {
 
-    private fun hex(s: String) = s.split(" ").filter { it.isNotEmpty() }
-        .map { it.toInt(16).toByte() }.toByteArray()
-
     /** Selecting USER 1 - E:05. */
     @Test
     fun `a selection is the three sets the editor sent`() {
         val sets = MotifXsSysEx.selectVoice(device = 0, bankSelectLsb = 0x08, program = 0x44)
         assertEquals(3, sets.size)
-        assertArrayEquals(hex("f0 43 40 7f 03 65 00 00 3f f7"), sets[0])
-        assertArrayEquals(hex("f0 43 40 7f 03 65 00 01 08 f7"), sets[1])
-        assertArrayEquals(hex("f0 43 40 7f 03 65 00 02 44 f7"), sets[2])
+        assertArrayEquals("f0 43 40 7f 03 65 00 00 3f f7".hexToBytes(), sets[0])
+        assertArrayEquals("f0 43 40 7f 03 65 00 01 08 f7".hexToBytes(), sets[1])
+        assertArrayEquals("f0 43 40 7f 03 65 00 02 44 f7".hexToBytes(), sets[2])
     }
 
     /**
@@ -70,9 +68,9 @@ class MotifXsEditingTest {
     /** The device's echo of a selection, which is the only confirmation one gets. */
     @Test
     fun `the selection echo is recognised and a dump is not`() {
-        assertTrue(MotifXsSysEx.isSelectEcho(hex("f0 43 10 7f 0b 65 00 02 44 f7")))
+        assertTrue(MotifXsSysEx.isSelectEcho("f0 43 10 7f 0b 65 00 02 44 f7".hexToBytes()))
         // The poll's reply shares the type but not the address.
-        assertFalse(MotifXsSysEx.isSelectEcho(hex("f0 43 10 7f 0b 70 00 06 f7")))
+        assertFalse(MotifXsSysEx.isSelectEcho("f0 43 10 7f 0b 70 00 06 f7".hexToBytes()))
         assertFalse(MotifXsSysEx.isSelectEcho(MotifXsFixtures.namedVoice))
     }
 
@@ -84,8 +82,8 @@ class MotifXsEditingTest {
      */
     @Test
     fun `the bulk acknowledgement is recognised`() {
-        assertTrue(MotifXsSysEx.isAck(hex("f0 43 60 02 f7")))
-        assertFalse(MotifXsSysEx.isAck(hex("f0 43 10 7f 0b 65 00 02 44 f7")))
+        assertTrue(MotifXsSysEx.isAck("f0 43 60 02 f7".hexToBytes()))
+        assertFalse(MotifXsSysEx.isAck("f0 43 10 7f 0b 65 00 02 44 f7".hexToBytes()))
         assertFalse(MotifXsSysEx.isAck(MotifXsFixtures.drumVoice))
     }
 
@@ -133,7 +131,7 @@ class MotifXsEditingTest {
     @Test
     fun `a zero-payload dump is well formed`() {
         val marker = MotifXsSysEx.bulkDump(0, 0x11, 0x00, 0x00, ByteArray(0))
-        assertArrayEquals(hex("f0 43 00 7f 03 00 00 11 00 00 6f f7"), marker)
+        assertArrayEquals("f0 43 00 7f 03 00 00 11 00 00 6f f7".hexToBytes(), marker)
         assertEquals(MotifXsSysEx.BULK_OVERHEAD, marker.size)
         assertTrue(MotifXsSysEx.isWellFormedBulkDump(marker))
     }
