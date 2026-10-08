@@ -102,9 +102,9 @@ class AxeFx3DeviceTest {
     }
 
     @Test
-    fun `an unacknowledged store is not sent again`() = runTest {
+    fun `an unacknowledged store is not sent again, and is no error by itself`() = runTest {
         val fake = FakeAxeFx3().apply { silentStores = true }
-        assertFalse(device(fake).store(5))
+        device(fake).store(5)
         assertEquals(listOf("01/26"), fake.commands())
     }
 

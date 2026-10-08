@@ -98,17 +98,16 @@ class AxeFx3Device(private val exchange: SysExExchange) {
     /**
      * Stores the edit buffer into slot [number]: a flash write, acknowledged after about 600 ms.
      * Not re-sent on a timeout, and a missing acknowledgement is not an error by itself: every
-     * caller reads the slot back, which is the proof either way. Returns whether it was
-     * acknowledged.
+     * caller reads the slot back, which is the proof either way.
      */
-    suspend fun store(number: Int): Boolean = try {
-        exchange.exchange(AxeFx3SysEx.store(number), "storing preset $number", STORE_TIMEOUT, retries = 0) {
-            AxeFx3SysEx.isEditorAck(it, AxeFx3SysEx.SUB_STORE)
+    suspend fun store(number: Int) {
+        try {
+            exchange.exchange(AxeFx3SysEx.store(number), "storing preset $number", STORE_TIMEOUT, retries = 0) {
+                AxeFx3SysEx.isEditorAck(it, AxeFx3SysEx.SUB_STORE)
+            }
+        } catch (e: InstrumentException.Timeout) {
+            Log.w(TAG, "No acknowledgement for storing preset $number; the read-back decides")
         }
-        true
-    } catch (e: InstrumentException.Timeout) {
-        Log.w(TAG, "No acknowledgement for storing preset $number; the read-back decides")
-        false
     }
 
     /**
