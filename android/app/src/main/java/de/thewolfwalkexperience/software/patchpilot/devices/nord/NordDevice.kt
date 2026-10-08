@@ -34,6 +34,9 @@ private object StatusEcho {
     const val ITEM = 8
 }
 
+/** Where a move's or a copy's reply echoes its four request words: source bank and item, destination bank and item. */
+private val TRANSFER_ECHO = listOf(4, 8, 12, 16)
+
 /** The sub-opcode 30/31 reply: an item's metadata record, not its data. */
 private object ItemRecord {
     /** 0 for a record; otherwise the rest is the previous reply's bytes, name included. */
@@ -651,6 +654,32 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         }
     }
 
+    /**
+     * Checks a move's or a copy's reply: the status word, then the four request words echoed
+     * back. As in [requireEcho], a non-zero status is a refusal, and an echo of another request
+     * means the instrument acted on other slots.
+     */
+    private fun requireTransferEcho(
+        what: String,
+        payload: ByteArray,
+        srcBank: Int,
+        srcItem: Int,
+        dstBank: Int,
+        dstItem: Int,
+    ) {
+        val status = readUInt32BE(payload, StatusEcho.STATUS)
+        if (status != 0) throw NordStatusException(what, status, "Unexpected $what response status: $status")
+        val echo = TRANSFER_ECHO.map { readUInt32BE(payload, it) }
+        if (echo != listOf(srcBank, srcItem, dstBank, dstItem)) {
+            throw NordProtocolException(
+                "The instrument answered for ${slotLabel(echo[0], echo[1])} to " +
+                    "${slotLabel(echo[2], echo[3])} instead of ${slotLabel(srcBank, srcItem)} to " +
+                    "${slotLabel(dstBank, dstItem)}. A preset other than the chosen ones may have " +
+                    "changed. Refresh the list to see what the instrument holds.",
+            )
+        }
+    }
+
     /** [formatPresetId], or the raw numbers for an echo naming a slot outside the layout. */
     private fun slotLabel(bank: Int, item: Int): String =
         runCatching { formatPresetId(bank, item) }.getOrElse { "bank $bank, item $item" }
@@ -878,21 +907,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 FileTransferSubOp.MOVE_PROGRAM,
                 uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
             ).payload
-            val status = readUInt32BE(payload, StatusEcho.STATUS)
-            if (status != 0) {
-                throw NordStatusException(
-                    "move-program",
-                    status,
-                    "Unexpected move-program response status: $status",
-                )
-            }
-            val echo = listOf(4, 8, 12, 16).map { readUInt32BE(payload, it) }
-            if (echo != listOf(srcBank, srcItem, dstBank, dstItem)) {
-                throw NordProtocolException(
-                    "Unexpected move-program echo: $echo " +
-                        "(requested [$srcBank, $srcItem, $dstBank, $dstItem])",
-                )
-            }
+            requireTransferEcho("move-program", payload, srcBank, srcItem, dstBank, dstItem)
             reloadPresetForDisplay(srcBank, srcItem)
             reloadPresetForDisplay(dstBank, dstItem)
         }
@@ -909,29 +924,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             FileTransferSubOp.COPY_PROGRAM,
             uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
         ).payload
-        val status = readUInt32BE(payload, StatusEcho.STATUS)
-        if (status == STATUS_FILE_EXISTS) {
-            throw NordStatusException(
-                "copy-program",
-                status,
-                "Cannot copy onto an occupied slot: the instrument answered status 4 (file " +
-                    "exists). A copy needs an empty destination.",
-            )
-        }
-        if (status != 0) {
-            throw NordStatusException(
-                "copy-program",
-                status,
-                "Unexpected copy-program response status: $status",
-            )
-        }
-        val echo = listOf(4, 8, 12, 16).map { readUInt32BE(payload, it) }
-        if (echo != listOf(srcBank, srcItem, dstBank, dstItem)) {
-            throw NordProtocolException(
-                "Unexpected copy-program echo: $echo " +
-                    "(requested [$srcBank, $srcItem, $dstBank, $dstItem])",
-            )
-        }
+        requireTransferEcho("copy-program", payload, srcBank, srcItem, dstBank, dstItem)
         val record = fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(dstBank) + uint32BE(dstItem)).payload
         val newName = parseItemName(record)
         reloadPresetForDisplay(dstBank, dstItem)

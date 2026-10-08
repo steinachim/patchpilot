@@ -989,8 +989,8 @@ class NordDeviceProtocolTest {
     }
 
     /**
-     * Status 4 is the instrument's "file exists", and an occupied destination is the one
-     * copy failure a caller can act on - so it is named rather than reported as a bare number.
+     * Status 4 is the instrument's "file exists". The code travels to `NordInstrument`, which
+     * names the occupied slot to the user (`NordFailureMappingTest`).
      */
     @Test
     fun `copyProgram refuses an occupied destination, but still unlocks`() = runTest {
@@ -1004,7 +1004,7 @@ class NordDeviceProtocolTest {
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
         val failure = thrownBy<NordStatusException> { device.copyProgram(7, 23, 8, 12) }
-        assertTrue(failure.message!!.contains("occupied"))
+        assertEquals(NordDevice.STATUS_FILE_EXISTS, failure.status)
         assertEquals(NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code, transport.sentRequests.last().subOp)
         transport.assertAllConsumed()
     }
