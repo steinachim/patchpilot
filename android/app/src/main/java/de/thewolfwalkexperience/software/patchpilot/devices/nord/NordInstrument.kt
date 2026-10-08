@@ -21,6 +21,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
 import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
+import de.thewolfwalkexperience.software.patchpilot.core.ReportIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.slugifyDeviceId
@@ -297,6 +298,9 @@ class NordInstrument(
         )
 
         val report = NordReport(
+            note = "Read-only report generated from the connected instrument. Nothing was " +
+                "written; each category was locked only while it was read.",
+            identity = ReportIdentity.of(identity),
             catalogEntry = entry,
             probe = DeviceProbe(
                 failures = probes.failures,

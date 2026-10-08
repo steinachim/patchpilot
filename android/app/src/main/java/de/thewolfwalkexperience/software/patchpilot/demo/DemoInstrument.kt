@@ -21,10 +21,14 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
+import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
+import de.thewolfwalkexperience.software.patchpilot.core.ReportIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 
 /**
  * A fictitious instrument, implemented directly against [Instrument] with an in-memory library
@@ -156,15 +160,17 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
 
     override suspend fun buildReport(progress: ((String) -> Unit)?): DeviceReportResult {
         progress?.invoke("Building report...")
-        val json = """
-            {
-              "note": "This is demo mode. No instrument was read; nothing here describes real hardware.",
-              "instrument": "${identity.name}"
-            }
-        """.trimIndent()
+        val report = DemoReport(
+            note = "This is demo mode. No instrument was read; nothing here describes real hardware.",
+            identity = ReportIdentity.of(identity),
+        )
         // Nothing was read, so nothing can have failed to read.
-        return DeviceReportResult(json, emptyMap())
+        return DeviceReportResult(REPORT_JSON.encodeToString(report), emptyMap())
     }
+
+    /** The shape every family's report opens with, and nothing else: there is nothing to read. */
+    @Serializable
+    private data class DemoReport(val note: String, val identity: ReportIdentity)
 
     companion object {
         const val DEMO_DESCRIPTOR_ID = "demo"

@@ -3,10 +3,12 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
+import de.thewolfwalkexperience.software.patchpilot.core.ReportIdentity
 import kotlinx.serialization.Serializable
 
 /**
- * Everything this app can read off a connected Nord without changing anything on it.
+ * Everything this app can read off a connected Nord without changing anything on it. [note]
+ * and [identity] open it as they open every family's report.
  *
  *  - [catalogEntry] is a [NordProfile] in the schema's `$defs/device` shape, meant to be lifted
  *    straight into `devices/nord_devices.json`, filled in with what the wire can settle: USB ids,
@@ -19,7 +21,9 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class NordReport(
-    val reportVersion: Int = 1,
+    val reportVersion: Int = 2,
+    val note: String,
+    val identity: ReportIdentity,
     val catalogEntry: NordProfile,
     val probe: DeviceProbe,
 )

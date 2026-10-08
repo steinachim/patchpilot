@@ -14,6 +14,9 @@ import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordProfile
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordTransport
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
+import de.thewolfwalkexperience.software.patchpilot.devices.pro800.FakePro800
+import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Config
+import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Instrument
 import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.FakeSubsequent37
 import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.subsequent37
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
@@ -24,6 +27,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -364,5 +370,29 @@ class InstrumentFacetTest {
     fun `a selector's confirmation reflects what its instrument can honestly claim`() {
         assertEquals("Selected A:1:1.", nord().selector!!.confirmationFor("A:1:1"))
         assertEquals("Sent A00.", NoCopyFixtureInstrument().selector!!.confirmationFor("A00"))
+    }
+
+    /** Every report opens the same way, whatever the family reads after it. */
+    @Test
+    fun `every family's report opens with a note and an identity`() = runTest {
+        val pro800 = FakePro800()
+        val reporters = listOf(
+            "demo" to DemoInstrument(),
+            "Nord" to nord(),
+            "Pro-800" to Pro800Instrument(SysExExchange(pro800.transport, backgroundScope), Pro800Config()),
+            "Axe-Fx III" to axeFx3(FakeAxeFx3()),
+            "Subsequent 37" to subsequent37(FakeSubsequent37(backgroundScope)),
+        )
+        for ((name, instrument) in reporters) {
+            instrument.connect()
+            val json = Json.parseToJsonElement(instrument.report!!.buildReport().json).jsonObject
+            assertTrue("$name: no note", json["note"]?.jsonPrimitive?.content?.isNotBlank() == true)
+            val identity = json["identity"]?.jsonObject
+            assertEquals(
+                "$name: identity",
+                instrument.identity.descriptorId,
+                identity?.get("descriptorId")?.jsonPrimitive?.content,
+            )
+        }
     }
 }
