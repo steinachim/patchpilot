@@ -224,16 +224,32 @@ val generateUsbDeviceFilter = tasks.register("generateUsbDeviceFilter") {
     doLast {
         val entries = linkedSetOf<Pair<Int, Int>>()
 
-        // One lazy pattern covers every catalog shape: the Nord file carries vendorId/productId
-        // directly on each device, the generic one inside a "usb" match, a usbHint or a
-        // launchOnUsbAttach. A file with none of them contributes nothing, which is correct.
-        val usbIds = Regex("\"vendorId\"\\s*:\\s*(\\d+)[\\s\\S]*?\"productId\"\\s*:\\s*(\\d+)")
+        // Parsed, not pattern-matched, so only the fields that mean "launch on attach" count: a
+        // Nord device carries its ids itself, a generic catalog's "usb" match is one, and a MIDI
+        // match contributes only its launchOnUsbAttach - its usbHint narrows probing and launches
+        // nothing. A file with no "devices" list, such as the factory-voice table, contributes
+        // nothing.
+        val slurper = groovy.json.JsonSlurper()
+        fun ids(node: Any?): Pair<Int, Int>? {
+            val map = node as? Map<*, *> ?: return null
+            val vendorId = (map["vendorId"] as? Number)?.toInt() ?: return null
+            val productId = (map["productId"] as? Number)?.toInt() ?: return null
+            return vendorId to productId
+        }
         deviceCatalogDir.listFiles()
             ?.filter { it.name.endsWith(".json") && !it.name.endsWith(".schema.json") }
             ?.sortedBy { it.name }
             ?.forEach { file ->
-                usbIds.findAll(file.readText())
-                    .forEach { entries += it.groupValues[1].toInt() to it.groupValues[2].toInt() }
+                val devices = (slurper.parse(file) as? Map<*, *>)?.get("devices") as? List<*>
+                devices.orEmpty().forEach { device ->
+                    val match = (device as? Map<*, *>)?.get("match") as? Map<*, *>
+                    val usb = when {
+                        match == null -> ids(device)
+                        match["type"] == "usb" -> ids(match)
+                        else -> ids(match["launchOnUsbAttach"])
+                    }
+                    if (usb != null) entries += usb
+                }
             }
 
         outputFile.parentFile.mkdirs()

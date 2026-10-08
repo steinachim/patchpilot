@@ -6,6 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.catalog
 import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.AxeFx3Config
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.resolvedConfig
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.DeviceCatalog
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Config
 import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37Config
 import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37SysEx
@@ -340,5 +341,33 @@ class CatalogParsesTest {
                 assertEquals("$name: probe must be one message", 1, probe.count { it == 0xF7.toByte() })
             }
         }
+    }
+
+    /**
+     * The launch-on-attach filter the build generates (`generateUsbDeviceFilter`) lists exactly
+     * the catalogs' launch ids: each USB match's, each MIDI match's `launchOnUsbAttach` and never
+     * its `usbHint`, and every Nord's.
+     */
+    @Test
+    fun `the USB device filter lists exactly the catalogs' launch ids`() {
+        val filter = File("src/main/res/xml/device_filter.xml")
+        assertTrue("$filter does not exist", filter.isFile)
+        val listed = Regex("""vendor-id="(\d+)" product-id="(\d+)"""").findAll(filter.readText())
+            .map { it.groupValues[1].toInt() to it.groupValues[2].toInt() }
+            .toSet()
+
+        val generic = catalogDir.listFiles { file -> file.extension == "json" }!!
+            .filterNot { it.name.startsWith("nord_devices") || it.name == "motifxs_factory_voices.json" }
+            .flatMap { catalog(it.name).devices }
+            .mapNotNull { descriptor ->
+                when (val match = descriptor.match) {
+                    is DeviceMatch.Usb -> match.vendorId to match.productId
+                    is DeviceMatch.MidiIdentity -> match.launchOnUsbAttach?.let { it.vendorId to it.productId }
+                }
+            }
+        val nord = json.decodeFromString(DeviceCatalog.serializer(), catalogDir.resolve("nord_devices.json").readText())
+            .devices.map { it.vendorId to it.productId }
+
+        assertEquals((generic + nord).toSet(), listed)
     }
 }
