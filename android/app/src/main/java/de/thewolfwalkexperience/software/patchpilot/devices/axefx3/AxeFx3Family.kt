@@ -8,12 +8,11 @@ import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 import de.thewolfwalkexperience.software.patchpilot.catalog.FamilyCatalog
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentFamily
+import de.thewolfwalkexperience.software.patchpilot.catalog.familyConfig
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
-import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer
-import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
+import de.thewolfwalkexperience.software.patchpilot.midi.familyExchange
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
-import de.thewolfwalkexperience.software.patchpilot.transport.transportScope
 import kotlinx.serialization.Serializable
 
 /** Named for the one instrument it describes; the loader dispatches on the `family` field inside it. */
@@ -63,15 +62,11 @@ object AxeFx3Family : InstrumentFamily {
         descriptor: InstrumentDescriptor,
         transport: Transport,
     ): Instrument {
-        val midi = transport as? MidiTransport
-            ?: error("An Axe-Fx III speaks MIDI SysEx, not ${transport::class.simpleName}.")
-        // Resolved before the exchange starts its collector, so a catalog or asset fault cannot
-        // leave a collector running on a transport nobody owns.
-        val config = catalog.format.decodeFromJsonElement(AxeFx3Config.serializer(), catalog.load(context).familyConfig)
+        // Resolved before the exchange - see familyExchange.
+        val config = catalog.familyConfig(context, AxeFx3Config.serializer())
         val emptyPreset = AxeFx3DumpImage.parse(context.assets.open(EMPTY_PRESET_ASSET).use { it.readBytes() })
-        val scope = transportScope(descriptor.name)
         return AxeFx3Instrument(
-            SysExExchange(midi, scope, framer = SysExFramer(MAX_MESSAGE_BYTES)),
+            familyExchange(transport, "An Axe-Fx III", descriptor.name, SysExFramer(MAX_MESSAGE_BYTES)),
             config,
             emptyPreset,
             descriptorId = descriptor.id,
