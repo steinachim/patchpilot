@@ -172,6 +172,25 @@ class Subsequent37EditorTest {
         assertEquals(1, fake.writes.size)
     }
 
+    /** A move cancelled as its copy lands still empties the source, so the preset is not left in two slots. */
+    @Test
+    fun `a cancelled move still empties the source`() = runTest {
+        val fake = FakeSubsequent37(backgroundScope)
+        val editor = connected(fake).editor
+        val name = fake.programAt(0).name
+        val empty = Subsequent37Fixtures.emptyPrograms(1).single()
+        var job: Job? = null
+        fake.onWrite = { job?.cancel() }
+
+        job = launch(start = CoroutineStart.LAZY) { editor.move(address(0), address(empty)) }
+        job!!.start()
+        job!!.join()
+
+        assertTrue(job!!.isCancelled)
+        assertEquals(name, fake.programAt(empty).name)
+        assertTrue(fake.programAt(0).isEmpty)
+    }
+
     /**
      * A swap cancelled as its first write lands still writes the second: both writes run under
      * `NonCancellable`, so leaving mid-swap cannot leave one preset in two slots and the other

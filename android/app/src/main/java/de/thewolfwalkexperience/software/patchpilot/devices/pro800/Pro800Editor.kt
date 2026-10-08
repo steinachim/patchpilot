@@ -6,44 +6,29 @@ package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 import android.util.Log
 import androidx.annotation.VisibleForTesting
 import de.thewolfwalkexperience.software.patchpilot.BuildConfig
-import de.thewolfwalkexperience.software.patchpilot.core.EditOp
+import de.thewolfwalkexperience.software.patchpilot.core.ComposedEditor
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
-import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 
 private const val TAG = "Pro800Editor"
 
 /**
- * Rename, move, swap and delete on an instrument that has none of those commands: every one is
- * composed from reads and writes, and every one has a moment where a preset exists in exactly one
- * place. Five rules follow:
+ * Every edit on an instrument that has none of them as a command, composed by [ComposedEditor]
+ * from reads and writes. Two rules on top of its transaction model:
  *
  *  1. Verify by reading back after every write; the write's own status carries no address and is
  *     not waited for (see [Pro800Instrument.write]).
- *  2. Order the destructive step last: a move writes the destination and only then erases the
- *     source, so an erase that fails leaves a duplicate rather than a hole.
- *  3. Roll back what cannot be finished: a swap whose second write fails puts the first back.
- *  4. Keep what was overwritten in [undoBuffer] for the session.
- *  5. Do not stop part way: a move's or a swap's writes run under [NonCancellable], so cancelling
- *     one waits for it to finish rather than leaving it half done.
+ *  2. Keep what was overwritten in [undoBuffer] for the session.
  */
 class Pro800Editor(
     private val transfer: PresetTransfer,
     private val layout: SlotLayout,
-) : PresetEditor {
-
-    override val supported = setOf(EditOp.RENAME, EditOp.MOVE, EditOp.SWAP, EditOp.DELETE, EditOp.COPY)
-
-    /** All of them. The instrument has no single command for any of these. */
-    override fun isEmulated(op: EditOp) = true
+) : ComposedEditor<Pro800Program>() {
 
     /** The name field is sixteen characters wide; the instrument keeps the first sixteen of anything longer. */
     override val maxNameLength = Pro800ProgramFields.NAME_LENGTH
@@ -65,99 +50,47 @@ class Pro800Editor(
         override fun hashCode() = 31 * address.hashCode() + blob.contentHashCode()
     }
 
-    // ---- Operations ----
+    // ---- ComposedEditor ----
 
-    override suspend fun rename(address: SlotAddress, newName: String) {
-        nameProblem(newName)?.let { throw IllegalArgumentException(it) }
+    override fun displayIdOf(address: SlotAddress): String = layout.format.format(address)
 
-        val before = readProgram(address)
-        if (before.isEmpty) throw InstrumentException.SlotStateChanged.empty(layout.format.format(address))
-        writeVerified(address, before.withName(newName), expectName = newName)
+    override suspend fun peek(address: SlotAddress) = Pro800Program.fromEncoded(transfer.read(address))
+
+    override fun isEmpty(preset: Pro800Program) = preset.isEmpty
+
+    override fun isNamed(preset: Pro800Program, name: String) = preset.name == name
+
+    override fun shownName(preset: Pro800Program) = preset.name ?: UNNAMED_PRESET
+
+    override suspend fun writeVerified(address: SlotAddress, preset: Pro800Program) {
+        if (preset.isEmpty) erase(address) else writeRecord(address, preset, preset.name)
     }
 
-    override suspend fun delete(address: SlotAddress) {
-        val before = readProgram(address)
-        if (before.isEmpty) return // already nothing there; deleting it again is not an error
-        remember(address, before)
-        writeEmptyVerified(address)
-    }
+    override suspend fun erase(address: SlotAddress) = writeEmptyVerified(address)
 
-    /** Copy to the destination, then erase the source: if the erase fails, the preset exists at both addresses. */
-    override suspend fun move(from: SlotAddress, to: SlotAddress) {
-        if (from == to) return
-        val source = readProgram(from)
-        if (source.isEmpty) throw InstrumentException.SlotStateChanged.empty(layout.format.format(from))
-        val destination = readProgram(to)
-        if (!destination.isEmpty) throw InstrumentException.SlotStateChanged.occupied(layout.format.format(to))
+    override suspend fun storeName(address: SlotAddress, preset: Pro800Program, name: String) =
+        writeRecord(address, preset.withName(name), expectName = name)
 
-        remember(from, source)
-        withContext(NonCancellable) {
-            writeVerified(to, source, expectName = source.name)
-            writeEmptyVerified(from)
-        }
-    }
-
-    /**
-     * Duplicates a preset into an empty slot, leaving the source where it is. Writes the
-     * destination and nothing else, so it needs no rollback and no undo entry. The returned name
-     * is the source's, verbatim: the instrument stores exactly the bytes it is sent, and two
-     * presets may share a name. An unnamed preset reports [UNNAMED_PRESET], as the
-     * browser does for the same record.
-     */
-    override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String {
-        if (src == dst) throw InstrumentException.NotSupported("copy a preset onto itself")
-
-        val source = readProgram(src)
-        if (source.isEmpty) throw InstrumentException.SlotStateChanged.empty(layout.format.format(src))
-
-        // Nothing on the instrument refuses an occupied destination, so this has to.
-        val destination = readProgram(dst)
-        if (!destination.isEmpty) throw InstrumentException.SlotStateChanged.occupied(layout.format.format(dst))
-
-        writeVerified(dst, source, expectName = source.name)
-        return source.name ?: UNNAMED_PRESET
-    }
-
-    /** Two writes, with the first undone if the second fails: once `a` holds `b`'s contents, `a`'s are only in memory. */
-    override suspend fun swap(a: SlotAddress, b: SlotAddress) {
-        if (a == b) return
-        val first = readProgram(a)
-        val second = readProgram(b)
-        if (first.isEmpty && second.isEmpty) return
-
-        remember(a, first)
-        remember(b, second)
-
-        withContext(NonCancellable) {
-            writeOrEmpty(a, second)
-            try {
-                writeOrEmpty(b, first)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                rollback(a, first, becauseOf = e)
-                throw e
-            }
-        }
+    override fun overwriting(address: SlotAddress, preset: Pro800Program) {
+        _undoBuffer.addFirst(
+            UndoEntry(address, displayIdOf(address), Pro800ProgramCodec.encode(preset.dense)),
+        )
+        while (_undoBuffer.size > UNDO_DEPTH) _undoBuffer.removeLast()
     }
 
     // ---- Write plumbing ----
-
-    private suspend fun writeOrEmpty(address: SlotAddress, program: Pro800Program) {
-        if (program.isEmpty) writeEmptyVerified(address) else writeVerified(address, program, program.name)
-    }
 
     /**
      * Writes a record and proves it landed: the slot is occupied, and the bytes agree with what
      * was sent over the common prefix. The instrument truncates trailing padding, so a record
      * written at full length legitimately comes back shorter.
      */
-    private suspend fun writeVerified(address: SlotAddress, program: Pro800Program, expectName: String?) {
-        val displayId = layout.format.format(address)
+    private suspend fun writeRecord(address: SlotAddress, program: Pro800Program, expectName: String?) {
+        val displayId = displayIdOf(address)
         transfer.write(address, Pro800ProgramCodec.encode(program.dense))
         settle()
 
-        val readBack = readProgram(address)
+        val readBack = peek(address)
         if (readBack.isEmpty) {
             throw InstrumentException.ProtocolDesync(
                 "Wrote $displayId but the instrument reports it as empty. The preset may not have " +
@@ -192,37 +125,14 @@ class Pro800Editor(
 
     /** Sets an address back to uninitialized - a `0x78` with no data - and proves it took. */
     private suspend fun writeEmptyVerified(address: SlotAddress) {
-        val displayId = layout.format.format(address)
+        val displayId = displayIdOf(address)
         transfer.write(address, ByteArray(0))
         settle()
 
-        if (!readProgram(address).isEmpty) {
+        if (!peek(address).isEmpty) {
             throw InstrumentException.ProtocolDesync(
                 "Asked the instrument to clear $displayId but it still reports a preset there.",
             )
-        }
-    }
-
-    /**
-     * Best-effort restore of an address this class has just overwritten. Under [NonCancellable],
-     * since a cancelled caller would otherwise skip it; a failure is logged rather than thrown,
-     * so it cannot mask the error that caused the rollback.
-     */
-    private suspend fun rollback(address: SlotAddress, original: Pro800Program, becauseOf: Exception) {
-        withContext(NonCancellable) {
-            try {
-                writeOrEmpty(address, original)
-                Log.w(TAG, "Rolled ${layout.format.format(address)} back after: ${becauseOf.message}")
-            } catch (e: Exception) {
-                // The one path that can lose data: the original bytes are then held only in
-                // [undoBuffer], in memory, and nothing in the app reads them back.
-                Log.e(
-                    TAG,
-                    "Could not roll ${layout.format.format(address)} back after a failed edit; " +
-                        "its previous contents are no longer on the instrument.",
-                    e,
-                )
-            }
         }
     }
 
@@ -232,17 +142,6 @@ class Pro800Editor(
         if (program.dense.size <= start) return "(record ends before the name field)"
         val end = minOf(Pro800ProgramFields.NAME_DENSE_END, program.dense.size)
         return program.dense.copyOfRange(start, end).toHex(" ")
-    }
-
-    private suspend fun readProgram(address: SlotAddress) =
-        Pro800Program.fromEncoded(transfer.read(address))
-
-    private fun remember(address: SlotAddress, program: Pro800Program) {
-        if (program.isEmpty) return
-        _undoBuffer.addFirst(
-            UndoEntry(address, layout.format.format(address), Pro800ProgramCodec.encode(program.dense)),
-        )
-        while (_undoBuffer.size > UNDO_DEPTH) _undoBuffer.removeLast()
     }
 
     /** The pause the reference implementation leaves between writes, taken here before reading back. */

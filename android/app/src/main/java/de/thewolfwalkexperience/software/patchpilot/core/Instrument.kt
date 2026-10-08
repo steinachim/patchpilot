@@ -313,6 +313,7 @@ interface PresetEditor {
     /** True where [op] is composed host-side from reads and writes rather than being one call. */
     fun isEmulated(op: EditOp): Boolean
 
+    /** Stores [newName] as given: the caller trims it, as the rename dialog does. */
     suspend fun rename(address: SlotAddress, newName: String)
     suspend fun move(from: SlotAddress, to: SlotAddress)
     suspend fun swap(a: SlotAddress, b: SlotAddress)

@@ -39,6 +39,7 @@
 - Loading a Yamaha Motif XS voice counts as done only when the instrument echoes that voice, and a preset list being read at the same time can no longer slip between the selection's messages.
 - A Behringer Pro-800 that refuses to load a preset now says so, instead of the app reporting the preset as selected.
 - When a preset was saved or deleted on the instrument since the list was read, an edit that finds the slot changed now names the slot and asks for a refresh, instead of saying the instrument cannot do it.
+- A Behringer Pro-800 move that copies the preset but cannot empty its old slot now says the preset is in both slots, as the other instruments do.
 
 ## 1.1
 

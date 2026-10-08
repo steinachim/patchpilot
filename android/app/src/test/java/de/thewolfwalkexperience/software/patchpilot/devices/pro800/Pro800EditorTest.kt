@@ -289,6 +289,21 @@ class Pro800EditorTest {
         }
     }
 
+    /** The destination is written first, so an erase that fails leaves a duplicate, and says so. */
+    @Test
+    fun `a move whose erase fails says the preset is in both slots`() = runTest {
+        val fake = fake()
+        fake.failWritesTo = setOf(0)
+        val pro800 = instrument(fake, backgroundScope)
+
+        val failure = runCatching { pro800.editor!!.move(a(0), b(3)) }.exceptionOrNull()
+
+        assertTrue("got $failure", failure is InstrumentException.ProtocolDesync)
+        assertTrue(failure!!.message!!, failure.message!!.contains("in both slots"))
+        assertEquals("Organ I", fake.nameAt(0))
+        assertEquals("Organ I", fake.nameAt(8))
+    }
+
     @Test
     fun `move onto an occupied slot is refused - that is what swap is for`() = runTest {
         val fake = fake()
@@ -345,14 +360,14 @@ class Pro800EditorTest {
     }
 
     /**
-     * **The one operation that can destroy a preset outright.** Once `a` has been overwritten with
-     * `b`'s contents, the only copy of `a`'s original is in memory - so a failure on the second
+     * **The one operation that can destroy a preset outright.** Once `b` has been overwritten with
+     * `a`'s contents, the only copy of `b`'s original is in memory - so a failure on the second
      * write has to put it back.
      */
     @Test
     fun `a swap that fails halfway rolls the first write back`() = runTest {
         val fake = fake()
-        fake.failWritesTo = setOf(1) // the second write will not take
+        fake.failWritesTo = setOf(0) // the second write, to A00, will not take
         val pro800 = instrument(fake, backgroundScope)
 
         try {

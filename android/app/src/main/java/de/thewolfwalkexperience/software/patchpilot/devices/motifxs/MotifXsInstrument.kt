@@ -216,10 +216,9 @@ class MotifXsInstrument(
          */
         override suspend fun rename(address: SlotAddress, newName: String) {
             requireWritable(address)
-            val trimmed = newName.trim()
             // Printable ASCII is the field's own range - the Data List gives `00, 20 - 7E` - so a
             // name the instrument cannot store is refused here rather than written as mojibake.
-            nameProblem(trimmed)?.let { throw IllegalArgumentException(it) }
+            nameProblem(newName)?.let { throw IllegalArgumentException(it) }
 
             val where = layout.format.format(address)
 
@@ -237,13 +236,13 @@ class MotifXsInstrument(
                 // NUL-padded, as the instrument itself does and revision C0 of the Data List
                 // permits; revision B0 says space-padded and does not match the instrument.
                 for (i in 0 until MotifXsVoice.NAME_LENGTH) {
-                    payload[i] = if (i < trimmed.length) trimmed[i].code.toByte() else 0
+                    payload[i] = if (i < newName.length) newName[i].code.toByte() else 0
                 }
             }
 
             // Read back through `0C`, the path the browser lists with.
             val stored = MotifXsVoice.nameOf(readVoicePayload(address))
-            if (stored != trimmed) {
+            if (stored != newName) {
                 throw InstrumentException.ProtocolDesync(
                     "Renamed $where but it reads back as ${stored ?: "empty"}.",
                 )

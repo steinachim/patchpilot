@@ -58,7 +58,7 @@ class AxeFx3EditorTest {
         val instrument = connected(fake)
         val start = fake.requests.size
 
-        instrument.editor.rename(at(10), "New Name  ")
+        instrument.editor.rename(at(10), "New Name")
 
         assertEquals("New Name", fake.nameAt(10))
         assertEquals(listOf("0d", "0d", "01/27", "01/28", "01/26", "0d", "01/27"), fake.commandsSince(start))
