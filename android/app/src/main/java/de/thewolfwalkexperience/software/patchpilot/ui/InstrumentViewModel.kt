@@ -197,10 +197,14 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      * activity filters out). Stops a running scan where the session will be rebuilt on the way
      * back: the resume discards it anyway, and on a Motif XS its display would sit on "dump in
      * progress" for up to 93 s with the phone locked.
+     *
+     * Not while a regression run is under way: it plans around the user listing, and a cancelled
+     * one would have it read the whole instrument again, with the resume waiting behind it.
      */
     fun onAppBackgrounded() {
         backgrounded = true
-        if (connection.shouldRebuildOnResume) listings.cancel()
+        val regressionRunning = regressionRunner.state.value is RunState.Running
+        if (connection.shouldRebuildOnResume && !regressionRunning) listings.cancel()
     }
 
     /**
