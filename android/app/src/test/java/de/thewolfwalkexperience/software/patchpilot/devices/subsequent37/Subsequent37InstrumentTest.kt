@@ -260,6 +260,23 @@ class Subsequent37InstrumentTest {
         assertEquals(1, fake.selected)
     }
 
+    /** A listing waiting behind an operation already counts, or the next operation queues behind the whole dump. */
+    @Test
+    fun `an operation is refused while a listing waits for the lock`() = runTest {
+        val fake = FakeSubsequent37(backgroundScope)
+        val instrument = subsequent37(fake).apply { connect() }
+        instrument.lock.lock() // an operation in flight
+        val listing = launch { instrument.index().collect {} }
+        runCurrent()
+
+        val failure = runCatching { instrument.refresh(SlotAddress(0, 1)) }.exceptionOrNull()
+        assertTrue("got $failure", failure is InstrumentException.BlockedByDeviceState)
+
+        instrument.lock.unlock()
+        listing.join()
+        assertEquals("Preset 001", instrument.refresh(SlotAddress(0, 1)).name)
+    }
+
     @Test
     fun `a cancelled listing leaves the instrument usable`() = runTest {
         val fake = FakeSubsequent37(backgroundScope)

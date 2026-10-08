@@ -25,6 +25,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.core.queryOrNull
 import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareAdvisory
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.ComparableTimeMark
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -85,9 +86,11 @@ class Subsequent37Instrument(
     internal var settings: Subsequent37Settings? = null
         private set
 
-    /** Set while a listing runs; see [requireIdle]. */
-    @Volatile
-    private var listing = false
+    /**
+     * Listings running or waiting for [lock]; see [requireIdle]. A count, so a cancelled listing
+     * that finishes after its replacement has started cannot clear the replacement's mark.
+     */
+    private val listings = AtomicInteger(0)
 
     /** How long the running listing's transfer still takes, where that is known. */
     @Volatile
@@ -177,16 +180,17 @@ class Subsequent37Instrument(
      * [PresetScope.USER] is declared.
      */
     override fun index(scope: PresetScope): Flow<IndexUpdate> = channelFlow {
-        lock.withLock {
-            listing = true
-            try {
+        // Marked before the lock is taken: an operation let through while this waits for it
+        // would queue behind the whole dump.
+        listings.incrementAndGet()
+        try {
+            lock.withLock {
                 val decoded = receiveDump()
                 fillGaps(decoded)
                 send(IndexUpdate.Complete)
-            } finally {
-                listing = false
-                listingTimeLeft = null
             }
+        } finally {
+            if (listings.decrementAndGet() == 0) listingTimeLeft = null
         }
     }
 
@@ -456,11 +460,11 @@ class Subsequent37Instrument(
     }
 
     /**
-     * Refuses while a listing runs: the instrument answers nothing else until its dump ends, and
-     * waiting on [lock] for minutes would look like a hang.
+     * Refuses while a listing runs or waits to: the instrument answers nothing else until its
+     * dump ends, and waiting on [lock] for minutes would look like a hang.
      */
     internal fun requireIdle() {
-        if (!listing) return
+        if (listings.get() == 0) return
         val left = listingTimeLeft?.let { " (${timeLeftText(it)})" }.orEmpty()
         throw InstrumentException.BlockedByDeviceState(
             "The Subsequent 37 is still sending its preset list$left, and answers nothing else " +
