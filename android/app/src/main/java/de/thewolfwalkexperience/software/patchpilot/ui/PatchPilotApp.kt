@@ -10,24 +10,39 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.withResumed
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.navArgument
+import androidx.navigation.toRoute
+import kotlinx.serialization.Serializable
 
-private const val ROUTE_CONNECT = "connect"
-private const val ROUTE_PROGRAMS = "programs"
-private const val ROUTE_DEBUG = "debug"
-private const val ROUTE_SETTINGS = "settings"
-private const val ROUTE_LICENSES = "licenses"
-private const val ROUTE_LICENSE_TEXT = "licenses/{asset}"
-private const val ARG_LICENSE_ASSET = "asset"
+// The routes. Internal rather than private: NavHost finds a start destination's serializer by
+// reflection, which cannot reach a private class.
+@Serializable
+internal data object ConnectRoute
 
-/** The routes that show a connected session and have no UI for anything else. */
-private val SESSION_ROUTES = setOf(ROUTE_PROGRAMS, ROUTE_DEBUG)
+@Serializable
+internal data object ProgramsRoute
+
+@Serializable
+internal data object DebugRoute
+
+@Serializable
+internal data object SettingsRoute
+
+@Serializable
+internal data object LicensesRoute
+
+/** One license text; [asset] is its file under `assets/licenses/`. */
+@Serializable
+internal data class LicenseTextRoute(val asset: String)
+
+/** Whether this destination shows a connected session and has no UI for anything else. */
+private fun NavDestination.isSessionRoute(): Boolean = hasRoute<ProgramsRoute>() || hasRoute<DebugRoute>()
 
 /**
  * Whether a session screen has anything to show for [this] state, or should hand off to
@@ -81,7 +96,7 @@ fun PatchPilotApp(
     fun currentEntryIsResumed(): Boolean =
         navController.currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED
 
-    fun guardedNavigate(route: String, builder: NavOptionsBuilder.() -> Unit = {}) {
+    fun guardedNavigate(route: Any, builder: NavOptionsBuilder.() -> Unit = {}) {
         if (!currentEntryIsResumed()) return
         navController.navigate(route, builder)
     }
@@ -90,13 +105,14 @@ fun PatchPilotApp(
         navController.popBackStack()
     }
 
-    // Returns to ROUTE_CONNECT from a session route, a no-op if that has already happened: a
+    // Returns to ConnectRoute from a session route, a no-op if that has already happened: a
     // session that cycles through several unrenderable states re-runs the effect below for each,
-    // and once the first call has left `programs`, `popUpTo(ROUTE_PROGRAMS)` matches nothing and
-    // `navigate` would push a second `connect`. From `debug`, the pop takes `programs` with it.
+    // and once the first call has left ProgramsRoute, `popUpTo<ProgramsRoute>` matches nothing and
+    // `navigate` would push a second ConnectRoute. From DebugRoute, the pop takes ProgramsRoute
+    // with it.
     fun returnToConnect() {
-        if (navController.currentDestination?.route == ROUTE_CONNECT) return
-        guardedNavigate(ROUTE_CONNECT) { popUpTo(ROUTE_PROGRAMS) { inclusive = true } }
+        if (navController.currentDestination?.hasRoute<ConnectRoute>() == true) return
+        guardedNavigate(ConnectRoute) { popUpTo<ProgramsRoute> { inclusive = true } }
     }
 
     // Hands a session screen off to ConnectScreen once the session settles somewhere it cannot
@@ -113,7 +129,7 @@ fun PatchPilotApp(
     val currentEntry by navController.currentBackStackEntryAsState()
     LaunchedEffect(session, currentEntry) {
         val entry = currentEntry ?: return@LaunchedEffect
-        if (entry.destination.route !in SESSION_ROUTES) return@LaunchedEffect
+        if (!entry.destination.isSessionRoute()) return@LaunchedEffect
         if (session.rendersOnSessionScreens()) return@LaunchedEffect
         entry.lifecycle.withResumed { returnToConnect() }
     }
@@ -123,56 +139,52 @@ fun PatchPilotApp(
     // is not resumed, and a dropped navigate is never re-run.
     LaunchedEffect(session, currentEntry) {
         val entry = currentEntry ?: return@LaunchedEffect
-        if (entry.destination.route != ROUTE_CONNECT || session !is ConnectionState.Connected) return@LaunchedEffect
+        if (!entry.destination.hasRoute<ConnectRoute>() || session !is ConnectionState.Connected) return@LaunchedEffect
         entry.lifecycle.withResumed {
-            guardedNavigate(ROUTE_PROGRAMS) { popUpTo(ROUTE_CONNECT) { inclusive = true } }
+            guardedNavigate(ProgramsRoute) { popUpTo<ConnectRoute> { inclusive = true } }
         }
     }
 
-    NavHost(navController = navController, startDestination = ROUTE_CONNECT, modifier = modifier) {
-        composable(ROUTE_CONNECT) {
-            ConnectScreen(viewModel, onOpenSettings = { guardedNavigate(ROUTE_SETTINGS) })
+    NavHost(navController = navController, startDestination = ConnectRoute, modifier = modifier) {
+        composable<ConnectRoute> {
+            ConnectScreen(viewModel, onOpenSettings = { guardedNavigate(SettingsRoute) })
         }
-        composable(ROUTE_PROGRAMS) {
+        composable<ProgramsRoute> {
             ProgramsScreen(
                 viewModel,
                 // `disconnect()` leaves Connected at once and ends on the picker, which this
                 // screen cannot render, so the hand-off above also returns to ConnectScreen if
                 // this navigate is dropped mid-transition.
                 //
-                // `returnToConnect` pops to ROUTE_PROGRAMS, never to 0: under route-based
+                // `returnToConnect` pops to ProgramsRoute, never to 0: under route-based
                 // navigation the graph's own id is 0, and popping that leaves the host with no
                 // destination to render.
                 onBack = {
                     viewModel.connection.disconnect()
                     returnToConnect()
                 },
-                onOpenDebugMenu = { guardedNavigate(ROUTE_DEBUG) },
-                onOpenSettings = { guardedNavigate(ROUTE_SETTINGS) },
+                onOpenDebugMenu = { guardedNavigate(DebugRoute) },
+                onOpenSettings = { guardedNavigate(SettingsRoute) },
             )
         }
-        composable(ROUTE_DEBUG) {
+        composable<DebugRoute> {
             DebugScreen(viewModel, onBack = { guardedPopBackStack() })
         }
-        composable(ROUTE_SETTINGS) {
+        composable<SettingsRoute> {
             SettingsScreen(
                 viewModel.preferences,
-                onOpenLicenses = { guardedNavigate(ROUTE_LICENSES) },
+                onOpenLicenses = { guardedNavigate(LicensesRoute) },
                 onBack = { guardedPopBackStack() },
             )
         }
-        composable(ROUTE_LICENSES) {
+        composable<LicensesRoute> {
             OpenSourceLicensesScreen(
-                onOpenLicense = { asset -> guardedNavigate("$ROUTE_LICENSES/$asset") },
+                onOpenLicense = { asset -> guardedNavigate(LicenseTextRoute(asset)) },
                 onBack = { guardedPopBackStack() },
             )
         }
-        composable(
-            ROUTE_LICENSE_TEXT,
-            arguments = listOf(navArgument(ARG_LICENSE_ASSET) { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val asset = backStackEntry.arguments?.getString(ARG_LICENSE_ASSET).orEmpty()
-            LicenseTextScreen(asset, onBack = { guardedPopBackStack() })
+        composable<LicenseTextRoute> { backStackEntry ->
+            LicenseTextScreen(backStackEntry.toRoute<LicenseTextRoute>().asset, onBack = { guardedPopBackStack() })
         }
     }
 }
