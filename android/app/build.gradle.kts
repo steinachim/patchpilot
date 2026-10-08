@@ -61,10 +61,15 @@ android {
     }
 
     signingConfigs {
-        // Only registered when local.properties actually has the four RELEASE_* keys, so
-        // `assembleRelease` still works (producing an unsigned APK) for a contributor without a
-        // keystore, rather than failing the whole build eagerly.
+        // Only registered when local.properties names a keystore, so `assembleRelease` still
+        // works (producing an unsigned APK) for a contributor without one. Once one is named, the
+        // other three keys are required, and a missing one fails here rather than at signing.
         if (releaseSigningProps.getProperty("RELEASE_STORE_FILE") != null) {
+            val missing = listOf("RELEASE_STORE_PASSWORD", "RELEASE_KEY_ALIAS", "RELEASE_KEY_PASSWORD")
+                .filter { releaseSigningProps.getProperty(it) == null }
+            check(missing.isEmpty()) {
+                "local.properties names a keystore but lacks ${missing.joinToString()}"
+            }
             create("release") {
                 storeFile = rootProject.file(releaseSigningProps.getProperty("RELEASE_STORE_FILE"))
                 storePassword = releaseSigningProps.getProperty("RELEASE_STORE_PASSWORD")
