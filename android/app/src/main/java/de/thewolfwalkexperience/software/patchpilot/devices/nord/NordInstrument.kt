@@ -45,7 +45,7 @@ class NordInstrument(
     private val device: NordDevice,
     /**
      * The catalog's family-level category master list, `id -> name` (see
-     * [DeviceCatalog.programCategories]). Empty on the unknown-device path and in tests, which
+     * [NordCatalog.programCategories]). Empty on the unknown-device path and in tests, which
      * gives an instrument without categories.
      */
     programCategories: Map<String, String> = emptyMap(),
@@ -100,14 +100,14 @@ class NordInstrument(
     override val advisory: String? get() = device.firmwareAdvisory
 
     /**
-     * The handshake, then, for a device opened on a guess ([DeviceProfile.unknown]), the bank
+     * The handshake, then, for a device opened on a guess ([NordProfile.unknown]), the bank
      * bounds it reports in place of the guessed ones - see [NordDevice.applyDerivedBankLayout].
      * Best-effort: a device with no `Program` category is what that path exists to survive, and
      * the guessed bounds still work, just generously.
      */
     override suspend fun connect() {
         exclusive("connecting") { device.connect() }
-        if (device.profile.id != DeviceProfile.UNKNOWN_ID) return
+        if (device.profile.id != NordProfile.UNKNOWN_ID) return
         try {
             deviceLock.withLock { device.applyDerivedBankLayout() }
         } catch (e: CancellationException) {
@@ -296,7 +296,7 @@ class NordInstrument(
             slotsPerGroup = bankLayout?.slotsPerBank ?: d.profile.slotsPerGroup,
         )
 
-        val report = DeviceReport(
+        val report = NordReport(
             catalogEntry = entry,
             probe = DeviceProbe(
                 failures = probes.failures,

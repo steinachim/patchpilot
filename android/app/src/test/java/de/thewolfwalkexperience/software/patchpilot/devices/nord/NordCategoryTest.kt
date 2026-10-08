@@ -69,13 +69,13 @@ class NordCategoryTest {
 
     // ---- Resolving ----
 
-    private val catalog: DeviceCatalog by lazy {
+    private val catalog: NordCatalog by lazy {
         // The real shipped catalog, so a name or id this test relies on cannot be one only a
         // fixture has.
         val dir = System.getProperty("deviceCatalogDir")
             ?: error("deviceCatalogDir is not set; see the Test task config in app/build.gradle.kts")
         Json { ignoreUnknownKeys = true }.decodeFromString(
-            DeviceCatalog.serializer(),
+            NordCatalog.serializer(),
             File(dir).resolve("nord_devices.json").readText(),
         )
     }

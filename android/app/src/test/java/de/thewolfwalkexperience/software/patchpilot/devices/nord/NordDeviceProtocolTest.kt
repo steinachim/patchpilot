@@ -200,7 +200,7 @@ class NordDeviceProtocolTest {
         // An unparseable device-info reply: the count doesn't account for the payload.
         for (profile in listOf(
             NordFixtures.GRAND_PROFILE,
-            DeviceProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
+            NordProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
         )) {
             val transport = ReplayTransport(listOf(3 to byteArrayOf(9, 6, 1)), firmwareVersion = 168)
             val device = NordFixtures.device(transport, profile)
@@ -468,7 +468,7 @@ class NordDeviceProtocolTest {
         // declares a trailer length, so this is the only way it works at all.
         val device = NordFixtures.device(
             ReplayTransport(emptyList()),
-            DeviceProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
+            NordProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
         )
         val categories = device.parseRootCategoryList(parseMessage(NordFixtures.STAGE2EX_ROOT_LIST_RESPONSE).payload)
         assertEquals(10, categories.size)

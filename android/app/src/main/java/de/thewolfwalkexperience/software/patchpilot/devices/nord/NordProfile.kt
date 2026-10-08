@@ -11,10 +11,10 @@ import kotlinx.serialization.Serializable
  * devices/nord_devices.json. Field-for-field the schema's `$defs/device` shape, so a profile
  * serializes straight back into a paste-able catalog entry (see `NordInstrument.buildReport`).
  * [programCategoryIds] indexes the catalog's family-level `programCategories` master list - see
- * [DeviceCatalog] and [NordCategories].
+ * [NordCatalog] and [NordCategories].
  */
 @Serializable
-data class DeviceProfile(
+data class NordProfile(
     val id: String,
     val name: String,
     /** The trailing part of [name] that tells this model from its siblings, e.g. "2 EX"; see [InstrumentDescriptor.variant]. */
@@ -60,7 +60,7 @@ data class DeviceProfile(
          * Synthesizes a profile for a Clavia USB device the catalog does not list - the "at your
          * own risk" path. The bank bounds are guesses generous enough not to reject a real Nord.
          */
-        fun unknown(name: String, vendorId: Int, productId: Int) = DeviceProfile(
+        fun unknown(name: String, vendorId: Int, productId: Int) = NordProfile(
             id = UNKNOWN_ID,
             name = name,
             vendorId = vendorId,
@@ -76,12 +76,12 @@ data class DeviceProfile(
 
 /** The parsed contents of devices/nord_devices.json - see [InstrumentRegistry]. */
 @Serializable
-data class DeviceCatalog(
+data class NordCatalog(
     val schemaVersion: Int,
-    val devices: List<DeviceProfile>,
+    val devices: List<NordProfile>,
     /**
      * The master category table, `id -> name`, all 54 entries: one list shared across the Nord
-     * line, of which each instrument names a subset via [DeviceProfile.programCategoryIds]. Not
+     * line, of which each instrument names a subset via [NordProfile.programCategoryIds]. Not
      * injective (ids 2 and 37 are both `Wind`), so `name -> id` is defined only within one
      * instrument's subset - [NordCategories] builds that direction.
      */

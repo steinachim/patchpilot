@@ -234,7 +234,7 @@ class StorageCalibrationTest {
         // was sent.
         val device = NordFixtures.device(
             ReplayTransport(listOf(1 to rootList, 3 to GrandChildLists.PROGRAM.hexToBytes())),
-            DeviceProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
+            NordProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
         ).apply { detectedProtocolVersionFileTransfer = NordFixtures.GRAND_PROTOCOL_VERSION }
 
         val layout = device.applyDerivedBankLayout()!!

@@ -6,7 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.catalog
 import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.AxeFx3Config
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.resolvedConfig
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DeviceCatalog
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordCatalog
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Config
 import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37Config
 import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37SysEx
@@ -365,7 +365,7 @@ class CatalogParsesTest {
                     is DeviceMatch.MidiIdentity -> match.launchOnUsbAttach?.let { it.vendorId to it.productId }
                 }
             }
-        val nord = json.decodeFromString(DeviceCatalog.serializer(), catalogDir.resolve("nord_devices.json").readText())
+        val nord = json.decodeFromString(NordCatalog.serializer(), catalogDir.resolve("nord_devices.json").readText())
             .devices.map { it.vendorId to it.productId }
 
         assertEquals((generic + nord).toSet(), listed)

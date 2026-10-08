@@ -53,7 +53,7 @@ object NordFixtures {
      */
     fun device(
         transport: de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport,
-        profile: DeviceProfile = GRAND_PROFILE,
+        profile: NordProfile = GRAND_PROFILE,
     ): NordDevice = NordDevice(transport, profile).apply {
         detectedProtocolVersionFileTransfer = when (profile) {
             STAGE2EX_PROFILE -> STAGE2EX_PROTOCOL_VERSION
@@ -63,7 +63,7 @@ object NordFixtures {
 
     // Transcribed from devices/nord_devices.json (repo root) rather than loaded from it, since
     // these tests run as plain JVM unit tests with no Android assets/Context available.
-    val GRAND_PROFILE = DeviceProfile(
+    val GRAND_PROFILE = NordProfile(
         id = "nord_grand",
         name = "Nord Grand",
         vendorId = 0x0FFC,
@@ -75,7 +75,7 @@ object NordFixtures {
         supportedFirmwareVersions = setOf(168),
     )
 
-    val STAGE2EX_PROFILE = DeviceProfile(
+    val STAGE2EX_PROFILE = NordProfile(
         id = "nord_stage_2ex",
         name = "Nord Stage 2 EX",
         vendorId = 0x0FFC,

@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 /**
  * Everything this app can read off a connected Nord without changing anything on it.
  *
- *  - [catalogEntry] is a [DeviceProfile] in the schema's `$defs/device` shape, meant to be lifted
+ *  - [catalogEntry] is a [NordProfile] in the schema's `$defs/device` shape, meant to be lifted
  *    straight into `devices/nord_devices.json`, filled in with what the wire can settle: USB ids,
  *    firmware version, and the bank count and capacity the `Program` category reports. It cannot
  *    fill the grouping of a bank's slots (nothing announces it) or `programCategoryIds` (the wire
@@ -18,9 +18,9 @@ import kotlinx.serialization.Serializable
  * Every field comes from a query; the only side effect is the per-category SELECT_CATEGORY lock.
  */
 @Serializable
-data class DeviceReport(
+data class NordReport(
     val reportVersion: Int = 1,
-    val catalogEntry: DeviceProfile,
+    val catalogEntry: NordProfile,
     val probe: DeviceProbe,
 )
 
@@ -31,7 +31,7 @@ data class DeviceProbe(
      * ...) with the error as the value. Empty on a clean run; see `core.Probes`.
      */
     val failures: Map<String, String> = emptyMap(),
-    /** e.g. "1.68" - the scaled code lives in [DeviceProfile.supportedFirmwareVersions]. */
+    /** e.g. "1.68" - the scaled code lives in [NordProfile.supportedFirmwareVersions]. */
     val firmwareVersion: String,
     val usbVendorId: String,
     val usbProductId: String,

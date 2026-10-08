@@ -3,7 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DeviceCatalog
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordCatalog
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
 import java.io.File
 import kotlinx.serialization.json.Json
@@ -116,7 +116,7 @@ class SupportedModelsTest {
             .map { it to json.parseToJsonElement(it.readText()).jsonObject }
             .filter { (_, root) -> "family" in root && "devices" in root }
             .flatMap { (file, _) -> json.decodeFromString(FamilyCatalog.serializer(), file.readText()).devices }
-        val nord = json.decodeFromString(DeviceCatalog.serializer(), catalogDir.resolve("nord_devices.json").readText())
+        val nord = json.decodeFromString(NordCatalog.serializer(), catalogDir.resolve("nord_devices.json").readText())
             .devices.map {
                 InstrumentDescriptor(
                     id = it.id,

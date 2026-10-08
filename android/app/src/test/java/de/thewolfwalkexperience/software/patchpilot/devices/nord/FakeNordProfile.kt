@@ -25,7 +25,7 @@ object FakeNordProfile {
      * Four banks of 25 slots, matching the `FakeNordCatalog` fixture's dummy program layout. Not
      * backed by any USB device - vendorId/productId are never dialed, only carried for display.
      */
-    fun profile() = DeviceProfile(
+    fun profile() = NordProfile(
         id = ID,
         name = "Fake Nord",
         vendorId = -1,

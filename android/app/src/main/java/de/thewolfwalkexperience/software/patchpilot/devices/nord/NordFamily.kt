@@ -18,7 +18,7 @@ private const val DEVICE_CATALOG_ASSET = "nord_devices.json"
 
 /**
  * The Nord family: `devices/nord_devices.json` plus a factory for [NordDevice]/[NordInstrument].
- * The catalog file keeps its own shape; each [DeviceProfile] becomes a descriptor whose
+ * The catalog file keeps its own shape; each [NordProfile] becomes a descriptor whose
  * `familyConfig` is that profile serialized, which the factory reads straight back. List order
  * decides which device is preferred if more than one is connected.
  */
@@ -26,12 +26,12 @@ object NordFamily : InstrumentFamily {
 
     override val id = NordInstrument.FAMILY
 
-    private val catalog = CatalogLoader(DEVICE_CATALOG_ASSET, DeviceCatalog.serializer())
+    private val catalog = CatalogLoader(DEVICE_CATALOG_ASSET, NordCatalog.serializer())
 
     override fun descriptors(context: Context): List<InstrumentDescriptor> =
         catalog.load(context).devices.map { it.toDescriptor() }
 
-    private fun DeviceProfile.toDescriptor() = InstrumentDescriptor(
+    private fun NordProfile.toDescriptor() = InstrumentDescriptor(
         id = id,
         family = NordInstrument.FAMILY,
         name = name,
@@ -55,7 +55,7 @@ object NordFamily : InstrumentFamily {
     }
 
     /**
-     * A Clavia device the catalog does not list, on [DeviceProfile.unknown]'s guessed bounds;
+     * A Clavia device the catalog does not list, on [NordProfile.unknown]'s guessed bounds;
      * [NordInstrument.connect] replaces them with the ones the device reports.
      */
     override fun createForUnknown(
@@ -64,9 +64,9 @@ object NordFamily : InstrumentFamily {
         vendorId: Int,
         productId: Int,
     ): Instrument =
-        NordInstrument(NordDevice(transport, DeviceProfile.unknown(name, vendorId, productId)))
+        NordInstrument(NordDevice(transport, NordProfile.unknown(name, vendorId, productId)))
 
     /** The profile [toDescriptor] stashed, read back with no field mapping. */
-    private fun InstrumentDescriptor.profile(): DeviceProfile =
-        catalog.format.decodeFromJsonElement(DeviceProfile.serializer(), familyConfig)
+    private fun InstrumentDescriptor.profile(): NordProfile =
+        catalog.format.decodeFromJsonElement(NordProfile.serializer(), familyConfig)
 }

@@ -14,7 +14,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
  * and [CategoryRef.main] is an index into a [CategoryTaxonomy].
  *
  * Built from the catalog's family-level `programCategories` master list and the device's own
- * [DeviceProfile.programCategoryIds] subset, plus any [DeviceProfile.programCategoryNameOverrides].
+ * [NordProfile.programCategoryIds] subset, plus any [NordProfile.programCategoryNameOverrides].
  */
 internal class NordCategories private constructor(
     /** Wire ids, in taxonomy order - so `ids[ref.main]` is what sub-opcode 51 carries. */
@@ -51,7 +51,7 @@ internal class NordCategories private constructor(
          * Ordered alphabetically with [NONE] last, the order the vendor's own editor lists
          * categories in; the catalog stores the ids in the instrument's own order.
          */
-        fun resolve(profile: DeviceProfile, master: Map<String, String>): NordCategories? {
+        fun resolve(profile: NordProfile, master: Map<String, String>): NordCategories? {
             val declared = profile.programCategoryIds?.takeIf { it.isNotEmpty() } ?: return null
             val overrides = profile.programCategoryNameOverrides.orEmpty()
 

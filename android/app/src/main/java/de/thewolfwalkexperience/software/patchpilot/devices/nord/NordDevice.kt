@@ -94,7 +94,7 @@ class UnsupportedProtocolVersionException(message: String) : IllegalStateExcepti
 /**
  * The USB protocol logic shared by every supported Nord instrument. [profile] supplies what
  * differs per model (USB ids, bank layout, name length, known firmware versions), from
- * devices/nord_devices.json or from [DeviceProfile.unknown] for an unrecognized device.
+ * devices/nord_devices.json or from [NordProfile.unknown] for an unrecognized device.
  *
  * Two values are read off the instrument rather than configured: [protocolVersionFileTransfer],
  * advertised in the device-info reply (10 on a Grand, 8 on a Stage 2 EX), and the root-category
@@ -105,7 +105,7 @@ class UnsupportedProtocolVersionException(message: String) : IllegalStateExcepti
  * ENTER_STATUS_MODE and a content-database RESET, none of which is a prerequisite for anything
  * here. Each operation sends the requests it needs and unlocks whatever it locked.
  */
-class NordDevice(private val transport: UsbBulkTransport, initialProfile: DeviceProfile) {
+class NordDevice(private val transport: UsbBulkTransport, initialProfile: NordProfile) {
 
     /**
      * The transport's own resume policy - see [de.thewolfwalkexperience.software.patchpilot
@@ -117,10 +117,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * The per-instrument constants in force. Normally exactly what
      * devices/nord_devices.json declared - the catalog is the configuration, and this class does
      * not second-guess it. The one exception is [applyDerivedBankLayout], which an *unknown*
-     * device uses to replace [DeviceProfile.unknown]'s guessed bank bounds with the
+     * device uses to replace [NordProfile.unknown]'s guessed bank bounds with the
      * instrument's own; see there.
      */
-    var profile: DeviceProfile = initialProfile
+    var profile: NordProfile = initialProfile
         private set
 
     val name: String get() = profile.name
@@ -202,7 +202,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
     /**
      * Reads the firmware version, raises [firmwareAdvisory] if it is not in
-     * [supportedFirmwareVersions] (an empty set skips the check - see [DeviceProfile.unknown]),
+     * [supportedFirmwareVersions] (an empty set skips the check - see [NordProfile.unknown]),
      * then reads the protocol version table to learn [protocolVersionFileTransfer]. The only
      * thing that has to happen before every other method can be called.
      */
@@ -302,7 +302,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     var firmwareAdvisory: String? = null
         private set
 
-    /** Warns, does not refuse - see Instrument.advisory. An empty set (DeviceProfile.unknown) skips the check. */
+    /** Warns, does not refuse - see Instrument.advisory. An empty set (NordProfile.unknown) skips the check. */
     private fun validateFirmwareVersion() {
         firmwareAdvisory = untestedFirmwareAdvisory(
             name,
@@ -850,7 +850,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     /**
      * Renames the preset at (bank, item): sub-opcode 28/29 inside the `Program` category lock,
      * then a re-select so the panel catches up. An oversized name is accepted and silently
-     * truncated by the instrument; [DeviceProfile.maxProgramNameLen] caps it earlier.
+     * truncated by the instrument; [NordProfile.maxProgramNameLen] caps it earlier.
      */
     suspend fun renamePreset(bank: Int, item: Int, newName: String) {
         require(newName.isNotBlank()) { "New preset name must not be blank" }
@@ -1052,7 +1052,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     }
 
     /**
-     * Replaces an unrecognized device's guessed bank bounds ([DeviceProfile.unknown]'s generous
+     * Replaces an unrecognized device's guessed bank bounds ([NordProfile.unknown]'s generous
      * 'Z' and 100 groups) with the ones the instrument reports. A catalog device keeps its
      * configured values. The wire does not announce how a bank's slots are grouped, so this sets
      * `maxGroup = 1` and `slotsPerGroup` to the whole bank: a Nord Grand bank reads

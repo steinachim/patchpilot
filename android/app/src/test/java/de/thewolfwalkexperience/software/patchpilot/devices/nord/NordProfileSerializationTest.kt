@@ -10,21 +10,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [DeviceProfile] is deliberately field-for-field devices/nord_devices.schema.json's `$defs/device`
+ * [NordProfile] is deliberately field-for-field devices/nord_devices.schema.json's `$defs/device`
  * shape, so NordInstrument.buildReport() can encode one straight into a paste-able
  * catalog entry (see that function's doc). These tests pin the two encoding details a plain
- * "it compiles" check wouldn't catch: [DeviceProfile.maxBankLetter] must serialize as a bare JSON
+ * "it compiles" check wouldn't catch: [NordProfile.maxBankLetter] must serialize as a bare JSON
  * string (the schema's `^[A-Z]$` pattern, not a number), and the whole thing must round-trip
  * through [Json] with unknown keys ignored, as the real catalog file is read.
  */
-class DeviceProfileSerializationTest {
+class NordProfileSerializationTest {
     private val json = Json {
         ignoreUnknownKeys = true
         prettyPrint = true
         encodeDefaults = true
     }
 
-    private val profile = DeviceProfile(
+    private val profile = NordProfile(
         id = "some_new_device",
         name = "Some New Device",
         vendorId = 0x1234,
@@ -54,7 +54,7 @@ class DeviceProfileSerializationTest {
     @Test
     fun `an encoded profile round-trips back through the catalog's own Json config`() {
         val encoded = json.encodeToString(profile)
-        val decoded = json.decodeFromString(DeviceProfile.serializer(), encoded)
+        val decoded = json.decodeFromString(NordProfile.serializer(), encoded)
         assertEquals(profile, decoded)
     }
 
@@ -74,7 +74,7 @@ class DeviceProfileSerializationTest {
              "maxDisplayTextLen":16,"maxProgramNameLen":9,
              "supportedFirmwareVersions":[168]}
         """.trimIndent()
-        val decoded = json.decodeFromString(DeviceProfile.serializer(), entry)
+        val decoded = json.decodeFromString(NordProfile.serializer(), entry)
         assertEquals("the catalog's value must win over the default", 9, decoded.maxProgramNameLen)
     }
 
@@ -89,7 +89,7 @@ class DeviceProfileSerializationTest {
              "maxBankLetter":"P","maxGroup":5,"slotsPerGroup":5,
              "maxDisplayTextLen":16,"supportedFirmwareVersions":[]}
         """.trimIndent()
-        val decoded = json.decodeFromString(DeviceProfile.serializer(), entry)
+        val decoded = json.decodeFromString(NordProfile.serializer(), entry)
         assertEquals(16, decoded.maxProgramNameLen)
     }
 
@@ -100,7 +100,7 @@ class DeviceProfileSerializationTest {
         val catalogJson = """
             {"schemaVersion": 1, "devices": [${json.encodeToString(profile)}]}
         """.trimIndent()
-        val catalog = json.decodeFromString(DeviceCatalog.serializer(), catalogJson)
+        val catalog = json.decodeFromString(NordCatalog.serializer(), catalogJson)
         assertEquals(listOf(profile), catalog.devices)
     }
 }
