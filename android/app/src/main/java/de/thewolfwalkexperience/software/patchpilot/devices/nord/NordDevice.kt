@@ -1076,7 +1076,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         return index
     }
 
-    suspend fun getProgramCategoryIndex(): Int = getCategoryIndexByName("Program")
+    /** The `Program` category's root-list index, read once per session: the root list does not change. */
+    private var programCategoryIndex: Int? = null
+
+    suspend fun getProgramCategoryIndex(): Int =
+        programCategoryIndex ?: getCategoryIndexByName("Program").also { programCategoryIndex = it }
 
     // ---- Storage figures and read-only unit calibration ----
 

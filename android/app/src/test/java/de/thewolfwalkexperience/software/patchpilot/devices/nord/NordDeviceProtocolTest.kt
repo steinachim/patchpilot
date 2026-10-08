@@ -582,8 +582,7 @@ class NordDeviceProtocolTest {
                 5 to ByteArray(0),
                 31 to (uint32BE(3) + ByteArray(32)), // FETCH_ITEM -> status 3
                 7 to ByteArray(0),
-                // The walk:
-                1 to programRootList,
+                // The walk, with the category index already known:
                 3 to childListPayload(listOf("Bank 1" to 25)),
                 5 to ByteArray(0),
                 9 to (uint32BE(0) + uint32BE(1)),

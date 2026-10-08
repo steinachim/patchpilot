@@ -206,9 +206,7 @@ class NordTaggerTest {
                 52 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
                 48 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
                 7 to ByteArray(0),
-                // The read-back fetches the slot by address, which re-asks for the category
-                // index first - getProgramCategoryIndex() queries every time.
-                1 to rootList(), // ROOT_CATEGORY_LIST
+                // The read-back fetches the slot by address; the category index is already known.
                 5 to ByteArray(0), // SELECT_CATEGORY
                 31 to itemRecord(bank = 0, item = 0, categoryId = 21, name = "White Grand"),
                 7 to ByteArray(0), // UNLOCK_CATEGORY_SELECTION
