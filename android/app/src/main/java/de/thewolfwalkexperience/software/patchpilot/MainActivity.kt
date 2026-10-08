@@ -14,9 +14,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
 import de.thewolfwalkexperience.software.patchpilot.ui.InstrumentViewModel
 import de.thewolfwalkexperience.software.patchpilot.ui.PatchPilotApp
@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
             // Nothing until the stored theme arrives, which is a frame or more after onCreate:
             // painting the default theme in the meantime would flash the wrong one on a
             // Steampunk install. The launch background covers the gap instead (themes.xml).
-            val appTheme by viewModel.preferences.theme.collectAsState(initial = null)
+            val appTheme by viewModel.preferences.theme.collectAsStateWithLifecycle(initialValue = null)
             appTheme?.let { chosen ->
                 PatchPilotTheme(appTheme = chosen) {
                     val theme = LocalThemeStyle.current

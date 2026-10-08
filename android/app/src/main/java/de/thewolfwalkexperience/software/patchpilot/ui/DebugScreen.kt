@@ -22,7 +22,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.OccupiedSlotReason
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionReport
@@ -66,18 +66,18 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     // The run itself lives in the ViewModel, so a configuration change mid-run neither cancels
     // it nor loses the dialog it is waiting on - see RegressionRunner.
     val runner = viewModel.regressionRunner
-    val run by runner.state.collectAsState()
-    val pending by runner.question.collectAsState()
-    val runError by runner.error.collectAsState()
+    val run by runner.state.collectAsStateWithLifecycle()
+    val pending by runner.question.collectAsStateWithLifecycle()
+    val runError by runner.error.collectAsStateWithLifecycle()
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
     // The device report, read and held in the ViewModel like the regression run, so neither the
     // read nor the result is lost to a rotation - see DeviceReportRunner.
     val reportRunner = viewModel.deviceReportRunner
-    val reportState by reportRunner.state.collectAsState()
-    val reportError by reportRunner.error.collectAsState()
+    val reportState by reportRunner.state.collectAsStateWithLifecycle()
+    val reportError by reportRunner.error.collectAsStateWithLifecycle()
     // Collected rather than read as plain properties, so the buttons stay honest through a
     // reconnect's dip. The hand-off when a session is lost is PatchPilotApp's.
-    val capabilities by viewModel.capabilities.collectAsState()
+    val capabilities by viewModel.capabilities.collectAsStateWithLifecycle()
     val hasReport = capabilities.hasReport
     val canVerifyFactoryNames = capabilities.canVerifyFactoryNames
     var error by remember { mutableStateOf<String?>(null) }

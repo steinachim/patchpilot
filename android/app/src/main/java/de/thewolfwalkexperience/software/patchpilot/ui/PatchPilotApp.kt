@@ -5,10 +5,10 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.withResumed
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
@@ -109,7 +109,7 @@ fun PatchPilotApp(
     // settings screen. Nothing would re-run a dropped hand-off, so the effect suspends on
     // `withResumed` instead. Keyed on the session, so a `forceReconnect()` dip back to Connected
     // never fires it.
-    val session by viewModel.state.collectAsState()
+    val session by viewModel.state.collectAsStateWithLifecycle()
     val currentEntry by navController.currentBackStackEntryAsState()
     LaunchedEffect(session, currentEntry) {
         val entry = currentEntry ?: return@LaunchedEffect

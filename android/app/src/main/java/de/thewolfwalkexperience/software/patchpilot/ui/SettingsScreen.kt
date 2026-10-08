@@ -16,12 +16,12 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.AppTheme
 
@@ -39,9 +39,9 @@ fun SettingsScreen(
 ) {
     // Null until each store has answered: drawn before then, a default the user has changed
     // would show for a frame, a switch flipping as the stored value arrives.
-    val storedTheme by preferences.theme.collectAsState(initial = null)
-    val storedAutoConnect by preferences.autoConnectToFirstFound.collectAsState(initial = null)
-    val storedHiddenNotices by preferences.hiddenNotices.collectAsState(initial = null)
+    val storedTheme by preferences.theme.collectAsStateWithLifecycle(initialValue = null)
+    val storedAutoConnect by preferences.autoConnectToFirstFound.collectAsStateWithLifecycle(initialValue = null)
+    val storedHiddenNotices by preferences.hiddenNotices.collectAsStateWithLifecycle(initialValue = null)
 
     PatchPilotScaffold(title = stringResource(R.string.settings_title), onBack = onBack) { innerPadding ->
         val current = storedTheme ?: return@PatchPilotScaffold

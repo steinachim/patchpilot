@@ -26,7 +26,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,13 +37,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.BarAction
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 
 @Composable
 fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val theme = LocalThemeStyle.current
 
     // The report is reachable from the untested-firmware gate, not only after continuing: someone
@@ -52,7 +52,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
     // would let it be supported. The instrument is already connected here, since the advisory is
     // raised after the handshake.
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
-    val capabilities by viewModel.capabilities.collectAsState()
+    val capabilities by viewModel.capabilities.collectAsStateWithLifecycle()
     // Said rather than swallowed: a read the cable interrupted lands in the same Done as a whole
     // one, and the report is shared the moment it is read. Kept until the next read.
     var incompleteReads by rememberSaveable { mutableStateOf(0) }

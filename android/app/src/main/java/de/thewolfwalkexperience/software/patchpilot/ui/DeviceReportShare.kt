@@ -5,7 +5,6 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -14,6 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.thewolfwalkexperience.software.patchpilot.R
 import kotlinx.coroutines.launch
 
@@ -58,8 +58,8 @@ internal fun rememberDeviceReportShare(
     onShared: (sharedAs: String, failedReads: Int) -> Unit = { _, _ -> },
 ): DeviceReportShare {
     val runner = viewModel.deviceReportRunner
-    val state by runner.state.collectAsState()
-    val error by runner.error.collectAsState()
+    val state by runner.state.collectAsStateWithLifecycle()
+    val error by runner.error.collectAsStateWithLifecycle()
     var pendingStem by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()

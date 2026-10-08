@@ -29,7 +29,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +45,7 @@ import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
@@ -139,12 +139,12 @@ fun ProgramsScreen(
     // What the session offers, derived once per connection state rather than re-read here on
     // every recomposition; empty while disconnected, so recomposing through a reconnect is safe.
     // The hand-off to ConnectScreen is PatchPilotApp's.
-    val session by viewModel.state.collectAsState()
-    val capabilities by viewModel.capabilities.collectAsState()
+    val session by viewModel.state.collectAsStateWithLifecycle()
+    val capabilities by viewModel.capabilities.collectAsStateWithLifecycle()
     val supportedEdits = capabilities.supportedEdits
     val canRelocate = EditOp.MOVE in supportedEdits || EditOp.SWAP in supportedEdits
     // Which listing is on screen.
-    val browseScope by viewModel.scope.collectAsState()
+    val browseScope by viewModel.scope.collectAsStateWithLifecycle()
     // Null where the instrument has no categories at all, which is what hides both row actions.
     val tagger = capabilities.tagger
     // Non-null where the instrument is usable but not vouched for. The connect screen gates on
@@ -180,7 +180,7 @@ fun ProgramsScreen(
     // Rows render as they arrive rather than behind a spinner, on an instrument whose index costs
     // one round trip per slot. Collected in the ViewModel, so a rotation does not restart a
     // 93-second scan.
-    val index by viewModel.listings.index.collectAsState()
+    val index by viewModel.listings.index.collectAsStateWithLifecycle()
 
     // Announces "this screen needs a listing"; the ViewModel decides whether that means work.
     // Keyed on Unit, not the session: restarting a reconnect's listing is the ViewModel's job
@@ -246,7 +246,7 @@ fun ProgramsScreen(
     // The user listing's free slots, whatever is on screen: a copy can only be written to a
     // writable slot, so the destination pool belongs to the user scope. From `listing` it would
     // be empty in the factory scope, where every row holds a voice.
-    val userIndex by viewModel.listings.userIndex.collectAsState()
+    val userIndex by viewModel.listings.userIndex.collectAsStateWithLifecycle()
     val userSlots = remember(capabilities) { viewModel.listings.allSlots(PresetScope.USER) }
     val copyDestinations =
         remember(userIndex, userSlots) { freeSlots(userIndex.slots, userSlots, userIndex.unreadable) }
@@ -421,7 +421,7 @@ fun ProgramsScreen(
         }
     }
 
-    val notice by viewModel.pendingNotice.collectAsState()
+    val notice by viewModel.pendingNotice.collectAsStateWithLifecycle()
     notice?.let { shown ->
         InstrumentNoticeDialog(shown, onDismiss = { hide -> viewModel.dismissNotice(shown, hide) })
     }
