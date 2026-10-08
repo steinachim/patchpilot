@@ -7,6 +7,7 @@ import kotlin.random.Random
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class Pro800ProgramCodecTest {
@@ -89,6 +90,17 @@ class Pro800ProgramCodecTest {
     fun `an overflow position is not a valid field offset`() {
         assertThrows(IllegalArgumentException::class.java) { Pro800ProgramCodec.denseIndexOf(0) }
         assertThrows(IllegalArgumentException::class.java) { Pro800ProgramCodec.denseIndexOf(16) }
+    }
+
+    /** The ported offset table: no two fields overlap, and the name comes after the version. */
+    @Test
+    fun `the record's fields do not overlap`() {
+        val fields = listOf(Pro800ProgramFields.STORAGE_CODE, Pro800ProgramFields.VERSION).sortedBy { it.denseOffset }
+        assertTrue(fields.all { it.denseOffset >= 0 })
+        fields.zipWithNext { a, b ->
+            assertTrue("${a.name} and ${b.name} overlap", a.denseOffset + a.byteCount <= b.denseOffset)
+        }
+        assertTrue(Pro800ProgramFields.NAME_DENSE_OFFSET > Pro800ProgramFields.VERSION.denseOffset)
     }
 
     @Test
