@@ -23,7 +23,9 @@ import de.thewolfwalkexperience.software.patchpilot.usb.AttachedUsbDevice
 import de.thewolfwalkexperience.software.patchpilot.usb.UsbHost
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -711,11 +713,15 @@ internal class ConnectionCoordinator(
      * close runs from a coroutine of its own, through the same mutex and after [onSessionEnding]:
      * at once where nothing is in flight, otherwise once the edit and the cleanup are done.
      * Nothing here sends protocol messages; every operation cleans up whatever lock it caused.
+     *
+     * In [GlobalScope] on purpose: the owner's scope is already cancelled, and this one coroutine
+     * has to outlive it. It ends once the close is done.
      */
+    @OptIn(DelicateCoroutinesApi::class)
     fun release() {
         val target = instrument ?: return
         instrument = null
-        CoroutineScope(Dispatchers.Main.immediate).launch {
+        GlobalScope.launch(Dispatchers.Main.immediate) {
             instrumentMutex.withLock {
                 onSessionEnding()
                 closeQuietly(target)
