@@ -77,6 +77,10 @@ class ProgramsControllerTest {
             return value
         }
 
+        override suspend fun applyRemedy(remedy: suspend () -> Unit) {
+            calls += "applyRemedy"
+            remedy()
+        }
         override suspend fun selectProgram(slot: PresetSlot) = answer("select(${slot.displayId})", "Selected")
         override suspend fun renameProgram(slot: PresetSlot, newName: String) =
             answer("rename(${slot.displayId},$newName)", "Renamed")
@@ -216,6 +220,33 @@ class ProgramsControllerTest {
 
         assertNotNull("a remedy plus a retry is answerable, so it must open the dialog", controller.blocked)
         assertNull("and must not also be reported as a plain failure", controller.operationError)
+    }
+
+    /** The fix is an edit like any other: busy while it runs, and run through the session's lock. */
+    @Test
+    fun `a confirmed remedy runs as an edit, then retries the blocked one`() = runTest {
+        val (controller, ops) = controller()
+        var fixed = false
+        ops.failWith = InstrumentException.BlockedByDeviceState(
+            message = "The instrument is in Performance mode.",
+            remedy = {
+                assertNotNull("the fix must show as busy", controller.busy)
+                fixed = true
+                ops.failWith = null
+            },
+            remedyLabel = "Switch to Voice mode",
+        )
+        controller.onProgramTapped(slot(0, 3))
+        testScheduler.advanceUntilIdle()
+
+        controller.onBlockedRemedyConfirmed(controller.blocked!!)
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(fixed)
+        assertEquals(listOf("select(A3)", "applyRemedy", "select(A3)"), ops.calls)
+        assertNull(controller.busy)
+        assertNull(controller.blocked)
+        assertNull(controller.operationError)
     }
 
     @Test

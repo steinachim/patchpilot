@@ -42,6 +42,7 @@
 - A Behringer Pro-800 move that copies the preset but cannot empty its old slot now says the preset is in both slots, as the other instruments do.
 - On a Nord, a copy is no longer reported under another preset's name when the instrument's answer about the new copy is not the copy's own record.
 - A Behringer Pro-800 preset whose reply keeps arriving damaged is reported as damaged, instead of as the instrument not answering.
+- On a Yamaha Motif XS, switching to Voice mode from the load dialog shows its progress and keeps other edits and Back off until it is done.
 
 ## 1.1
 

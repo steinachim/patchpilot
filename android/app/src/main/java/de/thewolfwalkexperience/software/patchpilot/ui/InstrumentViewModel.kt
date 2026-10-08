@@ -111,6 +111,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
 
     /** The instrument the last session was on, so a session on another one starts [programs] afresh. */
     private var lastSessionKey: String? = null
+    private var lastInstrument: Instrument? = null
 
     /** The device report, held here so a minutes-long read survives the screen being torn down - see [DeviceReportRunner]. */
     internal val deviceReportRunner = DeviceReportRunner(
@@ -145,16 +146,24 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     /**
      * Resets [programs] where the session it described is over: the device was unplugged, or a
      * session on another instrument began. A resume's rebuild of the same instrument keeps it, so
-     * a dialog open across a screen lock is still there.
+     * a dialog open across a screen lock is still there - all but a remedy offer, which is bound
+     * to the instrument that raised it, now closed.
      */
     private fun forgetOperationsOnSessionChange(state: ConnectionState) {
         if (state is ConnectionState.DeviceLost) {
             programs.reset()
             lastSessionKey = null
+            lastInstrument = null
         }
-        val key = (state as? ConnectionState.Connected)?.instrument?.identity?.stableKey ?: return
-        if (key != lastSessionKey) programs.reset()
+        val instrument = (state as? ConnectionState.Connected)?.instrument ?: return
+        val key = instrument.identity.stableKey
+        if (key != lastSessionKey) {
+            programs.reset()
+        } else if (instrument !== lastInstrument) {
+            programs.forgetRemedy()
+        }
         lastSessionKey = key
+        lastInstrument = instrument
     }
 
     private suspend fun offerNotice(instrument: Instrument) {
@@ -226,6 +235,8 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     override fun reloadAfterEdit() = listings.reloadAfterEdit()
 
     // ---- Actions, each routed through a facet ----
+
+    override suspend fun applyRemedy(remedy: suspend () -> Unit) = connection.exclusive { remedy() }
 
     override suspend fun selectProgram(slot: PresetSlot): String = connection.exclusive { instrument ->
         val selector = requireFacet(instrument.selector, "load a preset")

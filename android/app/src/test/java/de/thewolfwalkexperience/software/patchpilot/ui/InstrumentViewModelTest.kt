@@ -58,6 +58,36 @@ class InstrumentViewModelTest {
         assertEquals(null, viewModel.programs.renameTarget)
     }
 
+    /**
+     * A rebuild of the same instrument keeps the screen's dialogs, but not a remedy offer: its fix
+     * is bound to the instrument that raised it, which the rebuild closed.
+     */
+    @Test
+    fun `a rebuilt session keeps the open dialog but drops a remedy offer`() {
+        val viewModel = viewModel().apply { awaitSettled() }
+        viewModel.connection.connectDemo()
+        viewModel.awaitSettled()
+        // Lets the ViewModel see the session begin, which resets the screen's state.
+        shadowOf(Looper.getMainLooper()).idle()
+        val first = viewModel.connection.instrument
+        val slot = viewModel.listings.allSlots().first()
+        viewModel.programs.renameTarget = slot
+        viewModel.programs.blocked = BlockedOperation("Blocked.", null, "Fix", apply = {}, retry = {})
+
+        viewModel.connection.connectDemo()
+        val deadline = System.nanoTime() + 10_000_000_000
+        // Until the new session is published, not merely opened: the ViewModel reacts to the state.
+        while ((viewModel.state.value as? ConnectionState.Connected)?.instrument.let { it == null || it === first }) {
+            check(System.nanoTime() < deadline) { "Still ${viewModel.state.value} after 10 s" }
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(10)
+        }
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(slot, viewModel.programs.renameTarget)
+        assertEquals(null, viewModel.programs.blocked)
+    }
+
     /** The share button's gate can trail the session by a frame, so a tap may find no session at all. */
     @Test
     fun `a report is named only while a session can give one`() {

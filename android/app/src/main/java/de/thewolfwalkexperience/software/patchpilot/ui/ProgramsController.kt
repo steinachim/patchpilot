@@ -142,6 +142,8 @@ internal class ProgramsController(
         reloadAfter: Boolean = true,
         retry: (() -> Unit)? = null,
         showProgress: Boolean = true,
+        /** Started once [block] has succeeded, as its own edit. */
+        then: (() -> Unit)? = null,
         block: suspend () -> String?,
     ) {
         val what = busyLabel.trimEnd('…', ' ')
@@ -158,6 +160,7 @@ internal class ProgramsController(
             try {
                 statusMessage = block()
                 if (reloadAfter) viewModel.reloadAfterEdit()
+                then?.invoke()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: InstrumentException.BlockedByDeviceState) {
@@ -197,25 +200,26 @@ internal class ProgramsController(
         ) { viewModel.selectProgram(slot) }
     }
 
+    /**
+     * Applies the fix as an edit of its own - busy, and under the session's lock - then retries
+     * the blocked edit, only once the fix has reported success: the remedy verifies itself, so a
+     * silent no-op would show the user the same dialog twice.
+     */
     fun onBlockedRemedyConfirmed(pending: BlockedOperation) {
-        // `pending.retry()` is the blocked edit, so it must not become abandonable just because
-        // it arrived through the remedy dialog.
-        viewModel.launchEdit {
-            blocked = null
-            operationError = null
-            try {
-                pending.apply()
-                // Only after the fix reports success: the remedy verifies itself, so a silent
-                // no-op would show the user the same dialog twice.
-                pending.retry()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val what = strings.get(R.string.programs_busy_applying_fix).trimEnd('…', ' ')
-                operationError =
-                    reportFailure(what, e, strings.get(R.string.programs_operation_failed, what))
-            }
+        blocked = null
+        runEdit(
+            busyLabel = strings.get(R.string.programs_busy_applying_fix),
+            reloadAfter = false,
+            then = pending.retry,
+        ) {
+            viewModel.applyRemedy(pending.apply)
+            null
         }
+    }
+
+    /** Drops an open remedy offer, whose fix is bound to an instrument since replaced. */
+    fun forgetRemedy() {
+        blocked = null
     }
 
     fun onDeleteConfirmed(slot: PresetSlot) {
