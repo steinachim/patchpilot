@@ -43,7 +43,7 @@ class InstrumentFacetTest {
     private fun nord(): NordInstrument = NordInstrument(NordDevice(FakeNordTransport(), FakeNordProfile.profile()))
 
     /** A Motif XS with no transport behind it - enough to ask what its editor declares. */
-    private fun motifXs(scope: CoroutineScope = CoroutineScope(SupervisorJob())): MotifXsInstrument =
+    private fun motifXs(scope: CoroutineScope): MotifXsInstrument =
         MotifXsInstrument(
             SysExExchange(NullMidiTransport, scope),
             MotifXsConfig(
@@ -79,8 +79,8 @@ class InstrumentFacetTest {
      * started returning a tagger regardless would be offering a dialog with no categories in it.
      */
     @Test
-    fun `a family without a capability declares null for it`() {
-        assertNull("no encoding in this fixture, so nothing to tag with", motifXs().tagger)
+    fun `a family without a capability declares null for it`() = runTest {
+        assertNull("no encoding in this fixture, so nothing to tag with", motifXs(backgroundScope).tagger)
         // A Nord's categories need *two* halves - the model's own id subset and the catalog's
         // master name list - and this fixture profile carries neither, so there is nothing to
         // resolve. The Nord path with both halves present is covered by NordTaggerTest.
@@ -260,7 +260,7 @@ class InstrumentFacetTest {
      */
     @Test
     fun `a filename stem exists for every instrument, with or without a reporter`() = runTest {
-        val motif = motifXs()
+        val motif = motifXs(backgroundScope)
         assertNull("this test is pointless if the Motif XS grows a reporter", motif.report)
 
         // Asserted as a property rather than a literal: the stem comes from the *fixture's*
@@ -283,7 +283,7 @@ class InstrumentFacetTest {
         assertTrue("a Nord deletes with sub-opcode 20/21", EditOp.DELETE in nordOps)
         assertTrue(
             "the Motif XS erases the slot the way a move clears its source",
-            EditOp.DELETE in motifXs().editor!!.supported,
+            EditOp.DELETE in motifXs(backgroundScope).editor!!.supported,
         )
         assertTrue(
             "an Axe-Fx III writes the editor's own empty preset",
