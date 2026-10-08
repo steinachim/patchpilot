@@ -278,45 +278,15 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                         }) { Text(stringResource(R.string.action_retry)) }
                     }
 
-                    is ConnectionState.AdvisoryWarning -> {
-                        // The same shape as the unknown-device gate below: the same kind of question, and
-                        // a second visual language for it would make it easier to click past.
-                        Text(
-                            stringResource(R.string.connect_advisory_title),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(s.instrument.identity.name)
-                        Spacer(Modifier.height(16.dp))
-                        Text(s.message, color = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(16.dp))
-                        Row {
-                            OutlinedButton(onClick = { viewModel.connection.disconnect() }) {
-                                Text(stringResource(R.string.action_disconnect))
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            theme.FilledButton(onClick = { viewModel.connection.confirmAdvisory() }) {
-                                Text(stringResource(R.string.action_continue_anyway))
-                            }
-                        }
-                        if (capabilities.hasReport) {
-                            TextButton(
-                                onClick = { pendingShare = reportShare.dialog() },
-                                enabled = !reportShare.running,
-                            ) {
-                                Text(reportShare.label)
-                            }
-                        }
-                        reportShare.error?.let {
-                            Text(it, color = MaterialTheme.colorScheme.error)
-                        }
-                        if (incompleteReads > 0) {
-                            Text(
-                                stringResource(R.string.report_shared_incomplete, incompleteReads),
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    }
+                    is ConnectionState.AdvisoryWarning -> AdvisoryGate(
+                        instrumentName = s.instrument.identity.name,
+                        message = s.message,
+                        reportShare = reportShare.takeIf { capabilities.hasReport },
+                        incompleteReads = incompleteReads,
+                        onDisconnect = { viewModel.connection.disconnect() },
+                        onContinue = { viewModel.connection.confirmAdvisory() },
+                        onShareReport = { pendingShare = reportShare.dialog() },
+                    )
 
                     is ConnectionState.DeviceLost -> {
                         Text(
@@ -377,5 +347,62 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * The untested-firmware or untested-model question: disconnect, or continue anyway. The same
+ * shape as the unknown-device gate, since it is the same kind of question and a second visual
+ * language for it would make it easier to click past.
+ *
+ * "Continue anyway" waits for a report being read: it leaves this screen, which is what shares
+ * the report, so the read would finish with nobody to hand it to. Disconnect stays live, since it
+ * cancels the read.
+ *
+ * @param reportShare the report flow, or null where the instrument has no report.
+ */
+@Composable
+internal fun AdvisoryGate(
+    instrumentName: String,
+    message: String,
+    reportShare: DeviceReportShare?,
+    incompleteReads: Int,
+    onDisconnect: () -> Unit,
+    onContinue: () -> Unit,
+    onShareReport: () -> Unit,
+) {
+    val theme = LocalThemeStyle.current
+    val reading = reportShare?.running == true
+    Text(
+        stringResource(R.string.connect_advisory_title),
+        style = MaterialTheme.typography.titleMedium,
+    )
+    Spacer(Modifier.height(8.dp))
+    Text(instrumentName)
+    Spacer(Modifier.height(16.dp))
+    Text(message, color = MaterialTheme.colorScheme.error)
+    Spacer(Modifier.height(16.dp))
+    Row {
+        OutlinedButton(onClick = onDisconnect) {
+            Text(stringResource(R.string.action_disconnect))
+        }
+        Spacer(Modifier.width(8.dp))
+        theme.FilledButton(onClick = onContinue, enabled = !reading) {
+            Text(stringResource(R.string.action_continue_anyway))
+        }
+    }
+    if (reportShare != null) {
+        TextButton(onClick = onShareReport, enabled = !reading) {
+            Text(reportShare.label)
+        }
+        reportShare.error?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
+    }
+    if (incompleteReads > 0) {
+        Text(
+            stringResource(R.string.report_shared_incomplete, incompleteReads),
+            color = MaterialTheme.colorScheme.error,
+        )
     }
 }

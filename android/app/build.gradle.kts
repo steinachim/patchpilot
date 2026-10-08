@@ -163,6 +163,9 @@ dependencies {
     testImplementation(libs.androidx.compose.ui.test.junit4)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+    // The empty activity createComposeRule hosts a composable in; debug builds only, so it never
+    // reaches a release.
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
 // devices/*.json (repo root) are the source of truth for per-instrument constants. Android can
