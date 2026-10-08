@@ -539,7 +539,7 @@ class MotifXsInstrument(
         }
         try {
             exchange.exchangeAfterAll(
-                messages = sequence,
+                sequence = sequence,
                 what = busyWhat,
                 timeout = SEQUENCE_TIMEOUT,
                 gap = BLOCK_GAP,

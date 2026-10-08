@@ -223,7 +223,7 @@ class SysExExchange(
     }
 
     /**
-     * Sends every message in [messages] under a single lock, then waits for the first reply
+     * Sends every message in [sequence] under a single lock, then waits for the first reply
      * satisfying [matches] - for a write acknowledged only at the end, such as a Motif XS's
      * header, blocks and footer. The lock is held across the whole run so no unrelated message
      * lands inside a sequence the instrument treats as one transaction.
@@ -238,17 +238,17 @@ class SysExExchange(
      * before the call.
      */
     suspend fun exchangeAfterAll(
-        messages: List<ByteArray>,
+        sequence: List<ByteArray>,
         what: String,
         timeout: Duration = defaultTimeout,
         gap: Duration = Duration.ZERO,
         matches: (ByteArray) -> Boolean,
     ): ByteArray = lock.withLock {
-        require(messages.isNotEmpty()) { "exchangeAfterAll needs at least one message to send" }
+        require(sequence.isNotEmpty()) { "exchangeAfterAll needs at least one message to send" }
         val reply = withTimeoutOrNull(timeout) {
             coroutineScope {
                 val awaited = async(start = CoroutineStart.UNDISPATCHED) {
-                    this@SysExExchange.messages.first { message ->
+                    messages.first { message ->
                         matches(message).also { matched ->
                             if (!matched && BuildConfig.DEBUG) {
                                 Log.d(TAG, "'$what': ignoring ${message.size}B reply ${message.prefixHex()}")
@@ -258,9 +258,9 @@ class SysExExchange(
                 }
                 // `delay(gap)` is a cancellation point on every iteration - see the doc above.
                 withContext(NonCancellable) {
-                    messages.forEachIndexed { index, message ->
+                    sequence.forEachIndexed { index, message ->
                         sendOrLost(message, what)
-                        if (gap > Duration.ZERO && index < messages.size - 1) delay(gap)
+                        if (gap > Duration.ZERO && index < sequence.size - 1) delay(gap)
                     }
                 }
                 awaited.await()
