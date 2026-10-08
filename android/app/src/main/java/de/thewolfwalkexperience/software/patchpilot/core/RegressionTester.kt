@@ -63,6 +63,9 @@ class RegressionTester(
     private val refreshEdited: suspend (List<SlotAddress>) -> Unit,
 ) {
 
+    /** Anything this run changed about the instrument's state, for the summary to disclose. */
+    private val remediesApplied = linkedSetOf<String>()
+
     suspend fun run(progress: (String) -> Unit): RegressionReport {
         val results = facetInventory() +
             selectorChecks(progress) +
@@ -384,17 +387,16 @@ class RegressionTester(
         val deleteResult = skip(DELETE, "$NO_SANDBOX - delete is never run against a stored preset")
 
         val mutating = listOf(EditOp.RENAME, EditOp.MOVE, EditOp.SWAP).filter { it in editor.supported }
+        // In the sandbox path's order, so the two reports read alike: copy first, delete last.
         if (mutating.isEmpty()) {
-            return listOf(copyResult, deleteResult) +
-                listOf(RENAME, MOVE, SWAP).map { skip(it, UNSUPPORTED) }
+            return listOf(copyResult) + listOf(RENAME, MOVE, SWAP).map { skip(it, UNSUPPORTED) } + deleteResult
         }
         if (!onConfirmRealSlotMutation(reason)) {
-            return listOf(copyResult, deleteResult) +
-                listOf(RENAME, MOVE, SWAP).map { skip(it, DECLINED) }
+            return listOf(copyResult) + listOf(RENAME, MOVE, SWAP).map { skip(it, DECLINED) } + deleteResult
         }
 
         val target = occupied.first()
-        val results = mutableListOf(copyResult, deleteResult)
+        val results = mutableListOf(copyResult)
 
         results += when {
             EditOp.RENAME !in editor.supported -> skip(RENAME, UNSUPPORTED)
@@ -464,7 +466,7 @@ class RegressionTester(
                 "Swapped ${display(target)} with ${display(partner)} - real data ($why) - and back."
             }
         }
-        return results
+        return results + deleteResult
     }
 
     // ---- Plumbing ----
@@ -522,9 +524,6 @@ class RegressionTester(
             RegressionResult(name, Status.FAIL, "$what did not clear it: ${e.message ?: e}")
         }
     }
-
-    /** Anything this run changed about the instrument's state, for the summary to disclose. */
-    private val remediesApplied = linkedSetOf<String>()
 
     private fun skip(name: String, reason: String) = RegressionResult(name, Status.SKIPPED, reason)
 

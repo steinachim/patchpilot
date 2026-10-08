@@ -267,6 +267,9 @@ class RegressionTesterTest {
         // Never attempted without a sandbox, whatever the user answered.
         assertEquals(Status.SKIPPED, report.of("Delete a preset").status)
         assertEquals(before, listing(instrument))
+        // The sandbox path's order, so the two reports read alike.
+        val edits = listOf("Copy a preset", "Rename a preset", "Move a preset", "Swap two presets", "Delete a preset")
+        assertEquals(edits, report.results.map { it.name }.filter { it in edits })
     }
 
     /**
