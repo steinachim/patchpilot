@@ -25,7 +25,6 @@ internal sealed class ProgramRow {
  * @property occupied addresses that actually hold a preset.
  * @property unreadable addresses whose read failed: neither occupied nor free as far as anyone
  *   knows, so no edit is offered on them or onto them.
- * @property freeSlots every address a copy could be written to.
  * @property bankHeaderIndex bank label -> the row index of its header, for the rail's jump.
  */
 internal data class ProgramListing(
@@ -33,7 +32,6 @@ internal data class ProgramListing(
     val bankLabels: List<String> = emptyList(),
     val occupied: Set<SlotAddress> = emptySet(),
     val unreadable: Set<SlotAddress> = emptySet(),
-    val freeSlots: List<PresetSlot> = emptyList(),
     val bankHeaderIndex: Map<String, Int> = emptyMap(),
 )
 
@@ -74,10 +72,6 @@ internal fun buildProgramListing(
     // Addresses that actually hold a preset, not every address the index mentioned: a Pro-800
     // answers for all 400, and an empty slot must not get a drag handle and a Rename button.
     val occupied = reported.filterNot { it.isEmpty }.map { it.address }.toSet()
-
-    // From the full address space rather than the toggle, since picking a destination needs all
-    // of it whether or not "show empty slots" is on.
-    val freeSlots = freeSlots(reported, allSlots, unreadable)
 
     // Bank labels come off the rows rather than being parsed out of a display id, since "A:1:1"
     // yields its bank to substringBefore(':') and "A00" does not.
@@ -133,7 +127,6 @@ internal fun buildProgramListing(
         bankLabels = bankLabels,
         occupied = occupied,
         unreadable = unreadable,
-        freeSlots = freeSlots,
         // Row index of each bank's header, so the index rail can scroll straight to it.
         bankHeaderIndex = rows.withIndex()
             .mapNotNull { (i, row) -> (row as? ProgramRow.BankHeader)?.bank?.let { it to i } }

@@ -105,9 +105,9 @@ class ProgramRowsTest {
 
     @Test
     fun `free slots are every address the layout allows that holds nothing`() {
-        val listing = buildProgramListing(nordReported, allSlots(), false, false, "")
-        assertEquals(3, listing.freeSlots.size)
-        assertTrue(listing.freeSlots.none { it.address in listing.occupied })
+        val free = freeSlots(nordReported, allSlots())
+        assertEquals(3, free.size)
+        assertTrue(free.none { slot -> nordReported.any { it.address == slot.address } })
     }
 
     @Test
@@ -137,7 +137,7 @@ class ProgramRowsTest {
     fun `an empty listing still offers every address as a copy destination`() {
         val listing = buildProgramListing(emptyList(), allSlots(), false, false, "")
         assertTrue(listing.rows.isEmpty())
-        assertEquals(6, listing.freeSlots.size)
+        assertEquals(6, freeSlots(emptyList(), allSlots()).size)
     }
 
     // ---- Bank order ----
@@ -218,7 +218,6 @@ class ProgramRowsTest {
         val unreadable = setOf(SlotAddress(0, 1))
         val listing = buildProgramListing(nordReported, allSlots(), false, true, "", unreadable)
 
-        assertTrue(listing.freeSlots.none { it.address in unreadable })
         assertEquals(unreadable, listing.unreadable)
         assertTrue(freeSlots(nordReported, allSlots(), unreadable).none { it.address in unreadable })
     }
