@@ -417,145 +417,8 @@ class MotifXsInstrument(
         }
     }
 
-    // ---- Mode ----
-
-    /** Reads the instrument's current mode, or null if it will not say: one parameter request, ~10 ms. Best-effort - see [requireVoiceMode]. */
-    internal suspend fun readMode(): MotifXsMode? = try {
-        val reply = exchange.exchange(
-            request = MotifXsSysEx.requestMode(config.deviceNumber),
-            what = "asking which mode the instrument is in",
-            timeout = MODE_TIMEOUT,
-        ) { MotifXsSysEx.modeOf(it) != null }
-        MotifXsSysEx.modeOf(reply)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Log.w(TAG, "Couldn't read the mode; continuing without the check", e)
-        null
-    }
-
-    /**
-     * Refuses a selection the instrument would silently ignore: selection works in Voice mode
-     * only, and in Performance and Song mode the three parameter sets draw no echo and change
-     * nothing, so the selection would otherwise time out and report silence.
-     *
-     * The mode change is offered as a remedy rather than sent, since taking a player out of the
-     * Performance they are using is a visible change to their setup. An unreadable mode blocks
-     * nothing: the selection is attempted anyway.
-     */
-    private suspend fun requireVoiceMode() {
-        val mode = readMode() ?: return
-        if (!mode.blocksVoiceSelection) return
-        throw InstrumentException.BlockedByDeviceState(
-            message = "The instrument is in ${mode.label} mode, where it ignores a voice " +
-                "selection silently - nothing would change.",
-            remedyLabel = "Switch to Voice mode",
-            remedyDetail = "This switches the instrument out of ${mode.label} mode, which " +
-                "changes what it is playing. Anything unsaved in the current " +
-                "${mode.label.lowercase()} stays on the instrument, but you will have to go " +
-                "back to it yourself.",
-            remedy = { switchToVoiceMode() },
-        )
-    }
-
-    /**
-     * Sends the documented mode change and confirms it took - only ever called from a remedy the
-     * user has accepted. The confirmation matters because a parameter change draws no reply of
-     * its own, so a switch that did not happen would look like one that did.
-     */
-    private suspend fun switchToVoiceMode() {
-        exchange.tell(MotifXsSysEx.setMode(config.deviceNumber, MotifXsMode.VOICE))
-
-        // Polled, not read back once: the instrument tears down a Performance and loads a voice,
-        // so a read straight after the send returns the old value. Bounded by the clock rather
-        // than by a poll count, since each read carries its own timeout and retries.
-        var last: MotifXsMode? = null
-        val reachedVoice = withTimeoutOrNull(MODE_SETTLE_BUDGET) {
-            var now: MotifXsMode?
-            do {
-                delay(MODE_SETTLE_INTERVAL)
-                now = readMode()
-                if (now != null) last = now
-            } while (now?.blocksVoiceSelection != false)
-            true
-        }
-        if (reachedVoice == true) return
-
-        // Never read at all is "could not tell", as in [requireVoiceMode].
-        val stuck = last ?: return
-        throw InstrumentException.BlockedByDeviceState(
-            "The instrument was still in ${stuck.label} mode after being asked to switch. " +
-                "Change it from the panel instead.",
-        )
-    }
-
-    /**
-     * The voice currently loaded in the edit buffer, read a byte at a time from `40 00 nn` - the
-     * documented readback channel for what the panel is showing. Answers in Voice and Song mode
-     * and is silent in Performance mode, so null means "could not tell", never "no voice".
-     */
-    internal suspend fun readEditBufferName(): String? {
-        val bytes = ByteArray(MotifXsVoice.NAME_LENGTH)
-        for (offset in 0 until MotifXsVoice.NAME_LENGTH) {
-            val reply = try {
-                exchange.exchange(
-                    request = MotifXsSysEx.requestEditBufferNameByte(config.deviceNumber, offset),
-                    what = "reading the loaded voice's name",
-                    timeout = MODE_TIMEOUT,
-                ) { m ->
-                    MotifXsSysEx.typeOf(m) == MotifXsSysEx.TYPE_PARAM_CHANGE &&
-                        MotifXsSysEx.addressOf(m) ==
-                        Triple(MotifXsSysEx.COMMON_HI, MotifXsSysEx.COMMON_MID, offset)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                return null
-            }
-            val at = MotifXsSysEx.REQUEST_ADDRESS_INDEX + 3
-            if (reply.size <= at + 1) return null
-            bytes[offset] = reply[at]
-        }
-        return String(bytes, Charsets.ISO_8859_1).trimEnd('\u0000', ' ').ifEmpty { null }
-    }
-
-    // ---- PresetSelector ----
-
-    /** Selection is three parameter sets at `65 00 00/01/02`. */
-    override val selector: PresetSelector = object : PresetSelector {
-        override suspend fun select(address: SlotAddress) {
-            requireVoiceMode()
-            val bank = requireNotNull(config.banks.getOrNull(address.bank)) { "No bank ${address.bank}" }
-            // Assuming an LSB would select a different bank without saying so.
-            val lsb = bank.selectLsb ?: throw InstrumentException.NotSupported(
-                "select a voice in ${bank.shownLabel}, whose bank-select LSB is unknown",
-            )
-            val sets = MotifXsSysEx.selectVoice(
-                config.deviceNumber,
-                lsb,
-                address.slot,
-                bank.selectMsb,
-            )
-            // All three under one lock, so a listing's dump request cannot land between the bank
-            // select and the program. Only the third echo - the program, carrying the value sent -
-            // means the selection landed. A selection is idempotent, so a missing echo sends all
-            // three again, as often as the exchange retries anything else.
-            val what = "selecting ${layout.format.format(address)}"
-            var retriesLeft = SELECT_RETRIES
-            while (true) {
-                try {
-                    exchange.exchangeAfterAll(sets, what, timeout = VOICE_TIMEOUT) { reply ->
-                        MotifXsSysEx.isSelectEcho(reply) && reply.size > 8 &&
-                            (reply[7].toInt() and 0xFF) == MotifXsSysEx.SELECT_PROGRAM &&
-                            (reply[8].toInt() and 0x7F) == address.slot
-                    }
-                    return
-                } catch (e: InstrumentException.Timeout) {
-                    if (retriesLeft-- == 0) throw e
-                }
-            }
-        }
-    }
+    /** Selection is three parameter sets at `65 00 00/01/02`; see [MotifXsSelector]. */
+    override val selector: PresetSelector = MotifXsSelector(this)
 
     // ---- PresetBrowser ----
 
@@ -845,10 +708,10 @@ class MotifXsInstrument(
         private const val BATCH_SIZE = 8
 
         /** Sized for the slowest voice: a drum voice is ~12.6 kB and takes ~1.02 s against a user voice's ~160 ms. */
-        private val VOICE_TIMEOUT = 5.seconds
+        internal val VOICE_TIMEOUT = 5.seconds
 
         /** As many as the exchange the family builds (`MotifXsFamily`) allows any other request. */
-        private const val SELECT_RETRIES = 2
+        internal const val SELECT_RETRIES = 2
 
         /**
          * A write's acknowledgement takes ~158 ms for a 1,916-byte voice. Generous, since too
@@ -861,7 +724,7 @@ class MotifXsInstrument(
         internal val COMMIT_TIMEOUT = 5.seconds
 
         /** One parameter request; the mode reply comes back in ~10 ms. */
-        private val MODE_TIMEOUT = 2.seconds
+        internal val MODE_TIMEOUT = 2.seconds
 
         /**
          * How long a favorites write gets to apply after being acknowledged. No settle time was
@@ -878,8 +741,8 @@ class MotifXsInstrument(
          * Generous, since too short would tell the user their switch failed while they watch it
          * succeed. The loop exits as soon as the instrument reports Voice.
          */
-        private val MODE_SETTLE_INTERVAL = 250.milliseconds
-        private val MODE_SETTLE_BUDGET = 3.seconds
+        internal val MODE_SETTLE_INTERVAL = 250.milliseconds
+        internal val MODE_SETTLE_BUDGET = 3.seconds
 
         /** A whole documented block sequence, not each message: the read takes ~1.4 s and the write ends in a flash commit. */
         private val SEQUENCE_TIMEOUT = 10.seconds
