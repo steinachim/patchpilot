@@ -146,6 +146,12 @@ internal class ConnectionCoordinator(
 
     private var connectJob: Job? = null
 
+    /** A USB device was plugged in while an attempt scanned or opened; see [rescanAfterAttach]. */
+    private var attachedDuringAttempt = false
+
+    /** Whether the latest scan forced the picker, so [rescanAfterAttach] repeats it as it ran. */
+    private var lastScanForcedPicker = false
+
     /**
      * Starts listening for USB detaches; called once. Guarded, unlike this class's other
      * fire-and-forget launches: the scope installs no CoroutineExceptionHandler, and registering a
@@ -222,7 +228,9 @@ internal class ConnectionCoordinator(
      * Reacts to a USB device being plugged in, delivered by `MainActivity.onNewIntent`. Only where
      * the session is waiting for a device: every "nothing usable yet" state rescans, the picker
      * rescans without auto-picking, and [ConnectionState.DeviceLost] reconnects only for the
-     * device that went away. A session in flight or established is left alone.
+     * device that went away. One plugged in while an attempt scans or opens is remembered and
+     * scanned for once that attempt ends with nothing usable ([rescanAfterAttach]). An
+     * established session is left alone.
      *
      * Permission is never asked here: Android grants it to the app it launches for the attach.
      */
@@ -245,9 +253,11 @@ internal class ConnectionCoordinator(
 
             is ConnectionState.DeviceLost -> if (device.physicalKey == s.physicalKey) connect()
 
-            is ConnectionState.Connected,
             ConnectionState.Searching,
             is ConnectionState.Opening,
+            -> attachedDuringAttempt = true
+
+            is ConnectionState.Connected,
             is ConnectionState.UnknownDeviceWarning,
             is ConnectionState.AdvisoryWarning,
             -> Unit
@@ -261,7 +271,10 @@ internal class ConnectionCoordinator(
      */
     private fun launchConnect(failureMessage: String? = null, block: suspend () -> Unit) {
         if (connectJob?.isActive == true) return
-        connectJob = scope.launch { runAttempt(failureMessage, block) }
+        connectJob = scope.launch {
+            runAttempt(failureMessage, block)
+            rescanAfterAttach()
+        }
     }
 
     /**
@@ -275,6 +288,30 @@ internal class ConnectionCoordinator(
         connectJob = scope.launch {
             previous?.join()
             runAttempt(failureMessage = null, block)
+            rescanAfterAttach()
+        }
+    }
+
+    /**
+     * Scans again where a USB device was plugged in while the attempt scanned or opened, and the
+     * attempt ended with nothing usable: the device may have enumerated after the scan's USB
+     * phase. Runs in the attempt's own job, which the single-flight guard would otherwise turn a
+     * new attempt away from.
+     */
+    private suspend fun rescanAfterAttach() {
+        while (attachedDuringAttempt) {
+            attachedDuringAttempt = false
+            when (state.value) {
+                is ConnectionState.NothingFound,
+                is ConnectionState.DeviceSelection,
+                is ConnectionState.Error,
+                is ConnectionState.PermissionDenied,
+                is ConnectionState.NeedsManualSetting,
+                ConnectionState.Disconnected,
+                -> runAttempt(failureMessage = null) { performConnect(lastScanForcedPicker) }
+
+                else -> return
+            }
         }
     }
 
@@ -322,6 +359,7 @@ internal class ConnectionCoordinator(
      * found nothing recognised.
      */
     private suspend fun performConnect(forcePicker: Boolean) {
+        lastScanForcedPicker = forcePicker
         _state.value = ConnectionState.Searching
         val catalog = catalog()
         val autoConnect = autoConnect()

@@ -43,6 +43,7 @@
 - On a Nord, a copy is no longer reported under another preset's name when the instrument's answer about the new copy is not the copy's own record.
 - A Behringer Pro-800 preset whose reply keeps arriving damaged is reported as damaged, instead of as the instrument not answering.
 - On a Yamaha Motif XS, switching to Voice mode from the load dialog shows its progress and keeps other edits and Back off until it is done.
+- An instrument plugged in while the app is still searching is now found, instead of the search ending with "Nothing found".
 
 ## 1.1
 

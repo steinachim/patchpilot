@@ -132,6 +132,42 @@ class ConnectionCoordinatorTest {
     ).also { it.start() }
 
     /**
+     * A device plugged in while the scan runs may enumerate after the scan's USB phase. The plug-in
+     * is remembered, and the empty result is followed by a second scan that finds it.
+     */
+    @Test
+    fun `a device plugged in during a scan is found by a second scan`() = runSession { session ->
+        val usb = FakeUsbHost()
+        val scanned = CompletableDeferred<Unit>()
+        var scans = 0
+        val discovery = object : DeviceDiscovery {
+            var candidates: List<Candidate> = emptyList()
+            override val bus = Bus.USB
+            override suspend fun scan(catalog: List<InstrumentDescriptor>): List<Candidate> {
+                scans++
+                val found = candidates
+                scanned.await()
+                return found
+            }
+            override suspend fun open(candidate: Candidate): Transport = FakeTransport()
+        }
+        val coordinator = coordinator(session, usb, discovery)
+        coordinator.connect()
+        runCurrent()
+        assertEquals(ConnectionState.Searching, coordinator.state.value)
+
+        val stage = FakeDevice(stageKey)
+        usb.attached = listOf(stage)
+        discovery.candidates = listOf(stageCandidate)
+        coordinator.onUsbDeviceAttached(stage)
+        scanned.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(2, scans)
+        assertTrue("got ${coordinator.state.value}", coordinator.state.value is ConnectionState.Connected)
+    }
+
+    /**
      * An open that fails must not leave its device marked as opening: unplugging that device
      * later would otherwise fail whatever session is current by then.
      */
