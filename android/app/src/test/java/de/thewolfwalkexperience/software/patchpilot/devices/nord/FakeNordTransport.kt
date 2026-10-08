@@ -165,26 +165,39 @@ class FakeNordTransport(private val catalog: FakeNordCatalog = FakeNordCatalog()
         return u32(0) + u32(count) + u32(DEMO_FREE_BYTES) + u32(DEMO_USED_BYTES) + u32(0) + u32(0)
     }
 
+    /**
+     * Sub-opcode 24/25. *Assumed*, as no refusal of a move is recorded: an occupied destination
+     * answers status 4, as a copy's does, and an empty source status 1, as a fetch of an empty
+     * slot does.
+     */
     private fun moveReply(payload: ByteArray): ByteArray {
         val srcBank = readU32(payload, 0)
         val srcItem = readU32(payload, 4)
         val dstBank = readU32(payload, 8)
         val dstItem = readU32(payload, 12)
-        catalog.move(srcBank, srcItem, dstBank, dstItem)
-        return u32(0) + u32(srcBank) + u32(srcItem) + u32(dstBank) + u32(dstItem)
+        val status = when {
+            !catalog.isOccupied(srcBank, srcItem) -> NordDevice.STATUS_NOT_FOUND
+            catalog.isOccupied(dstBank, dstItem) -> NordDevice.STATUS_FILE_EXISTS
+            else -> 0.also { catalog.move(srcBank, srcItem, dstBank, dstItem) }
+        }
+        return u32(status) + u32(srcBank) + u32(srcItem) + u32(dstBank) + u32(dstItem)
     }
 
     /**
-     * Sub-opcode 22/23: [moveReply]'s shape, but the source stays and the destination
-     * has to be empty - status 4 ("file exists") where it is not, which is the refusal
-     * [NordDevice.copyProgram] names.
+     * Sub-opcode 22/23: [moveReply]'s shape, but the source stays. An occupied destination
+     * answers status 4 ("file exists"), the refusal PROTOCOLS records; an empty source *assumed*
+     * status 1, as for a move.
      */
     private fun copyReply(payload: ByteArray): ByteArray {
         val srcBank = readU32(payload, 0)
         val srcItem = readU32(payload, 4)
         val dstBank = readU32(payload, 8)
         val dstItem = readU32(payload, 12)
-        val status = if (catalog.copy(srcBank, srcItem, dstBank, dstItem) == null) 4 else 0
+        val status = when {
+            catalog.isOccupied(dstBank, dstItem) -> NordDevice.STATUS_FILE_EXISTS
+            !catalog.isOccupied(srcBank, srcItem) -> NordDevice.STATUS_NOT_FOUND
+            else -> 0.also { catalog.copy(srcBank, srcItem, dstBank, dstItem) }
+        }
         return u32(status) + u32(srcBank) + u32(srcItem) + u32(dstBank) + u32(dstItem)
     }
 
@@ -199,8 +212,14 @@ class FakeNordTransport(private val catalog: FakeNordCatalog = FakeNordCatalog()
         return u32(0) + u32(bank) + u32(item)
     }
 
+    /** Sub-opcode 26/27: both slots must hold a program; an empty one answers status 1, as PROTOCOLS records. */
     private fun swapReply(payload: ByteArray): ByteArray {
-        catalog.swap(readU32(payload, 0), readU32(payload, 4), readU32(payload, 8), readU32(payload, 12))
+        val (srcBank, srcItem) = readU32(payload, 0) to readU32(payload, 4)
+        val (dstBank, dstItem) = readU32(payload, 8) to readU32(payload, 12)
+        if (!catalog.isOccupied(srcBank, srcItem) || !catalog.isOccupied(dstBank, dstItem)) {
+            return u32(NordDevice.STATUS_NOT_FOUND)
+        }
+        catalog.swap(srcBank, srcItem, dstBank, dstItem)
         return u32(0)
     }
 

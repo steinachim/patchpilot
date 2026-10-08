@@ -37,22 +37,23 @@ class FakeNordCatalog {
         programBank[Slot(bank, item)] = newName
     }
 
+    fun isOccupied(bank: Int, item: Int): Boolean = Slot(bank, item) in programBank
+
+    /** Moves an occupied slot's program to an empty one; [FakeNordTransport] refuses anything else first. */
     fun move(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int) {
-        val name = programBank.remove(Slot(srcBank, srcItem)) ?: return
-        programBank[Slot(dstBank, dstItem)] = name
+        programBank[Slot(dstBank, dstItem)] = programBank.getValue(Slot(srcBank, srcItem))
+        programBank.remove(Slot(srcBank, srcItem))
     }
 
     /**
      * Duplicates a program into an empty slot, leaving the source alone, and **names the copy
      * itself** - the way a real instrument does, since that auto-naming is the whole
      * reason `NordDevice.copyProgram` reads the destination back rather than trusting the request.
-     * Returns null where the destination is already occupied, which the transport turns into the
-     * instrument's status 4.
+     * [FakeNordTransport] refuses an occupied destination or an empty source first.
      */
-    fun copy(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int): String? {
+    fun copy(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int): String {
         val dstKey = Slot(dstBank, dstItem)
-        if (dstKey in programBank) return null
-        val sourceName = programBank[Slot(srcBank, srcItem)] ?: return null
+        val sourceName = programBank.getValue(Slot(srcBank, srcItem))
         val copyName = generateSequence(2) { it + 1 }
             .map { "$sourceName $it" }
             .first { candidate -> programBank.values.none { it == candidate } }
@@ -60,13 +61,13 @@ class FakeNordCatalog {
         return copyName
     }
 
+    /** Exchanges two occupied slots' programs; [FakeNordTransport] refuses an empty side first. */
     fun swap(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int) {
         val srcKey = Slot(srcBank, srcItem)
         val dstKey = Slot(dstBank, dstItem)
-        val srcName = programBank[srcKey]
-        val dstName = programBank[dstKey]
-        if (dstName != null) programBank[srcKey] = dstName else programBank.remove(srcKey)
-        if (srcName != null) programBank[dstKey] = srcName else programBank.remove(dstKey)
+        val srcName = programBank.getValue(srcKey)
+        programBank[srcKey] = programBank.getValue(dstKey)
+        programBank[dstKey] = srcName
     }
 
     fun delete(bank: Int, item: Int) {

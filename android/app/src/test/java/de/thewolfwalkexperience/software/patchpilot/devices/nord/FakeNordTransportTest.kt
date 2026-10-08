@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -70,6 +71,15 @@ class FakeNordTransportTest {
         device.connect()
         device.selectPreset(0, 3)
         assertEquals(0 to 3, transport.selectedPreset)
+    }
+
+    /** As PROTOCOLS records: both slots of a swap must hold a program, and an empty one answers status 1. */
+    @Test
+    fun `a swap with an empty slot is refused with status 1`() = runTest {
+        val device = fakeNord()
+        device.connect()
+        val failure = thrownBy<NordStatusException> { device.swapPrograms(0, 0, 3, 24) }
+        assertEquals(NordDevice.STATUS_NOT_FOUND, failure.status)
     }
 
     @Test

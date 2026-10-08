@@ -251,6 +251,8 @@ internal class FakeMotifXs(
     misstore: Boolean = false,
     /** Echoes the program set with the next program's number, as if another selection had landed. */
     private val echoesOtherProgram: Boolean = false,
+    /** The bank a selection's LSB names, as its dump address-mid byte: USER 1 and USER 2 by default. */
+    private val bankMidForLsb: Map<Int, Int> = mapOf(0x08 to 0x0A, 0x09 to 0x0B),
 ) {
     val slots = FakeMotifXsSlots(readOnlyBanks).also {
         it.silentCommit = silentCommit
@@ -259,6 +261,9 @@ internal class FakeMotifXs(
     private var currentMode = mode
     private var pendingMode: MotifXsMode? = null
     private var readsBeforeSettled = 0
+
+    /** The bank the last selection's LSB named; a program change loads from it. */
+    private var selectedBankMid = 0x0A
 
     // What the instrument's own panel is showing: the voice in the Normal Voice edit buffer.
     // A selection loads one; a documented write to flash does **not** touch it, which is the
@@ -329,16 +334,20 @@ internal class FakeMotifXs(
                 emptyList()
             }
 
-            // A selection is echoed back a set at a time. This fake echoes in every mode; the
-            // instrument answers only in Voice mode (see `selection is refused outside voice
-            // mode`).
+            // A selection is echoed back a set at a time, in Voice mode only; outside it the
+            // instrument ignores the selection (see `selection is refused outside voice mode`).
+            // An instrument that does not say its mode is taken to be in Voice mode.
             MotifXsSysEx.typeOf(request) == MotifXsSysEx.TYPE_SELECT -> {
+                if (currentMode != null && currentMode != MotifXsMode.VOICE) return@FakeMidiTransport emptyList()
+                if ((request[7].toInt() and 0xFF) == MotifXsSysEx.SELECT_BANK_LSB) {
+                    selectedBankMid = bankMidForLsb[request[8].toInt() and 0x7F] ?: selectedBankMid
+                }
                 // The program set is the one that loads the voice into the edit buffer.
                 if ((request[7].toInt() and 0xFF) == MotifXsSysEx.SELECT_PROGRAM) {
                     val slot = request[8].toInt() and 0x7F
                     loadedVoice = slots.read(
-                        Triple(0x0C, 0x0A, slot),
-                        defaultVoiceAt(0x0C, 0x0A, slot),
+                        Triple(0x0C, selectedBankMid, slot),
+                        defaultVoiceAt(0x0C, selectedBankMid, slot),
                     )?.let { MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(it)) }
                 }
                 val echo = selectEcho(request)
