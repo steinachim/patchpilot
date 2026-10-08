@@ -33,6 +33,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,8 +110,9 @@ fun ProgramsScreen(
     val badgesFit = LocalConfiguration.current.screenWidthDp >= BADGE_MIN_WIDTH_DP
 
     val resources = LocalResources.current
-    var showEmptySlots by remember { mutableStateOf(false) }
-    var searchText by remember { mutableStateOf("") }
+    // Saveable, so a rotation keeps what the user filtered by and chose to see.
+    var showEmptySlots by rememberSaveable { mutableStateOf(false) }
+    var searchText by rememberSaveable { mutableStateOf("") }
 
     val reportShare = rememberDeviceReportShare(viewModel) { sharedAs, failedReads ->
         if (failedReads == 0) {

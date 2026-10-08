@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -130,5 +131,21 @@ class PresetScreenLifecycleTest {
 
         assertFalse(viewModel.programs.picking)
         compose.onNodeWithContentDescription(text(R.string.cd_back)).assertExists()
+    }
+
+    /** What the user filtered by survives a rotation, as the list it narrows does. */
+    @Test
+    fun `recreating the activity keeps the filter text`() {
+        openDemoPresets()
+        compose.onNodeWithText(text(R.string.programs_filter_hint)).performTextInput("Grand")
+        compose.waitForIdle()
+
+        compose.activityRule.scenario.recreate()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithContentDescription(text(R.string.cd_back)).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        compose.onNodeWithText("Grand", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(text(R.string.action_clear_filter)).assertDoesNotExist()
     }
 }
