@@ -136,6 +136,6 @@ The test suite is JVM unit tests. Most run against the stubbed Android SDK jar (
 ## Known limitations
 
 - No dependency injection; the ViewModel constructs its dependencies directly.
-- The app manages exactly one connected instrument at a time. Two instruments of the same model connected at once collapse to one candidate, because the physical key is the USB vendor and product id.
+- The app manages exactly one connected instrument at a time. Two instruments of the same model connected at once collapse to one candidate, because the physical key is the USB vendor and product id; for the same reason, unplugging the idle one of the two ends the session on the other as `DeviceLost`. No family reads a serial number that would tell them apart.
 - No on-disk persistence of the preset listing.
 - No instrumented tests. The Compose UI tests run on Robolectric, in demo mode only.

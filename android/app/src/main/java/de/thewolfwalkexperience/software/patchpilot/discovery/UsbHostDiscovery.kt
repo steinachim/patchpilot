@@ -50,5 +50,9 @@ class UsbHostDiscovery(private val connectionManager: UsbConnectionManager) : De
     }
 }
 
-/** The key [MidiDiscovery] derives from a port's backing `UsbDevice` too, so both buses agree. */
+/**
+ * The key [MidiDiscovery] derives from a port's backing `UsbDevice` too, so both buses agree. Model
+ * level: two units of one model share it, so either one's detach reads as the session's device
+ * leaving - see docs/ARCHITECTURE.md, "Known limitations".
+ */
 internal fun UsbDevice.physicalKey(): String = "usb:$vendorId:$productId"
