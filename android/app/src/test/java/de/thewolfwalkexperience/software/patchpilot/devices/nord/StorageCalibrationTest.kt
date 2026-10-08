@@ -153,7 +153,7 @@ class StorageCalibrationTest {
         // ...and a record carrying a content id keys on that instead.
         val real = parseMessage(NordFixtures.NSMP_RECORD_RESPONSE).payload
         assertNotNull(NordDevice.parseItemContentId(real))
-        assertEquals(NordDevice.parseItemContentId(real), device.itemIdentity(real))
+        assertEquals(NordDevice.ItemIdentity.Content(NordDevice.parseItemContentId(real)!!), device.itemIdentity(real))
     }
 
     // ---- The category child list (sub-opcode 2/3) ----

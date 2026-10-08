@@ -1223,13 +1223,21 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: NordPr
     ): StorageArea {
         if (space.countedInBytes) {
             return StorageArea(
-                names, indexes, space, itemCounts, space.itemCount, 0L, 1, null, null,
-                "counted in bytes, not blocks (unit code 0) - nothing to calibrate",
+                names = names,
+                indexes = indexes,
+                space = space,
+                itemCounts = itemCounts,
+                recordCount = space.itemCount,
+                totalBytes = 0L,
+                unitBytes = 1,
+                residual = null,
+                candidateRange = null,
+                reason = "counted in bytes, not blocks (unit code 0) - nothing to calibrate",
             )
         }
 
-        val listings = ArrayList<Map<Any, Int>>() // per category: identity -> times listed
-        val sizeOf = HashMap<Any, Int>()
+        val listings = ArrayList<Map<ItemIdentity, Int>>() // per category: identity -> times listed
+        val sizeOf = HashMap<ItemIdentity, Int>()
         for ((name, index) in names.zip(indexes)) {
             progress?.invoke(name, index)
             val payloads = try {
@@ -1241,11 +1249,19 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: NordPr
                 // report does not read as complete.
                 onFailure?.invoke(name, e)
                 return StorageArea(
-                    names, indexes, space, itemCounts, 0, 0L, null, null, null,
-                    "couldn't walk '$name', so the records are incomplete (${e.message})",
+                    names = names,
+                    indexes = indexes,
+                    space = space,
+                    itemCounts = itemCounts,
+                    recordCount = 0,
+                    totalBytes = 0L,
+                    unitBytes = null,
+                    residual = null,
+                    candidateRange = null,
+                    reason = "couldn't walk '$name', so the records are incomplete (${e.message})",
                 )
             }
-            val here = HashMap<Any, Int>()
+            val here = HashMap<ItemIdentity, Int>()
             for (payload in payloads) {
                 val identity = itemIdentity(payload)
                 here[identity] = (here[identity] ?: 0) + 1
@@ -1264,9 +1280,17 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: NordPr
             null
         }
         return StorageArea(
-            names, indexes, space, itemCounts, sizes.size, sizes.sumOf { it.toLong() },
-            solved.unitBytes, solved.residual, solved.candidateRange, solved.reason,
-            reportedResidual,
+            names = names,
+            indexes = indexes,
+            space = space,
+            itemCounts = itemCounts,
+            recordCount = sizes.size,
+            totalBytes = sizes.sumOf { it.toLong() },
+            unitBytes = solved.unitBytes,
+            residual = solved.residual,
+            candidateRange = solved.candidateRange,
+            reason = solved.reason,
+            reportedResidual = reportedResidual,
         )
     }
 
@@ -1276,9 +1300,22 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: NordPr
      * it does not (a Stage 2 EX). Not `(bank, item)`: a Nord Grand's two `Samp Lib` views list the
      * same 235 samples at different addresses.
      */
-    fun itemIdentity(payload: ByteArray): Any =
-        itemContentId(payload)
-            ?: listOf(payload.copyOfRange(16, 20).toList(), parseItemName(payload), parseItemDataSize(payload))
+    fun itemIdentity(payload: ByteArray): ItemIdentity =
+        itemContentId(payload)?.let { ItemIdentity.Content(it) }
+            ?: ItemIdentity.Described(
+                tag = payload.copyOfRange(16, 20).toList(),
+                name = parseItemName(payload),
+                size = parseItemDataSize(payload),
+            )
+
+    /** See [itemIdentity]. */
+    sealed interface ItemIdentity {
+        /** The content id the instrument gives the item. */
+        data class Content(val id: Int) : ItemIdentity
+
+        /** What the record says the item is, where it carries no content id. */
+        data class Described(val tag: List<Byte>, val name: String, val size: Int) : ItemIdentity
+    }
 
     companion object {
         /**
