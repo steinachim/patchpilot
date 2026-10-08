@@ -37,11 +37,16 @@ fun SettingsScreen(
     onOpenLicenses: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val current by preferences.theme.collectAsState(initial = AppTheme.Default)
-    val autoConnect by preferences.autoConnectToFirstFound.collectAsState(initial = true)
-    val hiddenNotices by preferences.hiddenNotices.collectAsState(initial = emptySet())
+    // Null until each store has answered: drawn before then, a default the user has changed
+    // would show for a frame, a switch flipping as the stored value arrives.
+    val storedTheme by preferences.theme.collectAsState(initial = null)
+    val storedAutoConnect by preferences.autoConnectToFirstFound.collectAsState(initial = null)
+    val storedHiddenNotices by preferences.hiddenNotices.collectAsState(initial = null)
 
     PatchPilotScaffold(title = stringResource(R.string.settings_title), onBack = onBack) { innerPadding ->
+        val current = storedTheme ?: return@PatchPilotScaffold
+        val autoConnect = storedAutoConnect ?: return@PatchPilotScaffold
+        val hiddenNotices = storedHiddenNotices ?: return@PatchPilotScaffold
         Column(Modifier.padding(innerPadding)) {
             Text(
                 stringResource(R.string.settings_theme_heading),
