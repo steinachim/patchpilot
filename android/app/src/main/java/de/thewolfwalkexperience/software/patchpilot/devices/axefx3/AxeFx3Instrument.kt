@@ -325,6 +325,31 @@ class AxeFx3Instrument(
         device.store(number)
     }
 
+    /**
+     * Loads [number], names it [name], stores it and reads the name back. A failure anywhere,
+     * the read-back included, re-selects [number], as [writeUnit] does: the edit buffer is what
+     * the rig plays, and it must not keep a name that was never stored.
+     */
+    internal suspend fun renameUnit(number: Int, name: String) = withContext(NonCancellable) {
+        device.select(number)
+        try {
+            device.setName(name)
+            device.store(number)
+            val stored = device.name(number)
+            if (stored != name) {
+                throw InstrumentException.ProtocolDesync(
+                    "${displayIdOf(number)} was saved, but the Axe-Fx III stored its name as " +
+                        "'$stored' rather than '$name'. It may not accept every character.",
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            selectQuietly(number)
+            throw e
+        }
+    }
+
     /** [writeUnit], then a read-back that must hold the same preset. */
     internal suspend fun writeVerified(number: Int, image: AxeFx3DumpImage) {
         writeUnit(number, image)

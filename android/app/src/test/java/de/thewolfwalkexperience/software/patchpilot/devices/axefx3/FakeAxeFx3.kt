@@ -102,6 +102,9 @@ class FakeAxeFx3(
 
     fun nameAt(number: Int): String = slots[number].name ?: AxeFx3SysEx.EMPTY_NAME
 
+    /** The name in the edit buffer, the preset the rig is playing. */
+    val editBufferName: String? get() = editBuffer.name
+
     // ---- Wire ----
 
     private fun respond(request: ByteArray): List<ByteArray> {

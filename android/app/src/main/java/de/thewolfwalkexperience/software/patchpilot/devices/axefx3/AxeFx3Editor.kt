@@ -8,8 +8,6 @@ import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 
 /**
  * Edits on an Axe-Fx III, each the sequence Axe-Edit III itself sends:
@@ -73,19 +71,7 @@ class AxeFx3Editor(private val instrument: AxeFx3Instrument) : ComposedEditor<Ax
     override suspend fun erase(address: SlotAddress) = instrument.erase(instrument.numberOf(address))
 
     override suspend fun storeName(address: SlotAddress, preset: Stored, name: String) {
-        val number = instrument.numberOf(address)
-        withContext(NonCancellable) {
-            device.select(number)
-            device.setName(name)
-            device.store(number)
-        }
-        val stored = device.name(number)
-        if (stored != name) {
-            throw InstrumentException.ProtocolDesync(
-                "${instrument.displayIdOf(number)} was saved, but the Axe-Fx III stored its " +
-                    "name as '$stored' rather than '$name'. It may not accept every character.",
-            )
-        }
+        instrument.renameUnit(instrument.numberOf(address), name)
     }
 
     companion object {

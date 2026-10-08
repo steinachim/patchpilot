@@ -66,6 +66,21 @@ class AxeFx3EditorTest {
         assertEquals(0, fake.selected)
     }
 
+    /** The loaded preset's edit buffer is what the rig plays, so a name that was not stored must not stay in it. */
+    @Test
+    fun `a rename whose store fails reloads the stored preset`() = runTest {
+        val fake = FakeAxeFx3()
+        fake.put(0, "Old")
+        val instrument = connected(fake)
+        fake.ignoreStores = true
+        fake.silentStores = true
+
+        thrownBy<InstrumentException.ProtocolDesync> { instrument.editor.rename(at(0), "New") }
+
+        assertEquals("Old", fake.nameAt(0))
+        assertEquals("Old", fake.editBufferName)
+    }
+
     @Test
     fun `a name the instrument cannot store, or would read as empty, is refused before anything is sent`() = runTest {
         val fake = FakeAxeFx3()
