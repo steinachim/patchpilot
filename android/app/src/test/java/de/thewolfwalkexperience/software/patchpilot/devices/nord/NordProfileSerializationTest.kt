@@ -11,7 +11,7 @@ import org.junit.Test
 
 /**
  * [NordProfile] is deliberately field-for-field devices/nord_devices.schema.json's `$defs/device`
- * shape, so NordInstrument.buildReport() can encode one straight into a paste-able
+ * shape, so NordReporter.buildReport() can encode one straight into a paste-able
  * catalog entry (see that function's doc). These tests pin the two encoding details a plain
  * "it compiles" check wouldn't catch: [NordProfile.maxBankLetter] must serialize as a bare JSON
  * string (the schema's `^[A-Z]$` pattern, not a number), and the whole thing must round-trip
@@ -95,7 +95,7 @@ class NordProfileSerializationTest {
 
     @Test
     fun `an encoded profile parses as one entry of a real devices array`() {
-        // Mirrors exactly how a user would paste NordInstrument.buildReport()'s
+        // Mirrors exactly how a user would paste NordReporter.buildReport()'s
         // output into devices/nord_devices.json: as one more element of its "devices" array.
         val catalogJson = """
             {"schemaVersion": 1, "devices": [${json.encodeToString(profile)}]}

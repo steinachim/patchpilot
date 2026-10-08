@@ -51,7 +51,7 @@ class NordInstrument(
      */
     programCategories: Map<String, String> = emptyMap(),
     private val bus: Bus = Bus.USB,
-) : Instrument, PresetBrowser, PresetSelector, PresetEditor, DeviceReporter {
+) : Instrument, PresetBrowser, PresetSelector, PresetEditor {
 
     /** This model's categories, resolved once; [toPresetSlot] needs them for every row. */
     private val categories: NordCategories? = NordCategories.resolve(device.profile, programCategories)
@@ -91,7 +91,7 @@ class NordInstrument(
     /** Categories, where the catalog says which ones this model offers; null where [NordCategories.resolve] declines. */
     override val tagger: PresetTagger? = categories?.let { NordTagger(device, it, deviceLock) }
 
-    override val report: DeviceReporter get() = this
+    override val report: DeviceReporter = NordReporter(device, deviceLock) { identity }
 
     /** Null: the item-data read/write sub-opcodes are not implemented (see `NordDevice.READ_BUFSIZE`). */
     override val transfer: PresetTransfer? = null
@@ -222,124 +222,6 @@ class NordInstrument(
     } catch (e: NordStatusException) {
         if (e.status != NordDevice.STATUS_FILE_EXISTS) throw e
         throw InstrumentException.SlotStateChanged.occupied(layout.format.format(destination), e)
-    }
-
-    // ---- DeviceReporter ----
-
-    override fun suggestedFilename(): String = slugifyDeviceId(device.profile.name)
-
-    override val description =
-        "Reads everything this app can get off the instrument - categories, storage figures and " +
-            "each area's measured allocation unit - and shares it as JSON. Nothing is written to " +
-            "the instrument, but measuring reads every item, so it takes a while."
-
-    /**
-     * Everything the app can read off the instrument without changing anything on it, as JSON.
-     * Every call is a query; the only side effect is the per-category SELECT_CATEGORY lock, which
-     * each call releases. Slow: the storage calibration walks every item of every category at
-     * two round trips each, so [progress] reports what it is doing. No probe is fatal - see
-     * [Probes].
-     */
-    override suspend fun buildReport(progress: ((String) -> Unit)?): DeviceReportResult = deviceLock.withLock {
-        val d = device
-        val probes = Probes()
-
-        progress?.invoke("Reading device info...")
-        val commandTargets = probes.probe("deviceInfo", emptyMap()) { d.getProtocolVersions() }
-        val capabilityHex = probes.probe("capabilityQuery", "(query failed)") {
-            d.capabilityQueryPayload().toHex()
-        }
-
-        progress?.invoke("Reading categories...")
-        val rootPayload = probes.probe("rootCategoryList", ByteArray(0)) { d.rootCategoryListPayload() }
-        val categoryNames = probes.probe("rootCategoryListParse", emptyList()) {
-            if (rootPayload.isEmpty()) emptyList() else d.parseRootCategoryList(rootPayload)
-        }
-        val childPayloads = categoryNames.mapIndexed { index, name ->
-            name to probes.probe("categoryChild[$name]", null) { d.categoryChildPayload(index) }
-        }
-        val childHex = childPayloads.associate { (name, bytes) ->
-            name to (bytes?.toHex() ?: "(query failed)")
-        }
-        val childLists = childPayloads.mapNotNull { (name, bytes) ->
-            val parsed = bytes?.let {
-                probes.probe("categoryChildParse[$name]", null) { NordDevice.parseCategoryChildren(it) }
-            }
-            parsed?.let { children ->
-                name to children.map { CategoryChildReport(it.name, it.capacity) }
-            }
-        }.toMap()
-
-        val bankLayout = probes.probe("bankLayout", null) { d.deriveBankLayout() }
-
-        val areas = probes.probe("storage", emptyList()) {
-            d.calibrateStorageUnits(
-                progress = { name, _ -> progress?.invoke("Measuring '$name'...") },
-                onFailure = { name, e -> probes.record("storage[$name]", e.message ?: e.toString()) },
-            )
-        }
-
-        progress?.invoke("Building report...")
-        // Each area's allocation unit as the instrument reports it in its root-list trailer.
-        val reportedUnits = probes.probe("storageUnits", emptyMap<Int, Int>()) {
-            d.parseRootCategories(rootPayload)
-                .mapIndexedNotNull { i, c -> c.unitBytes?.let { unit -> i to unit } }
-                .toMap()
-        }
-
-        val entry = d.profile.copy(
-            id = slugifyDeviceId(d.profile.name),
-            supportedFirmwareVersions = setOf(d.firmwareVersion),
-            // From the Program category's own child list; the grouping of a bank's slots is not
-            // announced, so maxGroup is 1 - see NordDevice.applyDerivedBankLayout.
-            maxBankLetter = bankLayout?.maxBankLetter ?: d.profile.maxBankLetter,
-            maxGroup = if (bankLayout != null) 1 else d.profile.maxGroup,
-            slotsPerGroup = bankLayout?.slotsPerBank ?: d.profile.slotsPerGroup,
-        )
-
-        val report = NordReport(
-            note = "Read-only report generated from the connected instrument. Nothing was " +
-                "written; each category was locked only while it was read.",
-            identity = ReportIdentity.of(identity),
-            catalogEntry = entry,
-            probe = DeviceProbe(
-                failures = probes.failures,
-                firmwareVersion = d.formatFirmwareVersion(d.firmwareVersion),
-                usbVendorId = String.format(Locale.ROOT, "0x%04X", d.vendorId),
-                usbProductId = String.format(Locale.ROOT, "0x%04X", d.productId),
-                profileName = d.profile.name,
-                commandTargets = commandTargets.mapKeys { it.key.toString() },
-                capabilityQueryHex = capabilityHex,
-                rootCategories = categoryNames,
-                rootCategoryListHex = rootPayload.toHex(),
-                rootCategoryTrailerLen = NordDevice.detectRootCategoryTrailerLen(rootPayload),
-                categoryChildren = childLists,
-                categoryChildHex = childHex,
-                derivedBankCount = bankLayout?.bankCount,
-                derivedSlotsPerBank = bankLayout?.slotsPerBank,
-                storageAreas = areas.map { area ->
-                    StorageAreaReport(
-                        names = area.names,
-                        itemCounts = area.names.zip(area.itemCounts).toMap(),
-                        free = area.space.free,
-                        used = area.space.used,
-                        reclaimable = area.space.reclaimable,
-                        unitCode = area.space.unitCode,
-                        countedInBytes = area.space.countedInBytes,
-                        recordCount = area.recordCount,
-                        totalBytes = area.totalBytes,
-                        reportedUnitBytes = reportedUnits[area.indexes.first()],
-                        fittedUnitBytes = area.unitBytes.takeIf { area.solved },
-                        residual = area.residual,
-                        reportedResidual = area.reportedResidual,
-                        candidateRange = area.candidateRange?.let { "${it.first}-${it.second}" },
-                        note = area.reason,
-                    )
-                },
-            ),
-        )
-
-        DeviceReportResult(REPORT_JSON.encodeToString(report), probes.failures)
     }
 
     /** [block] under [deviceLock], with its failures translated by [mapNordFailure]. */

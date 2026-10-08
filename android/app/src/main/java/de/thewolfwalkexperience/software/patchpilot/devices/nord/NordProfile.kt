@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 /**
  * The per-instrument constants [NordDevice] needs, one instance per entry in
  * devices/nord_devices.json. Field-for-field the schema's `$defs/device` shape, so a profile
- * serializes straight back into a paste-able catalog entry (see `NordInstrument.buildReport`).
+ * serializes straight back into a paste-able catalog entry (see `NordReporter.buildReport`).
  * [programCategoryIds] indexes the catalog's family-level `programCategories` master list - see
  * [NordCatalog] and [NordCategories].
  */
