@@ -89,6 +89,12 @@ interface PresetTagger {
     val favorites: FavoriteModel?
 
     /**
+     * How a favorite is marked on the instrument's own panel, as a clause the empty favorites
+     * list can show; null where there is no panel route to name.
+     */
+    val favoritePanelHint: String? get() = null
+
+    /**
      * Whether an assignment can be left empty. True on a Motif XS, which has a `NoAsg` state;
      * false on a Nord, where every program carries a category id and `None` is a category rather
      * than the absence of one.

@@ -397,6 +397,7 @@ fun ProgramsScreen(
                     bankRailLabels = capabilities.bankRailLabels,
                     canSetFavorite = viewModel::canSetFavorite,
                     canSetCategories = viewModel::canSetCategories,
+                    favoritePanelHint = tagger?.favoritePanelHint,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }

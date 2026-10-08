@@ -123,7 +123,9 @@
     <string name="programs_scope_note_factory">Names come from the manufacturer\'s data list, not read from this instrument.</string>
     <string name="programs_scope_note_favorites">Marked on the instrument. Use Set favorite in a row menu to change one.</string>
     <string name="programs_no_favorites">Nothing is marked as a favorite on this instrument.</string>
-    <string name="programs_no_favorites_hint">Mark one with Set favorite in a row menu, or on the instrument itself — on a Motif XS, hold [CATEGORY SEARCH] and use the [FAVORITE] bank. Pull down to re-read them.</string>
+    <string name="programs_no_favorites_hint">Mark one with Set favorite in a row menu, or on the instrument itself. Pull down to re-read them.</string>
+    <!-- %1$s: the instrument's own way to mark one (PresetTagger.favoritePanelHint), e.g. "hold [CATEGORY SEARCH] and use the [FAVORITE] bank." -->
+    <string name="programs_no_favorites_hint_panel">Mark one with Set favorite in a row menu, or on the instrument itself: %1$s Pull down to re-read them.</string>
     <string name="programs_share_report">Share device details</string>
     <string name="share_reading_device">Reading device\u2026</string>
     <string name="programs_shared_as">Shared as %1$s.</string>

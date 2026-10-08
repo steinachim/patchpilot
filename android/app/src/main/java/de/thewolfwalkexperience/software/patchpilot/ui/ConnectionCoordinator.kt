@@ -498,10 +498,7 @@ internal class ConnectionCoordinator(
      * your own risk" warning before touching it.
      */
     fun selectUnknownDevice(device: AttachedUsbDevice) {
-        val refusal = "${device.label} is not a Clavia device, so there is no protocol " +
-            "to try on it. Only an unrecognised Nord can be opened this way - everything else the " +
-            "app supports is matched by its exact USB ids."
-        if (!mayGuessAt(device, refusal)) return
+        if (!mayGuessAt(device, UnknownDevicePolicy.refusalFor(device.label))) return
         _state.value = ConnectionState.UnknownDeviceWarning(device)
     }
 

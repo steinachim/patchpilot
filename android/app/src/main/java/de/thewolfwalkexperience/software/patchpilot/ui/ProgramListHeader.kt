@@ -187,8 +187,8 @@ internal fun ProgramListHeader(
  * screen reader announces "Factory, selected, 2 of 3" without any semantics here.
  *
  * The caption keeps two of the listings from misrepresenting themselves: the factory names are
- * transcribed from Yamaha's Data List rather than read off the instrument, and the favorite marks
- * are the instrument's own, changed from a row menu rather than from the listing.
+ * transcribed from the maker's documentation rather than read off the instrument, and the favorite
+ * marks are the instrument's own, changed from a row menu rather than from the listing.
  */
 @Composable
 private fun ScopeSelector(

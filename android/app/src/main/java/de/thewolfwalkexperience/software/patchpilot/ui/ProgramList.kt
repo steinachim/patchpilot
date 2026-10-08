@@ -143,6 +143,8 @@ internal fun ProgramListBody(
     bankRailLabels: Map<String, String>,
     canSetFavorite: (SlotAddress) -> Boolean,
     canSetCategories: (SlotAddress) -> Boolean,
+    /** See [de.thewolfwalkexperience.software.patchpilot.core.PresetTagger.favoritePanelHint]. */
+    favoritePanelHint: String?,
     modifier: Modifier = Modifier,
 ) {
     val theme = LocalThemeStyle.current
@@ -192,7 +194,7 @@ internal fun ProgramListBody(
     ) {
         // A filter that matches nothing says so, and offers a way out.
         if (visibleRows.isEmpty() && index.complete) {
-            NothingListed(browseScope, searchText, onClearFilter)
+            NothingListed(browseScope, searchText, favoritePanelHint, onClearFilter)
         }
         LazyColumn(
             state = listState,
@@ -262,7 +264,12 @@ internal fun ProgramListBody(
 
 /** What an empty list says, and the way out of a filter that matches nothing. */
 @Composable
-private fun NothingListed(browseScope: PresetScope, searchText: String, onClearFilter: () -> Unit) {
+private fun NothingListed(
+    browseScope: PresetScope,
+    searchText: String,
+    favoritePanelHint: String?,
+    onClearFilter: () -> Unit,
+) {
     CenteredMessage {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
@@ -287,7 +294,8 @@ private fun NothingListed(browseScope: PresetScope, searchText: String, onClearF
                 // - so an empty list is not a dead end.
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    stringResource(R.string.programs_no_favorites_hint),
+                    favoritePanelHint?.let { stringResource(R.string.programs_no_favorites_hint_panel, it) }
+                        ?: stringResource(R.string.programs_no_favorites_hint),
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

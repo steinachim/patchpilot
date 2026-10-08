@@ -41,6 +41,8 @@ internal class MotifXsTagger(
 
     override val favorites: FavoriteModel = FavoriteModel.PER_ASSIGNMENT
 
+    override val favoritePanelHint = "hold [CATEGORY SEARCH] and use the [FAVORITE] bank."
+
     /** Inside the voice, so a factory bank is out - the same rule a rename obeys. */
     override fun canSetCategories(address: SlotAddress): Boolean =
         config.banks.getOrNull(address.bank)?.readOnly == false

@@ -36,6 +36,12 @@ object UnknownDevicePolicy {
                 (descriptor.match as? DeviceMatch.Usb)?.vendorId == vendorId
         }?.family
 
+    /** Why [label], a device [familyFor] refuses, cannot be opened, for the device picker. */
+    fun refusalFor(label: String): String =
+        "$label is not a Clavia device, so there is no protocol to try on it. Only an " +
+            "unrecognised Nord can be opened this way - everything else the app supports is " +
+            "matched by its exact USB ids."
+
     /** May an unrecognised device with [vendorId] be opened on a guess? */
     @VisibleForTesting
     fun allows(descriptors: List<InstrumentDescriptor>, vendorId: Int): Boolean =
