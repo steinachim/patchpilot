@@ -97,6 +97,21 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     // arrives - while both reports survive in the ViewModel. One launcher per kind of report, so
     // the result says which one it is for.
     val saveFailed = stringResource(R.string.debug_save_failed)
+    val shareFailed = stringResource(R.string.share_failed)
+
+    // A held report stays held after a share, so Save is still there; a share that fails says so.
+    fun share(filename: String, content: String, mimeType: String, chooserTitle: String) {
+        scope.launch {
+            try {
+                shareTextReport(context, filename, content, mimeType, chooserTitle)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = e.message ?: shareFailed
+            }
+        }
+    }
+
     fun onSaveResult(uri: Uri?, content: () -> String?) {
         val text = content()
         if (uri == null || text == null) return
@@ -210,15 +225,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             initialStem = report.stem,
                             // From the held report: the read is the slow part this view keeps.
                             onConfirm = { stem ->
-                                scope.launch {
-                                    shareTextReport(
-                                        context = context,
-                                        filename = "$stem$jsonSuffix",
-                                        content = report.json,
-                                        mimeType = JSON_MIME_TYPE,
-                                        chooserTitle = reportShareTitle,
-                                    )
-                                }
+                                share("$stem$jsonSuffix", report.json, JSON_MIME_TYPE, reportShareTitle)
                             },
                         )
                     },
@@ -241,15 +248,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                             suffix = txtSuffix,
                             initialStem = "${finished.stem}$REGRESSION_STEM_SUFFIX",
                             onConfirm = { stem ->
-                                scope.launch {
-                                    shareTextReport(
-                                        context = context,
-                                        filename = "$stem$txtSuffix",
-                                        content = finished.report.asText(),
-                                        mimeType = TEXT_MIME_TYPE,
-                                        chooserTitle = regressionShareTitle,
-                                    )
-                                }
+                                share("$stem$txtSuffix", finished.report.asText(), TEXT_MIME_TYPE, regressionShareTitle)
                             },
                         )
                     },

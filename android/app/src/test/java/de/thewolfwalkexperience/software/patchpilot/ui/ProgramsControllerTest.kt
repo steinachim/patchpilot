@@ -9,6 +9,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,9 @@ class ProgramsControllerTest {
         var tagsToReturn = PresetTags(categories = emptyList())
         var failWith: Throwable? = null
 
+        /** Holds a delete on the instrument until completed, so another operation can finish first. */
+        var holdDelete: CompletableDeferred<Unit>? = null
+
         private val _scope = MutableStateFlow(initialScope)
         override val scope: StateFlow<PresetScope> = _scope
 
@@ -84,7 +88,10 @@ class ProgramsControllerTest {
         override suspend fun selectProgram(slot: PresetSlot) = answer("select(${slot.displayId})", "Selected")
         override suspend fun renameProgram(slot: PresetSlot, newName: String) =
             answer("rename(${slot.displayId},$newName)", "Renamed")
-        override suspend fun deleteProgram(slot: PresetSlot) = answer("delete(${slot.displayId})", "Deleted")
+        override suspend fun deleteProgram(slot: PresetSlot): String {
+            holdDelete?.await()
+            return answer("delete(${slot.displayId})", "Deleted")
+        }
         override suspend fun copyProgram(source: PresetSlot, destination: PresetSlot) =
             answer("copy(${source.displayId}->${destination.displayId})", "Copied")
         override suspend fun moveProgram(source: PresetSlot, target: PresetSlot, targetIsEmpty: Boolean) =
@@ -142,13 +149,18 @@ class ProgramsControllerTest {
     /** Selection is not gated on an edit, so the two overlap - and the edit's line has to win. */
     @Test
     fun `a selection finishing during an edit does not clear the edit's busy line`() = runTest {
-        val (controller, _) = controller()
-        controller.onProgramTapped(slot(0, 2))
+        val ops = FakeOperations(this).apply { holdDelete = CompletableDeferred() }
+        val (controller, _) = controller(ops)
         controller.onDeleteConfirmed(slot(0, 1))
+        controller.onProgramTapped(slot(0, 2))
+        testScheduler.runCurrent()
 
+        assertTrue("the selection has finished", ops.calls.any { it.startsWith("select(") })
         val shown = controller.busy
-        assertNotNull(shown)
+        assertNotNull("the delete still holds the instrument", shown)
         assertTrue("the line shows the edit, not the selection", shown!!.showProgress)
+
+        ops.holdDelete!!.complete(Unit)
         testScheduler.advanceUntilIdle()
         assertNull(controller.busy)
     }

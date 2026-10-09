@@ -6,7 +6,9 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 import androidx.lifecycle.SavedStateHandle
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * A report read and held, with everything sharing or saving it needs. [stem] and [description]
@@ -43,7 +45,7 @@ internal data class HeldReport(
  */
 internal class DeviceReportRunner(
     scope: CoroutineScope,
-    savedState: SavedStateHandle,
+    private val savedState: SavedStateHandle,
     private val build: suspend (progress: (String) -> Unit) -> DeviceReportResult,
     private val identity: () -> Pair<String, String>,
 ) {
@@ -51,26 +53,71 @@ internal class DeviceReportRunner(
 
     val state: StateFlow<RunState<HeldReport>> get() = runner.state
 
-    /** Why the last read failed, until the next one starts or [clearError] is called. */
+    /** Why the last read or share failed, until the next read starts or [clearError] is called. */
     val error: StateFlow<String?> get() = runner.error
 
-    /** Starts a read unless one is in progress, replacing any held report. */
-    fun start(readingLabel: String) = runner.start(readingLabel) { progress ->
-        val (stem, description) = identity()
-        val built = build(progress)
-        HeldReport(built.json, stem, description, built.failures.map { (what, why) -> "$what: $why" })
+    private val _shareAs = MutableStateFlow(savedState.get<String>(SHARE_AS_KEY))
+
+    /**
+     * The file name stem the running or finished read is to be shared under, or null for a read
+     * that is only held (the debug menu's). Here rather than in the screen that asked, so a
+     * rotation between confirming the name and the read finishing still shares it, and saved, so
+     * process death does too.
+     */
+    val shareAs: StateFlow<String?> = _shareAs.asStateFlow()
+
+    /**
+     * Starts a read unless one is in progress, replacing any held report. [shareAs] is the stem
+     * to share the result under once it is read - see [takeShare].
+     */
+    fun start(readingLabel: String, shareAs: String? = null) {
+        if (runner.isRunning) return
+        setShareAs(shareAs)
+        runner.start(readingLabel) { progress ->
+            val (stem, description) = identity()
+            val built = build(progress)
+            HeldReport(built.json, stem, description, built.failures.map { (what, why) -> "$what: $why" })
+        }
     }
 
-    /** Drops a held report. A read in progress is not dismissable. */
-    fun dismiss() = runner.dismiss()
+    /**
+     * The finished report and the stem it is to be shared under, or null where none is waiting.
+     * Taken once: the pending share is cleared, so a recomposition cannot share it twice. The
+     * report stays held until the caller [dismiss]es it, once the share sheet is up.
+     */
+    fun takeShare(): Pair<String, HeldReport>? {
+        val stem = _shareAs.value ?: return null
+        val done = (runner.state.value as? RunState.Done)?.result ?: return null
+        setShareAs(null)
+        return stem to done
+    }
+
+    /** Drops a held report and any share waiting for it. A read in progress is not dismissable. */
+    fun dismiss() {
+        if (runner.isRunning) return
+        setShareAs(null)
+        runner.dismiss()
+    }
 
     /** Stops a read in progress, for a session the user is leaving; a held report stays. */
-    fun cancel() = runner.cancel()
+    fun cancel() {
+        setShareAs(null)
+        runner.cancel()
+    }
 
     fun clearError() = runner.clearError()
 
+    /** A share that failed after the read, reported where a failed read is. */
+    fun reportShareFailure(message: String) = runner.reportError(message)
+
+    private fun setShareAs(stem: String?) {
+        _shareAs.value = stem
+        savedState[SHARE_AS_KEY] = stem
+    }
+
     private companion object {
         const val SAVED_KEY = "deviceReport"
+        const val SHARE_AS_KEY = "deviceReportShareAs"
 
         /** How many entries precede the failure lines in the saved list. */
         const val FIXED_FIELDS = 3

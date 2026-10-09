@@ -91,6 +91,11 @@ internal class SavedResultRunner<T : Any>(
         _error.value = null
     }
 
+    /** Puts [message] where a failed job's reason goes, for a failure after the job, such as handing its result on. */
+    fun reportError(message: String) {
+        _error.value = message
+    }
+
     /** Only a held result is saved; anything else saves as empty, which restores as [RunState.Idle]. */
     private fun set(state: RunState<T>) {
         _state.value = state

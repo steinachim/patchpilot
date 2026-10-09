@@ -9,6 +9,7 @@ import de.thewolfwalkexperience.software.patchpilot.cache.CacheKey
 import de.thewolfwalkexperience.software.patchpilot.cache.CachingBrowser
 import de.thewolfwalkexperience.software.patchpilot.cache.PresetIndexCache
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
@@ -82,7 +83,6 @@ internal class PresetListings(
     // once is safe: `SysExExchange` serialises one request/reply at a time, so a favorites read
     // started mid-scan interleaves with it and each reply is matched on its own echoed address.
     private val indexJobs = mutableMapOf<PresetScope, Job>()
-    private var indexGeneration = 0
 
     /**
      * Parent of every listing job. A cancelled job stays among its children until its cleanup has
@@ -168,25 +168,33 @@ internal class PresetListings(
         launchIndex(key, scope)
     }
 
+    private val _refreshing = MutableStateFlow(false)
+
     /**
-     * Drops the cache and re-reads from the instrument - the pull-to-refresh gesture. Returns the
-     * generation it started, so a caller can tell its own refresh finishing from another's; see
-     * [PresetIndexState.generation].
+     * Whether a [refresh] is re-reading the instrument. Ends with that run however it ends -
+     * completed, failed, or cancelled by a pause or a newer listing - so the screen's spinner
+     * cannot outlive it.
      */
-    fun refresh(): Int? {
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    /**
+     * Drops the cache and re-reads from the instrument - the pull-to-refresh gesture. False where
+     * nothing started: no session, or a refresh already running.
+     */
+    fun refresh(): Boolean {
+        if (_refreshing.value) return false
+        val key = instrument()?.identity?.stableKey ?: return false
         invalidate()
-        val key = instrument()?.identity?.stableKey ?: return null
-        return launchIndex(key, _browseScope.value)
+        _refreshing.value = true
+        launchIndex(key, _browseScope.value).invokeOnCompletion { _refreshing.value = false }
+        return true
     }
 
-    private fun launchIndex(key: String, scope: PresetScope): Int {
+    private fun launchIndex(key: String, scope: PresetScope): Job {
         indexJobs.remove(scope)?.cancel()
         indexedInstrument = key
-        // One counter across all scopes: a per-scope counter would let two scopes issue the same
-        // number, and a refresh of one would look like the screen's own refresh landing.
-        val generation = ++indexGeneration
-        updateIndex(scope) { PresetIndexState(generation = generation) }
-        indexJobs[scope] = this.scope.launch(listingJobs) {
+        updateIndex(scope) { PresetIndexState() }
+        return this.scope.launch(listingJobs) {
             try {
                 browser().index(scope).collect { update -> updateIndex(scope) { it.plus(update) } }
             } catch (e: CancellationException) {
@@ -197,8 +205,7 @@ internal class PresetListings(
                     it.copy(error = e.message ?: strings.get(R.string.listing_unknown_error), progress = null)
                 }
             }
-        }
-        return generation
+        }.also { indexJobs[scope] = it }
     }
 
     /**
@@ -278,6 +285,27 @@ internal class PresetListings(
                 return
             }
         }
+    }
+
+    /**
+     * Runs [edit], then re-reads the slots it [touched] ([refreshEdited]) - after a failure from
+     * the instrument too: a failed edit may still have changed it (a move that copied but could
+     * not empty its source, a Motif XS commit left unconfirmed, a slot found changed on the
+     * panel), and the rows must not keep showing what was there before. Not after a refusal that
+     * sent nothing ([InstrumentException.NotSupported],
+     * [InstrumentException.BlockedByDeviceState]) or a caller's bad argument.
+     */
+    suspend fun <T> editAndRefresh(vararg touched: SlotAddress, edit: suspend () -> T): T {
+        val result = try {
+            edit()
+        } catch (e: InstrumentException) {
+            if (e !is InstrumentException.NotSupported && e !is InstrumentException.BlockedByDeviceState) {
+                refreshEdited(*touched)
+            }
+            throw e
+        }
+        refreshEdited(*touched)
+        return result
     }
 
     /**

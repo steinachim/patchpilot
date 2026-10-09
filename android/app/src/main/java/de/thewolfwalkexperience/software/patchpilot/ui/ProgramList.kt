@@ -92,8 +92,8 @@ private object ProgramListMetrics {
  *
  * @property hasCategories whether the instrument files presets under categories at all.
  * @property categoryCount how many categories a preset holds - one on a Nord, two on a Motif XS.
- * @property editsEnabled false while the listing is still arriving or an edit is running - see
- *   `editsEnabled` in [ProgramsScreen].
+ * @property editsEnabled false while no edit may start: a listing still arriving, an edit or a
+ *   device report running - see [editsAllowed].
  */
 internal data class RowRules(
     val canRename: Boolean,
@@ -158,11 +158,11 @@ internal fun ProgramListBody(
         // The same function the app bar's refresh button calls, so the two agree.
         onRefresh = onRefresh,
         modifier = modifier
-            .pointerInput(visibleRows, rules.canRelocate, index.complete, ops.picking, browseScope) {
-                // Off while the index is still arriving (a drop into a region that has not
-                // loaded has no target), on an instrument that cannot relocate presets,
+            .pointerInput(visibleRows, rules.canRelocate, rules.editsEnabled, ops.picking, browseScope) {
+                // Off while no edit may start ([editsAllowed]: a listing still arriving, an edit
+                // or a device report running), on an instrument that cannot relocate presets,
                 // and while picking a destination, which is resolved by a tap.
-                if (!rules.canRelocate || !index.complete || ops.picking) return@pointerInput
+                if (!rules.canRelocate || !rules.editsEnabled || ops.picking) return@pointerInput
                 // A user-listing gesture: a read-only bank refuses the write, and the
                 // favorites listing is not an address space, so "the row below" is not a
                 // destination.
@@ -569,7 +569,7 @@ private fun RowActionsMenu(
     onDelete: () -> Unit,
     onSetFavorite: () -> Unit,
     onSetCategories: () -> Unit,
-    /** False while the listing is still arriving - see `editsEnabled` in ProgramsScreen. */
+    /** False while no edit may start - see [editsAllowed]. */
     enabled: Boolean = true,
 ) {
     var expanded by remember { mutableStateOf(false) }

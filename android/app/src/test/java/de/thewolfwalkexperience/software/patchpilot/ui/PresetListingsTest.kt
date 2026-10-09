@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
@@ -25,13 +26,15 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Stopping the listings at the end of a session: every listing's cleanup has run before
  * [PresetListings.cancelAndJoin] returns, as a Nord's category unlock has to before the
- * connection closes. And what an edit costs the listings afterwards.
+ * connection closes. And what an edit or a refresh costs the listings afterwards.
  */
 class PresetListingsTest {
 
@@ -104,6 +107,7 @@ class PresetListingsTest {
      */
     private class PartlyUnreadable {
         val collected = mutableListOf<PresetScope>()
+        val reRead = mutableListOf<SlotAddress>()
         var refreshFails = false
         private val demo = DemoInstrument()
 
@@ -118,6 +122,7 @@ class PresetListingsTest {
                 }
 
                 override suspend fun refresh(address: SlotAddress): PresetSlot {
+                    reRead += address
                     if (refreshFails) error("timed out")
                     return demo.refresh(address)
                 }
@@ -171,6 +176,68 @@ class PresetListingsTest {
         listings.reloadAfterEdit()
         advanceUntilIdle()
         assertEquals(listOf(PresetScope.USER, PresetScope.FAVORITES, PresetScope.FAVORITES), fake.collected)
+    }
+
+    /** A failed edit may still have changed the instrument, so what it touched is read again. */
+    @Test
+    fun `an edit the instrument failed re-reads what it touched`() = runEdits { listings, fake ->
+        val touched = listings.userIndex.value.slots.first().address
+        val failure = InstrumentException.ProtocolDesync("now in both slots")
+        val thrown = runCatching { listings.editAndRefresh(touched) { throw failure } }.exceptionOrNull()
+
+        assertSame(failure, thrown)
+        assertEquals(listOf(touched), fake.reRead)
+    }
+
+    /** A refusal sent nothing, so there is nothing to re-read. */
+    @Test
+    fun `an edit refused before anything was sent re-reads nothing`() = runEdits { listings, fake ->
+        val touched = listings.userIndex.value.slots.first().address
+        for (refusal in listOf(
+            InstrumentException.NotSupported("swap presets"),
+            InstrumentException.BlockedByDeviceState("The instrument is busy."),
+        )) {
+            val thrown = runCatching { listings.editAndRefresh(touched) { throw refusal } }.exceptionOrNull()
+            assertSame(refusal, thrown)
+        }
+        assertEquals(emptyList<SlotAddress>(), fake.reRead)
+    }
+
+    @Test
+    fun `a successful edit re-reads every slot it touched`() = runEdits { listings, fake ->
+        val (a, b) = listings.userIndex.value.slots.take(2).map { it.address }
+        assertEquals("Swapped", listings.editAndRefresh(a, b) { "Swapped" })
+        assertEquals(listOf(a, b), fake.reRead)
+    }
+
+    @Test
+    fun `refreshing lasts as long as the refresh's listing`() = runEdits { listings, fake ->
+        assertTrue(listings.refresh())
+        assertTrue(listings.refreshing.value)
+        assertFalse("a second pull waits for the first", listings.refresh())
+        advanceUntilIdle()
+        assertFalse(listings.refreshing.value)
+        assertEquals(listOf(PresetScope.USER, PresetScope.USER), fake.collected)
+    }
+
+    /** As `onAppBackgrounded` does on pause: a spinner left running would block every later refresh. */
+    @Test
+    fun `a refresh cancelled by a pause stops refreshing`() = runListings { listings, _ ->
+        listings.start()
+        runCurrent()
+        assertTrue(listings.refresh())
+        listings.cancel()
+        advanceUntilIdle()
+        assertFalse(listings.refreshing.value)
+        assertTrue("the next pull starts again", listings.refresh())
+    }
+
+    /** The reconnect dip: no instrument, so nothing to re-read and no spinner. */
+    @Test
+    fun `a refresh with no instrument starts nothing`() = runTest {
+        val listings = PresetListings(backgroundScope, { null }, { null }, StringResolver { id, _ -> "string $id" })
+        assertFalse(listings.refresh())
+        assertFalse(listings.refreshing.value)
     }
 
     /** The regression run plans its scratch slots around this: an unreadable slot is neither free nor taken. */

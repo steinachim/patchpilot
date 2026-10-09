@@ -128,9 +128,9 @@ fun ProgramsScreen(
     // disposed, by which point a controller resolved inside it is already going away.
     val keyboardController = LocalSoftwareKeyboardController.current
     // Pull-to-refresh, the gesture half of "the listing is cached, how do I make it re-read?";
-    // the app bar's button is the discoverable half. `PullToRefreshBox` hoists the flag to the
-    // caller, so this screen owns it.
-    var isRefreshing by remember { mutableStateOf(false) }
+    // the app bar's button is the discoverable half. The flag lives with the run it describes
+    // (`PresetListings.refreshing`), so it ends with that run however it ends.
+    val isRefreshing by viewModel.listings.refreshing.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
     // Drag-to-reorder - see ProgramListDragState.
@@ -186,40 +186,31 @@ fun ProgramsScreen(
     // Keyed on Unit, not the session: restarting a reconnect's listing is the ViewModel's job
     // (it starts one whenever a session begins), and a rotation must leave a running scan be.
     LaunchedEffect(Unit) { viewModel.listings.start() }
+    // The user listing, whatever is on screen: a copy can only be written to a writable slot, so
+    // the destination pool belongs to the user scope, and an edit waits for it.
+    val userIndex by viewModel.listings.userIndex.collectAsStateWithLifecycle()
     /*
-     * Editing is off while the listing is still arriving, and again while an edit is running.
-     * A drag dropped onto a region that has not loaded has no defined target, rename and delete
-     * would be composed against a filling index, and a second tap during an edit would queue a
-     * second edit behind the first. The gate covers dragging, the overflow menu and the device
-     * report alike.
+     * Edits wait for the listings and for whatever already holds the instrument - see
+     * [editsAllowed]. The gate covers dragging, the overflow menu and the device report alike.
      *
      * Three things stay live, because none is composed against the index: the bank rail, which
      * changes nothing on the instrument; the filter and the empty-slot toggle, which only narrow
      * what is shown; and tapping a row to select it, which stores nothing and lands between two
-     * dumps rather than inside one, since `SysExExchange` serializes requests.
+     * dumps rather than inside one, since `SysExExchange` serializes requests - except while a
+     * device report reads, which a selection would only queue behind, with Back refused meanwhile.
      */
-    val editsEnabled = index.complete && ops.busy == null
+    val editsEnabled = editsAllowed(
+        index,
+        userIndex,
+        editRunning = ops.busy != null,
+        reportRunning = reportShare.running,
+    )
 
-    // Which run this gesture started, so the effect below can tell it from any other; the
-    // spinner stops when the scan completes rather than on a timer.
-    var pendingRefresh by remember { mutableStateOf<Int?>(null) }
-    // Keyed on the generation, not only on `complete`: a fast listing (demo mode, a Nord, a cache
-    // hit) resets and completes inside one recomposition, so Compose never observes the
-    // intermediate `false` and the spinner would hang on exactly those instruments.
-    LaunchedEffect(index.generation, index.complete, index.error) {
-        if (!isRefreshing) return@LaunchedEffect
-        if (index.generation != pendingRefresh) return@LaunchedEffect
-        if (index.complete || index.error != null) isRefreshing = false
-    }
-    // Shared by the pull gesture and the app bar's button, so both give the same feedback and
-    // obey the same rule ([refreshAllowed]). Guards re-entry itself rather than trusting
-    // `enabled`, which only reflects the last recomposition, and which the pull gesture does not
-    // have at all: `isRefreshing` is local Compose state, so the second of two quick taps sees the
-    // first's write in the same snapshot.
+    // Shared by the pull gesture and the app bar's button, so both obey the same rule
+    // ([refreshAllowed]); `PresetListings.refresh` guards re-entry itself.
     fun startRefresh() {
-        if (isRefreshing || !refreshAllowed(index, editRunning = ops.busy != null)) return
-        isRefreshing = true
-        pendingRefresh = viewModel.listings.refresh()
+        if (!refreshAllowed(index, editRunning = ops.busy != null)) return
+        viewModel.listings.refresh()
     }
     val programs = index.slots
 
@@ -243,24 +234,20 @@ fun ProgramsScreen(
         )
     }
     val visibleRows = listing.rows
-    // The user listing's free slots, whatever is on screen: a copy can only be written to a
-    // writable slot, so the destination pool belongs to the user scope. From `listing` it would
-    // be empty in the factory scope, where every row holds a voice.
-    val userIndex by viewModel.listings.userIndex.collectAsStateWithLifecycle()
+    // The user listing's free slots, whatever is on screen: from `listing` they would be none in
+    // the factory scope, where every row holds a voice.
     val userSlots = remember(capabilities) { viewModel.listings.allSlots(PresetScope.USER) }
     val copyDestinations =
         remember(userIndex, userSlots) { freeSlots(userIndex.slots, userSlots, userIndex.unreadable) }
-    // Hidden rather than disabled where there is nowhere to copy to. Gated on the user listing
-    // being complete rather than on `editsEnabled`, which describes whichever listing is
-    // displayed - and the factory one completes the moment it is opened, before the destinations
-    // are known.
+    // Hidden rather than disabled where there is nowhere to copy to, which only a complete user
+    // listing can say.
     val canCopy = EditOp.COPY in supportedEdits && userIndex.complete && copyDestinations.isNotEmpty()
     val rules = RowRules(
         canRename = EditOp.RENAME in supportedEdits,
         canDelete = EditOp.DELETE in supportedEdits,
         canRelocate = canRelocate,
         canCopy = canCopy,
-        canSelect = capabilities.canSelect,
+        canSelect = capabilities.canSelect && !reportShare.running,
         // Per-row rather than per-instrument, because the favorites listing mixes the two: a
         // favorited factory voice and a user voice sit in one list, and only one can be renamed.
         readOnlyBanks = capabilities.readOnlyBanks,
@@ -410,9 +397,9 @@ fun ProgramsScreen(
             if (capabilities.hasReport && (capabilities.isUnknownDevice || advisory != null)) {
                 TextButton(
                     onClick = { ops.pendingShare = reportShare.dialog() },
-                    // Off while a report or a listing is running: the report walks every item, and
-                    // two long reads would share one serialized bus.
-                    enabled = !reportShare.running && editsEnabled,
+                    // Off while a report, a listing or an edit is running ([editsAllowed]): the
+                    // report walks every item, and two long reads would share one serialized bus.
+                    enabled = editsEnabled,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(reportShare.label)

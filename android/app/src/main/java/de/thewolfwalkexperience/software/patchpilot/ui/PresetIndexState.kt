@@ -20,13 +20,6 @@ data class PresetIndexState(
     val failures: List<IndexUpdate.Failed> = emptyList(),
     /** Set only when the scan itself failed, which is the one case with nothing to show. */
     val error: String? = null,
-    /**
-     * Which run of the index this describes, because [complete] alone cannot answer "has my
-     * refresh finished?": on a fast listing (demo mode, a Nord, a cache hit) the reset and the
-     * completion land in one recomposition, so a `LaunchedEffect` keyed on `complete` never sees
-     * its key change.
-     */
-    val generation: Int? = null,
 ) {
     val loading: Boolean get() = !complete && error == null
 

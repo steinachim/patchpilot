@@ -340,10 +340,12 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                 ) {
                     Spacer(Modifier.height(24.dp))
                     // One demo device, not one per family: a second entry would read as a second
-                    // instrument the app claims to support.
-                    TextButton(onClick = {
-                        viewModel.connection.connectDemo()
-                    }) { Text(stringResource(R.string.action_try_demo)) }
+                    // instrument the app claims to support. Off while a report reads, as Continue
+                    // anyway is: switching to demo mode would wait for the read and then drop it.
+                    TextButton(
+                        onClick = { viewModel.connection.connectDemo() },
+                        enabled = !reportShare.running,
+                    ) { Text(stringResource(R.string.action_try_demo)) }
                 }
             }
         }

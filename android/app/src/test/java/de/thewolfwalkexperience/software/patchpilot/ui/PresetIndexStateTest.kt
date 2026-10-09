@@ -64,13 +64,6 @@ class PresetIndexStateTest {
         assertNull(state.plus(IndexUpdate.Complete).progress)
     }
 
-    /** A fresh run keeps its generation so a caller can tell its own refresh from any other. */
-    @Test
-    fun `generation survives the fold`() {
-        val state = PresetIndexState(generation = 7).plus(IndexUpdate.Complete)
-        assertEquals(7, state.generation)
-    }
-
     // ---- withSlot ----
 
     /**

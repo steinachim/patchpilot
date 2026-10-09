@@ -261,19 +261,17 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         val editor = requireFacet(instrument.editor, "rearrange presets")
         // Both ends either way: a move empties the source as surely as it fills the destination.
         if (targetIsEmpty) {
-            editor.move(source.address, target.address)
-            listings.refreshEdited(source.address, target.address)
+            listings.editAndRefresh(source.address, target.address) { editor.move(source.address, target.address) }
             str(R.string.result_moved, source.displayId, target.displayId)
         } else {
-            editor.swap(source.address, target.address)
-            listings.refreshEdited(source.address, target.address)
+            listings.editAndRefresh(source.address, target.address) { editor.swap(source.address, target.address) }
             str(R.string.result_swapped, source.displayId, target.displayId)
         }
     }
 
     override suspend fun renameProgram(slot: PresetSlot, newName: String): String = connection.exclusive { instrument ->
-        requireFacet(instrument.editor, "rename presets").rename(slot.address, newName)
-        listings.refreshEdited(slot.address)
+        val editor = requireFacet(instrument.editor, "rename presets")
+        listings.editAndRefresh(slot.address) { editor.rename(slot.address, newName) }
         str(R.string.result_renamed, slot.displayId, newName)
     }
 
@@ -285,12 +283,16 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     /**
      * Files [slot] under the categories named by [under], or removes the favorite mark. Drops the
      * favorites listing rather than patching the row in: favoriting adds a voice to a listing it
-     * was absent from, and `PresetIndexState.withSlot` grows only the user listing.
+     * was absent from, and `PresetIndexState.withSlot` grows only the user listing. Dropped after a
+     * failure too, since a mark acknowledged but not seen applied may still land.
      */
     override suspend fun setFavorite(slot: PresetSlot, under: Set<Int>): String = connection.exclusive { instrument ->
-        requireFacet(instrument.tagger, "favorite presets").setFavorite(slot.address, under)
-        listings.refreshEdited(slot.address)
-        listings.dropFavorites()
+        val tagger = requireFacet(instrument.tagger, "favorite presets")
+        try {
+            listings.editAndRefresh(slot.address) { tagger.setFavorite(slot.address, under) }
+        } finally {
+            listings.dropFavorites()
+        }
         if (under.isEmpty()) {
             str(R.string.result_favorite_cleared, slot.displayId)
         } else {
@@ -302,11 +304,13 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     override suspend fun setCategories(slot: PresetSlot, categories: List<CategoryRef?>): String =
         connection.exclusive { instrument ->
             val tagger = requireFacet(instrument.tagger, "categorise presets")
-            tagger.setCategories(slot.address, categories)
-            listings.refreshEdited(slot.address)
             // A favorite is filed under the voice's own categories, so changing one moves where
             // the instrument lists it - the same reason setFavorite drops that listing.
-            listings.dropFavorites()
+            try {
+                listings.editAndRefresh(slot.address) { tagger.setCategories(slot.address, categories) }
+            } finally {
+                listings.dropFavorites()
+            }
             val shown = categories.mapNotNull { ref -> ref?.let { tagger.taxonomy.label(it) } }
             if (shown.isEmpty()) {
                 str(R.string.result_categories_cleared, slot.displayId)
@@ -323,9 +327,10 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         source: PresetSlot,
         destination: PresetSlot,
     ): String = connection.exclusive { instrument ->
-        val copiedName = requireFacet(instrument.editor, "copy presets")
-            .copyProgram(source.address, destination.address)
-        listings.refreshEdited(destination.address)
+        val editor = requireFacet(instrument.editor, "copy presets")
+        val copiedName = listings.editAndRefresh(destination.address) {
+            editor.copyProgram(source.address, destination.address)
+        }
         str(R.string.result_copied, source.displayId, destination.displayId, copiedName)
     }
 
@@ -336,8 +341,8 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      * (`PresetEditor.isEmulated(EditOp.DELETE)`).
      */
     override suspend fun deleteProgram(slot: PresetSlot): String = connection.exclusive { instrument ->
-        requireFacet(instrument.editor, "delete presets").delete(slot.address)
-        listings.refreshEdited(slot.address)
+        val editor = requireFacet(instrument.editor, "delete presets")
+        listings.editAndRefresh(slot.address) { editor.delete(slot.address) }
         str(R.string.result_deleted, slot.displayId)
     }
 

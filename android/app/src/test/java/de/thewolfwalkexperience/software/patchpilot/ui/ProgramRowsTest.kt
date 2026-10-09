@@ -237,4 +237,21 @@ class ProgramRowsTest {
         assertTrue(refreshAllowed(failed, editRunning = false))
         assertFalse(refreshAllowed(done, editRunning = true))
     }
+
+    /**
+     * An edit waits for the listing on screen and for the user listing, which another tab can
+     * leave running, and for whatever already holds the instrument.
+     */
+    @Test
+    fun `an edit waits for both listings, any edit and a device report`() {
+        val arriving = PresetIndexState().plus(IndexUpdate.Slots(listOf(slot(0, 0, "Grand"))))
+        val done = arriving.plus(IndexUpdate.Complete)
+
+        assertTrue(editsAllowed(done, done, editRunning = false, reportRunning = false))
+        assertFalse(editsAllowed(arriving, done, editRunning = false, reportRunning = false))
+        // Favorites done in seconds while a Motif XS's user banks are still being read.
+        assertFalse(editsAllowed(done, arriving, editRunning = false, reportRunning = false))
+        assertFalse(editsAllowed(done, done, editRunning = true, reportRunning = false))
+        assertFalse(editsAllowed(done, done, editRunning = false, reportRunning = true))
+    }
 }

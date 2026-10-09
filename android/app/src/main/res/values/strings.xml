@@ -49,7 +49,7 @@
 
     <string name="cd_row_options">Options for %1$s</string>
     <string name="cd_reorder">Reorder %1$s by dragging. Move to is also in this row’s options.</string>
-    <string name="cd_reorder_unavailable">Reordering is unavailable until the listing finishes</string>
+    <string name="cd_reorder_unavailable">Reordering is unavailable while the list loads or another operation runs</string>
     <string name="cd_copy_destination">Copy into %1$s</string>
     <string name="cd_move_destination">Move into %1$s</string>
     <string name="cd_settings">Settings</string>
@@ -249,6 +249,8 @@
     <string name="debug_regression_running">Running the regression test…</string>
     <string name="debug_regression_share">Share regression report</string>
     <string name="debug_save_failed">The report could not be saved.</string>
+    <!-- Shown by every screen that hands a report to the share sheet, when that fails. -->
+    <string name="share_failed">The report could not be shared.</string>
     <string name="debug_regression_back">Back to the debug menu</string>
     <string name="debug_confirm_select_title">Check the instrument</string>
     <string name="debug_confirm_select_body">The instrument was told to load %1$s. Is that what it is showing now?</string>

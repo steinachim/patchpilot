@@ -140,3 +140,18 @@ internal fun buildProgramListing(
  * The app bar's button and the pull gesture both ask this, so they cannot disagree.
  */
 internal fun refreshAllowed(index: PresetIndexState, editRunning: Boolean): Boolean = !index.loading && !editRunning
+
+/**
+ * Whether an edit may start - the row menu, a drag, the device report button. Not while the
+ * listing on screen or the user listing is still arriving: a drop or a pick into a region that
+ * has not loaded has no defined target, and on an instrument with no lock of its own (a Motif
+ * XS) an edit would interleave with the user listing's reads even while another tab is shown.
+ * Not while an edit or a device report runs either: a second operation would only queue behind
+ * the first, minutes behind a report, with Back refused meanwhile.
+ */
+internal fun editsAllowed(
+    index: PresetIndexState,
+    userIndex: PresetIndexState,
+    editRunning: Boolean,
+    reportRunning: Boolean,
+): Boolean = index.complete && userIndex.complete && !editRunning && !reportRunning
