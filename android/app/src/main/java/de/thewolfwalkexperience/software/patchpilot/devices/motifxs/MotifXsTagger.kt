@@ -89,12 +89,11 @@ internal class MotifXsTagger(
             listOf(main, sub)
         }
 
-        instrument.editStoredCategories(address, bytes)
+        val written = instrument.editStoredCategories(address, bytes) { payload -> storedRefs(payload) == wanted }
+        if (!written) return
 
         // Read back through `0C`, the same path the browser lists with.
-        val stored = MotifXsVoice.categoriesOf(instrument.readVoicePayload(address)).orEmpty()
-            .map { figure -> figure?.let { MotifXsCategories.refOf(it, taxonomy) } }
-        val storedPadded = List(ASSIGNMENTS) { stored.getOrNull(it) }
+        val storedPadded = storedRefs(instrument.readVoicePayload(address))
         if (storedPadded != wanted) {
             throw InstrumentException.ProtocolDesync(
                 "Set the categories of ${instrument.describe(address)} but they read back as " +
@@ -104,9 +103,18 @@ internal class MotifXsTagger(
         invalidate(address.bank)
     }
 
+    /** The [ASSIGNMENTS] categories a voice as read through `0C` carries, null where unassigned. */
+    private fun storedRefs(voicePayload: ByteArray): List<CategoryRef?> {
+        val stored = MotifXsVoice.categoriesOf(voicePayload).orEmpty()
+            .map { figure -> figure?.let { MotifXsCategories.refOf(it, taxonomy) } }
+        return List(ASSIGNMENTS) { stored.getOrNull(it) }
+    }
+
     /**
      * Files [address] under [under], or clears the mark when it is empty: read the bank's whole
-     * table, change one byte, send it back - see [MotifXsSysEx.writeFavorites].
+     * table, change one byte, send it back - see [MotifXsSysEx.writeFavorites]. A user slot is
+     * read first, as for categories: one emptied on the panel would otherwise be marked, and
+     * Favorites would list an empty row.
      */
     override suspend fun setFavorite(address: SlotAddress, under: Set<Int>) {
         val spec = config.banks.getOrNull(address.bank)
@@ -115,6 +123,9 @@ internal class MotifXsTagger(
             "A Motif XS voice has $ASSIGNMENTS category slots; $under names another."
         }
 
+        if (!spec.readOnly && MotifXsVoice.nameOf(instrument.readVoicePayload(address)) == null) {
+            throw InstrumentException.SlotStateChanged.empty(instrument.describe(address))
+        }
         // A mark against an unassigned category is legal and the instrument makes them itself:
         // marking a category-less USER voice from its own Category Search -> FAVORITE writes `2`,
         // the same value `setOf(0)` encodes to, and the voice then appears under no category. So

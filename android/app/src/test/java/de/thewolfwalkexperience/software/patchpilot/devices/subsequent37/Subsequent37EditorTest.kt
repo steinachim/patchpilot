@@ -3,8 +3,10 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
 
+import de.thewolfwalkexperience.software.patchpilot.causedBy
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import de.thewolfwalkexperience.software.patchpilot.core.assertEveryDeclaredEditCompletes
 import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -25,6 +27,12 @@ class Subsequent37EditorTest {
 
     private suspend fun TestScope.connected(fake: FakeSubsequent37 = FakeSubsequent37(backgroundScope)) =
         subsequent37(fake).apply { connect() }
+
+    /** The contract every family is held to - see `assertEveryDeclaredEditCompletes`. */
+    @Test
+    fun `every edit the Subsequent 37 declares completes`() = runTest {
+        assertEveryDeclaredEditCompletes("the Subsequent 37", subsequent37(FakeSubsequent37(backgroundScope)))
+    }
 
     private val blankPacked get() = Subsequent37SysEx.pack(Subsequent37Fixtures.BLANK)
 
@@ -125,8 +133,9 @@ class Subsequent37EditorTest {
         try {
             editor.move(address(2), address(target))
             fail("a half-done move was reported as done")
-        } catch (expected: InstrumentException.ProtocolDesync) {
+        } catch (expected: InstrumentException.PartlyApplied) {
             assertTrue(expected.message!!.contains("in both slots"))
+            assertTrue("why the erase failed is kept", expected.causedBy { it is InstrumentException })
         }
         assertArrayEquals(Subsequent37Fixtures.packedBlock(2), fake.packed[target])
     }

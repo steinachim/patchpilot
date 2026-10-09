@@ -3,10 +3,12 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
+import de.thewolfwalkexperience.software.patchpilot.causedBy
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+import de.thewolfwalkexperience.software.patchpilot.core.assertEveryDeclaredEditCompletes
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -46,6 +48,12 @@ class Pro800EditorTest {
 
     /** Bank B. With five slots per bank in this fixture, B03 is program number 8. */
     private fun b(slot: Int) = SlotAddress(1, slot)
+
+    /** The contract every family is held to - see `assertEveryDeclaredEditCompletes`. */
+    @Test
+    fun `every edit the Pro-800 declares completes`() = runTest {
+        assertEveryDeclaredEditCompletes("the Pro-800", instrument(fake(), backgroundScope))
+    }
 
     // ---- Copy ----
 
@@ -297,8 +305,9 @@ class Pro800EditorTest {
 
         val failure = runCatching { pro800.editor!!.move(a(0), b(3)) }.exceptionOrNull()
 
-        assertTrue("got $failure", failure is InstrumentException.ProtocolDesync)
+        assertTrue("got $failure", failure is InstrumentException.PartlyApplied)
         assertTrue(failure!!.message!!, failure.message!!.contains("in both slots"))
+        assertTrue("why the erase failed is kept", failure.causedBy { it is InstrumentException })
         assertEquals("Organ I", fake.nameAt(0))
         assertEquals("Organ I", fake.nameAt(8))
     }

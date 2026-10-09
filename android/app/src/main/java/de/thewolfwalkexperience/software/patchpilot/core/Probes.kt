@@ -21,18 +21,47 @@ class Probes {
     /** What went wrong, keyed by what was being attempted. Part of the report. */
     val failures: Map<String, String> get() = _failures
 
+    /** Probes in a row that timed out; any other outcome resets it. */
+    private var timeoutsInARow = 0
+
     /**
      * Runs one query, recording a failure under [what] and carrying on with [fallback].
      * Not `runCatching`, which would swallow [CancellationException].
      */
     suspend fun <T> probe(what: String, fallback: T, block: suspend () -> T): T = try {
-        block()
+        block().also { timeoutsInARow = 0 }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         Log.w(TAG, "Device report: '$what' failed", e)
         _failures[what] = e.message ?: e.toString()
+        timeoutsInARow = if (e is InstrumentException.Timeout) timeoutsInARow + 1 else 0
         fallback
+    }
+
+    /**
+     * Counts timeouts in a row afresh, at the start of a loop [gaveUp] watches: the probes before
+     * it (queries an instrument may not answer at all) say nothing about whether it has gone
+     * silent since.
+     */
+    fun startLoop() {
+        timeoutsInARow = 0
+    }
+
+    /**
+     * True once [SILENT_SLOTS_BEFORE_GIVING_UP] probes in a row since [startLoop] have timed out,
+     * with the [left] queries the loop would still make recorded as one failure under [what]: an
+     * instrument gone silent would otherwise cost the full timeout on each of them. The rule
+     * `indexWalk` applies to a listing.
+     */
+    fun gaveUp(what: String, left: Int): Boolean {
+        if (timeoutsInARow < SILENT_SLOTS_BEFORE_GIVING_UP) return false
+        record(
+            what,
+            "$left not read: the instrument stopped answering after $timeoutsInARow reads in a row " +
+                "went unanswered.",
+        )
+        return true
     }
 
     /** Records a failure found outside a [probe] call, e.g. by a callback. */

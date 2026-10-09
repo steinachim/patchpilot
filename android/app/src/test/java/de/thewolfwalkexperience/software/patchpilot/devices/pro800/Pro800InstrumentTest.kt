@@ -192,6 +192,33 @@ class Pro800InstrumentTest {
         assertFalse("the splice was consumed, not left to the next read", firstAnswer)
     }
 
+    /**
+     * An instrument that stops answering mid-report costs three timeouts, not one per remaining
+     * slot - the rule a listing follows - and the report says what it did not read.
+     */
+    @Test
+    fun `the report stops reading presets once the instrument goes silent`() = runTest {
+        val transport = FakeMidiTransport { request ->
+            val number = Pro800SysEx.addressOf(request)
+            if (Pro800SysEx.typeOf(request) == Pro800SysEx.TYPE_REQUEST_DUMP && number != null && number < 2) {
+                listOf(dumpFor(number, names[number]))
+            } else {
+                emptyList()
+            }
+        }
+        val pro800 = Pro800Instrument(
+            SysExExchange(transport, backgroundScope, defaultTimeout = kotlin.time.Duration.parse("20ms"), retries = 0),
+            config,
+        )
+
+        val result = pro800.report.buildReport()
+
+        val asked = transport.sent.filter { Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_REQUEST_DUMP }
+            .map { Pro800SysEx.addressOf(it) }.filter { it != Pro800SysEx.SETTINGS_ADDRESS }.distinct()
+        assertEquals("two answered, three silent, then no more", listOf(0, 1, 2, 3, 4), asked)
+        assertTrue(result.failures["dumpsNotRead"]!!, result.failures["dumpsNotRead"]!!.startsWith("5 not read"))
+    }
+
     /** The report reads as the browser does, so a spliced reply is retried rather than counted. */
     @Test
     fun `the report retries a spliced reply rather than counting it`() = runTest {

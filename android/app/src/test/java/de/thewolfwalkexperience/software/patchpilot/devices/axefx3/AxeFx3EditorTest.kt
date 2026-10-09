@@ -3,10 +3,12 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.axefx3
 
+import de.thewolfwalkexperience.software.patchpilot.causedBy
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+import de.thewolfwalkexperience.software.patchpilot.core.assertEveryDeclaredEditCompletes
 import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -26,6 +28,16 @@ class AxeFx3EditorTest {
 
     private suspend fun TestScope.connected(fake: FakeAxeFx3, config: AxeFx3Config = AxeFx3Config()) =
         axeFx3(fake, config).apply { connect() }
+
+    /** The contract every family is held to - see `assertEveryDeclaredEditCompletes`. */
+    @Test
+    fun `every edit the Axe-Fx III declares completes`() = runTest {
+        val fake = FakeAxeFx3().apply {
+            put(3, "Pad")
+            put(5, "Lead")
+        }
+        assertEveryDeclaredEditCompletes("the Axe-Fx III", axeFx3(fake))
+    }
 
     /** The commands sent from [from] on, for checking one edit's sequence after connect. */
     private fun FakeAxeFx3.commandsSince(from: Int) = commands().drop(from)
@@ -187,8 +199,9 @@ class AxeFx3EditorTest {
         val fake = FakeAxeFx3().apply { endStatusOf = { if (it == 2) 0x13 else 0 } }
         fake.put(3, "Pad")
         val instrument = connected(fake)
-        val error = thrownBy<InstrumentException.ProtocolDesync> { instrument.editor.move(at(3), at(4)) }
+        val error = thrownBy<InstrumentException.PartlyApplied> { instrument.editor.move(at(3), at(4)) }
         assertTrue(error.message!!.contains("both slots"))
+        assertTrue("why the erase failed is kept", error.causedBy { it is InstrumentException })
         assertEquals("Pad", fake.nameAt(3))
         assertEquals("Pad", fake.nameAt(4))
     }

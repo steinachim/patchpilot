@@ -18,3 +18,15 @@ inline fun <reified T : Throwable> thrownBy(block: () -> Unit): T {
     }
     throw AssertionError("Expected ${T::class.java.simpleName}, but nothing was thrown")
 }
+
+/**
+ * What caused this, nearest first. A test asks the chain rather than [Throwable.cause] alone:
+ * with assertions on, as under Gradle, kotlinx.coroutines recovers stack traces by copying an
+ * exception that crosses a `withContext` and setting the original as the copy's cause, so the
+ * cause a family set can sit one link further down.
+ */
+fun Throwable.causes(): Sequence<Throwable> = generateSequence(cause) { it.cause }
+
+/** Whether [why] is among the causes, other than another link of the same kind as this one. */
+fun Throwable.causedBy(why: (Throwable) -> Boolean): Boolean =
+    causes().any { it::class != this::class && why(it) }

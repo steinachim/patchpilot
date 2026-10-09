@@ -148,6 +148,8 @@
     <string name="programs_favorite_slot">Category %1$d</string>
     <string name="programs_favorite_clear_hint">Clearing every box removes the favorite.</string>
     <string name="programs_categories_sub">Sub-category</string>
+    <!-- A preset whose stored category the instrument cannot name, on one that has no "none". -->
+    <string name="programs_categories_not_set">Not set</string>
     <string name="programs_categories_none">None</string>
     <string name="programs_categories_no_sub">—</string>
     <string name="programs_delete_title">Delete %1$s?</string>

@@ -4,13 +4,11 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import android.util.Log
-import de.thewolfwalkexperience.software.patchpilot.core.AddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.BankSpec
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
-import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.FactoryNameCheck
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
@@ -31,14 +29,12 @@ import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "MotifXsInstrument"
@@ -358,8 +354,15 @@ class MotifXsInstrument(
      * Writes the four category bytes of a stored voice by the documented path. [bytes] is
      * `main1, sub1, main2, sub2`, the layout at `0x18`-`0x1B` of the Common block. A factory bank
      * is refused: these bytes are inside the voice.
+     *
+     * Writes nothing, and returns false, where [alreadyStored] says the voice as read already
+     * carries them: the write goes to Flash, and the read is needed anyway.
      */
-    internal suspend fun editStoredCategories(address: SlotAddress, bytes: List<Int>) {
+    internal suspend fun editStoredCategories(
+        address: SlotAddress,
+        bytes: List<Int>,
+        alreadyStored: (voicePayload: ByteArray) -> Boolean = { false },
+    ): Boolean {
         requireWritable(address)
         val where = describe(address)
         require(bytes.size == MotifXsSysEx.CATEGORY_LENGTH) {
@@ -367,9 +370,11 @@ class MotifXsInstrument(
         }
         require(bytes.all { it in 0..0x7F }) { "a category byte has to fit in seven bits" }
         // As for a rename: an empty slot answers the read too, and would gain a nameless voice.
-        if (MotifXsVoice.nameOf(readVoicePayload(address)) == null) {
+        val current = readVoicePayload(address)
+        if (MotifXsVoice.nameOf(current) == null) {
             throw InstrumentException.SlotStateChanged.empty(where)
         }
+        if (alreadyStored(current)) return false
         editCommonBlock(
             address,
             "setting the categories of $where",
@@ -384,6 +389,7 @@ class MotifXsInstrument(
                 payload[MotifXsSysEx.CATEGORY_OFFSET + i] = value.toByte()
             }
         }
+        return true
     }
 
     /** One bank's favorite marks - see [readFavoriteMarks]. */

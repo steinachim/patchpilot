@@ -18,7 +18,7 @@ private const val TAG = "ComposedEditor"
  *    panel. A slot not as the list showed it is [InstrumentException.SlotStateChanged], raised
  *    before anything is written.
  *  - A move writes the destination before it empties the source, so a failure leaves the preset
- *    in both slots rather than in neither, and says so.
+ *    in both slots rather than in neither, and says so ([InstrumentException.PartlyApplied]).
  *  - A swap reads both presets before writing either, and writes the first slot back if either
  *    write fails - the first included, since a write can land and still fail its read-back.
  *  - Moves and swaps run under [NonCancellable]: a cancelled one finishes rather than stopping
@@ -122,7 +122,7 @@ abstract class ComposedEditor<P : Any> : PresetEditor {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    throw InstrumentException.ProtocolDesync(
+                    throw InstrumentException.PartlyApplied(
                         "Copied ${displayIdOf(from)} to ${displayIdOf(to)}, but could not empty " +
                             "${displayIdOf(from)} afterwards, so the preset is now in both slots.",
                         e,

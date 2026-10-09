@@ -599,6 +599,32 @@ class MotifXsTaggerTest {
         )
     }
 
+    @Test
+    fun `setting the categories a voice already carries writes nothing`() = runTest {
+        val device = Device(favorites = mapOf(0x0A to ByteArray(4)))
+        val (_, tagger, transport) = instrument(backgroundScope, device)
+        val wanted = listOf(CategoryRef(bass, 2), CategoryRef(pads, null))
+        tagger.setCategories(userSlot, wanted)
+        val headers = { transport.sent.count { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.BULK_HEADER_HI } }
+        val written = headers()
+
+        tagger.setCategories(userSlot, wanted)
+
+        assertEquals("the voice already carries them", written, headers())
+    }
+
+    /** A user voice deleted on the panel would otherwise be marked, and Favorites list an empty row. */
+    @Test
+    fun `a favorite refuses a user slot emptied on the panel`() = runTest {
+        val device = Device(favorites = mapOf(0x0A to ByteArray(4)), voiceName = null)
+        val (_, tagger, transport) = instrument(backgroundScope, device)
+
+        val failure = runCatching { tagger.setFavorite(userSlot, setOf(0)) }.exceptionOrNull()
+
+        assertTrue("expected SlotStateChanged, got $failure", failure is InstrumentException.SlotStateChanged)
+        assertTrue(transport.favoriteWrites().isEmpty())
+    }
+
     /** A sub-category the main does not have is a caller bug, refused before the write. */
     @Test
     fun `setting categories refuses a sub the main does not have`() = runTest {

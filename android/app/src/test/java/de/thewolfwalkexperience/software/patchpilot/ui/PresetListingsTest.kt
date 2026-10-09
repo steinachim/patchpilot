@@ -40,12 +40,14 @@ class PresetListingsTest {
 
     /** Listings that never finish, and take [CLEANUP_MS] to clean up once cancelled. */
     private class SlowToStop {
+        val started = mutableListOf<PresetScope>()
         val cleanedUp = mutableListOf<PresetScope>()
         private val demo = DemoInstrument()
 
         val instrument = object : Instrument by demo {
             override val browser = object : PresetBrowser by demo {
                 override fun index(scope: PresetScope) = flow<IndexUpdate> {
+                    started += scope
                     try {
                         awaitCancellation()
                     } finally {
@@ -99,6 +101,26 @@ class PresetListingsTest {
         }
         listings.cancelAndJoin()
         assertEquals(listOf(PresetScope.USER, PresetScope.FAVORITES), slow.cleanedUp)
+    }
+
+    /**
+     * Edits wait for the user listing whichever tab is shown, so a pause that stopped it behind
+     * another tab must not leave it unfinished until the user happens to open the User tab.
+     */
+    @Test
+    fun `a user listing stopped behind another tab starts again with the session`() = runListings { listings, slow ->
+        listings.start()
+        runCurrent()
+        listings.setScope(PresetScope.FAVORITES)
+        runCurrent()
+        listings.cancel()
+        runCurrent()
+        slow.started.clear()
+
+        listings.start()
+        runCurrent()
+
+        assertEquals(setOf(PresetScope.FAVORITES, PresetScope.USER), slow.started.toSet())
     }
 
     /**
@@ -238,6 +260,32 @@ class PresetListingsTest {
         val listings = PresetListings(backgroundScope, { null }, { null }, StringResolver { id, _ -> "string $id" })
         assertFalse(listings.refresh())
         assertFalse(listings.refreshing.value)
+    }
+
+    /**
+     * An unplug drops the device's cached listings, and the user listing kept in memory behind
+     * another tab with them: the panel may change before the replug, and copy destinations and
+     * the edit gate must not go on reading rows nothing vouches for.
+     */
+    @Test
+    fun `unplugging the session's device drops a user listing kept behind another tab`() = runEdits { listings, fake ->
+        listings.setScope(PresetScope.FAVORITES)
+        advanceUntilIdle()
+        assertTrue(listings.userIndex.value.complete)
+
+        listings.forgetDevice("usb:other")
+        runCurrent()
+        assertTrue("another device's unplug leaves it", listings.userIndex.value.complete)
+
+        listings.forgetDevice("usb:test")
+        runCurrent()
+        assertFalse(listings.userIndex.value.complete)
+
+        fake.collected.clear()
+        listings.start()
+        advanceUntilIdle()
+        assertEquals(listOf(PresetScope.USER), fake.collected)
+        assertTrue(listings.userIndex.value.complete)
     }
 
     /** The regression run plans its scratch slots around this: an unreadable slot is neither free nor taken. */

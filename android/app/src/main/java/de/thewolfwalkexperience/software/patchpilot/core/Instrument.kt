@@ -313,6 +313,13 @@ interface PresetEditor {
     /** True where [op] is composed host-side from reads and writes rather than being one call. */
     fun isEmulated(op: EditOp): Boolean
 
+    /**
+     * Whether a preset from [source] can be put into [destination] at all, whatever either holds
+     * now - false only where the two store different kinds of preset (a Motif XS's drum banks and
+     * its normal ones). A destination pick and a drag offer only the slots this allows.
+     */
+    fun fits(source: SlotAddress, destination: SlotAddress): Boolean = true
+
     /** Stores [newName] as given: the caller trims it, as the rename dialog does. */
     suspend fun rename(address: SlotAddress, newName: String)
     suspend fun move(from: SlotAddress, to: SlotAddress)

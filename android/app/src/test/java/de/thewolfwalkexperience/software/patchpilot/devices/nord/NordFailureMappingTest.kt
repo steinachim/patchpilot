@@ -5,6 +5,8 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.emptyItemRecord
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.itemRecord
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
 import de.thewolfwalkexperience.software.patchpilot.thrownBy
@@ -13,7 +15,6 @@ import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferExcepti
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -42,7 +43,7 @@ class NordFailureMappingTest {
         )
         val failure = thrownBy<InstrumentException.DeviceRejected> { instrument.delete(SlotAddress(8, 12)) }
         assertEquals(9, failure.status)
-        assertTrue(failure.message!!.contains("delete a preset"))
+        assertTrue(failure.message!!, failure.message!!.contains("refused to delete a preset"))
     }
 
     /**
@@ -85,6 +86,52 @@ class NordFailureMappingTest {
         assertEquals(NordDevice.STATUS_FILE_EXISTS, (failure.cause as NordStatusException).status)
         assertTrue(failure.message!!, failure.message!!.contains("holds a preset"))
         assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
+    }
+
+    /** As for a copy; status 4 for a move is assumed, not measured - see `NordInstrument.intoEmpty`. */
+    @Test
+    fun `moving onto an occupied slot asks for a refresh`() = runTest {
+        val instrument = instrument(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                25 to uint32BE(NordDevice.STATUS_FILE_EXISTS),
+                7 to ByteArray(0),
+            ),
+        )
+        val failure =
+            thrownBy<InstrumentException.SlotStateChanged> { instrument.move(SlotAddress(0, 0), SlotAddress(0, 1)) }
+        assertTrue(failure.message!!, failure.message!!.contains("holds a preset"))
+    }
+
+    /** Read before the write, as on every family: a slot deleted on the panel asks for a refresh. */
+    @Test
+    fun `renaming a slot emptied on the panel asks for a refresh`() = runTest {
+        val instrument = instrument(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                31 to emptyItemRecord(bank = 0, item = 0),
+                7 to ByteArray(0),
+            ),
+        )
+        val failure = thrownBy<InstrumentException.SlotStateChanged> { instrument.rename(SlotAddress(0, 0), "New") }
+        assertTrue(failure.message!!, failure.message!!.contains("is empty"))
+    }
+
+    @Test
+    fun `a rename to the name already stored writes nothing`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                31 to itemRecord(bank = 0, item = 0, categoryId = 21, name = "White Grand"),
+                7 to ByteArray(0),
+            ),
+        )
+        NordInstrument(NordFixtures.device(transport, NordFixtures.GRAND_PROFILE))
+            .rename(SlotAddress(0, 0), "White Grand")
+        assertTrue(transport.sentRequests.none { it.subOp == NordDevice.FileTransferSubOp.SET_NAME.code })
     }
 
     /** A swap needs two presets; status 1 says one slot is empty, though not which. */
@@ -173,7 +220,9 @@ class NordFailureMappingTest {
     @Test
     fun `a read that times out becomes Timeout`() = runTest {
         val instrument = NordInstrument(NordFixtures.device(SilentTransport(), NordFixtures.GRAND_PROFILE))
-        thrownBy<InstrumentException.Timeout> { instrument.delete(SlotAddress(8, 12)) }
+        val failure = thrownBy<InstrumentException.Timeout> { instrument.delete(SlotAddress(8, 12)) }
+        // The -ing form: "did not answer while delete a preset" is what one label for both gave.
+        assertTrue(failure.message!!, failure.message!!.contains("did not answer while deleting a preset"))
     }
 
     /** Takes every request, then never answers within the timeout. */
@@ -191,7 +240,7 @@ class NordFailureMappingTest {
     fun `an unexpected internal state becomes ProtocolDesync, not TransportLost`() = runTest {
         val failure =
             thrownBy<InstrumentException.ProtocolDesync> {
-                mapNordFailure("delete a preset") { check(false) { "impossible state" } }
+                mapNordFailure("delete a preset", "deleting a preset") { check(false) { "impossible state" } }
             }
         assertTrue(failure.message!!.contains("impossible state"))
     }

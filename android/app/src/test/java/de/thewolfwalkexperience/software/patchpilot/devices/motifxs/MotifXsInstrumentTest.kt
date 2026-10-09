@@ -10,6 +10,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
+import de.thewolfwalkexperience.software.patchpilot.core.assertEveryDeclaredEditCompletes
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import de.thewolfwalkexperience.software.patchpilot.thrownBy
@@ -81,6 +82,12 @@ class MotifXsInstrumentTest {
         testBlanks,
         factoryVoices = factoryVoices,
     ) to fake.transport
+
+    /** The contract every family is held to - see `assertEveryDeclaredEditCompletes`. */
+    @Test
+    fun `every edit the Motif XS declares completes`() = runTest {
+        assertEveryDeclaredEditCompletes("the Motif XS", instrument(backgroundScope).first)
+    }
 
     @Test
     fun `the index walks every address and names the occupied ones`() = runTest {
@@ -700,6 +707,8 @@ class MotifXsInstrumentTest {
                 e
             }
             assertNotNull("$name across the drum boundary should be refused", failure)
+            // Worded by bank: the slot may be empty, so "a slot that holds a drum kit" would be wrong.
+            assertTrue(failure!!.message!!, failure.message!!.contains("USER DR, a bank of drum kits"))
             // Refused before anything is offered to the instrument, which matters here more than
             // usual: an accepted-but-uncommitted write stays armed until something commits it.
             assertTrue(
@@ -707,6 +716,34 @@ class MotifXsInstrumentTest {
                 transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP },
             )
         }
+    }
+
+    /** What a destination pick and a drag offer: the same rule the edits enforce, asked up front. */
+    @Test
+    fun `fits tells drum banks and normal ones apart`() = runTest {
+        val mixed = MotifXsConfig(
+            banks = listOf(
+                MotifXsBank(
+                    label = "USR1",
+                    slotCount = 3,
+                    addressHi = 0x0C,
+                    addressMid = 0x0A,
+                    displayLabel = "USER 1",
+                ),
+                MotifXsBank(
+                    label = "DRUM",
+                    slotCount = 3,
+                    addressHi = 0x0C,
+                    addressMid = 0x28,
+                    displayLabel = "USER DR",
+                ),
+            ),
+        )
+        val editor = instrument(backgroundScope, withConfig = mixed).first.editor!!
+        assertTrue(editor.fits(SlotAddress(0, 0), SlotAddress(0, 2)))
+        assertTrue(editor.fits(SlotAddress(1, 0), SlotAddress(1, 2)))
+        assertFalse(editor.fits(SlotAddress(0, 0), SlotAddress(1, 1)))
+        assertFalse(editor.fits(SlotAddress(1, 0), SlotAddress(0, 1)))
     }
 
     /** Same-kind edits are unaffected. */
@@ -1173,6 +1210,8 @@ class MotifXsInstrumentTest {
         job!!.start()
         job!!.join()
 
+        assertTrue("cancelled as its write went out", job!!.isCancelled)
+
         val committed = sent.any { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.STORE_HI }
         assertTrue(
             "an accepted write left uncommitted is armed, not discarded - a later unrelated " +
@@ -1214,6 +1253,68 @@ class MotifXsInstrumentTest {
         assertNull("the source must be cleared in the same commit", motif.browser.refresh(from).name)
     }
 
+    /** As the move: a copy cancelled as its write goes out still commits it. */
+    @Test
+    fun `a cancelled copy still commits`() = runTest {
+        var job: Job? = null
+        val (motif, _) = instrument(backgroundScope, fake = FakeMotifXs(onRequest = cancelOnFirstWrite { job }))
+        val from = SlotAddress(0, 0)
+        val to = SlotAddress(1, 1)
+        val copying = motif.browser.refresh(from).name
+
+        job = launch(start = CoroutineStart.LAZY) { motif.editor!!.copyProgram(from, to) }
+        job!!.start()
+        job!!.join()
+
+        assertTrue(job!!.isCancelled)
+        assertEquals(copying, motif.browser.refresh(to).name)
+    }
+
+    /** A swap cancelled mid-way still writes both slots in one commit: never one voice in both. */
+    @Test
+    fun `a cancelled swap still completes both writes and the commit`() = runTest {
+        var job: Job? = null
+        val (motif, _) = instrument(backgroundScope, fake = FakeMotifXs(onRequest = cancelOnFirstWrite { job }))
+        val a = SlotAddress(0, 0)
+        val b = SlotAddress(1, 2)
+        val nameA = motif.browser.refresh(a).name
+        val nameB = motif.browser.refresh(b).name
+
+        job = launch(start = CoroutineStart.LAZY) { motif.editor!!.swap(a, b) }
+        job!!.start()
+        job!!.join()
+
+        assertTrue(job!!.isCancelled)
+        assertEquals(nameB, motif.browser.refresh(a).name)
+        assertEquals(nameA, motif.browser.refresh(b).name)
+    }
+
+    /** Cancels [job] the moment the first write to a voice address goes out. */
+    private fun cancelOnFirstWrite(job: () -> Job?): (ByteArray) -> Unit = { request ->
+        if (MotifXsSysEx.typeOf(request) == MotifXsSysEx.TYPE_BULK_DUMP &&
+            MotifXsSysEx.addressOf(request)?.first == 0x0C
+        ) {
+            job()?.cancel()
+        }
+    }
+
+    // ---- Writes with nothing to change ----
+
+    @Test
+    fun `a rename to the name already stored writes nothing`() = runTest {
+        val (motif, transport) = instrument(backgroundScope)
+        val name = motif.browser.refresh(SlotAddress(0, 0)).name!!
+        motif.editor!!.rename(SlotAddress(0, 0), name)
+        assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
+    }
+
+    @Test
+    fun `swapping two empty slots writes nothing`() = runTest {
+        val (motif, transport) = instrument(backgroundScope)
+        motif.editor!!.swap(SlotAddress(0, 1), SlotAddress(1, 1))
+        assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
+    }
+
     // ---- When a write or its commit fails ----
 
     /**
@@ -1232,6 +1333,23 @@ class MotifXsInstrumentTest {
         assertTrue(failure!!.message!!, failure.message!!.contains("accepted-but-uncommitted"))
         assertTrue(transport.sent.none { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.STORE_HI })
         assertNull("nothing was committed, so the destination is still empty", motif.browser.refresh(to).name)
+    }
+
+    /** As the move: the first write stays armed, so the swap says so and commits nothing. */
+    @Test
+    fun `a swap whose second write is refused commits nothing and says why`() = runTest {
+        // USER 1 (address-mid 0x0A) refuses writes; the swap writes USER 2's slot first.
+        val (motif, transport) = instrument(backgroundScope, fake = FakeMotifXs(readOnlyBanks = setOf(0x0A)))
+        val a = SlotAddress(1, 0)
+        val b = SlotAddress(0, 2)
+        val before = motif.browser.refresh(a).name
+
+        val failure = runCatching { motif.editor!!.swap(a, b) }.exceptionOrNull()
+
+        assertTrue("expected a timeout, got $failure", failure is InstrumentException.Timeout)
+        assertTrue(failure!!.message!!, failure.message!!.contains("accepted-but-uncommitted"))
+        assertTrue(transport.sent.none { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.STORE_HI })
+        assertEquals("nothing was committed", before, motif.browser.refresh(a).name)
     }
 
     @Test

@@ -4,42 +4,13 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import android.util.Log
-import de.thewolfwalkexperience.software.patchpilot.core.AddressFormat
-import de.thewolfwalkexperience.software.patchpilot.core.BankSpec
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
-import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
-import de.thewolfwalkexperience.software.patchpilot.core.FactoryNameCheck
-import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
-import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
-import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
-import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
-import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
-import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
-import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
-import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
-import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
-import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
-import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
-import de.thewolfwalkexperience.software.patchpilot.core.indexWalk
-import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "MotifXsEditor"
 
@@ -88,6 +59,8 @@ internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEdito
         // this a rename would succeed and leave a named voice with nothing in it.
         val previousName = MotifXsVoice.nameOf(motif.readVoicePayload(address))
             ?: throw InstrumentException.SlotStateChanged.empty(where)
+        // Nothing to write: the voice already carries the name, and the write goes to Flash.
+        if (previousName == newName) return
 
         motif.editCommonBlock(address, "renaming $where", "rename of $where") { payload ->
             if (payload.size < MotifXsVoice.NAME_LENGTH) {
@@ -154,6 +127,8 @@ internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEdito
         if (a == b) return
         val payloadA = motif.readVoicePayload(a)
         val payloadB = motif.readVoicePayload(b)
+        // Two empty slots swapped are the same two empty slots.
+        if (MotifXsVoice.nameOf(payloadA) == null && MotifXsVoice.nameOf(payloadB) == null) return
         committed {
             write(a, payloadB)
             write(b, payloadA)
@@ -221,22 +196,30 @@ internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEdito
         verify(from, blank)
     }
 
+    /** A drum kit only into a drum bank, a normal voice only into a normal one - see [requireSameKind]. */
+    override fun fits(source: SlotAddress, destination: SlotAddress): Boolean {
+        val banks = motif.config.banks
+        val from = banks.getOrNull(source.bank) ?: return false
+        val to = banks.getOrNull(destination.bank) ?: return false
+        return from.isDrum == to.isDrum
+    }
+
     /**
      * Refuses an edit that would move a voice between a drum bank and a normal one - the one
      * cross-slot rule the instrument does not enforce. Measured: a normal voice offered to
      * `0C 28 00` was acknowledged, and a drum kit to `0C 0A 7F` likewise. Neither was
-     * committed, so what a commit would make of the slot is untested.
+     * committed, so what a commit would make of the slot is untested. Worded by bank, since the
+     * slot may be empty.
      */
     private fun requireSameKind(from: SlotAddress, to: SlotAddress) {
+        if (fits(from, to)) return
         val source = motif.config.banks[from.bank]
         val target = motif.config.banks[to.bank]
-        if (source.isDrum == target.isDrum) return
-        val kind = { b: MotifXsBank -> if (b.isDrum) "a drum kit" else "a normal voice" }
+        val kind = if (source.isDrum) "a drum kit" else "a normal voice"
+        val bankKind = if (target.isDrum) "drum kits" else "normal voices"
         throw InstrumentException.NotSupported(
-            "put ${kind(source)} into a slot that holds ${kind(target)} - " +
-                "${source.shownLabel} and " +
-                "${target.shownLabel} store different kinds of " +
-                "voice, and the instrument does not refuse the mismatch itself",
+            "put $kind into ${target.shownLabel}, a bank of $bankKind - the two kinds are stored " +
+                "differently, and the instrument does not refuse the mismatch itself",
         )
     }
 

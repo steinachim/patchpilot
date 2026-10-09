@@ -9,7 +9,7 @@ package de.thewolfwalkexperience.software.patchpilot.core
  *
  * The distinction that matters to a screen is "would retrying help?": [Timeout], [ReplyDamaged]
  * and [TransportLost] may, [NotSupported] and [DeviceRejected] will not, and [SlotStateChanged]
- * will after a refresh.
+ * and [PartlyApplied] will after a refresh.
  *
  * The convention every family follows: anything the instrument or the link causes is one of
  * these, with the underlying exception kept as its cause. A bad argument from the caller is an
@@ -75,6 +75,14 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
         explanation ?: "The instrument refused to $what (status $status).",
         cause,
     )
+
+    /**
+     * An edit that changed the instrument and then failed before it finished: [detail] says what
+     * the instrument holds now, and [cause] keeps why the edit stopped - a timeout, a lost link, a
+     * refusal. Its own type because neither half alone is the answer: the edit is not undone, and
+     * repeating it would meet a slot already changed, so the remedy is a refresh.
+     */
+    class PartlyApplied(detail: String, cause: Throwable) : InstrumentException(detail, cause)
 
     /** A reply arrived that this app cannot make sense of - a bug, or an unprofiled device. */
     class ProtocolDesync(detail: String, cause: Throwable? = null) :

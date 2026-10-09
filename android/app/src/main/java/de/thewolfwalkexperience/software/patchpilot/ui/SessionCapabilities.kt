@@ -7,6 +7,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
+import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 
 /**
  * What the session offers, derived once per [ConnectionState] rather than read off the instrument
@@ -35,6 +36,8 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
  * @property isUnknownDevice connected to something the catalog does not list - what "Share device
  *   details" on the preset screen is gated on.
  * @property factoryBanks the banks whose shipped names can be checked against the instrument.
+ * @property fits whether a preset from one slot can be put into another at all - `PresetEditor.fits`,
+ *   which a destination pick and a drag offer targets by.
  */
 data class SessionCapabilities(
     val instrumentName: String? = null,
@@ -51,6 +54,7 @@ data class SessionCapabilities(
     val hasReport: Boolean = false,
     val isUnknownDevice: Boolean = false,
     val factoryBanks: List<Pair<Int, String>> = emptyList(),
+    val fits: (source: SlotAddress, destination: SlotAddress) -> Boolean = anyDestination,
 ) {
     val canVerifyFactoryNames: Boolean get() = factoryBanks.isNotEmpty()
 
@@ -80,7 +84,13 @@ data class SessionCapabilities(
                 hasReport = instrument.report != null,
                 isUnknownDevice = instrument.identity.isGuessed,
                 factoryBanks = instrument.factoryNames?.banks.orEmpty(),
+                // A bound reference, which compares equal for the same editor, so a state
+                // emitted again for one session does not count as new capabilities.
+                fits = editor?.let { it::fits } ?: anyDestination,
             )
         }
     }
 }
+
+/** [SessionCapabilities.fits] with no editor, or one with no rule: one instance, so it compares equal. */
+private val anyDestination: (SlotAddress, SlotAddress) -> Boolean = { _, _ -> true }

@@ -61,6 +61,14 @@
 - A USB permission request that gets no answer no longer leaves the app waiting until you go back: access granted through Android's own dialog is picked up within a second, and after a minute the app offers Retry.
 - After USB access is denied, "Show all devices" lists every attached instrument, so another one can be chosen.
 - On a Yamaha Motif XS whose USB connection stops delivering data, the next operation says so at once and suggests replugging, instead of waiting for an answer that cannot come.
+- On a Nord program whose category the model can't name (`No Cat`), or a Moog Subsequent 37 preset with no category, Set category shows "Not set" and saves only once a category is picked, instead of failing or overwriting the stored value.
+- On a Nord or Yamaha Motif XS, renaming a preset to the name it has or setting the categories it already carries no longer writes it again; neither does swapping two empty Motif XS slots.
+- On a Nord, renaming or setting the category of a preset deleted on the panel since the list was read asks for a refresh, as on the other instruments, instead of reporting a status code.
+- On a Nord, timeouts and refusals are worded correctly ("did not answer while renaming a preset", not "while rename a preset").
+- On a Yamaha Motif XS, the user voice list is read again after a replug or a failed re-read even while Favorites or Factory is shown, so "Copy to…" offers only slots that are free now.
+- Refresh is off while picking a "Copy to…" or "Move to…" destination, and no slot can be picked while the list is still loading.
+- On a Yamaha Motif XS, "Copy to…", "Move to…" and dragging offer only slots of the same kind (drum kit or normal voice), and the refusal names the bank instead of calling an empty slot a drum kit.
+- On a Yamaha Motif XS, favoriting a user voice deleted on the panel since the list was read asks for a refresh instead of marking an empty slot.
 
 ## 1.1
 

@@ -4,7 +4,10 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.emptyItemRecord
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.itemRecord
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
 import de.thewolfwalkexperience.software.patchpilot.thrownBy
@@ -188,6 +191,10 @@ class NordTaggerTest {
         val transport = ReplayTransport(
             listOf(
                 1 to rootListPayload(),
+                // The slot as it stands, read first.
+                5 to ByteArray(0),
+                31 to itemRecord(bank = 0, item = 0, categoryId = 3, name = "White Grand"),
+                7 to ByteArray(0),
                 5 to ByteArray(0),
                 52 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
                 48 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
@@ -207,17 +214,38 @@ class NordTaggerTest {
         assertEquals(21, readUInt32BE(sent.payload, 8))
     }
 
-    /**
-     * A minimal `ngp` item record: the fields the parser reads, at the offsets it reads them.
-     *
-     * The content tag is spelled out as bytes rather than as a string, because it is NUL-padded -
-     * `6e 67 70 00` - and a NUL inside a source literal is invisible to anyone reading it.
-     */
-    private fun itemRecord(bank: Int, item: Int, categoryId: Int, name: String): ByteArray {
-        val text = name.toByteArray(Charsets.US_ASCII)
-        val ngp = byteArrayOf(0x6E, 0x67, 0x70, 0x00)
-        return uint32BE(0) + uint32BE(bank) + uint32BE(item) + uint32BE(0) +
-            ngp + uint32BE(101) + uint32BE(0) + uint32BE(categoryId) +
-            uint32BE(text.size) + text + ByteArray(12)
+    /** As every family: a category the program already carries is not written again. */
+    @Test
+    fun `a category the program already carries is not written`() = runTest {
+        val grand = categories.refOf(21)!!
+        val transport = ReplayTransport(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                31 to itemRecord(bank = 0, item = 0, categoryId = 21, name = "White Grand"),
+                7 to ByteArray(0),
+            ),
+        )
+        NordTagger(NordFixtures.device(transport, profile), categories).setCategories(SlotAddress(0, 0), listOf(grand))
+
+        assertTrue(transport.sentRequests.none { it.subOp == NordDevice.FileTransferSubOp.SET_CATEGORY.code })
+    }
+
+    /** A program deleted on the panel since the list was read: refresh, as on every other family. */
+    @Test
+    fun `setting the category of a slot emptied on the panel asks for a refresh`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                31 to emptyItemRecord(bank = 0, item = 0),
+                7 to ByteArray(0),
+            ),
+        )
+        val tagger = NordTagger(NordFixtures.device(transport, profile), categories)
+        thrownBy<InstrumentException.SlotStateChanged> {
+            tagger.setCategories(SlotAddress(0, 0), listOf(categories.refOf(21)!!))
+        }
+        assertTrue(transport.sentRequests.none { it.subOp == NordDevice.FileTransferSubOp.SET_CATEGORY.code })
     }
 }

@@ -22,7 +22,6 @@ import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.subsequ
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.toList
@@ -179,50 +178,6 @@ class InstrumentFacetTest {
         assertTrue(EditOp.DELETE in editor.supported)
         editor.delete(SlotAddress(0, 0))
         assertNull(instrument.refresh(SlotAddress(0, 0)).name)
-    }
-
-    /** Shared by both instruments below - the property is the same regardless of shape. */
-    private suspend fun assertEveryDeclaredEditCompletes(name: String, instrument: Instrument) {
-        instrument.connect()
-        val editor = instrument.editor!!
-        val occupied = instrument.browser.index().toList()
-            .filterIsInstance<IndexUpdate.Slots>()
-            .flatMap { it.slots }
-        val empty = instrument.layout.allAddresses().first { address ->
-            occupied.none { it.address == address }
-        }
-        // Where the first preset is, as the edits below move it.
-        var at = occupied[0].address
-
-        if (EditOp.RENAME in editor.supported) {
-            editor.rename(at, "Renamed")
-            assertEquals("Renamed", instrument.browser.refresh(at).name)
-        }
-        if (EditOp.MOVE in editor.supported) {
-            editor.move(at, empty)
-            assertNull("$name left the source occupied after a move", instrument.browser.refresh(at).name)
-            at = empty
-        }
-        if (EditOp.SWAP in editor.supported) {
-            // With another preset: a Nord, and demo mode with it, refuses a swap with an empty slot.
-            val other = occupied[1]
-            val moving = instrument.browser.refresh(at).name
-            editor.swap(at, other.address)
-            assertEquals(other.name, instrument.browser.refresh(at).name)
-            assertEquals(moving, instrument.browser.refresh(other.address).name)
-            at = other.address
-        }
-        if (EditOp.COPY in editor.supported) {
-            val stillEmpty = instrument.layout.allAddresses().first { address ->
-                instrument.browser.refresh(address).name == null
-            }
-            val copyName = editor.copyProgram(at, stillEmpty)
-            assertEquals(copyName, instrument.browser.refresh(stillEmpty).name)
-        }
-        if (EditOp.DELETE in editor.supported) {
-            editor.delete(at)
-            assertNull(instrument.browser.refresh(at).name)
-        }
     }
 
     @Test

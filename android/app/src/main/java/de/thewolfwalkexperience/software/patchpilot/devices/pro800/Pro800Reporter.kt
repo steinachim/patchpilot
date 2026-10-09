@@ -72,7 +72,10 @@ class Pro800Reporter(
         val total = layout.slotCount
         var done = 0
 
-        for (address in layout.allAddresses()) {
+        val addresses = layout.allAddresses().toList()
+        probes.startLoop()
+        for ((i, address) in addresses.withIndex()) {
+            if (probes.gaveUp("dumpsNotRead", addresses.size - i)) break
             val displayId = layout.format.format(address)
             val message = probes.probe("dump[$displayId]", ByteArray(0)) { readReply(address) }
             done++

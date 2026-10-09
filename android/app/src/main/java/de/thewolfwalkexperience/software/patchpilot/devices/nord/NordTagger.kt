@@ -16,8 +16,8 @@ import kotlinx.coroutines.sync.withLock
 /**
  * A Nord program's category tag: one assignment, no sub-categories, no favorites, no read-only
  * banks, a sparse id space ([NordCategories]), and "None" as a category rather than the absence
- * of one. Reading costs nothing (the tag is in the item record the browser fetches for every
- * row); writing is sub-opcode 51/52 - see [NordDevice.setPresetCategory].
+ * of one. Reading fetches the slot's item record, the one the browser fetches for every row;
+ * writing is sub-opcode 51/52 - see [NordDevice.setPresetCategory].
  */
 internal class NordTagger(
     private val device: NordDevice,
@@ -47,7 +47,7 @@ internal class NordTagger(
      * Null where the program carries an id this instrument does not name (`No Cat` on its display).
      */
     override suspend fun read(address: SlotAddress): PresetTags = deviceLock.withLock {
-        mapNordFailure("read a preset's category") {
+        mapNordFailure("read a preset's category", "reading a preset's category") {
             val id = categoryIdAt(address)
             PresetTags(categories = listOf(id?.let { categories.refOf(it) }))
         }
@@ -56,7 +56,8 @@ internal class NordTagger(
     /**
      * Writes the single assignment, then verifies against the item record the browser lists with.
      * The argument checks stay outside [mapNordFailure], which would read an
-     * `IllegalArgumentException` as an unparseable reply.
+     * `IllegalArgumentException` as an unparseable reply. The slot is read first: an unchanged
+     * category writes nothing, and a slot emptied on the panel is reported as such.
      */
     override suspend fun setCategories(address: SlotAddress, categories: List<CategoryRef?>) {
         val wanted = categories.firstOrNull()
@@ -67,7 +68,12 @@ internal class NordTagger(
             ?: throw IllegalArgumentException("No category ${wanted.main} on this Nord.")
 
         deviceLock.withLock {
-            mapNordFailure("set a preset's category") {
+            mapNordFailure("set a preset's category", "setting a preset's category") {
+                val current = device.readProgram(address.bank, address.slot)
+                    ?: throw InstrumentException.SlotStateChanged.empty(
+                        device.formatPresetId(address.bank, address.slot),
+                    )
+                if (current.categoryId == id) return@mapNordFailure
                 device.setPresetCategory(address.bank, address.slot, id)
 
                 val stored = categoryIdAt(address)

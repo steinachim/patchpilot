@@ -195,9 +195,13 @@ class RegressionTester(
         val source = occupied.first()
         var sandbox = free.first()
         var sandboxName: String? = null
+        // Set as soon as the copy returns, before its checks: a copy that landed but failed them
+        // is still on the instrument, and the clean-up has to know about it.
+        var copied: String? = null
 
-        results += step(COPY, progress) {
+        val copyResult = step(COPY, progress) {
             val copyName = editor.copyProgram(source, sandbox)
+            copied = copyName
             refreshEdited(listOf(sandbox))
             check(instrument.browser.refresh(sandbox).name == copyName) {
                 "${display(sandbox)} does not hold \"$copyName\" after the copy."
@@ -205,11 +209,16 @@ class RegressionTester(
             check(instrument.browser.refresh(source).name != null) {
                 "${display(source)} was emptied by a copy, which must leave its source alone."
             }
-            sandboxName = copyName
             "Copied ${display(source)} to ${display(sandbox)}; the instrument named it \"$copyName\"."
         }
-        val copyName = sandboxName
+        results += copyResult
+        val copyName = copied
             ?: return results + listOf(RENAME, MOVE, SWAP, DELETE).map { skip(it, NO_SANDBOX) }
+        if (copyResult.status != Status.PASS) {
+            return results + listOf(RENAME, MOVE, SWAP).map { skip(it, NO_SANDBOX) } +
+                cleanUp(editor, listOf(sandbox to copyName), progress)
+        }
+        sandboxName = copyName
 
         results += when {
             EditOp.RENAME !in editor.supported -> skip(RENAME, UNSUPPORTED)

@@ -129,9 +129,10 @@ internal class PresetListings(
     }
 
     /**
-     * Starts the listing unless one is running or finished for this instrument. Idempotent, since
-     * both callers are safe: ProgramsScreen on first composition, and the coordinator whenever a
-     * session begins, which is what covers a reconnect.
+     * Starts the listing unless one is running or finished for this instrument, and the user
+     * listing behind another tab likewise ([ensureUserListing]). Idempotent, since both callers
+     * are safe: ProgramsScreen on first composition, and the coordinator whenever a session
+     * begins, which is what covers a reconnect.
      */
     fun start() {
         val key = instrument()?.identity?.stableKey ?: return
@@ -143,8 +144,21 @@ internal class PresetListings(
         }
         lastBrowsedInstrument = key
         val scope = _browseScope.value
-        if (key == indexedInstrument && (indexJobs[scope]?.isActive == true || isSettled(scope))) return
-        launchIndex(key, scope)
+        if (key != indexedInstrument || (indexJobs[scope]?.isActive != true && !isSettled(scope))) {
+            launchIndex(key, scope)
+        }
+        ensureUserListing(key)
+    }
+
+    /**
+     * Starts the user listing where another scope is on screen and it has neither finished nor is
+     * running - after a pause stopped it, say, or [forgetUserListing] dropped it. Edits wait for
+     * it ([editsAllowed]), and "Copy to..." offers its free slots, whichever tab is shown.
+     */
+    private fun ensureUserListing(key: String) {
+        if (_browseScope.value == PresetScope.USER) return
+        if (isSettled(PresetScope.USER) || indexJobs[PresetScope.USER]?.isActive == true) return
+        launchIndex(key, PresetScope.USER)
     }
 
     /**
@@ -162,6 +176,7 @@ internal class PresetListings(
      */
     fun reloadAfterEdit() {
         val key = instrument()?.identity?.stableKey ?: return
+        ensureUserListing(key)
         val scope = _browseScope.value
         if (!editLeftListingStale && listingsByScope.value[scope] != null) return
         editLeftListingStale = false
@@ -250,8 +265,15 @@ internal class PresetListings(
         invalidateUserCache()
     }
 
-    /** Drops every cached listing of the device at [handle], connected or not - see [PresetIndexCache.invalidateDevice]. */
-    fun forgetDevice(handle: String) = indexCache.invalidateDevice(handle)
+    /**
+     * Drops every cached listing of the device at [handle], connected or not - see
+     * [PresetIndexCache.invalidateDevice] - and, for the session's own device, the user listing
+     * held in memory ([forgetUserListing]).
+     */
+    fun forgetDevice(handle: String) {
+        indexCache.invalidateDevice(handle)
+        if (handle == deviceHandle()) forgetUserListing()
+    }
 
     /**
      * Drops the cached user listing whichever scope is on screen. Separate from [invalidate]: a
@@ -261,6 +283,20 @@ internal class PresetListings(
     fun invalidateUserCache() {
         val instrument = instrument() ?: return
         cacheKey(instrument)?.let { indexCache.invalidate(it) }
+        forgetUserListing()
+    }
+
+    /**
+     * Drops the user listing held in memory where another scope is on screen, along with the scan
+     * filling it: once the cache no longer vouches for its rows, nothing may read them - the copy
+     * destinations, the regression run's occupancy, the edit gate - until [ensureUserListing] has
+     * read them again. A user listing on screen is left to the re-read that follows (a refresh,
+     * [reloadAfterEdit], a reconnect), so its rows do not vanish first.
+     */
+    private fun forgetUserListing() {
+        if (_browseScope.value == PresetScope.USER) return
+        indexJobs.remove(PresetScope.USER)?.cancel()
+        listingsByScope.update { it - PresetScope.USER }
     }
 
     /**

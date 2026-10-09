@@ -53,7 +53,13 @@ class AxeFx3Reporter(
         var unnamed = 0
         var staleTails = 0
         var firstOccupied: Int? = null
+        var notRead = 0
+        probes.startLoop()
         for (number in 0 until count) {
+            if (probes.gaveUp("namesNotRead", count - number)) {
+                notRead = count - number
+                break
+            }
             val field = probes.probe<ByteArray?>("name[$number]", null) { locked { device.nameField(number) } }
                 ?: continue
             val name = AxeFx3SysEx.nameFromField(field)
@@ -84,7 +90,7 @@ class AxeFx3Reporter(
             loadedPresetNumber = loaded,
             loadedPresetQueryWorks = loaded != null,
             occupiedCount = occupied,
-            emptyCount = count - occupied - probes.failures.keys.count { it.startsWith("name[") },
+            emptyCount = count - occupied - notRead - probes.failures.keys.count { it.startsWith("name[") },
             unnamedCount = unnamed,
             staleNameTailCount = staleTails,
             dumpReads = reads.map { it.summary },

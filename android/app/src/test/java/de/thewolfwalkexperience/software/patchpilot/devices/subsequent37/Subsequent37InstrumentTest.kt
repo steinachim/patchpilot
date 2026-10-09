@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
 
 import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
@@ -237,11 +238,17 @@ class Subsequent37InstrumentTest {
             { instrument.select(SlotAddress(0, 1)) },
             { instrument.refresh(SlotAddress(0, 1)) },
             { instrument.editor.rename(SlotAddress(0, 1), "New") },
+            { instrument.editor.copyProgram(SlotAddress(0, 1), SlotAddress(0, 2)) },
+            { instrument.editor.move(SlotAddress(0, 1), SlotAddress(0, 2)) },
+            { instrument.editor.swap(SlotAddress(0, 1), SlotAddress(0, 2)) },
+            { instrument.editor.delete(SlotAddress(0, 1)) },
+            { instrument.tagger.setCategories(SlotAddress(0, 1), listOf(CategoryRef(0))) },
             // Program 255 has not arrived yet, so its category would have to be read.
             { instrument.tagger.read(SlotAddress(15, 15)) },
             { instrument.read(SlotAddress(0, 1)) },
             { instrument.report.buildReport() },
         )
+        val before = fake.requests.size
         for (attempt in refusals) {
             try {
                 attempt()
@@ -250,6 +257,7 @@ class Subsequent37InstrumentTest {
                 assertTrue(expected.message!!.contains("still sending its preset list (about"))
             }
         }
+        assertEquals("a refusal sends nothing", before, fake.requests.size)
         // One the dump has delivered is answered from it, with nothing sent.
         val sent = fake.requests.size
         instrument.tagger.read(SlotAddress(0, 1))

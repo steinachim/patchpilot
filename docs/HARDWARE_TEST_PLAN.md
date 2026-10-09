@@ -71,6 +71,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | N6 | Two different Nords | Two supported Nords on a hub | One candidate each, in catalog order | – | – |
 | N7 | Instrument powered off mid session | Switch the Nord off, idle session | The app notices it has gone silent | 2026-09-20, Nord Grand | ◐ open: the 64-empty-reads path not exercised |
 | N8 | Accepted advisory across a lock | As N2: Continue anyway, then lock and unlock | No second advisory | – | – |
+| N9 | Category the model cannot name | On a program whose display shows `No Cat`, open Set category | The dialog shows "Not set" and Save stays off until a category is picked | – | – |
 
 ## 4. Yamaha Motif XS
 
@@ -87,6 +88,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | M9 | Move onto a slot changed on the panel | Store a voice from the panel into a slot the list shows as empty, then "Move to…" that slot in the app | Refused; the voice stored there is unchanged | – | – |
 | M10 | Pull to refresh mid listing | Over-pull at the top of the list while the user banks are still arriving | Nothing restarts; the listing goes on to the end | – | – |
 | M11 | Loading a voice in Performance mode | Put the instrument in Performance mode, tap a voice in the app, accept "Switch to Voice mode"; try Back and another edit while it switches | "Changing the instrument's state…" shows, Back and the edits stay off until the switch lands, then the voice loads | – | – |
+| M12 | Destinations of the other kind | "Copy to…" and "Move to…" on a USER 1 voice; drag it over the USER DR rows | No USER DR slot is offered or highlighted; the reverse for a drum kit | – | – |
 
 ## 5. Behringer Pro-800
 
@@ -147,3 +149,4 @@ Not yet run in the app. Use scratch slots.
 | S15 | Unplug mid swap | Swap two scratch presets, unplug between the writes | Clean failure; each slot holds one of the two presets (check on the panel); the log says whether the rollback ran | – | – |
 | S16 | Device report | Generate it twice | Firmware 1.2.0; 268 settings words; IN and OUT channels match the panel; the two reads of the selected program agree | – | – |
 | S17 | Advisory | Set `supportedFirmwareVersions` to `["1.1.0"]`, rebuild, connect | The advisory names 1.2.0; Continue anyway connects | – | – |
+| S18 | Unassigned category | Initialize a scratch preset on the panel (its CAT reads Misc), open Set category in the app | The dialog shows "Not set" and Save stays off until a category is picked; the panel's value is left alone on Cancel | – | – |

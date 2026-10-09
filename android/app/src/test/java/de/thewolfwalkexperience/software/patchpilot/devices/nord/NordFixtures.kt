@@ -38,6 +38,25 @@ object NordFixtures {
     }
 
     /**
+     * A minimal `ngp` item record, as a fetch (30/31) of an occupied slot answers: the fields the
+     * parser reads, at the offsets it reads them.
+     *
+     * The content tag is spelled out as bytes rather than as a string, because it is NUL-padded -
+     * `6e 67 70 00` - and a NUL inside a source literal is invisible to anyone reading it.
+     */
+    fun itemRecord(bank: Int, item: Int, categoryId: Int, name: String): ByteArray {
+        val text = name.toByteArray(Charsets.US_ASCII)
+        val ngp = byteArrayOf(0x6E, 0x67, 0x70, 0x00)
+        return uint32BE(0) + uint32BE(bank) + uint32BE(item) + uint32BE(0) +
+            ngp + uint32BE(101) + uint32BE(0) + uint32BE(categoryId) +
+            uint32BE(text.size) + text + ByteArray(12)
+    }
+
+    /** What a fetch (30/31) of an empty slot answers: status 1, not found. */
+    fun emptyItemRecord(bank: Int, item: Int): ByteArray =
+        uint32BE(NordDevice.STATUS_NOT_FOUND) + uint32BE(bank) + uint32BE(item)
+
+    /**
      * The file-transfer protocol version each instrument reports. Not part of any profile -
      * the instrument is asked at connect time - so tests that bypass connect() state it here.
      */

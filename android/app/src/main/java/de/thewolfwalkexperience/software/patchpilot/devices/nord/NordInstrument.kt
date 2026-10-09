@@ -5,7 +5,6 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
-import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
@@ -19,22 +18,15 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
-import de.thewolfwalkexperience.software.patchpilot.core.Probes
-import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
-import de.thewolfwalkexperience.software.patchpilot.core.ReportIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
-import de.thewolfwalkexperience.software.patchpilot.core.slugifyDeviceId
-import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbReadTimeoutException
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferException
-import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.encodeToString
 
 private const val TAG = "NordInstrument"
 
@@ -107,7 +99,7 @@ class NordInstrument(
      * the guessed bounds still work, just generously.
      */
     override suspend fun connect() {
-        exclusive("connecting") { device.connect() }
+        exclusive("connect", "connecting") { device.connect() }
         if (device.profile.id != NordProfile.UNKNOWN_ID) return
         try {
             deviceLock.withLock { device.applyDerivedBankLayout() }
@@ -128,7 +120,7 @@ class NordInstrument(
      * implemented.
      */
     override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
-        val items = exclusive("listing presets") {
+        val items = exclusive("list presets", "listing presets") {
             device.collectItemNames(device.fetchCategoryItems(device.getProgramCategoryIndex()))
         }
         emit(IndexUpdate.Slots(items.map { it.toPresetSlot() }))
@@ -137,7 +129,7 @@ class NordInstrument(
 
     /** Re-reads one slot by its address - see [NordDevice.readProgram]. */
     override suspend fun refresh(address: SlotAddress): PresetSlot =
-        exclusive("re-reading a preset") { device.readProgram(address.bank, address.slot) }
+        exclusive("re-read a preset", "re-reading a preset") { device.readProgram(address.bank, address.slot) }
             ?.toPresetSlot()
             ?: emptySlot(address)
 
@@ -164,7 +156,7 @@ class NordInstrument(
     // ---- PresetSelector ----
 
     override suspend fun select(address: SlotAddress) =
-        exclusive("load a preset") { device.selectPreset(address.bank, address.slot) }
+        exclusive("load a preset", "loading a preset") { device.selectPreset(address.bank, address.slot) }
 
     // ---- PresetEditor ----
 
@@ -180,17 +172,28 @@ class NordInstrument(
      */
     override val maxNameLength: Int get() = device.profile.maxProgramNameLen
 
-    /** The name is checked outside [exclusive], whose failure mapping would read the refusal as an unparseable reply. */
+    /**
+     * The name is checked outside [exclusive], whose failure mapping would read the refusal as an
+     * unparseable reply. The slot is read first, as every family does: an unchanged name writes
+     * nothing, and a slot emptied on the panel is reported as such rather than as a status code.
+     */
     override suspend fun rename(address: SlotAddress, newName: String) {
         nameProblem(newName)?.let { throw IllegalArgumentException(it) }
-        exclusive("rename a preset") { device.renamePreset(address.bank, address.slot, newName) }
+        exclusive("rename a preset", "renaming a preset") {
+            val current = device.readProgram(address.bank, address.slot)
+                ?: throw InstrumentException.SlotStateChanged.empty(layout.format.format(address))
+            if (current.name == newName) return@exclusive
+            device.renamePreset(address.bank, address.slot, newName)
+        }
     }
 
     override suspend fun move(from: SlotAddress, to: SlotAddress) =
-        exclusive("move a preset") { intoEmpty(to) { device.moveProgram(from.bank, from.slot, to.bank, to.slot) } }
+        exclusive("move a preset", "moving a preset") {
+            intoEmpty(to) { device.moveProgram(from.bank, from.slot, to.bank, to.slot) }
+        }
 
     /** Both slots must hold a preset; an empty one answers status 1, which does not say which. */
-    override suspend fun swap(a: SlotAddress, b: SlotAddress) = exclusive("swap two presets") {
+    override suspend fun swap(a: SlotAddress, b: SlotAddress) = exclusive("swap two presets", "swapping two presets") {
         try {
             device.swapPrograms(a.bank, a.slot, b.bank, b.slot)
         } catch (e: NordStatusException) {
@@ -205,11 +208,13 @@ class NordInstrument(
 
     /** Sub-opcode 20/21: the instrument empties the slot itself. Frees no space until its own reclaim runs. */
     override suspend fun delete(address: SlotAddress) =
-        exclusive("delete a preset") { device.deleteProgram(address.bank, address.slot) }
+        exclusive("delete a preset", "deleting a preset") { device.deleteProgram(address.bank, address.slot) }
 
     /** Sub-opcode 22/23: the instrument duplicates the record and names the copy itself. */
     override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String =
-        exclusive("copy a preset") { intoEmpty(dst) { device.copyProgram(src.bank, src.slot, dst.bank, dst.slot) } }
+        exclusive("copy a preset", "copying a preset") {
+            intoEmpty(dst) { device.copyProgram(src.bank, src.slot, dst.bank, dst.slot) }
+        }
 
     /**
      * Status 4 ("file exists") from [block] as [InstrumentException.SlotStateChanged]: the app
@@ -225,8 +230,8 @@ class NordInstrument(
     }
 
     /** [block] under [deviceLock], with its failures translated by [mapNordFailure]. */
-    private suspend fun <T> exclusive(what: String, block: suspend () -> T): T =
-        deviceLock.withLock { mapNordFailure(what, block) }
+    private suspend fun <T> exclusive(action: String, during: String, block: suspend () -> T): T =
+        deviceLock.withLock { mapNordFailure(action, during, block) }
 
     companion object {
         const val FAMILY = "nord"
@@ -252,27 +257,27 @@ class NordInstrument(
  *  - any other `IllegalStateException` - a state this code did not expect, which is a bug rather
  *    than anything the connection did.
  *
- * [what] is the operation in the user's terms, so [InstrumentException.NotSupported]'s and
- * [InstrumentException.DeviceRejected]'s sentences read correctly: "rename presets", not
- * "SET_NAME". Shared with [NordTagger], whose writes go through the same wire and deserve the
- * same translation.
+ * The operation is named twice, in the user's terms rather than "SET_NAME", because the sentences
+ * need two forms: [action] completes "The instrument refused to …" ("rename a preset"), and
+ * [during] completes "… did not answer while …" ("renaming a preset"). Shared with [NordTagger],
+ * whose writes go through the same wire and deserve the same translation.
  */
-internal suspend fun <T> mapNordFailure(what: String, block: suspend () -> T): T = try {
+internal suspend fun <T> mapNordFailure(action: String, during: String, block: suspend () -> T): T = try {
     block()
 } catch (e: CancellationException) {
     throw e
 } catch (e: NordStatusException) {
-    throw InstrumentException.DeviceRejected(what, e.status, cause = e)
+    throw InstrumentException.DeviceRejected(action, e.status, cause = e)
 } catch (e: UnsupportedProtocolVersionException) {
     throw InstrumentException.ProtocolDesync(e.message ?: "Unsupported protocol version", e)
 } catch (e: NordProtocolException) {
-    throw InstrumentException.ProtocolDesync(e.message ?: "Unexpected reply while $what", e)
+    throw InstrumentException.ProtocolDesync(e.message ?: "Unexpected reply while $during", e)
 } catch (e: IllegalArgumentException) {
-    throw InstrumentException.ProtocolDesync(e.message ?: "Unreadable reply while $what", e)
+    throw InstrumentException.ProtocolDesync(e.message ?: "Unreadable reply while $during", e)
 } catch (e: UsbReadTimeoutException) {
-    throw InstrumentException.Timeout(what, e)
+    throw InstrumentException.Timeout(during, e)
 } catch (e: UsbTransferException) {
-    throw InstrumentException.TransportLost(e.message ?: "The connection failed while $what", e)
+    throw InstrumentException.TransportLost(e.message ?: "The connection failed while $during", e)
 } catch (e: IllegalStateException) {
-    throw InstrumentException.ProtocolDesync(e.message ?: "Unexpected state while $what", e)
+    throw InstrumentException.ProtocolDesync(e.message ?: "Unexpected state while $during", e)
 }

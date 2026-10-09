@@ -33,7 +33,7 @@ class Subsequent37Tagger(private val instrument: Subsequent37Instrument) : Prese
 
     override val favorites: FavoriteModel? = null
 
-    /** False: see the class doc. A `null` still stores `0x77`, which the dialog only sends for a preset that already holds it. */
+    /** False: see the class doc. A `null` still stores `0x77`; the dialog never sends one (`categoriesSavable`). */
     override val allowsUnassigned: Boolean = false
 
     override fun canSetCategories(address: SlotAddress): Boolean = true

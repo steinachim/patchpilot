@@ -321,6 +321,53 @@ class RegressionTesterTest {
     }
 
     /**
+     * A copy that landed but whose check could not confirm it is still on the instrument, so it
+     * is cleaned up like any other: the run leaves nothing behind, and skips only the tests that
+     * needed a confirmed copy.
+     */
+    @Test
+    fun `a copy whose check fails is still deleted`() = runTest {
+        val real = nord()
+        val before = listing(real)
+        var copies = 0
+        var checkFailed = false
+        val instrument = object : Instrument by real {
+            override val editor = object : PresetEditor by real.editor!! {
+                override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String {
+                    copies++
+                    return real.editor!!.copyProgram(src, dst)
+                }
+            }
+            override val browser = object : PresetBrowser by real.browser {
+                override suspend fun refresh(address: SlotAddress): PresetSlot {
+                    // The copy step's own check, once: the copy has landed by then.
+                    if (copies == 1 && !checkFailed) {
+                        checkFailed = true
+                        throw InstrumentException.Timeout("re-reading a preset")
+                    }
+                    return real.browser.refresh(address)
+                }
+            }
+        }
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { real.layout.allAddresses().toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { true },
+            refreshEdited = {},
+        ).run {}
+
+        assertEquals(Status.FAIL, report.of("Copy a preset").status)
+        for (skipped in listOf("Rename a preset", "Move a preset", "Swap two presets")) {
+            assertEquals(skipped, Status.SKIPPED, report.of(skipped).status)
+        }
+        assertEquals(Status.PASS, report.of("Delete a preset").status)
+        assertEquals(before, listing(real))
+    }
+
+    /**
      * The clean-up reads each copy's slot before deleting it. An instrument that stops answering
      * there fails that one step, leaves the copies alone and says so; the run still ends in a
      * report, with every earlier result in it.

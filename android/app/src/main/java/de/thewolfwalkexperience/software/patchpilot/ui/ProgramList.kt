@@ -94,6 +94,8 @@ private object ProgramListMetrics {
  * @property categoryCount how many categories a preset holds - one on a Nord, two on a Motif XS.
  * @property editsEnabled false while no edit may start: a listing still arriving, an edit or a
  *   device report running - see [editsAllowed].
+ * @property fits whether a preset from one slot can be put into another at all
+ *   ([SessionCapabilities.fits]): a pick and a drag offer no target it rules out.
  */
 internal data class RowRules(
     val canRename: Boolean,
@@ -106,6 +108,7 @@ internal data class RowRules(
     val categoryCount: Int,
     val browseScope: PresetScope,
     val editsEnabled: Boolean,
+    val fits: (source: SlotAddress, destination: SlotAddress) -> Boolean = { _, _ -> true },
 )
 
 /**
@@ -176,9 +179,7 @@ internal fun ProgramListBody(
                     },
                     onDrag = { change, dragAmount ->
                         change.consume()
-                        drag.update(dragAmount.y) { i ->
-                            visibleRows.getOrNull(i) is ProgramRow.ProgramEntry
-                        }
+                        drag.update(dragAmount.y) { i -> canDropOn(visibleRows, drag.draggedIndex, i, rules.fits) }
                     },
                     onDragEnd = {
                         val (from, to) = drag.end() ?: return@detectDragGesturesAfterLongPress
@@ -329,11 +330,16 @@ private fun ProgramRowItem(
     // Which rows a tap can act on depends on what is being picked
     // for: a copy needs somewhere empty, a move can land anywhere but
     // its own source.
-    // An unreadable slot is neither: what it holds is unknown.
-    val isPickTarget = ops.picking && !isUnreadable && when (ops.pickIntent) {
-        PickIntent.COPY -> isEmpty
-        PickIntent.MOVE -> program.address != ops.pickSource?.address
-    }
+    // An unreadable slot is neither: what it holds is unknown. Nothing is a target while either
+    // listing is still arriving, when an unread slot looks empty ([editsAllowed]), nor where the
+    // slot cannot take the source at all (a Motif XS drum bank and a normal one).
+    val pickSource = ops.pickSource
+    val isPickTarget = ops.picking && rules.editsEnabled && !isUnreadable &&
+        (pickSource == null || rules.fits(pickSource.address, program.address)) &&
+        when (ops.pickIntent) {
+            PickIntent.COPY -> isEmpty
+            PickIntent.MOVE -> program.address != ops.pickSource?.address
+        }
     val rowColor = when {
         isDragged -> MaterialTheme.colorScheme.primaryContainer
         isDropTarget -> MaterialTheme.colorScheme.secondaryContainer
@@ -729,4 +735,19 @@ private fun BankIndex(
             }
         }
     }
+}
+
+/**
+ * Whether the row at [target] can take the one being dragged ([dragged]): a preset row, in a slot
+ * that [fits] the dragged preset - both ways, since a drop onto an occupied row swaps.
+ */
+internal fun canDropOn(
+    rows: List<ProgramRow>,
+    dragged: Int?,
+    target: Int,
+    fits: (SlotAddress, SlotAddress) -> Boolean,
+): Boolean {
+    val onto = rows.getOrNull(target) as? ProgramRow.ProgramEntry ?: return false
+    val from = dragged?.let { rows.getOrNull(it) as? ProgramRow.ProgramEntry } ?: return true
+    return fits(from.item.address, onto.item.address) && fits(onto.item.address, from.item.address)
 }

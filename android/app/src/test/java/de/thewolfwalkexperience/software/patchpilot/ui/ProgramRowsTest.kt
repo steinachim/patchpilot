@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
@@ -236,6 +237,48 @@ class ProgramRowsTest {
         assertTrue(refreshAllowed(done, editRunning = false))
         assertTrue(refreshAllowed(failed, editRunning = false))
         assertFalse(refreshAllowed(done, editRunning = true))
+        // A pick's targets would turn into unread rows under the finger.
+        assertFalse(refreshAllowed(done, editRunning = false, picking = true))
+    }
+
+    /** A drop goes only where the dragged preset fits, both ways, since a drop onto a preset swaps. */
+    @Test
+    fun `a drag offers only rows the dragged preset fits`() {
+        val listing = buildProgramListing(pro800Reported, allSlots(), true, false, "")
+        val rows = listing.rows
+        fun indexOf(bank: Int, slot: Int) =
+            rows.indexOfFirst { it is ProgramRow.ProgramEntry && it.item.address == SlotAddress(bank, slot) }
+        // Bank B stands in for a drum bank: nothing crosses between A and B.
+        val sameBank = { a: SlotAddress, b: SlotAddress -> a.bank == b.bank }
+
+        val dragged = indexOf(0, 0)
+        assertTrue(canDropOn(rows, dragged, indexOf(0, 2), sameBank))
+        assertFalse(canDropOn(rows, dragged, indexOf(1, 1), sameBank))
+        assertFalse(
+            "a bank header is no target",
+            canDropOn(
+                rows,
+                dragged,
+                rows.indexOfFirst {
+                    it is ProgramRow.BankHeader
+                },
+                sameBank,
+            ),
+        )
+        assertTrue(canDropOn(rows, dragged, indexOf(1, 1)) { _, _ -> true })
+    }
+
+    /**
+     * Where the instrument cannot store "no category", Save waits for a real one: unchanged, the
+     * Nord would refuse it and the Subsequent 37 would overwrite a value it could not name.
+     */
+    @Test
+    fun `categories are savable only once every pick is one the instrument can store`() {
+        val piano = CategoryRef(0)
+        assertFalse(categoriesSavable(listOf(null), allowsUnassigned = false))
+        assertTrue(categoriesSavable(listOf(piano), allowsUnassigned = false))
+        assertTrue(categoriesSavable(listOf(piano, null), allowsUnassigned = true))
+        assertTrue(categoriesSavable(listOf(null, null), allowsUnassigned = true))
     }
 
     /**

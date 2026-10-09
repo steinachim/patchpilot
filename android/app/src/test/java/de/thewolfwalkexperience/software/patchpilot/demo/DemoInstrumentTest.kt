@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.demo
 
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import kotlinx.coroutines.test.runTest
@@ -53,5 +54,30 @@ class DemoInstrumentTest {
         assertTrue("got $failure", failure is InstrumentException.SlotStateChanged)
         assertEquals(before, demo.refresh(first).name)
         assertNull(demo.refresh(empty).name)
+    }
+
+    // ---- Categories, shaped like a Nord's ----
+
+    @Test
+    fun `a category set reads back`() = runTest {
+        val tagger = DemoInstrument().tagger
+        val other = tagger.taxonomy.mains.indices
+            .map { CategoryRef(it) }
+            .first { it != tagger.read(first).categories.single() }
+
+        tagger.setCategories(first, listOf(other))
+
+        assertEquals(listOf(other), tagger.read(first).categories)
+    }
+
+    /** As on a Nord: `None` is a category, so there is no "none" to send, and no favorites at all. */
+    @Test
+    fun `a category cannot be cleared, an empty slot cannot be tagged, and nothing is favorited`() = runTest {
+        val tagger = DemoInstrument().tagger
+        assertTrue(refusal { tagger.setCategories(first, listOf(null)) } is IllegalArgumentException)
+        val onEmpty = refusal { tagger.setCategories(empty, listOf(CategoryRef(0))) }
+        assertTrue("got $onEmpty", onEmpty is InstrumentException.SlotStateChanged)
+        assertNull(tagger.favorites)
+        assertTrue(refusal { tagger.setFavorite(first, setOf(0)) } is InstrumentException.NotSupported)
     }
 }

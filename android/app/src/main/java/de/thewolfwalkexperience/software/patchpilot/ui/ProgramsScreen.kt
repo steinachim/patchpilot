@@ -209,7 +209,7 @@ fun ProgramsScreen(
     // Shared by the pull gesture and the app bar's button, so both obey the same rule
     // ([refreshAllowed]); `PresetListings.refresh` guards re-entry itself.
     fun startRefresh() {
-        if (!refreshAllowed(index, editRunning = ops.busy != null)) return
+        if (!refreshAllowed(index, editRunning = ops.busy != null, picking = ops.picking)) return
         viewModel.listings.refresh()
     }
     val programs = index.slots
@@ -255,13 +255,14 @@ fun ProgramsScreen(
         categoryCount = tagger?.assignmentCount ?: 1,
         browseScope = browseScope,
         editsEnabled = editsEnabled,
+        fits = capabilities.fits,
     )
 
     // While a row is dragged near an edge of the viewport, keep scrolling so targets outside the
     // visible range can be reached. Keyed on draggedIndex, so ending the drag cancels the loop.
     LaunchedEffect(drag.draggedIndex) {
         if (drag.draggedIndex == null) return@LaunchedEffect
-        drag.autoScroll { i -> visibleRows.getOrNull(i) is ProgramRow.ProgramEntry }
+        drag.autoScroll { i -> canDropOn(visibleRows, drag.draggedIndex, i, rules.fits) }
     }
 
     // System back does what the arrow does, so it never reaches the activity: there it would
@@ -307,7 +308,7 @@ fun ProgramsScreen(
             IconButton(
                 // Same as the pull gesture: drop the cache, then re-read from the instrument.
                 onClick = ::startRefresh,
-                enabled = refreshAllowed(index, editRunning = ops.busy != null),
+                enabled = refreshAllowed(index, editRunning = ops.busy != null, picking = ops.picking),
             ) {
                 // Composed only while refreshing: an infinite transition keeps the frame clock
                 // ticking for as long as it is in the composition, whether or not its value is
