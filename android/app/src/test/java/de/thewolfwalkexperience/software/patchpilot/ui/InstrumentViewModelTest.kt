@@ -96,6 +96,27 @@ class InstrumentViewModelTest {
         }
     }
 
+    /**
+     * Every hook the coordinator calls reaches the parts the ViewModel builds after it. A bound
+     * reference (`listings::forgetDevice`) is resolved while the coordinator is built, before
+     * `listings` exists: the first unplug then threw, and detach handling ended for the session.
+     */
+    @Test
+    fun `the coordinator's hooks reach what the ViewModel builds after it`() {
+        val viewModel = viewModel().apply { awaitSettled() }
+        fun hook(name: String): Any =
+            ConnectionCoordinator::class.java.getDeclaredField(name).apply {
+                isAccessible = true
+            }.get(viewModel.connection)!!
+
+        @Suppress("UNCHECKED_CAST")
+        (hook("onUsbDetached") as (String) -> Unit)("usb:/dev/bus/usb/001/002")
+        @Suppress("UNCHECKED_CAST")
+        (hook("onSessionLost") as () -> Unit)()
+        @Suppress("UNCHECKED_CAST")
+        (hook("onLeavingSession") as () -> Unit)()
+    }
+
     /** The share button's gate can trail the session by a frame, so a tap may find no session at all. */
     @Test
     fun `with no session, a report is not named`() {

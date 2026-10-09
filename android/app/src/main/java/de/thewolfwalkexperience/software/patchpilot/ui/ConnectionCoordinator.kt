@@ -169,7 +169,8 @@ internal class ConnectionCoordinator(
      * Starts listening for USB detaches; called once. Guarded, unlike this class's other
      * fire-and-forget launches: the scope installs no CoroutineExceptionHandler, and registering a
      * receiver can fail for reasons outside this app's control. Losing detach detection is a small
-     * regression; crashing at startup is not.
+     * regression; crashing at startup is not. Each detach is guarded on its own as well, so one
+     * that fails to be handled is logged and the next is still heard.
      */
     fun start() {
         // Every state the session passes through, for a hardware log: the screens show the same
@@ -177,7 +178,15 @@ internal class ConnectionCoordinator(
         scope.launch { state.collect { Log.i(TAG, "State: ${it.logLabel()}") } }
         scope.launch {
             try {
-                usb.detachEvents().collect { device -> handleUsbDetach(device) }
+                usb.detachEvents().collect { device ->
+                    try {
+                        handleUsbDetach(device)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Couldn't handle the unplug of ${device.label}", e)
+                    }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

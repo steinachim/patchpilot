@@ -73,7 +73,9 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             strings = strings,
             onSessionStarted = { listings.start() },
             onSessionEnding = { listings.cancelAndJoin() },
-            onUsbDetached = listings::forgetDevice,
+            // A lambda, like every hook here: `listings` is built after this coordinator, and a
+            // bound reference (`listings::forgetDevice`) would capture it as null.
+            onUsbDetached = { handle -> listings.forgetDevice(handle) },
             onSessionLost = {
                 // Both hold the operation mutex, and with the instrument gone they can only fail:
                 // a report read by read, a regression run perhaps on a question nobody will see

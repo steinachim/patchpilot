@@ -330,6 +330,32 @@ class ConnectionCoordinatorTest {
         )
     }
 
+    /** One unplug that fails to be handled must not end detection for the rest of the session. */
+    @Test
+    fun `an unplug whose handling fails does not stop the next from being heard`() = runSession { session ->
+        val usb = FakeUsbHost()
+        val coordinator = ConnectionCoordinator(
+            scope = session,
+            usb = usb,
+            discoveries = listOf(FakeDiscovery(listOf(stageCandidate)) { FakeTransport() }),
+            catalog = { listOf(nordStage) },
+            create = { _, _ -> DemoInstrument() },
+            createForUnknown = { _, _, _ -> DemoInstrument() },
+            autoConnect = { true },
+            strings = StringResolver { id, _ -> "string $id" },
+            onUsbDetached = { handle -> check(handle != "usb:/dev/bus/usb/001/007") { "broken hook" } },
+        ).also { it.start() }
+        coordinator.connect()
+        advanceUntilIdle()
+
+        usb.detaches.emit(FakeDevice(grandKey, handle = "usb:/dev/bus/usb/001/007"))
+        advanceUntilIdle()
+        usb.detaches.emit(FakeDevice(stageKey))
+        advanceUntilIdle()
+
+        assertTrue("got ${coordinator.state.value}", coordinator.state.value is ConnectionState.DeviceLost)
+    }
+
     /** Another unit of the same model may be plugged into the same port next, under the same handle. */
     @Test
     fun `unplugging a device no session uses still drops its cache`() = runSession { session ->
