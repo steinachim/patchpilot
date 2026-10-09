@@ -163,6 +163,8 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
 
                     // Retry re-asks: the permission is still not held, so the next open puts the system
                     // dialog up again. Nothing else does - see ConnectionState.PermissionDenied.
+                    // Retry asks about the same instrument, the first a scan finds, so the picker
+                    // is the way to another one attached beside it.
                     is ConnectionState.PermissionDenied -> {
                         Text(
                             stringResource(R.string.connect_usb_permission_denied, s.displayName),
@@ -174,6 +176,9 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                         theme.FilledButton(onClick = {
                             viewModel.connection.connect()
                         }) { Text(stringResource(R.string.action_retry)) }
+                        TextButton(onClick = { viewModel.connection.chooseDevice() }) {
+                            Text(stringResource(R.string.action_show_all_devices))
+                        }
                     }
 
                     // Not styled as an error: nothing is broken, the instrument is listening on a

@@ -11,6 +11,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -124,10 +126,10 @@ class UsbMidiBulkTransportTest {
      * End to end over a fake endpoint pair: what goes out is packed, what comes back is framed.
      *
      * On a **real** dispatcher rather than `runTest`'s, deliberately. The reader is a polling loop
-     * whose only suspension point is the idle `yield`, and `tryEmit` into a buffered flow never
-     * suspends - so under a single-threaded test scheduler the loop can run without ever letting
-     * the collector resume, and the test hangs. That is a property of this design, not of the
-     * test. A real dispatcher and a wall-clock timeout test what the phone will actually do.
+     * that never goes idle: each read is followed by a short `delay`, which a virtual clock skips
+     * at once, so a test scheduler never runs out of work and waiting for it to settle hangs the
+     * test. That is a property of this design, not of the test. A real dispatcher and a
+     * wall-clock timeout test what the phone will actually do.
      */
     @Test
     fun `a reply on the right cable reaches the incoming flow`() {
@@ -141,6 +143,24 @@ class UsbMidiBulkTransportTest {
                 assertArrayEquals(reply, withTimeout(5_000) { transport.incoming.first() })
             }
         }
+    }
+
+    /**
+     * A reader that has given up on the endpoint can deliver no reply, so a send fails at once
+     * instead of leaving the exchange to wait out its timeout. On a virtual clock: this reader
+     * stops, so the scheduler can settle.
+     */
+    @Test
+    fun `once the reader gives up, a send fails at once`() = runTest {
+        val bulk = object : UsbBulkTransport by FakeBulk() {
+            override fun bulkReadOrEmpty(bufferSize: Int, timeoutMs: Int): ByteArray =
+                throw UsbTransferException("USB bulk read failed")
+        }
+        val transport = UsbMidiBulkTransport(bulk, cable = 3, scope = backgroundScope)
+        advanceTimeBy(1_000)
+
+        val thrown = runCatching { transport.send("f0 7e 00 06 01 f7".hexToBytes()) }.exceptionOrNull()
+        assertTrue("got $thrown", thrown is UsbTransferException)
     }
 
     /** Builds a transport on a real dispatcher and tears it (and its reader) down afterwards. */

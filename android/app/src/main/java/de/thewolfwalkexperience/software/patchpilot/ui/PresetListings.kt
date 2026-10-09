@@ -194,10 +194,15 @@ internal class PresetListings(
         indexJobs.remove(scope)?.cancel()
         indexedInstrument = key
         updateIndex(scope) { PresetIndexState() }
+        // Start and end of every listing, for a hardware log: an empty listing that never ends
+        // shows the same "Connecting…" as a session that is not up yet (HARDWARE_TEST_PLAN X20).
+        Log.i(TAG, "Listing $scope started")
         return this.scope.launch(listingJobs) {
             try {
                 browser().index(scope).collect { update -> updateIndex(scope) { it.plus(update) } }
+                Log.i(TAG, "Listing $scope ended: ${listingsByScope.value[scope]?.slots?.size ?: 0} slots")
             } catch (e: CancellationException) {
+                Log.i(TAG, "Listing $scope cancelled")
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Listing $scope failed", e)

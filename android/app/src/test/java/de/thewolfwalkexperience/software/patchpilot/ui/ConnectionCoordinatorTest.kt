@@ -55,8 +55,11 @@ class ConnectionCoordinatorTest {
 
     private class FakeUsbHost(var attached: List<AttachedUsbDevice> = emptyList()) : UsbHost {
         val detaches = MutableSharedFlow<AttachedUsbDevice>()
+
+        /** The user's answer to a permission request: granted unless a test says otherwise. */
+        var permission: suspend () -> Boolean = { true }
         override fun attachedDevices() = attached
-        override suspend fun requestPermission(device: AttachedUsbDevice) = true
+        override suspend fun requestPermission(device: AttachedUsbDevice) = permission()
         override fun openBulk(device: AttachedUsbDevice): UsbBulkTransport = error("not opened in these tests")
         override fun detachEvents(): Flow<AttachedUsbDevice> = detaches
     }
@@ -128,6 +131,7 @@ class ConnectionCoordinatorTest {
         onSessionStarted = { events += "started" },
         onSessionEnding = onSessionEnding,
         onUsbDetached = { handle -> events += "detached $handle" },
+        onSessionLost = { events += "lost" },
         onLeavingSession = { events += "leaving" },
     ).also { it.start() }
 
@@ -224,7 +228,106 @@ class ConnectionCoordinatorTest {
         assertEquals(stageKey, lost.physicalKey)
         assertEquals(null, coordinator.instrument)
         // The cache is dropped while the handle it is keyed on still exists.
-        assertEquals(listOf("started", "detached usb:/dev/bus/usb/001/002", "ending"), events)
+        assertEquals(listOf("started", "detached usb:/dev/bus/usb/001/002", "lost", "ending"), events)
+    }
+
+    /**
+     * The session shows as lost before its teardown, which waits for whatever holds the operation
+     * mutex; a replug in that window reconnects once the teardown has closed the old instrument.
+     */
+    @Test
+    fun `an unplug shows at once, and a replug reconnects once the operation holding the session ends`() =
+        runSession { session ->
+            val usb = FakeUsbHost()
+            val events = mutableListOf<String>()
+            val coordinator = coordinator(
+                session,
+                usb,
+                FakeDiscovery(listOf(stageCandidate)) { FakeTransport() },
+                events = events,
+                create = { closeRecorded(events) },
+            )
+            coordinator.connect()
+            advanceUntilIdle()
+            val first = coordinator.instrument
+            val release = CompletableDeferred<Unit>()
+            session.holdMutex(coordinator, release)
+            runCurrent()
+
+            usb.detaches.emit(FakeDevice(stageKey))
+            runCurrent()
+            assertTrue("got ${coordinator.state.value}", coordinator.state.value is ConnectionState.DeviceLost)
+            assertTrue("lost" in events)
+            assertFalse("closed only once the operation lets go", "closed" in events)
+
+            coordinator.onUsbDeviceAttached(FakeDevice(stageKey))
+            advanceUntilIdle()
+            assertTrue("waits for the teardown", coordinator.state.value is ConnectionState.DeviceLost)
+
+            release.complete(Unit)
+            advanceUntilIdle()
+            assertTrue("got ${coordinator.state.value}", coordinator.state.value is ConnectionState.Connected)
+            assertNotSame(first, coordinator.instrument)
+            assertEquals(listOf("ending", "closed", "started"), events.takeLast(3))
+        }
+
+    @Test
+    fun `a permission refused when opening an instrument lands on the permission screen`() = runSession { session ->
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate)) { throw SecurityException("USB permission was denied") },
+        )
+        coordinator.connect()
+        advanceUntilIdle()
+        assertEquals(ConnectionState.PermissionDenied("Nord Stage 2 EX"), coordinator.state.value)
+    }
+
+    @Test
+    fun `a permission refused for an unrecognised device lands on the permission screen`() = runSession { session ->
+        val usb = FakeUsbHost().apply { permission = { false } }
+        val coordinator = coordinator(session, usb, FakeDiscovery(emptyList()) { FakeTransport() })
+        val newNord = FakeDevice("usb:4092:99", productId = 99)
+        coordinator.confirmUnknownDevice(newNord)
+        advanceUntilIdle()
+        assertEquals(ConnectionState.PermissionDenied(newNord.label), coordinator.state.value)
+    }
+
+    /** What `awaitPermission` bounds on a phone; here, Back is the way out. */
+    @Test
+    fun `a permission request nobody answers holds the attempt on Opening until Back`() = runSession { session ->
+        val usb = FakeUsbHost().apply { permission = { awaitCancellation() } }
+        val coordinator = coordinator(session, usb, FakeDiscovery(emptyList()) { FakeTransport() })
+        coordinator.confirmUnknownDevice(FakeDevice("usb:4092:99", productId = 99))
+        advanceUntilIdle()
+        assertTrue(coordinator.state.value is ConnectionState.Opening)
+
+        coordinator.disconnect()
+        advanceUntilIdle()
+        assertTrue("got ${coordinator.state.value}", coordinator.state.value !is ConnectionState.Opening)
+    }
+
+    /** Retry asks about the first instrument a scan finds, so another one needs the picker. */
+    @Test
+    fun `after a refusal, the picker offers every instrument even with auto-connect on`() = runSession { session ->
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate, grandCandidate)) { candidate ->
+                if (candidate == stageCandidate) throw SecurityException("denied") else FakeTransport()
+            },
+        )
+        coordinator.connect()
+        advanceUntilIdle()
+        assertTrue(coordinator.state.value is ConnectionState.PermissionDenied)
+
+        coordinator.chooseDevice()
+        advanceUntilIdle()
+        val picker = coordinator.state.value as ConnectionState.DeviceSelection
+        assertEquals(
+            listOf(stageKey, grandKey),
+            picker.entries.map { (it as PickerEntry.Known).candidate.physicalKey },
+        )
     }
 
     /** Another unit of the same model may be plugged into the same port next, under the same handle. */

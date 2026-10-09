@@ -74,6 +74,13 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             onSessionStarted = { listings.start() },
             onSessionEnding = { listings.cancelAndJoin() },
             onUsbDetached = listings::forgetDevice,
+            onSessionLost = {
+                // Both hold the operation mutex, and with the instrument gone they can only fail:
+                // a report read by read, a regression run perhaps on a question nobody will see
+                // once the screen has left the session. Nothing they would still write can land.
+                deviceReportRunner.cancel()
+                regressionRunner.cancel()
+            },
             onLeavingSession = {
                 // A report only reads, so cancelling it changes nothing on the instrument, and a
                 // Nord's would otherwise hold the teardown for minutes.

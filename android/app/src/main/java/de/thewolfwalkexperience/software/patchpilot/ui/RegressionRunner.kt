@@ -95,6 +95,12 @@ internal class RegressionRunner(
     /** Drops a finished report. A run in progress is not dismissable. */
     fun dismissReport() = runner.dismiss()
 
+    /**
+     * Stops a run in progress, a question it waits on included, for an instrument that has gone:
+     * a run can be stopped only where nothing it would still write can land.
+     */
+    fun cancel() = runner.cancel()
+
     /** Publishes [question] and suspends until the screen answers it. */
     private suspend fun ask(question: PendingQuestion): Boolean {
         val answer = CompletableDeferred<Boolean>()

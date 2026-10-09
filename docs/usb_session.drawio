@@ -5,7 +5,7 @@
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="trig_group" parent="1" style="swimlane;fontStyle=1;horizontal=1;startSize=26;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;rounded=1;" value="Triggers" vertex="1">
-          <mxGeometry height="640" width="280" x="20" y="20" as="geometry" />
+          <mxGeometry height="680" width="280" x="20" y="20" as="geometry" />
         </mxCell>
         <mxCell id="T1" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" value="InstrumentViewModel created&#xa;(launch, or after process death)" vertex="1">
           <mxGeometry height="50" width="240" x="20" y="40" as="geometry" />
@@ -25,8 +25,8 @@
         <mxCell id="T5" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" value="USB detach broadcast&#xa;handleUsbDetach, for this session&#39;s device" vertex="1">
           <mxGeometry height="50" width="240" x="20" y="480" as="geometry" />
         </mxCell>
-        <mxCell id="legend" parent="trig_group" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=10;fontColor=#555555;" value="Every teardown waits on instrumentMutex, so an edit or regression run in flight finishes before DeviceLost, a rebuild or the picker lands. Back cancels a running device report first. A device plugged in during Searching or Opening is scanned for once that attempt ends with no session." vertex="1">
-          <mxGeometry height="80" width="240" x="20" y="541" as="geometry" />
+        <mxCell id="legend" parent="trig_group" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=10;fontColor=#555555;" value="Every teardown waits on instrumentMutex, so an edit in flight finishes before a rebuild or the picker lands. Back cancels a running device report first. An unplug shows DeviceLost at once and cancels a device report or regression run; the next attempt waits for its teardown. A device plugged in during Searching or Opening is scanned for once that attempt ends with no session." vertex="1">
+          <mxGeometry height="130" width="240" x="20" y="541" as="geometry" />
         </mxCell>
         <mxCell id="C" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="connect()" vertex="1">
           <mxGeometry height="40" width="140" x="380" y="50" as="geometry" />
@@ -168,7 +168,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e_O_PD" edge="1" parent="1" source="O" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.3;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;" target="PD" value="denied">
+        <mxCell id="e_O_PD" edge="1" parent="1" source="O" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.3;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;" target="PD" value="denied or&lt;br&gt;unanswered">
           <mxGeometry relative="1" x="0.0795" as="geometry">
             <mxPoint as="offset" />
             <Array as="points">

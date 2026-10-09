@@ -57,6 +57,10 @@
 - A report that can't be handed to the share sheet now says so instead of closing the app, and a device report is kept so it can be shared again.
 - On a Yamaha Motif XS, edits wait for the user voice list to finish loading, even with Favorites or Factory shown.
 - An edit that fails partway now re-reads the slots it touched, so the list no longer shows what was there before.
+- Unplugging the instrument shows "Instrument disconnected" at once, even while a device report or another operation is running, and plugging it back in meanwhile reconnects instead of being ignored.
+- A USB permission request that gets no answer no longer leaves the app waiting until you go back: access granted through Android's own dialog is picked up within a second, and after a minute the app offers Retry.
+- After USB access is denied, "Show all devices" lists every attached instrument, so another one can be chosen.
+- On a Yamaha Motif XS whose USB connection stops delivering data, the next operation says so at once and suggests replugging, instead of waiting for an answer that cannot come.
 
 ## 1.1
 

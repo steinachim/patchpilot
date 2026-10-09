@@ -41,10 +41,11 @@ sealed class ConnectionState {
     data class Error(val message: String) : ConnectionState()
 
     /**
-     * The user answered the system's USB permission dialog with "Deny". Its own state rather than
-     * an [Error], because closing that dialog is itself a resume, and a resume with nothing
-     * connected rescans ([ConnectionCoordinator.shouldRebuildOnResume]) - which would put the
-     * dialog straight back up. Only the Retry button asks again.
+     * The user answered the system's USB permission dialog with "Deny", or the request went
+     * unanswered for a minute (`awaitPermission`). Its own state rather than an [Error], because
+     * closing that dialog is itself a resume, and a resume with nothing connected rescans
+     * ([ConnectionCoordinator.shouldRebuildOnResume]) - which would put the dialog straight back
+     * up. Only the Retry button asks again.
      */
     data class PermissionDenied(val displayName: String) : ConnectionState()
 

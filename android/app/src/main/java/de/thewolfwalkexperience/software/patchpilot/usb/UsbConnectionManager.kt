@@ -13,17 +13,20 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
 import de.thewolfwalkexperience.software.patchpilot.core.sanitizeDeviceText
 import de.thewolfwalkexperience.software.patchpilot.transport.AndroidUsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.resume
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+
+private const val TAG = "UsbConnectionManager"
 
 private const val ACTION_USB_PERMISSION = "de.thewolfwalkexperience.software.patchpilot.USB_PERMISSION"
 
@@ -46,46 +49,47 @@ class UsbConnectionManager(private val context: Context) {
      *
      * The answer's receiver is registered not-exported (see [registerNotExported]). The result is
      * read from [UsbManager.hasPermission] all the same, not from the broadcast's
-     * `EXTRA_PERMISSION_GRANTED`, so it never rests on what a broadcast claims.
+     * `EXTRA_PERMISSION_GRANTED`, so it never rests on what a broadcast claims. The wait is
+     * bounded - see [awaitPermission].
      */
     suspend fun requestPermission(device: UsbDevice): Boolean {
         if (usbManager.hasPermission(device)) return true
 
-        return suspendCancellableCoroutine { cont ->
-            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                PendingIntent.FLAG_MUTABLE
-            } else {
-                0
+        val answered = CompletableDeferred<Unit>()
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_MUTABLE
+        } else {
+            0
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            0,
+            Intent(ACTION_USB_PERMISSION).setPackage(context.packageName),
+            flags,
+        )
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context, intent: Intent) {
+                if (intent.action != ACTION_USB_PERMISSION) return
+                // A result for some other device - two requests in flight, or a broadcast that is
+                // not the system's - is not this request's answer.
+                val about = intent.usbDevice()
+                if (about != null && about.deviceName != device.deviceName) return
+                answered.complete(Unit)
             }
-            val pendingIntent = PendingIntent.getBroadcast(
-                context,
-                0,
-                Intent(ACTION_USB_PERMISSION).setPackage(context.packageName),
-                flags,
-            )
-
-            val receiver = object : BroadcastReceiver() {
-                private val unregistered = AtomicBoolean(false)
-
-                /** Once only: the reply and a cancellation can both try, and the second would throw. */
-                fun unregister() {
-                    if (unregistered.compareAndSet(false, true)) context.unregisterReceiver(this)
-                }
-
-                override fun onReceive(receiverContext: Context, intent: Intent) {
-                    if (intent.action != ACTION_USB_PERMISSION) return
-                    // A result for some other device - two requests in flight, or a broadcast
-                    // that is not the system's - is not this request's answer.
-                    val answered = intent.usbDevice()
-                    if (answered != null && answered.deviceName != device.deviceName) return
-                    unregister()
-                    if (cont.isActive) cont.resume(usbManager.hasPermission(device))
-                }
-            }
-            registerNotExported(receiver, IntentFilter(ACTION_USB_PERMISSION))
-            cont.invokeOnCancellation { receiver.unregister() }
-
+        }
+        registerNotExported(receiver, IntentFilter(ACTION_USB_PERMISSION))
+        Log.i(TAG, "Asking for USB permission for ${device.displayLabel()}")
+        try {
             usbManager.requestPermission(device, pendingIntent)
+            val granted = awaitPermission(answered) { usbManager.hasPermission(device) }
+            Log.i(
+                TAG,
+                "USB permission for ${device.displayLabel()}: ${if (granted) "granted" else "not granted"}" +
+                    if (answered.isCompleted) "" else " (no answer received)",
+            )
+            return granted
+        } finally {
+            context.unregisterReceiver(receiver)
         }
     }
 
@@ -137,6 +141,38 @@ class UsbConnectionManager(private val context: Context) {
     private fun registerNotExported(receiver: BroadcastReceiver, filter: IntentFilter) {
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
+}
+
+/** How long [awaitPermission] waits for an answer before it counts the request as not granted. */
+internal const val PERMISSION_TIMEOUT_MS = 60_000L
+
+/** How often [awaitPermission] checks whether permission arrived without an answer. */
+internal const val PERMISSION_POLL_MS = 500L
+
+/**
+ * Waits for a permission request to be settled and returns whether it was [granted]: when the
+ * request's own answer arrives ([answered]), when [granted] turns true without one, or after
+ * [PERMISSION_TIMEOUT_MS], whichever comes first.
+ *
+ * Checked without an answer because Android also grants permission through the dialog it shows
+ * on attach, which offers to open this app for the device, and a request made around then may
+ * never have its answer sent. **Assumption, not measured:** that is what kept the preset screen
+ * on "Connecting…" after a replug (HARDWARE_TEST_PLAN X20). Bounded so that a request left
+ * unanswered ends on the Retry screen rather than on a wait only leaving the session ends; a
+ * grant given after the timeout is found by Retry at once, with no second dialog.
+ */
+internal suspend fun awaitPermission(
+    answered: Deferred<Unit>,
+    timeoutMs: Long = PERMISSION_TIMEOUT_MS,
+    pollMs: Long = PERMISSION_POLL_MS,
+    granted: () -> Boolean,
+): Boolean {
+    withTimeoutOrNull(timeoutMs) {
+        while (!granted()) {
+            if (withTimeoutOrNull(pollMs) { answered.await() } != null) break
+        }
+    }
+    return granted()
 }
 
 /** The [UsbDevice] a USB broadcast or attach intent is about, or null where it carries none. */

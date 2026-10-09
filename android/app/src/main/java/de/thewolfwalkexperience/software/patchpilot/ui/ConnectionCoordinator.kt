@@ -52,6 +52,9 @@ private const val TAG = "ConnectionCoordinator"
  *   once that has finished its cleanup. Runs under the operation mutex, right before the close.
  * @param onUsbDetached a USB device was unplugged, the connected one or any other, with its
  *   device handle, the one a cache key is built from. Runs first, before any teardown.
+ * @param onSessionLost the connected device was unplugged: cancel work that holds the operation
+ *   mutex and can only fail now, such as a device report or a regression run waiting on a
+ *   question, so the teardown does not wait it out. Runs before the teardown.
  * @param onLeavingSession the user is leaving the session ([disconnect]): cancel work that only
  *   reads from it, such as a device report, so the teardown does not wait it out. Runs before the
  *   teardown asks for the operation mutex.
@@ -68,6 +71,7 @@ internal class ConnectionCoordinator(
     private val onSessionStarted: () -> Unit = {},
     private val onSessionEnding: suspend () -> Unit = {},
     private val onUsbDetached: (handle: String) -> Unit = {},
+    private val onSessionLost: () -> Unit = {},
     private val onLeavingSession: () -> Unit = {},
     private val demo: () -> Instrument = { DemoInstrument() },
 ) {
@@ -148,6 +152,13 @@ internal class ConnectionCoordinator(
 
     private var connectJob: Job? = null
 
+    /**
+     * The teardown of a session whose device was unplugged, which every later attempt waits for
+     * ([runAttempt]): it closes the old instrument, and a replug's attempt must not publish a new
+     * one before that close has run.
+     */
+    private var detachTeardown: Job? = null
+
     /** A USB device was plugged in while an attempt scanned or opened; see [rescanAfterAttach]. */
     private var attachedDuringAttempt = false
 
@@ -161,6 +172,9 @@ internal class ConnectionCoordinator(
      * regression; crashing at startup is not.
      */
     fun start() {
+        // Every state the session passes through, for a hardware log: the screens show the same
+        // wait for several of them (HARDWARE_TEST_PLAN X20).
+        scope.launch { state.collect { Log.i(TAG, "State: ${it.logLabel()}") } }
         scope.launch {
             try {
                 usb.detachEvents().collect { device -> handleUsbDetach(device) }
@@ -204,10 +218,13 @@ internal class ConnectionCoordinator(
             connectJob?.cancel()
             lastConfirmedUnknownDevice = null
             acceptedAdvisory = null
-            scope.launch {
-                teardownCurrentInstrument()
-                _state.value = ConnectionState.DeviceLost(name, detachedKey)
-            }
+            connectedPhysicalKey = null
+            // Published before the teardown, which waits for whatever holds the operation mutex:
+            // a session still showing as connected meanwhile would take edits it can no longer
+            // run, and a replug in that window would be ignored as an attach during a session.
+            _state.value = ConnectionState.DeviceLost(name, detachedKey)
+            onSessionLost()
+            detachTeardown = scope.launch { teardownCurrentInstrument() }
             return
         }
         if (detachedKey == openingPhysicalKey) {
@@ -240,7 +257,7 @@ internal class ConnectionCoordinator(
         val s = state.value
         Log.i(
             TAG,
-            "USB attach of ${device.label} while $s; attached devices: " +
+            "USB attach of ${device.label} while ${s.logLabel()}; attached devices: " +
                 usb.attachedDevices().joinToString { it.label },
         )
         when (s) {
@@ -317,8 +334,12 @@ internal class ConnectionCoordinator(
         }
     }
 
-    /** The catch every attempt shares: a failure lands on a screen, cancellation does not. */
+    /**
+     * The catch every attempt shares: a failure lands on a screen, cancellation does not. Starts
+     * once a detach's teardown has finished ([detachTeardown]).
+     */
     private suspend fun runAttempt(failureMessage: String?, block: suspend () -> Unit) {
+        detachTeardown?.join()
         try {
             block()
         } catch (e: CancellationException) {
@@ -344,6 +365,14 @@ internal class ConnectionCoordinator(
      */
     fun connect() {
         launchConnect { performConnect(forcePicker = false) }
+    }
+
+    /**
+     * Scans and offers the picker whatever auto-connect says: from the permission screen, where
+     * Retry asks about the same device again and another attached one would be out of reach.
+     */
+    fun chooseDevice() {
+        launchConnect { performConnect(forcePicker = true) }
     }
 
     /**
@@ -756,6 +785,18 @@ internal class ConnectionCoordinator(
             Log.w(TAG, "Closing the connection did not complete cleanly", e)
         }
     }
+}
+
+/**
+ * A short label for the log: the state's name and the device or instrument it is about. Not
+ * `toString()`, which for the picker prints every platform `UsbDevice` in full.
+ */
+private fun ConnectionState.logLabel(): String = when (this) {
+    is ConnectionState.Connected -> "Connected(${instrument.identity.name})"
+    is ConnectionState.AdvisoryWarning -> "AdvisoryWarning(${instrument.identity.name})"
+    is ConnectionState.UnknownDeviceWarning -> "UnknownDeviceWarning(${device.label})"
+    is ConnectionState.DeviceSelection -> "DeviceSelection(${entries.size} entries)"
+    else -> toString()
 }
 
 /** The physical device a row refers to, in the same form a detach reports. */

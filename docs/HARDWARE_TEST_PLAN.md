@@ -17,7 +17,7 @@ Drive the phone over adb, pinned to one device: `adb -s <device> <command>`. Pac
 | Hard kill | `adb shell am force-stop <package>` | Also discards saved state; not for cases that expect a restore |
 | Soft kill (as a low-memory kill) | Background first, then `adb shell am kill <package>`; `adb shell pidof <package>` then prints nothing | Keeps saved state, so a relaunch from Recents restores |
 | Memory pressure | `adb shell am send-trim-memory <package> RUNNING_CRITICAL`, or several large apps in the background | Asks; does not force a GC pause |
-| Logs | `adb logcat --pid=$(adb shell pidof <package>)` | Tags are the class names: `ConnectionCoordinator`, `NordDevice`, `AndroidUsbBulkTransport`, `UsbMidiBulkTransport`, `Pro800Instrument`, `AxeFx3Device`, `Subsequent37Instrument` and others |
+| Logs | `adb logcat --pid=$(adb shell pidof <package>)` | Tags are the class names: `ConnectionCoordinator` (every connection state), `PresetListings` (each listing's start and end), `UsbConnectionManager` (each permission request and its answer), `NordDevice`, `AndroidUsbBulkTransport`, `UsbMidiBulkTransport`, `Pro800Instrument`, `AxeFx3Device`, `Subsequent37Instrument` and others |
 
 Needs a hand at the hardware: plugging and unplugging, the instrument's own panel, listening for a preset change, and a second host on a shared MIDI port.
 
@@ -26,7 +26,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | # | Case | Steps | Pass when | Last run | Result |
 |---|---|---|---|---|---|
 | X1 | First permission grant | Uninstall and reinstall (`pm clear` keeps a USB grant), plug in, launch, accept | Connects; no hang | 2026-09-20, Nord Grand | ✓ |
-| X2 | First permission denial | As X1, launched from the launcher with the cable in; tap Deny | One "USB permission was denied" screen with Retry; no second dialog by itself; Retry asks again and connects | 2026-09-20, Nord Grand | ✓ |
+| X2 | First permission denial | As X1, launched from the launcher with the cable in; tap Deny | One "did not get USB access" screen with Retry; no second dialog by itself; Retry asks again and connects | 2026-09-20, Nord Grand | ✓ |
 | X3 | Launch with a permitted device attached | Grant once, force-stop, relaunch with the cable in | Connects at once, no dialog | 2026-09-20, Nord Grand | ✓ |
 | X4 | Plugged in while backgrounded | Home, plug in, return; also from "No supported instrument was found" in the foreground | Connects with no Retry tap | 2026-09-20, Nord Grand | ✓ |
 | X5 | Rotation mid regression run | Start the regression test, rotate | The run continues; its progress shows in the new orientation; the result is kept | 2026-09-20, Nord Grand | ✓ |
@@ -35,16 +35,16 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | X8 | Home mid transfer | Start a listing or the regression run, Home for several seconds, return | A USB instrument's listing stops on Home and restarts on return; a MIDI instrument's (Pro-800, Axe-Fx III, Subsequent 37) keeps running. A report or regression run continues, and the return waits for it. No screen is left waiting | 2026-09-20, Nord Grand | ✓ |
 | X9 | Force-stop mid report, relaunch | Start a report, force-stop mid-read, relaunch | The running report is gone; the relaunch connects (logcat shows the queued bytes drained). A dead endpoint ends in "unplug the USB cable, plug it back in and try again" | 2026-09-20, Nord Grand | ✓ |
 | X10 | Soft kill with a finished report held | Finish a report, soft kill before sharing it, relaunch from Recents | The report is restored; Share and Save work on it | 2026-09-20, Nord Grand | ✓ |
-| X11 | Cable pulled mid listing | Start a listing, unplug | The detach is reported; a replug reconnects with nothing left of the aborted listing | 2026-09-20, Nord Grand | ◐ open: passed as part of X20, not run on its own |
-| X12 | Cable pulled mid regression write | Unplug during a copy, rename, move or swap step | After reconnecting, a second regression run finds every slot consistent | 2026-09-20, Nord Grand | ◐ open: passed as part of N5, not run on its own |
-| X13 | Unplug and replug at once | Unplug and replug within a second, idle session | Recovers without a restart or a second permission request | 2026-09-20, Nord Grand | ◐ open: covered by X20, not run on its own |
+| X11 | Cable pulled mid listing | Start a listing, unplug | The detach is reported; a replug reconnects with nothing left of the aborted listing | – | – not run on its own; X20, which included it, failed |
+| X12 | Cable pulled mid regression write | Unplug during a copy, rename, move or swap step | "Instrument disconnected" at once, and the run is gone; after reconnecting, a second regression run finds every slot consistent | – | – not run on its own |
+| X13 | Unplug and replug at once | Unplug and replug within a second, idle session | Recovers without a restart or a second permission request | – | – not run on its own; X20, which covers it, failed |
 | X14 | Contents changed while unplugged | Browse, unplug; change the contents on the panel (or plug in another unit of the same model); replug without restarting the app | The listing shows the current contents, not the one from before the unplug | 2026-09-20, Nord Grand | ✓ |
 | X15 | Unrelated USB device alongside | Plug a USB drive or keyboard in through a hub next to the instrument | The instrument is found and preferred; the other device is at most a picker row | 2026-09-20 | ✓ |
 | X16 | Only an unrecognised device | Plug in something not in the catalog | "No supported instrument was found" or the picker; no crash | 2026-09-20 | ✓ |
 | X17 | Bus power through a passive OTG adapter | Use the adapter an end user would have, not a powered hub | No dropouts | – | – |
 | X18 | Screen lock mid transfer | Start a listing or regression run, lock, wait, unlock | As X8; a Motif XS leaves "dump in progress" within a second of the lock | 2026-09-20, Nord Grand | ✓ |
 | X19 | Unplug on the debug screen | Idle on the debug screen, unplug; separately, Home and return with the cable in | Leaves for "Instrument disconnected"; after the return the buttons are enabled again | 2026-09-20, Nord Grand | ✓ |
-| X20 | Unplug mid report, replug later | Unplug during a report, wait tens of seconds, replug: (a) in the foreground, (b) backgrounded, then return, (c) replugged while Android's attach dialog is up | Ends on "Instrument disconnected" or reconnected, never on "Connecting…" | 2026-09-20, Nord Grand | ◐ open: twice the preset screen stayed on "Connecting…" after the replug, surviving a refresh and a Home and return; Back recovered it. Cause unknown |
+| X20 | Unplug mid report, replug later | Unplug during a report, wait tens of seconds, replug: (a) in the foreground, (b) backgrounded, then return, (c) replugged while Android's attach dialog is up | "Instrument disconnected" as soon as the cable is out, then reconnected after the replug; never stuck on "Connecting…" | 2026-09-20, Nord Grand | ✗ twice the preset screen stayed on "Connecting…" after the replug, surviving a refresh and a Home and return; Back recovered it. Cause unknown: re-run with logcat (tags above) |
 | X21 | Report read cut short | Save a baseline report; start another, unplug mid-read, save what arrives; diff the two. Repeat from the preset screen's "Share device details" | "Device report ready — incomplete", naming the failed reads; the JSON's `failures` map is not empty | 2026-09-20, Nord Grand | ◐ open: the "Share device details" path not run |
 | X22 | Bank rail after deleting a bank's last preset | "Show empty slots" off: copy into an empty bank, then delete the copy | The bank leaves the rail with its header once the delete lands | 2026-09-20, Nord Grand | ✓ |
 | X23 | Process death on the preset screen | On the presets: Home, soft kill, relaunch from Recents | Reconnects and lists the presets; never stays on "Connecting…" | – | – |
@@ -56,6 +56,8 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | X29 | System back on the presets | Use the back gesture or key on the presets; then again while picking a "Copy to…" destination | Back lands on the picker, as the arrow does; while picking, it ends the pick and stays | – | – |
 | X30 | Plugged in during a search | Nothing attached, on "No supported instrument was found": tap Retry, and plug the instrument in while the search runs | It is found once that search ends, with no second Retry | – | – |
 | X31 | Report from an advisory | Behind an advisory (as N2 or P9), start the device report; while it reads, try Continue anyway; then tap Disconnect | Continue anyway and the share button stay off until the report is ready; Disconnect stops the read and lands on the picker | – | – |
+| X32 | Second instrument after a denial | Two supported instruments attached, auto-connect on: Deny the permission for the first, tap "Show all devices", pick the second | The picker lists both; the second connects | – | – |
+| X33 | Permission request left unanswered | As X1, but leave the permission dialog up for over a minute, then Allow | After a minute the "did not get USB access" screen is behind the dialog; after Allow, Retry connects with no second dialog | – | – |
 
 ## 3. Nord
 
@@ -65,7 +67,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | N2 | Firmware advisory | Connect a Nord on firmware not in the catalog (simulate by editing `supportedFirmwareVersions`); then repeat and tap Disconnect | The advisory shows and the report is reachable from it; the session is not refused. Disconnect lands on the picker with the Nord listed; picking it raises the advisory again; Continue anyway connects | 2026-09-20, Nord Grand | ◐ open: Disconnect not run since its last change |
 | N3 | Panel refresh after an edit, per model | Rename, move, swap and set a category; watch the panel | The panel shows each change, on a Stage 2 EX and a Grand | 2026-09-20, Nord Grand | ◐ open: Stage 2 EX not run |
 | N4 | Category lock after a kill mid operation | Force-stop during a rename, move, swap or category change; for a swap, between the regression test's two swap halves. Variant: exactly one free user slot | The panel is not left locked; a real preset is never displaced, only scratch copies remain | 2026-09-20, Nord Grand | ◐ open: the one-free-slot variant not run |
-| N5 | Unplug during a locked operation | As N4, unplugging instead | As N4, and the app reports the disconnect | 2026-09-20, Nord Grand | ◐ open: covered by X20 and N4, not run on its own |
+| N5 | Unplug during a locked operation | As N4, unplugging instead | As N4, and the app reports the disconnect | – | – not run on its own; X20, which included it, failed |
 | N6 | Two different Nords | Two supported Nords on a hub | One candidate each, in catalog order | – | – |
 | N7 | Instrument powered off mid session | Switch the Nord off, idle session | The app notices it has gone silent | 2026-09-20, Nord Grand | ◐ open: the 64-empty-reads path not exercised |
 | N8 | Accepted advisory across a lock | As N2: Continue anyway, then lock and unlock | No second advisory | – | – |

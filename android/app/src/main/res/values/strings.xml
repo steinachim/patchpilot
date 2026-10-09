@@ -37,6 +37,7 @@
     <string name="action_clear_filter">Clear filter</string>
     <string name="action_continue_anyway">Continue anyway</string>
     <string name="action_retry_search">Retry search</string>
+    <string name="action_show_all_devices">Show all devices</string>
     <string name="action_try_demo">Try demo mode</string>
     <string name="action_ok">OK</string>
 
@@ -196,7 +197,8 @@
     <!-- Connection failures the app itself raises, as opposed to ones an instrument reports. -->
     <string name="connect_failed">Failed to connect</string>
     <string name="connect_failed_demo">Failed to start demo mode</string>
-    <string name="connect_usb_permission_denied">USB permission was denied for %1$s.</string>
+    <!-- Denied, or left unanswered for a minute: the request is settled either way. -->
+    <string name="connect_usb_permission_denied">Patch Pilot did not get USB access to %1$s.</string>
     <string name="connect_permission_denied_hint">Tap Retry to be asked again.</string>
     <string name="connect_opening_device_unplugged">%1$s was unplugged before the connection finished.</string>
     <string name="listing_unknown_error">Unknown error</string>

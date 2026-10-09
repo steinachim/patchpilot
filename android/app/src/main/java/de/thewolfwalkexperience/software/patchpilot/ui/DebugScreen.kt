@@ -178,9 +178,9 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
 
     // A run in progress is not dismissable: it survives the screen, but its confirmation dialogs
     // are shown only here and it holds the instrument mutex while it waits on one, so leaving
-    // would strand it on a question nobody can see and block every edit behind it. The wait is
-    // bounded by the exchange timeouts. Never enabled together with the handler above, since
-    // `Running` counts as `atMenu`.
+    // would strand it on a question nobody can see and block every edit behind it. Nothing bounds
+    // that wait but an answer, or an unplug, which cancels the run (`RegressionRunner.cancel`).
+    // Never enabled together with the handler above, since `Running` counts as `atMenu`.
     //
     // The device report read is not held like this: it writes nothing and carries on in the
     // ViewModel, so coming back finds the result waiting.

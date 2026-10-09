@@ -94,6 +94,21 @@ class RegressionRunnerTest {
         assertEquals(RunState.Idle, runner(this, saved).state.value)
     }
 
+    /** As an unplug does: the run's question goes with it, and nothing is held. */
+    @Test
+    fun `a cancelled run withdraws its question`() = runTest {
+        val runner = runner(this, SavedStateHandle())
+        runner.start("starting")
+        advanceUntilIdle()
+        assertNotNull(runner.question.value)
+
+        runner.cancel()
+        advanceUntilIdle()
+
+        assertNull(runner.question.value)
+        assertEquals(RunState.Idle, runner.state.value)
+    }
+
     /** Restore runs as the ViewModel is built, so a status it cannot read must not throw. */
     @Test
     fun `a saved report with a status this build does not know restores as nothing`() = runTest {
