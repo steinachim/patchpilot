@@ -72,7 +72,7 @@ One table: rows are concerns, columns are Nord, Pro-800, Motif XS, Axe-Fx III, S
 
 - Gradle: tasks writing into `src/`, stale version comments, dependency hygiene, reproducibility notes.
 - Workflows: `${{ }}` interpolated into `run:` scripts, permissions, triggers, whether a release is gated on tests and lint.
-- Run `./gradlew spotlessCheck --rerun-tasks lintRelease` rather than assuming CI ran them; CI does not build feature branches.
+- Run `./gradlew spotlessCheck --rerun-tasks lintRelease` rather than assuming CI ran them; CI builds a feature branch only when started by hand.
 - Tests: real-time waits, `runBlocking` inside `runTest`, duplicated helpers and fakes, test names that claim more than the test checks, risky paths from pass B with no test.
 
 ## 3. Second look

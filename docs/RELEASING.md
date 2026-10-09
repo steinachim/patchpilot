@@ -1,6 +1,6 @@
 # Releasing
 
-How a version of Patch Pilot gets from `dev` to GitHub Releases, and, once the app is listed there, to F-Droid and Google Play. Development happens on `dev`, the repository's default branch; `main` receives releases by fast-forward and is the only branch CI signs. Store metadata lives in `fastlane/metadata/android/en-US/`; F-Droid reads it from the repository directly, and the same files are uploaded to Play.
+How a version of Patch Pilot gets from `dev` to GitHub Releases, and, once the app is listed there, to F-Droid and Google Play. Development happens on `dev`; `main`, GitHub's default branch, receives releases by fast-forward and is the only branch CI signs. Store metadata lives in `fastlane/metadata/android/en-US/`; F-Droid reads it from the repository directly, and the same files are uploaded to Play.
 
 ## 1. Prepare the release commit
 
@@ -59,4 +59,4 @@ for k in RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
 done
 ```
 
-A push to `main` without these secrets fails at the signing step rather than producing an unsigned APK. Pull-request builds never use the key.
+A push to `main` without these secrets fails at the signing step rather than producing an unsigned APK. Pull-request and manual builds never use the key.

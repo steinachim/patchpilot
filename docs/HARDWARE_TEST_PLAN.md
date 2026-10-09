@@ -54,6 +54,8 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | X27 | Rotation mid edit (any instrument) | Start a copy, rotate while it runs | The progress line stays, Back stays off until it lands, and the result shows | – | – |
 | X28 | Demo mode from an advisory | Behind an advisory (as N2 or P9), tap "Try demo mode"; then leave demo mode and search | The instrument is found again | – | – |
 | X29 | System back on the presets | Use the back gesture or key on the presets; then again while picking a "Copy to…" destination | Back lands on the picker, as the arrow does; while picking, it ends the pick and stays | – | – |
+| X30 | Plugged in during a search | Nothing attached, on "No supported instrument was found": tap Retry, and plug the instrument in while the search runs | It is found once that search ends, with no second Retry | – | – |
+| X31 | Report from an advisory | Behind an advisory (as N2 or P9), start the device report; while it reads, try Continue anyway; then tap Disconnect | Continue anyway and the share button stay off until the report is ready; Disconnect stops the read and lands on the picker | – | – |
 
 ## 3. Nord
 
@@ -82,6 +84,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | M8 | XS7 and XS8 product ids | Connect an XS7 or XS8 | Recognised (the ids are assumed) | – | – (no unit) |
 | M9 | Move onto a slot changed on the panel | Store a voice from the panel into a slot the list shows as empty, then "Move to…" that slot in the app | Refused; the voice stored there is unchanged | – | – |
 | M10 | Pull to refresh mid listing | Over-pull at the top of the list while the user banks are still arriving | Nothing restarts; the listing goes on to the end | – | – |
+| M11 | Loading a voice in Performance mode | Put the instrument in Performance mode, tap a voice in the app, accept "Switch to Voice mode"; try Back and another edit while it switches | "Changing the instrument's state…" shows, Back and the edits stay off until the switch lands, then the voice loads | – | – |
 
 ## 5. Behringer Pro-800
 

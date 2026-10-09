@@ -69,7 +69,7 @@ The build reads the device catalog from `../devices` relative to `android/` (the
 
 ### Continuous integration
 
-[GitHub Actions](.github/workflows/android.yml) checks formatting, runs the unit tests, `assembleRelease bundleRelease` and `lintRelease` on every pull request and on every push to `main`. Pushes to other branches without a pull request do not trigger a build. On `main` the release APK and bundle are signed with the release key held in repository secrets (see [RELEASING.md](docs/RELEASING.md#signing)) and attached to the run as an artifact for 30 days. Pull-request builds are unsigned.
+[GitHub Actions](.github/workflows/android.yml) checks formatting, runs the unit tests, `assembleRelease bundleRelease` and `lintRelease` on every pull request and on every push to `main`. Pushes to other branches do not trigger a build on their own; a run can be started by hand on any branch from the Actions tab. On a push to `main` the release APK and bundle are signed with the release key held in repository secrets (see [RELEASING.md](docs/RELEASING.md#signing)) and attached to the run as an artifact for 30 days. Pull-request and manual builds are unsigned.
 
 ## Documentation
 

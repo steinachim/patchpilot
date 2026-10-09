@@ -76,7 +76,7 @@
           "type": ["object", "null"],
           "propertyNames": { "pattern": "^(0|[1-9][0-9]*)$" },
           "additionalProperties": { "type": "string", "minLength": 1 },
-          "description": "Ids from 'programCategoryIds' that this instrument displays under a different name than the master list gives them, id -> name. Both current instruments relabel 23/24 ('EPiano'/'Wurl' in the master list) as 'EPiano1'/'EPiano2'. An id here that is absent from 'programCategoryIds' is ignored."
+          "description": "Ids from 'programCategoryIds' that this instrument displays under a different name than the master list gives them, id -> name. The Nord Grand and Stage 2 EX, for example, relabel 23/24 ('EPiano'/'Wurl' in the master list) as 'EPiano1'/'EPiano2'. An id here that is absent from 'programCategoryIds' is ignored."
         }
       }
     }

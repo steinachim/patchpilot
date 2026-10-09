@@ -25,8 +25,8 @@
         <mxCell id="T5" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" value="USB detach broadcast&#xa;handleUsbDetach, for this session&#39;s device" vertex="1">
           <mxGeometry height="50" width="240" x="20" y="480" as="geometry" />
         </mxCell>
-        <mxCell id="legend" parent="trig_group" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=10;fontColor=#555555;" value="Every teardown waits on instrumentMutex, so an edit or regression run in flight finishes before DeviceLost, a rebuild or the picker lands. Back cancels a running device report first." vertex="1">
-          <mxGeometry height="50" width="240" x="20" y="541" as="geometry" />
+        <mxCell id="legend" parent="trig_group" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=10;fontColor=#555555;" value="Every teardown waits on instrumentMutex, so an edit or regression run in flight finishes before DeviceLost, a rebuild or the picker lands. Back cancels a running device report first. A device plugged in during Searching or Opening is scanned for once that attempt ends with no session." vertex="1">
+          <mxGeometry height="80" width="240" x="20" y="541" as="geometry" />
         </mxCell>
         <mxCell id="C" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="connect()" vertex="1">
           <mxGeometry height="40" width="140" x="380" y="50" as="geometry" />
