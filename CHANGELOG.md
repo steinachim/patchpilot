@@ -45,6 +45,8 @@
 - On a Yamaha Motif XS, switching to Voice mode from the load dialog shows its progress and keeps other edits and Back off until it is done.
 - An instrument plugged in while the app is still searching is now found, instead of the search ending with "Nothing found".
 - Plugging a different unit of the same instrument into the same USB port no longer shows the previous unit's preset list.
+- Settings no longer shows default values for a moment before the saved ones.
+- Rotating the phone no longer clears the preset list's name filter or “Show empty slots”.
 
 ## 1.1
 
