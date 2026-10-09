@@ -57,7 +57,8 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | X30 | Plugged in during a search | Nothing attached, on "No supported instrument was found": tap Retry, and plug the instrument in while the search runs | It is found once that search ends, with no second Retry | – | – |
 | X31 | Report from an advisory | Behind an advisory (as N2 or P9), start the device report; while it reads, try Continue anyway; then tap Disconnect | Continue anyway and the share button stay off until the report is ready; Disconnect stops the read and lands on the picker | – | – |
 | X32 | Second instrument after a denial | Two supported instruments attached, auto-connect on: Deny the permission for the first, tap "Show all devices", pick the second | The picker lists both; the second connects | – | – |
-| X33 | Permission request left unanswered | As X1, but leave the permission dialog up for over a minute, then Allow | After a minute the "did not get USB access" screen is behind the dialog; after Allow, Retry connects with no second dialog | – | – |
+| X33 | Permission request left unanswered | As X1, but leave the permission dialog up for over a minute, then Allow | After a minute the app shows "did not get USB access", visible once the dialog is closed; after Allow, Retry connects with no second dialog | 2026-10-10, Nord Grand | ✓ |
+| X34 | Release build | Install the release APK (an uninstall first where a debug build is installed); look at the launcher icon, the connect screen, the preset list, Settings and the debug menu, in both themes | Nothing missing: icon, text, images and fonts as in a debug build | 2026-10-10, Pixel 6 | ✓ |
 
 ## 3. Nord
 
