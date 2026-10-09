@@ -344,6 +344,24 @@ interface PresetEditor {
 }
 
 /**
+ * Re-reads [listed]'s slot and throws [InstrumentException.SlotStateChanged] where it no longer
+ * holds the preset the list showed: emptied on the panel, or holding another one stored over it.
+ * For an edit the user confirmed against that row, a delete above all, which would otherwise erase
+ * a preset nobody saw named. A preset of the same name stored over it is not told apart.
+ */
+suspend fun PresetBrowser.requireStillHolds(listed: PresetSlot) {
+    val current = refresh(listed.address)
+    if (current.isEmpty) throw InstrumentException.SlotStateChanged.empty(listed.displayId)
+    if (current.name != listed.name) {
+        throw InstrumentException.SlotStateChanged.replaced(
+            listed.displayId,
+            now = current.name ?: UNNAMED_PRESET,
+            listed = listed.name ?: UNNAMED_PRESET,
+        )
+    }
+}
+
+/**
  * The name rule every family shares: not blank, only printable ASCII (`0x20`-`0x7E`, the range
  * every family's name field stores and reads back unchanged), and no longer than [maxLength] where
  * one is known.

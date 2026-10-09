@@ -40,6 +40,10 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
             /** [displayId] is empty where the operation needs a preset. */
             fun empty(displayId: String, cause: Throwable? = null) =
                 SlotStateChanged("$displayId is empty, though the list shows a preset there.", cause)
+
+            /** [displayId] holds [now], stored over the [listed] preset the list still shows. */
+            fun replaced(displayId: String, now: String, listed: String) =
+                SlotStateChanged("$displayId now holds \"$now\", not \"$listed\" as the list shows.")
         }
     }
 

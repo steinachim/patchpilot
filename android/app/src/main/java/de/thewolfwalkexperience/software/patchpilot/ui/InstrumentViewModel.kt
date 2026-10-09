@@ -23,6 +23,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionReport
 import de.thewolfwalkexperience.software.patchpilot.core.RegressionTester
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.requireStillHolds
 import de.thewolfwalkexperience.software.patchpilot.core.stemFor
 import de.thewolfwalkexperience.software.patchpilot.discovery.MidiDiscovery
 import de.thewolfwalkexperience.software.patchpilot.discovery.UsbHostDiscovery
@@ -347,11 +348,15 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      * Erases one preset - destructive and not undoable from this app. The confirmation lives in
      * the screen. How it is erased varies by family: a Nord empties the slot with one command,
      * while every other family writes an empty or initialised preset over it
-     * (`PresetEditor.isEmulated(EditOp.DELETE)`).
+     * (`PresetEditor.isEmulated(EditOp.DELETE)`). The slot is read first, so a preset stored over
+     * the confirmed one on the panel since the list was read is not the one erased.
      */
     override suspend fun deleteProgram(slot: PresetSlot): String = connection.exclusive { instrument ->
         val editor = requireFacet(instrument.editor, "delete presets")
-        listings.editAndRefresh(slot.address) { editor.delete(slot.address) }
+        listings.editAndRefresh(slot.address) {
+            instrument.browser.requireStillHolds(slot)
+            editor.delete(slot.address)
+        }
         str(R.string.result_deleted, slot.displayId)
     }
 

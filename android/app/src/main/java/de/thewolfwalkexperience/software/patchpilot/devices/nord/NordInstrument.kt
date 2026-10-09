@@ -11,6 +11,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentNotice
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
@@ -91,6 +92,21 @@ class NordInstrument(
     override val rebuildOnResume: Boolean get() = device.rebuildOnResume
 
     override val advisory: String? get() = device.firmwareAdvisory
+
+    /**
+     * Every edit re-selects the programs it touched so the display shows the change, which on a
+     * Grand loads them: the panel switches to the edited program, and unsaved changes to the one
+     * loaded are lost (measured). No query says which program is loaded, so it cannot be put back.
+     */
+    override val notices: List<InstrumentNotice> = listOf(
+        InstrumentNotice(
+            id = EDITS_LOAD_PROGRAMS_NOTICE,
+            title = "Edits load programs",
+            message = "Every change Patch Pilot makes on the Nord (rename, category, copy, move, swap " +
+                "or delete) loads the program it changes, so the display shows the result. Unsaved " +
+                "changes to the program you are playing are lost, so store them on the instrument first.",
+        ),
+    )
 
     /**
      * The handshake, then, for a device opened on a guess ([NordProfile.unknown]), the bank
@@ -213,9 +229,19 @@ class NordInstrument(
         }
     }
 
-    /** Sub-opcode 20/21: the instrument empties the slot itself. Frees no space until its own reclaim runs. */
-    override suspend fun delete(address: SlotAddress) =
-        exclusive("delete a preset", "deleting a preset") { device.deleteProgram(address.bank, address.slot) }
+    /**
+     * Sub-opcode 20/21: the instrument empties the slot itself. Frees no space until its own
+     * reclaim runs. Status 1 (not found, measured on a Grand) is a slot emptied on the panel
+     * since the list was read.
+     */
+    override suspend fun delete(address: SlotAddress) = exclusive("delete a preset", "deleting a preset") {
+        try {
+            device.deleteProgram(address.bank, address.slot)
+        } catch (e: NordStatusException) {
+            if (e.status != NordDevice.STATUS_NOT_FOUND) throw e
+            throw InstrumentException.SlotStateChanged.empty(layout.format.format(address), e)
+        }
+    }
 
     /**
      * Sub-opcode 22/23: the instrument duplicates the record and names the copy itself. The same
@@ -248,6 +274,9 @@ class NordInstrument(
 
     companion object {
         const val FAMILY = "nord"
+
+        /** The id a hidden "edits load programs" notice is remembered by. */
+        const val EDITS_LOAD_PROGRAMS_NOTICE = "nord.edits_load_programs"
     }
 }
 

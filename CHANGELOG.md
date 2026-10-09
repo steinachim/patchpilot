@@ -7,6 +7,7 @@
 - The Moog Subsequent 37 is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted, and their categories shown and set. Reading its preset list takes about 2½ minutes, the instrument's own transfer time. Every operation was verified on a unit, but the app itself has not yet been run on one.
 - An instrument can show a notice when it connects, with a “Don't show this again” option; Settings → “Show Hidden Messages Again” brings hidden notices back.
 - Each GitHub release also carries the R8 mapping file for its APK, so a stack trace from that build can be read.
+- On a Nord, a notice on connecting says that every edit loads the program it changes, so unsaved changes on the panel should be stored first.
 
 ### Changed
 - The rename dialog says why a name can't be stored (characters outside plain ASCII, or a name the instrument reserves) and only enables Rename for a name that can, before anything is sent.
@@ -78,6 +79,8 @@
 - In split screen, whether category badges fit is judged by the window's width, not the screen's.
 - In demo mode, a copy's name stays within the 16-character name limit.
 - On a Yamaha Motif XS, the connect screen shows the firmware as 1.60 instead of "6.0.0.127", and a release the app has not been tested with now shows the untested-firmware warning, as on the other instruments.
+- Deleting a preset is refused when the slot was changed on the instrument's panel since the list was read, naming what it holds now, instead of erasing a preset you never saw named.
+- On a Nord, deleting a preset that was deleted or moved on the panel asks for a refresh, instead of reporting "refused … (status 1)".
 
 ## 1.1
 

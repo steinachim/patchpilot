@@ -258,6 +258,12 @@ class InstrumentFacetTest {
 
     // ---- Facet presence is what the UI gates on ----
 
+    /** Measured on a Grand: every edit loads the program it changes, which a player must hear about once. */
+    @Test
+    fun `a Nord announces that edits load programs`() {
+        assertEquals(listOf(NordInstrument.EDITS_LOAD_PROGRAMS_NOTICE), nord().notices.map { it.id })
+    }
+
     @Test
     fun `a Nord offers the facets its protocol has, and only those`() {
         val instrument = nord()

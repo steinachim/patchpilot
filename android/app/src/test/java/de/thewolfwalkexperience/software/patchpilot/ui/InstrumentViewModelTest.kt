@@ -7,6 +7,11 @@ import android.os.Looper
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotSame
@@ -82,6 +87,28 @@ class InstrumentViewModelTest {
 
         assertNotSame(first, viewModel.connection.instrument)
         assertEquals(slot, viewModel.programs.renameTarget)
+    }
+
+    /** As on the bench: a preset stored over the confirmed one on the panel is not the one erased. */
+    @Test
+    fun `a delete refuses a slot that no longer holds the confirmed preset`() {
+        val viewModel = viewModel().apply { awaitSettled() }
+        viewModel.connection.connectDemo()
+        val deadline = System.nanoTime() + 10_000_000_000
+        while (viewModel.connection.instrument !is DemoInstrument) {
+            check(System.nanoTime() < deadline) { "No demo session after 10 s (${viewModel.state.value})" }
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(10)
+        }
+        val demo = viewModel.connection.instrument as DemoInstrument
+        val row = runBlocking { demo.index().toList() }
+            .filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }.first { !it.isEmpty }
+        runBlocking { demo.rename(row.address, "Stored Over") }
+
+        val failure = runCatching { runBlocking { viewModel.deleteProgram(row) } }.exceptionOrNull()
+
+        assertTrue("got $failure", failure is InstrumentException.SlotStateChanged)
+        assertEquals("Stored Over", runBlocking { demo.refresh(row.address).name })
     }
 
     private fun remedyOffer() = BlockedOperation("Blocked.", null, "Fix", apply = {}, retry = {})

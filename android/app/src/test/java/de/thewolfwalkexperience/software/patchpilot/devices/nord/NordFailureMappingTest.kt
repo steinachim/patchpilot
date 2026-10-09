@@ -145,6 +145,21 @@ class NordFailureMappingTest {
         assertTrue(transport.sentRequests.isEmpty())
     }
 
+    /** Measured on a Grand: deleting a slot emptied on the panel answers status 1, not found. */
+    @Test
+    fun `deleting a slot emptied on the panel asks for a refresh`() = runTest {
+        val instrument = instrument(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                21 to (uint32BE(NordDevice.STATUS_NOT_FOUND) + uint32BE(8) + uint32BE(12)),
+                7 to ByteArray(0),
+            ),
+        )
+        val failure = thrownBy<InstrumentException.SlotStateChanged> { instrument.delete(SlotAddress(8, 12)) }
+        assertTrue(failure.message!!, failure.message!!.contains("is empty"))
+    }
+
     /** A swap needs two presets; status 1 says one slot is empty, though not which. */
     @Test
     fun `swapping with an empty slot asks for a refresh`() = runTest {
