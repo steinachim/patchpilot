@@ -89,6 +89,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | M10 | Pull to refresh mid listing | Over-pull at the top of the list while the user banks are still arriving | Nothing restarts; the listing goes on to the end | – | – |
 | M11 | Loading a voice in Performance mode | Put the instrument in Performance mode, tap a voice in the app, accept "Switch to Voice mode"; try Back and another edit while it switches | "Changing the instrument's state…" shows, Back and the edits stay off until the switch lands, then the voice loads | – | – |
 | M12 | Destinations of the other kind | "Copy to…" and "Move to…" on a USER 1 voice; drag it over the USER DR rows | No USER DR slot is offered or highlighted; the reverse for a drum kit | – | – |
+| M13 | Firmware and advisory | Connect; then set `supportedFirmwareVersions` in `devices/yamaha_motif_xs.json` to `["1.50"]`, rebuild and connect | "Firmware: 1.60" and no advisory; with the edited catalog the advisory names 1.60 and Continue anyway connects | – | – not run in the app; the version byte `06` is confirmed as 1.60 |
 
 ## 5. Behringer Pro-800
 

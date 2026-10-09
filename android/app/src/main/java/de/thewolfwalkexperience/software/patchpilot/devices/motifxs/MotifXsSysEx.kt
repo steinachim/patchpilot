@@ -355,6 +355,17 @@ object MotifXsSysEx {
     fun identityRequest(): ByteArray =
         byteArrayOf(SYSEX_START, 0x7E, 0x00, 0x06, 0x01, SYSEX_END)
 
+    /**
+     * The firmware version an identity reply names, from the first of its four version bytes:
+     * `06` is 1.60 (measured on a unit running 1.60, the latest release). How other releases are
+     * numbered is unmeasured, so any other value is shown as its code rather than guessed at. The
+     * other three bytes read `00 00 7F` and are not used.
+     */
+    fun firmwareVersionOf(versionByte: Int): String =
+        FIRMWARE_BY_VERSION_BYTE[versionByte] ?: "code 0x%02X".format(versionByte)
+
+    private val FIRMWARE_BY_VERSION_BYTE = mapOf(0x06 to "1.60")
+
     fun isOurs(message: ByteArray): Boolean =
         message.size >= MIN_MESSAGE_SIZE &&
             message.first() == SYSEX_START &&

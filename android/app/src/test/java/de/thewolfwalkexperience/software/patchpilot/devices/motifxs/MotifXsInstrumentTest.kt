@@ -248,7 +248,29 @@ class MotifXsInstrumentTest {
         assertEquals("Yamaha Motif XS", motif.identity.name)
         // USB, not MIDI: this instrument is matched by USB ids and has no MIDI port at all.
         assertEquals(Bus.USB, motif.identity.bus)
-        assertEquals("6.0.0.127", motif.identity.firmwareVersion)
+        // The reply's first version byte, 06, is what a unit on 1.60 sends.
+        assertEquals("1.60", motif.identity.firmwareVersion)
+        assertNull("1.60 is the tested release", motif.advisory)
+    }
+
+    /** Warned about, never refused, as on every other instrument. */
+    @Test
+    fun `a firmware this app was not tested against raises the advisory`() = runTest {
+        val (motif, _) = instrument(
+            backgroundScope,
+            withConfig = config.copy(supportedFirmwareVersions = setOf("1.50")),
+        )
+        assertNull("nothing is known before connecting", motif.advisory)
+        motif.connect()
+        val advisory = motif.advisory!!
+        assertTrue(advisory, advisory.contains("1.60") && advisory.contains("tested: 1.50"))
+    }
+
+    /** How releases other than 1.60 are numbered is unmeasured, so their byte is shown, not guessed at. */
+    @Test
+    fun `a version byte not measured shows as its code`() {
+        assertEquals("1.60", MotifXsSysEx.firmwareVersionOf(0x06))
+        assertEquals("code 0x05", MotifXsSysEx.firmwareVersionOf(0x05))
     }
 
     /** Only what was measured on the instrument is offered, and the nulls say so - see MotifXsInstrument's class doc. */

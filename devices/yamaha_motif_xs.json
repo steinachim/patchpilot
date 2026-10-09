@@ -2,6 +2,9 @@
   "family": "motifxs",
   "schemaVersion": 1,
   "familyConfig": {
+    "supportedFirmwareVersions": [
+      "1.60"
+    ],
     "categoryEncoding": {
       "description": "How the four category bytes at 0x18-0x1B of a voice's documented Voice Common block encode the two assignments (MIDI_Data_Table_en.xls, VOICE NORMAL r26-r29; the Common block is 0x40 00 00 for a Normal Voice and 0x46 00 00 for a Drum Voice). Each assignment is a main byte then a sub byte.",
       "mainByValue": [

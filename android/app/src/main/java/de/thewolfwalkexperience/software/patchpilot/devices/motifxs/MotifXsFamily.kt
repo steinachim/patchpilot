@@ -108,6 +108,11 @@ data class MotifXsConfig(
      * leaves the app without a tagging facet.
      */
     val categoryEncoding: MotifXsCategoryEncoding? = null,
+    /**
+     * Firmware versions this app has been tested against, as [MotifXsSysEx.firmwareVersionOf]
+     * names them; empty skips the check.
+     */
+    val supportedFirmwareVersions: Set<String> = setOf("1.60"),
 )
 
 /**

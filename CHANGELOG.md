@@ -77,6 +77,7 @@
 - Rotating the phone with the connect screen's "Share device details" filename prompt open keeps the prompt and the name typed so far.
 - In split screen, whether category badges fit is judged by the window's width, not the screen's.
 - In demo mode, a copy's name stays within the 16-character name limit.
+- On a Yamaha Motif XS, the connect screen shows the firmware as 1.60 instead of "6.0.0.127", and a release the app has not been tested with now shows the untested-firmware warning, as on the other instruments.
 
 ## 1.1
 

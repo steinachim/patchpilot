@@ -25,6 +25,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
 import de.thewolfwalkexperience.software.patchpilot.core.indexWalk
+import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareAdvisory
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -90,6 +91,10 @@ class MotifXsInstrument(
 
     private var firmware: String = UNKNOWN_FIRMWARE
 
+    /** Raised once [connect] has read a firmware this app has not been tested against; see [Instrument.advisory]. */
+    override val advisory: String?
+        get() = untestedFirmwareAdvisory(catalogName, firmware, config.supportedFirmwareVersions.sorted())
+
     override val identity: InstrumentIdentity
         get() = InstrumentIdentity(
             descriptorId = descriptorId,
@@ -130,15 +135,14 @@ class MotifXsInstrument(
         firmware = version ?: UNKNOWN_FIRMWARE
     }
 
-    /** The identity reply's version, or null if the instrument did not answer. */
+    /** The identity reply's firmware version, or null if the instrument did not answer. */
     private suspend fun readIdentityVersion(): String? = try {
         val reply = exchange.exchange(
             MotifXsSysEx.identityRequest(),
             what = "asking the instrument to identify itself",
         ) { it.size > 4 && it[1].toInt() == 0x7E && it[4].toInt() == 0x02 }
-        // Version occupies the four bytes before F7 in the inquiry reply.
-        reply.copyOfRange(reply.size - 5, reply.size - 1)
-            .joinToString(".") { (it.toInt() and 0x7F).toString() }
+        // The version bytes are the four before F7; the first names the release.
+        MotifXsSysEx.firmwareVersionOf(reply[reply.size - 5].toInt() and 0x7F)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
