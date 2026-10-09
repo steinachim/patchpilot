@@ -424,6 +424,9 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             onConfirmSelect = onConfirmSelect,
             onConfirmRealSlotMutation = onConfirmRealSlotMutation,
             refreshEdited = { addresses -> listings.refreshEdited(*addresses.toTypedArray()) },
+            presetNames = {
+                listings.userIndex.value.slots.mapNotNull { slot -> slot.name?.let { slot.address to it } }.toMap()
+            },
         ).run(progress)
     }
 

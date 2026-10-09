@@ -212,6 +212,64 @@ class RegressionTesterTest {
         assertEquals(before, listing(instrument))
     }
 
+    /**
+     * A run interrupted before its clean-up leaves a copy named as the test names it. The next
+     * run points it out, leaves it alone, and names its own copy around it: a Nord makes a
+     * clashing name unique by changing it, which failed every step after the rename.
+     */
+    @Test
+    fun `a copy an earlier run left is pointed out, and the new copy is named around it`() = runTest {
+        val instrument = nord()
+        instrument.editor!!.rename(listing(instrument).keys.first(), "PatchPilot Test")
+        val before = listing(instrument)
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { instrument.layout.allAddresses().toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { true },
+            refreshEdited = {},
+            presetNames = { before },
+        ).run {}
+
+        val leftovers = report.of("Copies left by an earlier run")
+        assertTrue(leftovers.detail, leftovers.detail.contains("\"PatchPilot Test\""))
+        assertEquals("the leftover is the only failure", listOf(leftovers), report.failures())
+        val rename = report.of("Rename a preset")
+        assertFalse(rename.detail, rename.detail.contains("to \"PatchPilot Test\""))
+        assertEquals(before, listing(instrument))
+    }
+
+    /** A rename stored under another name than asked for fails, and the copy is still followed to the end. */
+    @Test
+    fun `a copy renamed under another name is still moved, swapped and deleted`() = runTest {
+        val real = nord()
+        val before = listing(real)
+        val instrument = object : Instrument by real {
+            override val editor = object : PresetEditor by real.editor!! {
+                // As a Nord does with a name already in use.
+                override suspend fun rename(address: SlotAddress, newName: String) =
+                    real.editor!!.rename(address, "Renamed Else")
+            }
+        }
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { real.layout.allAddresses().toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { true },
+            refreshEdited = {},
+        ).run {}
+
+        assertEquals(Status.FAIL, report.of("Rename a preset").status)
+        for (step in listOf("Move a preset", "Swap two presets", "Delete a preset")) {
+            assertEquals(report.of(step).detail, Status.PASS, report.of(step).status)
+        }
+        assertEquals(before, listing(real))
+    }
+
     /** The instrument names the copy, so the report has to carry the name it chose. */
     @Test
     fun `the copy test reports the name the instrument gave the copy`() = runTest {
