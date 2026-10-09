@@ -500,6 +500,29 @@ class ConnectionCoordinatorTest {
         assertSame(demo, coordinator.instrument)
     }
 
+    /**
+     * Nothing is read behind the advisory gate: a Subsequent 37's listing would hold the
+     * instrument for minutes and refuse the gate's own device report.
+     */
+    @Test
+    fun `the listing starts only once the advisory is accepted`() = runSession { session ->
+        val events = mutableListOf<String>()
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate)) { FakeTransport() },
+            events = events,
+            create = { advisoryRaising(mutableListOf()) },
+        )
+        coordinator.connect()
+        advanceUntilIdle()
+        assertTrue(coordinator.state.value is ConnectionState.AdvisoryWarning)
+        assertTrue("the listing started behind the gate: $events", "started" !in events)
+
+        coordinator.confirmAdvisory()
+        assertEquals(listOf("started"), events.filter { it == "started" })
+    }
+
     @Test
     fun `an accepted advisory is not raised again by a resume, but is after the user backs out`() =
         runSession { session ->

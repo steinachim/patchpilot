@@ -50,10 +50,12 @@ private const val TAG = "MotifXsEditor"
  * to `0C <bank> <slot>`. Rename uses the documented path instead (see [rename]), since
  * parameter changes reach only the edit buffer and no host message carries that to a slot.
  *
- * Every operation is write, write, commit, verify. All the writes precede the single commit,
- * which makes them all-or-nothing: a refused write is answered with silence and is not
- * buffered, so a rejected second write leaves nothing committed. The read-back comes after
- * the commit, since an acknowledgement is a claim about the message and not about the flash.
+ * Every operation is write, write, commit, verify. All the writes precede the single commit: a
+ * refused write is answered with silence and is not buffered, so a rejected second write stops
+ * the operation before anything is committed. That holds only until the next commit, though: a
+ * write accepted before the refusal stays held, and the next commit from any edit applies it
+ * (see [write]). The read-back comes after the commit, since an acknowledgement is a claim about
+ * the message and not about the flash.
  */
 internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEditor {
     override val supported =

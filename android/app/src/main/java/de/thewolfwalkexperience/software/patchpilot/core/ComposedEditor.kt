@@ -19,8 +19,8 @@ private const val TAG = "ComposedEditor"
  *    before anything is written.
  *  - A move writes the destination before it empties the source, so a failure leaves the preset
  *    in both slots rather than in neither, and says so.
- *  - A swap reads both presets before writing either, and writes the first slot back if the
- *    second write fails.
+ *  - A swap reads both presets before writing either, and writes the first slot back if either
+ *    write fails - the first included, since a write can land and still fail its read-back.
  *  - Moves and swaps run under [NonCancellable]: a cancelled one finishes rather than stopping
  *    half done.
  *
@@ -144,12 +144,14 @@ abstract class ComposedEditor<P : Any> : PresetEditor {
             if (!isEmpty(first)) overwriting(a, first)
             if (!isEmpty(second)) overwriting(b, second)
             withContext(NonCancellable) {
-                writeVerified(b, presetA)
                 try {
+                    writeVerified(b, presetA)
                     writeVerified(a, presetB)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    // Also after the first write: its read-back can fail with the write already
+                    // stored, and b's preset would then exist only here.
                     rollback(b, presetB, e)
                     throw e
                 }

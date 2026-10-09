@@ -47,6 +47,10 @@
 - Plugging a different unit of the same instrument into the same USB port no longer shows the previous unit's preset list.
 - Settings no longer shows default values for a moment before the saved ones.
 - Rotating the phone no longer clears the preset list's name filter or “Show empty slots”.
+- With an untested-firmware warning showing, the preset list is read only after "Continue anyway", so the warning's "Share device details" works on a Moog Subsequent 37 too.
+- On a Nord, locking the phone or leaving the app while the preset list is being read can no longer leave the instrument's front panel locked.
+- A preset swap on a Behringer Pro-800, Fractal Audio Axe-Fx III or Moog Subsequent 37 whose first write cannot be confirmed now puts that slot back too.
+- On a Yamaha Motif XS, Set categories no longer offers "NoAsg", which saved correctly but reported a failure.
 
 ## 1.1
 

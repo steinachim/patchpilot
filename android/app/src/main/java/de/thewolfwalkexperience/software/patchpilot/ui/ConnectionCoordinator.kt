@@ -426,6 +426,9 @@ internal class ConnectionCoordinator(
      * claimed by a session that does not exist. That includes an attempt cancelled while it waits
      * for the mutex, which a [disconnect] replacing it does.
      *
+     * Behind the advisory gate nothing is read yet: the listing starts once the user accepts
+     * ([confirmAdvisory]), and until then the instrument stays free for the gate's device report.
+     *
      * Expects no session: every path that can run with one tears it down first.
      */
     private suspend fun connectAndPublish(
@@ -443,8 +446,9 @@ internal class ConnectionCoordinator(
                 deviceHandle = handle
             }
         }
-        _state.value = connectedOrAdvisory(built)
-        onSessionStarted()
+        val published = connectedOrAdvisory(built)
+        _state.value = published
+        if (published is ConnectionState.Connected) onSessionStarted()
     }
 
     /**

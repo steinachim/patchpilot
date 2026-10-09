@@ -81,7 +81,8 @@ class MotifXsFactoryVoicesTest {
             MotifXsCategoryEncoding.NO_ASSIGNMENT,
             encoding.mainByValue[MotifXsCategories.NO_ASSIGNMENT_MAIN],
         )
-        assertEquals(17, encoding.taxonomy.mains.size)
+        // NoAsg is the absence of a category, not one the dialogs offer.
+        assertEquals(16, encoding.taxonomy.mains.size)
     }
 
     /** Every model of this family inherits it; none of the three carries its own copy. */

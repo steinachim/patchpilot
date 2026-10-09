@@ -12,12 +12,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -375,6 +372,32 @@ class Pro800EditorTest {
             throw AssertionError("a half-completed swap reported success")
         } catch (expected: InstrumentException.ProtocolDesync) {
             // Both presets survive, in their original places.
+            assertEquals("Organ I", fake.nameAt(0))
+            assertEquals("Strings", fake.nameAt(1))
+        }
+    }
+
+    /**
+     * The first write can land and still fail: its read-back goes unanswered. The slot then holds
+     * the other preset, and its own exists only in memory - so it is put back here too.
+     */
+    @Test
+    fun `a swap whose first read-back fails puts the first slot back`() = runTest {
+        val fake = fake()
+        var first = true
+        fake.onWrite = { programNumber ->
+            // Both attempts of the read-back that follows the first write to A01 are lost.
+            if (programNumber == 1 && first) {
+                first = false
+                fake.unansweredReads[1] = 2
+            }
+        }
+        val pro800 = instrument(fake, backgroundScope)
+
+        try {
+            pro800.editor!!.swap(a(0), a(1))
+            throw AssertionError("a swap whose first write was never confirmed reported success")
+        } catch (expected: InstrumentException.Timeout) {
             assertEquals("Organ I", fake.nameAt(0))
             assertEquals("Strings", fake.nameAt(1))
         }

@@ -124,10 +124,16 @@ data class MotifXsCategoryEncoding(
     /** Sub-categories by byte value, keyed by main-category name. */
     val subByValuePerMain: Map<String, List<String>> = emptyMap(),
 ) {
-    /** The taxonomy as everything above wants it: by index, in the main table's own order. */
+    /**
+     * The taxonomy as everything above wants it: by index, in the main table's own order, so an
+     * index is still the byte value. Ends before [NO_ASSIGNMENT]: "no assignment" is a null
+     * [CategoryRef], and offered as a category of its own it would be written as one and read
+     * back as null.
+     */
     val taxonomy: CategoryTaxonomy by lazy {
         CategoryTaxonomy(
-            mainByValue.map { name -> MainCategory(name, subByValuePerMain[name].orEmpty()) },
+            mainByValue.takeWhile { it != NO_ASSIGNMENT }
+                .map { name -> MainCategory(name, subByValuePerMain[name].orEmpty()) },
         )
     }
 

@@ -550,6 +550,23 @@ class MotifXsTaggerTest {
         assertEquals(listOf(CategoryRef(piano, 0), null), tagger.read(userSlot).categories)
     }
 
+    /**
+     * `NoAsg` is the null assignment, not a category: offered as one, writing it stored `(16, 0)`,
+     * read back as null and reported a successful write as a failure.
+     */
+    @Test
+    fun `no assignment is not offered as a category`() = runTest {
+        val device = Device(favorites = mapOf(0x0A to ByteArray(4)))
+        val (_, tagger, transport) = instrument(backgroundScope, device)
+
+        assertTrue(tagger.taxonomy.mains.none { it.name == MotifXsCategoryEncoding.NO_ASSIGNMENT })
+        assertEquals(mainNames.indexOf("Ethnic"), tagger.taxonomy.mains.lastIndex)
+        val sentBefore = transport.sent.size
+        val failure = runCatching { tagger.setCategories(userSlot, listOf(CategoryRef(noAsg, null), null)) }
+        assertTrue(failure.exceptionOrNull() is IllegalArgumentException)
+        assertEquals("nothing goes out for a refused category", sentBefore, transport.sent.size)
+    }
+
     /** Inside the voice, so a factory bank is refused before a single byte goes out. */
     @Test
     fun `setting categories refuses a read-only bank`() = runTest {

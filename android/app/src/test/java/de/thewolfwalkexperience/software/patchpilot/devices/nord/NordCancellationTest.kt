@@ -176,4 +176,38 @@ class NordCancellationTest {
         )
         replay.assertAllConsumed()
     }
+
+    /**
+     * **A select cancelled as it goes out is unlocked too.** The instrument may already hold the
+     * lock, and Home or a screen lock cancels a running listing at any moment - with the phone
+     * locked, nothing else would release the panel.
+     */
+    @Test
+    fun `an operation cancelled as its category select goes out still unlocks the instrument`() = runTest {
+        val replay = ReplayTransport(
+            listOf(
+                1 to rootListPayload(listOf("Piano", "Program", "Settings")),
+                // No SELECT_CATEGORY reply: the job is cancelled as the request goes out.
+                7 to ByteArray(0), // UNLOCK_CATEGORY_SELECTION, sent anyway
+            ),
+        )
+        val transport = CancelMidOperation(replay, cancelOn = NordDevice.FileTransferSubOp.SELECT_CATEGORY.code)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        val job = launch(start = CoroutineStart.LAZY) { device.renamePreset(1, 11, "Black Upright") }
+        transport.job = job
+        job.start()
+        job.join()
+
+        assertTrue(job.isCancelled)
+        assertEquals(
+            listOf(
+                NordDevice.FileTransferSubOp.ROOT_CATEGORY_LIST.code,
+                NordDevice.FileTransferSubOp.SELECT_CATEGORY.code,
+                NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code,
+            ),
+            replay.sentRequests.map { it.subOp },
+        )
+        replay.assertAllConsumed()
+    }
 }

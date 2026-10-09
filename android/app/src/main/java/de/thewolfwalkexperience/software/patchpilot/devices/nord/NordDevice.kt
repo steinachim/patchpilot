@@ -12,7 +12,6 @@ import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -687,14 +686,17 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: NordPr
     /**
      * Selects [categoryIndex], runs [block], and always unlocks afterwards: a lock left standing
      * makes the instrument's own front panel unresponsive until the session ends.
+     *
+     * The select is inside the `try`, so a select that fails or is cancelled after it went out -
+     * a reply timeout, or the screen locked mid-request - is unlocked too: the instrument may
+     * have taken the lock either way. **Assumption:** an unlock with no lock set is harmless; its
+     * reply is not decoded, and a silent one costs one read timeout on this failure path only.
      */
-    private suspend fun <T> withCategory(categoryIndex: Int, block: suspend () -> T): T {
+    private suspend fun <T> withCategory(categoryIndex: Int, block: suspend () -> T): T = try {
         fileTransfer(FileTransferSubOp.SELECT_CATEGORY, uint32BE(categoryIndex))
-        return try {
-            block()
-        } finally {
-            unlockCategorySelection()
-        }
+        block()
+    } finally {
+        unlockCategorySelection()
     }
 
     /** [withCategory] against the `Program` category; the index is looked up before the lock is taken. */

@@ -20,11 +20,12 @@ import org.junit.Test
 
 /**
  * What the debug menu's regression test does to an instrument, checked against the wire-level Nord
- * fake and the in-memory demo instrument rather than hardware.
+ * and Axe-Fx III fakes and [NoCopyFixtureInstrument] rather than hardware.
  *
- * **The property under test is "the instrument is exactly as it was afterwards."** Every case below
- * compares the whole program listing before and after the run, because that - not the individual
- * PASS lines - is what makes a test suite safe to point at somebody's own instrument.
+ * **The property under test is "the instrument is exactly as it was afterwards."** Most cases
+ * compare the whole program listing before and after the run, because that - not the individual
+ * PASS lines - is what makes a test suite safe to point at somebody's own instrument; a case whose
+ * instrument fails part-way checks that the report says what was left behind.
  */
 class RegressionTesterTest {
 
@@ -317,6 +318,52 @@ class RegressionTesterTest {
         assertEquals(Status.PASS, delete.status)
         assertTrue(delete.detail, delete.detail.startsWith("Deleted the copies from"))
         assertEquals(before, listing(real))
+    }
+
+    /**
+     * The clean-up reads each copy's slot before deleting it. An instrument that stops answering
+     * there fails that one step, leaves the copies alone and says so; the run still ends in a
+     * report, with every earlier result in it.
+     */
+    @Test
+    fun `a clean-up that cannot read the copies fails its step, not the run`() = runTest {
+        val real = nord()
+        val before = listing(real)
+        var swaps = 0
+        var readsAfterSwapBack = 0
+        val instrument = object : Instrument by real {
+            override val editor = object : PresetEditor by real.editor!! {
+                override suspend fun swap(a: SlotAddress, b: SlotAddress) {
+                    swaps++
+                    real.editor!!.swap(a, b)
+                }
+            }
+            override val browser = object : PresetBrowser by real.browser {
+                override suspend fun refresh(address: SlotAddress): PresetSlot {
+                    // The swap test checks both slots after swapping back; every read after that
+                    // is the clean-up's.
+                    if (swaps >= 2 && ++readsAfterSwapBack > 2) {
+                        throw InstrumentException.Timeout("re-reading a preset")
+                    }
+                    return real.browser.refresh(address)
+                }
+            }
+        }
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { real.layout.allAddresses().toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { true },
+            refreshEdited = {},
+        ).run {}
+
+        assertEquals(Status.PASS, report.of("Swap two presets").status)
+        val delete = report.of("Delete a preset")
+        assertEquals(Status.FAIL, delete.status)
+        assertTrue(delete.detail, delete.detail.contains("could not be read"))
+        assertEquals(listOf(delete), report.failures())
     }
 
     /**

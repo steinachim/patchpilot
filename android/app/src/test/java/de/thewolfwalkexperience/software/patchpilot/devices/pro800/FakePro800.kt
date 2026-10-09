@@ -40,6 +40,9 @@ class FakePro800(
     /** Called with the program number after each write lands - where a test cancels mid-edit. */
     var onWrite: (Int) -> Unit = {}
 
+    /** Program number -> how many more dump requests for it go unanswered, as if each reply were lost. */
+    val unansweredReads = mutableMapOf<Int, Int>()
+
     /** Program number -> the encoded payload stored there. Absent means an empty address. */
     private val stored = initial.toMutableMap()
 
@@ -80,7 +83,16 @@ class FakePro800(
                     Pro800SysEx.SYSEX_END,
             )
 
-            Pro800SysEx.TYPE_REQUEST_DUMP -> listOf(dumpFor(Pro800SysEx.addressOf(request)!!))
+            Pro800SysEx.TYPE_REQUEST_DUMP -> {
+                val programNumber = Pro800SysEx.addressOf(request)!!
+                val lost = unansweredReads[programNumber] ?: 0
+                if (lost > 0) {
+                    unansweredReads[programNumber] = lost - 1
+                    emptyList()
+                } else {
+                    listOf(dumpFor(programNumber))
+                }
+            }
 
             // A write. The instrument answers nothing, which is exactly the point.
             Pro800SysEx.TYPE_DUMP -> {

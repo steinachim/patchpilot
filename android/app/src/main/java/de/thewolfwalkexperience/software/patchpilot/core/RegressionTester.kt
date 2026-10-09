@@ -327,6 +327,10 @@ class RegressionTester(
      * that did not swap back) the address held here may hold a real preset, so a slot is erased
      * only if it reads back as one of the run's copies - either name, since an interrupted swap
      * leaves the two copies exchanged - and anything else is left alone and said so.
+     *
+     * A slot that cannot be read is left alone too, and fails this step rather than the run: this
+     * is the last test, and an instrument misbehaving here is when the rest of the report matters
+     * most.
      */
     private suspend fun cleanUp(
         editor: PresetEditor,
@@ -338,14 +342,25 @@ class RegressionTester(
             return skip(DELETE, "$UNSUPPORTED - the copies are left in ${slots.joinToString { display(it) }}")
         }
         val copyNames = copies.mapNotNull { it.second }.toSet()
-        val (ours, theirs) = slots.partition { instrument.browser.refresh(it).name in copyNames }
-        val leftAlone = theirs.joinToString { display(it) }
+        val unreadable = mutableListOf<SlotAddress>()
+        val ours = slots.filter { slot ->
+            try {
+                instrument.browser.refresh(slot).name in copyNames
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                unreadable += slot
+                false
+            }
+        }
+        val gone = slots.filterNot { it in ours || it in unreadable }
+        val leftAlone = listOfNotNull(
+            describe(gone, "no longer holds a copy"),
+            describe(unreadable, "could not be read"),
+        ).joinToString("; ")
         if (ours.isEmpty()) {
-            return skip(
-                DELETE,
-                "$leftAlone no longer holds a copy, so nothing was deleted - " +
-                    "check the instrument by hand before running this again",
-            )
+            val detail = "$leftAlone, so nothing was deleted - $CHECK_BY_HAND"
+            return if (unreadable.isEmpty()) skip(DELETE, detail) else RegressionResult(DELETE, Status.FAIL, detail)
         }
         return step(DELETE, progress) {
             ours.forEach { slot ->
@@ -357,14 +372,18 @@ class RegressionTester(
             }
             val deleted = (if (ours.size == 1) "the copy from " else "the copies from ") +
                 ours.joinToString { display(it) }
-            if (theirs.isEmpty()) {
+            check(unreadable.isEmpty()) { "Deleted $deleted, but $leftAlone - $CHECK_BY_HAND." }
+            if (gone.isEmpty()) {
                 "Deleted $deleted; the instrument is as it was."
             } else {
-                "Deleted $deleted. $leftAlone no longer holds a copy and was left alone - " +
-                    "check the instrument by hand before running this again."
+                "Deleted $deleted. $leftAlone and was left alone - $CHECK_BY_HAND."
             }
         }
     }
+
+    /** "A:1:2, A:1:3 [what]", or null where [slots] is empty. */
+    private fun describe(slots: List<SlotAddress>, what: String): String? =
+        slots.takeIf { it.isNotEmpty() }?.let { "${it.joinToString { slot -> display(slot) }} $what" }
 
     /**
      * The path with no sandbox to work in - either nothing is free or this family cannot copy.
@@ -569,6 +588,7 @@ class RegressionTester(
         const val NOTHING_STORED = "the instrument holds no presets to test against"
         const val NO_SANDBOX = "no sandbox copy to test against"
         const val DECLINED = "declined by the user"
+        const val CHECK_BY_HAND = "check the instrument by hand before running this again"
 
         /** Between steps, so the instrument's display does not flip presets in a rapid, silent burst. */
         const val STEP_PAUSE_MS = 500L
