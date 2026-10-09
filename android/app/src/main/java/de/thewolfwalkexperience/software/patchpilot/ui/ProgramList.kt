@@ -39,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -677,7 +678,7 @@ private fun BankIndex(
     modifier: Modifier = Modifier,
     railLabel: (String) -> String = { it },
 ) {
-    var columnHeightPx by remember { mutableStateOf(0f) }
+    var columnHeightPx by remember { mutableFloatStateOf(0f) }
     val theme = LocalThemeStyle.current
     val pillShape = RoundedCornerShape(percent = 50)
     fun jumpToY(y: Float) {

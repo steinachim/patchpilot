@@ -10,6 +10,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.core.assertEveryDeclaredEditCompletes
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -119,15 +120,11 @@ class Pro800EditorTest {
     }
 
     @Test
-    fun `copy onto itself is refused`() = runTest {
+    fun `copy onto itself is refused as the caller's mistake`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        try {
-            pro800.editor!!.copyProgram(a(1), a(1))
-            throw AssertionError("expected a refusal")
-        } catch (e: InstrumentException.NotSupported) {
-            assertTrue(e.message!!.contains("itself"))
-        }
+        val e = thrownBy<IllegalArgumentException> { pro800.editor!!.copyProgram(a(1), a(1)) }
+        assertTrue(e.message!!.contains("itself"))
         assertEquals("Strings", fake.nameAt(1))
     }
 
@@ -431,21 +428,6 @@ class Pro800EditorTest {
             assertTrue(expected.message!!.contains("A00"))
             assertEquals("Organ I", fake.nameAt(0))
         }
-    }
-
-    // ---- Undo buffer ----
-
-    @Test
-    fun `overwritten bytes are kept for the session`() = runTest {
-        val fake = fake()
-        val pro800 = instrument(fake, backgroundScope)
-        val editor = pro800.editor as Pro800Editor
-
-        pro800.editor!!.delete(a(0))
-        val entry = editor.undoBuffer.first()
-        assertEquals(a(0), entry.address)
-        assertEquals("A00", entry.displayId)
-        assertEquals("Organ I", Pro800Program.fromEncoded(entry.blob).name)
     }
 
     // ---- Declaration ----

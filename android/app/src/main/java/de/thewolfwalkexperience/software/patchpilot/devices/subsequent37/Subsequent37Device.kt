@@ -68,17 +68,20 @@ class Subsequent37Device(
      * Each attempt sends the pair once: retrying the pair inside an attempt as well would double
      * what a silent instrument costs.
      */
-    suspend fun readStoredMessage(number: Int): ByteArray =
-        attempt(READ_ATTEMPTS, "reading program $number") {
+    suspend fun readStoredMessage(number: Int): ByteArray {
+        // As the row shows it: the wire number counts from 0, the panel's from B01/P01.
+        val reading = "reading ${Subsequent37AddressFormat.format(Subsequent37AddressFormat.addressOf(number))}"
+        return attempt(READ_ATTEMPTS, reading) {
             settingsOnce()
             exchange.exchange(
                 Subsequent37SysEx.readProgram(number),
-                "reading program $number",
+                reading,
                 READ_TIMEOUT,
                 retries = 0,
                 intact = { Subsequent37SysEx.programOf(it) != null },
             ) { Subsequent37SysEx.isStoredProgramReply(it, number) }
         }
+    }
 
     suspend fun readProgram(number: Int): Subsequent37Program =
         Subsequent37Program(Subsequent37SysEx.programOf(readStoredMessage(number))!!).also { lastRead[number] = it }

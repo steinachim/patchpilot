@@ -19,7 +19,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Test
 
 class AxeFx3EditorTest {
@@ -149,7 +148,7 @@ class AxeFx3EditorTest {
         fake.put(2, "Pad")
         val instrument = connected(fake)
         val start = fake.requests.size
-        thrownBy<InstrumentException.NotSupported> { instrument.editor.copyProgram(at(1), at(1)) }
+        thrownBy<IllegalArgumentException> { instrument.editor.copyProgram(at(1), at(1)) }
         thrownBy<InstrumentException.SlotStateChanged> { instrument.editor.copyProgram(at(3), at(4)) }
         thrownBy<InstrumentException.SlotStateChanged> { instrument.editor.copyProgram(at(1), at(2)) }
         assertFalse(fake.commandsSince(start).contains("01/27"))

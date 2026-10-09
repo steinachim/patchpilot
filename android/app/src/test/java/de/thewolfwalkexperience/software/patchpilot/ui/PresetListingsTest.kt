@@ -124,10 +124,10 @@ class PresetListingsTest {
     }
 
     /**
-     * Demo mode's library, with one slot that cannot be read, so the cache never holds the
-     * listing; counts every collection.
+     * Demo mode's library, with one slot that cannot be read where [unreadable] says so; counts
+     * every collection.
      */
-    private class PartlyUnreadable {
+    private class PartlyUnreadable(private val unreadable: Boolean = true) {
         val collected = mutableListOf<PresetScope>()
         val reRead = mutableListOf<SlotAddress>()
         var refreshFails = false
@@ -138,7 +138,11 @@ class PresetListingsTest {
                 override fun index(scope: PresetScope) = flow {
                     collected += scope
                     demo.index(scope).collect { update ->
-                        if (update == IndexUpdate.Complete) emit(IndexUpdate.Failed(UNREADABLE, "timed out"))
+                        if (unreadable &&
+                            update == IndexUpdate.Complete
+                        ) {
+                            emit(IndexUpdate.Failed(UNREADABLE, "timed out"))
+                        }
                         emit(update)
                     }
                 }
@@ -153,9 +157,12 @@ class PresetListingsTest {
     }
 
     /** [test] against [PartlyUnreadable], with a device handle so the listing goes through the cache. */
-    private fun runEdits(test: suspend TestScope.(PresetListings, PartlyUnreadable) -> Unit) = runTest {
+    private fun runEdits(
+        unreadable: Boolean = true,
+        test: suspend TestScope.(PresetListings, PartlyUnreadable) -> Unit,
+    ) = runTest {
         val session = CoroutineScope(coroutineContext + Job(coroutineContext.job))
-        val fake = PartlyUnreadable()
+        val fake = PartlyUnreadable(unreadable)
         val listings =
             PresetListings(session, { fake.instrument }, { "usb:test" }, StringResolver { id, _ -> "string $id" })
         try {
@@ -168,11 +175,11 @@ class PresetListingsTest {
     }
 
     /**
-     * An edit patches the rows it touched and collects nothing again: a listing the cache does not
-     * hold would otherwise be re-read from the instrument after every rename - 93 s on a Motif XS.
+     * An edit patches the rows it touched and collects nothing again, even on a listing with an
+     * unreadable slot: collected again, it would be re-read from the instrument after every rename.
      */
     @Test
-    fun `an edit on a listing the cache does not hold does not collect it again`() = runEdits { listings, fake ->
+    fun `an edit does not collect the listing again`() = runEdits { listings, fake ->
         val edited = listings.userIndex.value.slots.first().address
         listings.refreshEdited(edited)
         listings.reloadAfterEdit()
@@ -186,6 +193,26 @@ class PresetListingsTest {
         listings.refreshEdited(listings.userIndex.value.slots.first().address)
         listings.reloadAfterEdit()
         advanceUntilIdle()
+        assertEquals(listOf(PresetScope.USER, PresetScope.USER), fake.collected)
+    }
+
+    /**
+     * A listing read whole is cached, so a resume serves it without asking the instrument; a
+     * re-read after an edit that fails drops it, so the next one asks again.
+     */
+    @Test
+    fun `a failed re-read after an edit drops the cached listing`() = runEdits(unreadable = false) { listings, fake ->
+        listings.cancel()
+        listings.start()
+        advanceUntilIdle()
+        assertEquals("served from the cache", listOf(PresetScope.USER), fake.collected)
+
+        fake.refreshFails = true
+        listings.refreshEdited(listings.userIndex.value.slots.first().address)
+        listings.cancel()
+        listings.start()
+        advanceUntilIdle()
+
         assertEquals(listOf(PresetScope.USER, PresetScope.USER), fake.collected)
     }
 

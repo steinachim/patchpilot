@@ -59,6 +59,12 @@ class PresetIndexCache {
     /** Address-keyed and insertion-ordered, so a replay keeps device order and a write-through replaces a row in place. */
     private val entries = mutableMapOf<CacheKey, LinkedHashMap<SlotAddress, PresetSlot>>()
 
+    /**
+     * The addresses each index could not read, kept apart from its rows: a missing row would
+     * otherwise read as an empty slot (`PresetSlot.isEmpty` is `name == null`).
+     */
+    private val unread = mutableMapOf<CacheKey, MutableSet<SlotAddress>>()
+
     private val lock = Any()
 
     /** Bumped by every write-through and invalidation, so a listing that ran across one can tell - see [putIfUnchanged]. */
@@ -75,11 +81,18 @@ class PresetIndexCache {
         entries[key]?.values?.toList()
     }
 
-    /** Stores a completed index - one that reached `IndexUpdate.Complete` without a failed address; see [CachingBrowser]. */
-    fun put(key: CacheKey, slots: List<PresetSlot>) = synchronized(lock) {
+    /** The addresses [key]'s cached index could not read, which a replay reads again - see [CachingBrowser]. */
+    fun unreadable(key: CacheKey): Set<SlotAddress> = synchronized(lock) { unread[key].orEmpty().toSet() }
+
+    /**
+     * Stores a completed index - one that reached `IndexUpdate.Complete` - with the addresses it
+     * could not read; see [CachingBrowser].
+     */
+    fun put(key: CacheKey, slots: List<PresetSlot>, unreadable: Set<SlotAddress> = emptySet()) = synchronized(lock) {
         entries[key] = LinkedHashMap<SlotAddress, PresetSlot>(slots.size).apply {
             slots.forEach { put(it.address, it) }
         }
+        if (unreadable.isEmpty()) unread.remove(key) else unread[key] = unreadable.toMutableSet()
     }
 
     /** Where [key]'s writes stand; a listing reads it as it starts - see [putIfUnchanged]. */
@@ -93,9 +106,14 @@ class PresetIndexCache {
      * then replay stale from here. Skipping costs the next listing a re-read; the listing on screen
      * was already corrected by the edit's own re-read. Returns whether it stored.
      */
-    fun putIfUnchanged(key: CacheKey, slots: List<PresetSlot>, version: Int): Boolean = synchronized(lock) {
+    fun putIfUnchanged(
+        key: CacheKey,
+        slots: List<PresetSlot>,
+        version: Int,
+        unreadable: Set<SlotAddress> = emptySet(),
+    ): Boolean = synchronized(lock) {
         if (versionOf(key) != version) return false
-        put(key, slots)
+        put(key, slots, unreadable)
         true
     }
 
@@ -110,6 +128,8 @@ class PresetIndexCache {
     fun update(key: CacheKey, slot: PresetSlot): Unit = synchronized(lock) {
         bump(key)
         val index = entries[key] ?: return
+        // Read now, so no longer unknown.
+        unread[key]?.remove(slot.address)
         if (slot.address in index) {
             index[slot.address] = slot
             return
@@ -131,6 +151,7 @@ class PresetIndexCache {
     fun invalidate(key: CacheKey) = synchronized(lock) {
         bump(key)
         entries.remove(key)
+        unread.remove(key)
         Unit
     }
 
@@ -141,6 +162,7 @@ class PresetIndexCache {
     fun invalidateDevice(physicalDevice: String) = synchronized(lock) {
         deviceVersions[physicalDevice] = (deviceVersions[physicalDevice] ?: 0) + 1
         entries.keys.removeAll { it.physicalDevice == physicalDevice }
+        unread.keys.removeAll { it.physicalDevice == physicalDevice }
         Unit
     }
 

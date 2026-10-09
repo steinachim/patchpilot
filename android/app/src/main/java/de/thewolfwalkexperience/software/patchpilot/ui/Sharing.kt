@@ -17,7 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -111,12 +111,12 @@ data class PendingShare(
 
 /**
  * Lets the user rename the file before it goes anywhere - the same prompt for every kind of report
- * this app shares. The stem lives in this composable's own state: each appearance is a fresh
- * composition, so there is nothing to preserve between prompts.
+ * this app shares. The stem typed so far is saveable, so a rotation keeps it; a prompt for another
+ * file starts again from its own [PendingShare.initialStem].
  */
 @Composable
 fun ShareFilenameDialog(pending: PendingShare, onDismiss: () -> Unit) {
-    var stem by remember { mutableStateOf(pending.initialStem) }
+    var stem by rememberSaveable(pending.initialStem) { mutableStateOf(pending.initialStem) }
     val keyboardController = LocalSoftwareKeyboardController.current
     DisposableEffect(Unit) {
         onDispose { keyboardController?.hide() }

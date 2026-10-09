@@ -3,35 +3,15 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
-import android.util.Log
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
-import de.thewolfwalkexperience.software.patchpilot.core.EditOp
-import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
-import de.thewolfwalkexperience.software.patchpilot.core.Instrument
-import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
-import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
-import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
-import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
-import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
-import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
-import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
-import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
 import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
 import de.thewolfwalkexperience.software.patchpilot.core.ReportIdentity
-import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
-import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.slugifyDeviceId
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
-import de.thewolfwalkexperience.software.patchpilot.transport.UsbReadTimeoutException
-import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferException
 import java.util.Locale
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString

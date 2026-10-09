@@ -98,7 +98,7 @@ class InstrumentViewModelTest {
 
     /** The share button's gate can trail the session by a frame, so a tap may find no session at all. */
     @Test
-    fun `a report is named only while a session can give one`() {
+    fun `with no session, a report is not named`() {
         val viewModel = viewModel().apply { awaitSettled() }
         assertEquals(null, viewModel.reportNaming())
     }

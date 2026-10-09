@@ -82,6 +82,8 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            // Drops resources nothing references once R8 has removed the code that used them.
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfigs.findByName("release")?.let { signingConfig = it }
         }
@@ -373,9 +375,13 @@ androidComponents {
 // malformed catalog is otherwise a defect that only appears on a phone, with the instrument simply
 // missing from the connect screen.
 tasks.withType<Test>().configureEach {
-    systemProperty("deviceCatalogDir", deviceCatalogDir.absolutePath)
+    // An argument provider rather than `systemProperty`, whose value Gradle records as an input:
+    // an absolute path there would differ per checkout, against the RELATIVE tracking below.
+    jvmArgumentProviders += CommandLineArgumentProvider {
+        listOf("-DdeviceCatalogDir=${deviceCatalogDir.absolutePath}")
+    }
     // **Declared as an input, or the tests that read it never re-run when it changes.**
-    // A `systemProperty` is not an input Gradle tracks, so without this editing a catalog leaves
+    // The path above is not an input Gradle tracks, so without this editing a catalog leaves
     // every test task UP-TO-DATE and the tests that assert what the catalogs contain never run.
     // A catalog is data the tests assert against, so it belongs here beside the property that
     // points at it.

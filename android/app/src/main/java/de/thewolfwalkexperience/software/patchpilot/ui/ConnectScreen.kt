@@ -26,9 +26,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,11 +52,13 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
     // who does not want to touch an instrument the app cannot vouch for can still send back what
     // would let it be supported. The instrument is already connected here, since the advisory is
     // raised after the handshake.
-    var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
+    // Whether the filename prompt is open, rather than the prompt itself: its callback belongs to
+    // the composition that built it, so a rotation rebuilds it from [reportShare] instead.
+    var shareOpen by rememberSaveable { mutableStateOf(false) }
     val capabilities by viewModel.capabilities.collectAsStateWithLifecycle()
     // Said rather than swallowed: a read the cable interrupted lands in the same Done as a whole
     // one, and the report is shared the moment it is read. Kept until the next read.
-    var incompleteReads by rememberSaveable { mutableStateOf(0) }
+    var incompleteReads by rememberSaveable { mutableIntStateOf(0) }
     val reportShare = rememberDeviceReportShare(
         viewModel,
         onStarted = { incompleteReads = 0 },
@@ -290,7 +293,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                         incompleteReads = incompleteReads,
                         onDisconnect = { viewModel.connection.disconnect() },
                         onContinue = { viewModel.connection.confirmAdvisory() },
-                        onShareReport = { pendingShare = reportShare.dialog() },
+                        onShareReport = { shareOpen = reportShare.dialog() != null },
                     )
 
                     is ConnectionState.DeviceLost -> {
@@ -333,8 +336,16 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                         }
                     }
                 }
-                pendingShare?.let { pending ->
-                    ShareFilenameDialog(pending) { pendingShare = null }
+                if (shareOpen) {
+                    // Gone with the session it would name the report from: closed, not reopened later.
+                    val pending = reportShare.dialog()
+                    if (pending ==
+                        null
+                    ) {
+                        SideEffect { shareOpen = false }
+                    } else {
+                        ShareFilenameDialog(pending) { shareOpen = false }
+                    }
                 }
 
                 // Not offered while a real connection attempt is in flight or has landed: Connected

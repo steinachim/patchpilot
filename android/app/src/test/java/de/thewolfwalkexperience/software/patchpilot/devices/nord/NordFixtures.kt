@@ -19,6 +19,13 @@ object NordFixtures {
         value.toByte(),
     )
 
+    /** The big-endian 32-bit word at [offset] of [data] - [uint32BE] read back. */
+    fun readUInt32BE(data: ByteArray, offset: Int): Int =
+        ((data[offset].toInt() and 0xFF) shl 24) or
+            ((data[offset + 1].toInt() and 0xFF) shl 16) or
+            ((data[offset + 2].toInt() and 0xFF) shl 8) or
+            (data[offset + 3].toInt() and 0xFF)
+
     /**
      * A root category list reply (sub-opcode 1): four unused bytes, the count, then each name
      * with its length and a [trailerLen]-byte trailer, which opens with that category's word from

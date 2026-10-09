@@ -86,14 +86,15 @@ class DemoLibrary(
      * Duplicates [from] into the empty slot [to], leaving [from] alone, and names the copy itself
      * as a real Nord does, so
      * [de.thewolfwalkexperience.software.patchpilot.core.PresetEditor.copyProgram]'s contract
-     * holds here too.
+     * holds here too. The source's name is shortened where the number would take the copy's past
+     * [maxNameLength], the limit the rename dialog holds every name to.
      */
-    fun copy(from: SlotAddress, to: SlotAddress): String {
+    fun copy(from: SlotAddress, to: SlotAddress, maxNameLength: Int): String {
         requireOccupied(from)
         requireEmpty(to)
         val source = programs.getValue(from)
         val copyName = generateSequence(2) { it + 1 }
-            .map { "${source.name} $it" }
+            .map { n -> " $n".let { suffix -> source.name.take(maxNameLength - suffix.length).trimEnd() + suffix } }
             .first { candidate -> programs.values.none { it.name == candidate } }
         // The copy keeps the source's category, the way a real instrument's copy does.
         programs[to] = source.copy(name = copyName)

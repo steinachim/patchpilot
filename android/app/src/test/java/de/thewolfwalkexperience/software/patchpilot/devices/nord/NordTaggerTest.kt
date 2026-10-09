@@ -8,6 +8,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.emptyItemRecord
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.itemRecord
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.readUInt32BE
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
 import de.thewolfwalkexperience.software.patchpilot.thrownBy
@@ -44,10 +45,6 @@ class NordTaggerTest {
     )
 
     private val categories = NordCategories.resolve(profile, master)!!
-
-    private fun readUInt32BE(b: ByteArray, off: Int): Int =
-        ((b[off].toInt() and 0xFF) shl 24) or ((b[off + 1].toInt() and 0xFF) shl 16) or
-            ((b[off + 2].toInt() and 0xFF) shl 8) or (b[off + 3].toInt() and 0xFF)
 
     // ---- The wire ----
 

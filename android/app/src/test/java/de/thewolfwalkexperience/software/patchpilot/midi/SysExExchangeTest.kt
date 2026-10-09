@@ -5,9 +5,11 @@ package de.thewolfwalkexperience.software.patchpilot.midi
 
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800SysEx
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -140,15 +142,10 @@ class SysExExchangeTest {
         val transport = FakeMidiTransport { emptyList() }
         val exchange = SysExExchange(transport, backgroundScope, defaultTimeout = 20.milliseconds, retries = 0)
 
-        // Caught rather than assertThrows: a runBlocking inside runTest would deadlock, since
-        // the virtual-time scheduler needs the very thread runBlocking parks.
-        val thrown = try {
+        val thrown = thrownBy<InstrumentException.Timeout> {
             exchange.exchange(Pro800SysEx.requestDump(0), "reading preset A00") { true }
-            null
-        } catch (e: InstrumentException.Timeout) {
-            e
         }
-        assertTrue(thrown!!.message!!.contains("reading preset A00"))
+        assertTrue(thrown.message!!.contains("reading preset A00"))
     }
 
     /**
@@ -169,6 +166,34 @@ class SysExExchangeTest {
         }
         assertEquals(5, Pro800SysEx.addressOf(reply))
         assertEquals(2, transport.sent.size)
+    }
+
+    /**
+     * A reply to an attempt that timed out can still arrive after the retry has started. It is
+     * drained, not taken as the retry's answer: the late reply here carries other data, and
+     * arrives before the retry's own would, which is exactly when taking it would go wrong.
+     */
+    @Test
+    fun `a late reply to a timed-out attempt is not taken as the retry's answer`() = runTest {
+        var attempt = 0
+        lateinit var transport: FakeMidiTransport
+        transport = FakeMidiTransport {
+            attempt++
+            // Attempt 1 is answered 60 ms in, after its 50 ms timeout; the retry 30 ms in.
+            val (after, payload) = if (attempt == 1) 60L to LATE else 30L to FRESH
+            backgroundScope.launch {
+                delay(after)
+                transport.inject(dump(5, payload))
+            }
+            emptyList()
+        }
+        val exchange = SysExExchange(transport, backgroundScope, defaultTimeout = 50.milliseconds, retries = 1)
+
+        val reply = exchange.exchange(Pro800SysEx.requestDump(5), "reading 5") {
+            Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_DUMP
+        }
+
+        assertArrayEquals(FRESH, Pro800SysEx.dumpPayload(reply))
     }
 
     /**
@@ -309,5 +334,10 @@ class SysExExchangeTest {
         )
         assertArrayEquals(messages.last(), transport.sent.last())
         assertTrue("the caller itself must still end up cancelled", job.isCancelled)
+    }
+
+    private companion object {
+        val LATE = byteArrayOf(0x11, 0x11)
+        val FRESH = byteArrayOf(0x22, 0x22)
     }
 }

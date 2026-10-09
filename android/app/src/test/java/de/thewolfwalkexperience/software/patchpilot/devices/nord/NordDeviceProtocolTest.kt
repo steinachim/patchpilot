@@ -4,11 +4,11 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.readUInt32BE
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
 import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -1165,12 +1165,6 @@ class NordDeviceProtocolTest {
             // expected
         }
     }
-
-    private fun readUInt32BE(data: ByteArray, offset: Int): Int =
-        ((data[offset].toInt() and 0xFF) shl 24) or
-            ((data[offset + 1].toInt() and 0xFF) shl 16) or
-            ((data[offset + 2].toInt() and 0xFF) shl 8) or
-            (data[offset + 3].toInt() and 0xFF)
 
     @Test
     fun `getCategoryIndexByName finds Program in a Nord Grand's root category list`() = runTest {

@@ -90,6 +90,9 @@ internal class PresetListings(
      */
     private val listingJobs = SupervisorJob(scope.coroutineContext[Job])
 
+    /** Where listings run: [scope]'s context, under [listingJobs]. */
+    private val listingScope = CoroutineScope(scope.coroutineContext + listingJobs)
+
     /** Which instrument [listingsByScope] describes, so a *different* one still triggers a fresh scan. */
     private var indexedInstrument: String? = null
 
@@ -212,7 +215,7 @@ internal class PresetListings(
         // Start and end of every listing, for a hardware log: an empty listing that never ends
         // shows the same "Connecting…" as a session that is not up yet (HARDWARE_TEST_PLAN X20).
         Log.i(TAG, "Listing $scope started")
-        return this.scope.launch(listingJobs) {
+        return listingScope.launch {
             try {
                 browser().index(scope).collect { update -> updateIndex(scope) { it.plus(update) } }
                 Log.i(TAG, "Listing $scope ended: ${listingsByScope.value[scope]?.slots?.size ?: 0} slots")

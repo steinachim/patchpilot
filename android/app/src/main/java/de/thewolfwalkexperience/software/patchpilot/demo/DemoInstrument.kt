@@ -110,10 +110,18 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
         nameProblem(newName)?.let { throw IllegalArgumentException(it) }
         library.rename(address, newName)
     }
-    override suspend fun move(from: SlotAddress, to: SlotAddress) = library.move(from, to)
-    override suspend fun swap(a: SlotAddress, b: SlotAddress) = library.swap(a, b)
+    override suspend fun move(from: SlotAddress, to: SlotAddress) {
+        if (from != to) library.move(from, to)
+    }
+
+    override suspend fun swap(a: SlotAddress, b: SlotAddress) {
+        if (a != b) library.swap(a, b)
+    }
     override suspend fun delete(address: SlotAddress) = library.delete(address)
-    override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String = library.copy(src, dst)
+    override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String {
+        require(src != dst) { "A preset cannot be copied onto itself." }
+        return library.copy(src, dst, maxNameLength)
+    }
 
     // ---- PresetTagger ----
 
@@ -170,7 +178,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
 
     /** The shape every family's report opens with, and nothing else: there is nothing to read. */
     @Serializable
-    private data class DemoReport(val note: String, val identity: ReportIdentity)
+    private data class DemoReport(val reportVersion: Int = 1, val note: String, val identity: ReportIdentity)
 
     companion object {
         const val DEMO_DESCRIPTOR_ID = "demo"

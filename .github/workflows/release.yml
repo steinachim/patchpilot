@@ -1,6 +1,6 @@
-# Creates the GitHub Release when a vX.Y tag is pushed: builds, tests and lints the signed APK,
-# then publishes it with the matching "## X.Y" section of CHANGELOG.md as the release notes. See
-# docs/RELEASING.md.
+# Creates the GitHub Release when a vX.Y tag is pushed: checks formatting, tests and lints, builds
+# the signed APK, then publishes it and R8's mapping file with the matching "## X.Y" section of
+# CHANGELOG.md as the release notes. See docs/RELEASING.md.
 #
 # Two jobs, so the token that can write to the repository is never on the machine running the
 # build and its third-party plugins: `build` gets a read-only token, `publish` the write one and
@@ -40,6 +40,11 @@ jobs:
         with:
           cache-read-only: true
 
+      # A release is gated on what a pull request is: formatting, the tests and lint, then the
+      # build of both outputs. The key goes on disk only after the steps that do not need it.
+      - name: Check formatting, test and lint
+        run: ./gradlew spotlessCheck testDebugUnitTest lintRelease
+
       - name: Install release signing key
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
@@ -53,24 +58,29 @@ jobs:
           fi
           mkdir -p keystore
           printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 -d > keystore/patchpilot-release.jks
+          # Properties.load reads a backslash as an escape, so each is doubled to arrive as written.
+          esc() { printf '%s' "${1//\\/\\\\}"; }
           {
             echo "RELEASE_STORE_FILE=keystore/patchpilot-release.jks"
-            echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
-            echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
-            echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+            echo "RELEASE_STORE_PASSWORD=$(esc "$RELEASE_STORE_PASSWORD")"
+            echo "RELEASE_KEY_ALIAS=$(esc "$RELEASE_KEY_ALIAS")"
+            echo "RELEASE_KEY_PASSWORD=$(esc "$RELEASE_KEY_PASSWORD")"
           } > local.properties
 
-      # A release is gated on what a pull request is: the tests and lint, beside the build.
-      - name: Test, lint and build the release APK
-        run: ./gradlew testDebugUnitTest lintRelease assembleRelease
+      - name: Build the release APK and bundle
+        run: ./gradlew assembleRelease bundleRelease
 
       # The tag is "vX.Y"; the changelog heading is "## X.Y" with no "v" and no date. Written to a
       # file rather than into a command line, so no character in the notes is ever shell syntax,
       # and beside the APK, so the artifact holds both at its root.
-      - name: Extract changelog section
+      - name: Collect the release notes and the mapping
         run: |
           version="${GITHUB_REF_NAME#v}"
           notes=app/build/outputs/apk/release/release-notes.md
+          # R8's mapping, which only this build can produce: without it a stack trace from this
+          # release cannot be read. Beside the APK, so the artifact keeps its flat layout.
+          cp app/build/outputs/mapping/release/mapping.txt \
+              "app/build/outputs/apk/release/patchpilot-${GITHUB_REF_NAME}-mapping.txt"
           sed -n "/^## ${version}\$/,/^## /p" ../CHANGELOG.md | sed '1d;$d' > "$notes"
           if [ ! -s "$notes" ]; then
             echo "::error::No '## ${version}' section found in CHANGELOG.md"
@@ -82,6 +92,7 @@ jobs:
           name: release
           path: |
             android/app/build/outputs/apk/release/patchpilot-${{ github.ref_name }}.apk
+            android/app/build/outputs/apk/release/patchpilot-${{ github.ref_name }}-mapping.txt
             android/app/build/outputs/apk/release/release-notes.md
           if-no-files-found: error
           retention-days: 1
@@ -105,5 +116,6 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
               "patchpilot-$GITHUB_REF_NAME.apk" \
+              "patchpilot-$GITHUB_REF_NAME-mapping.txt" \
               --title "$GITHUB_REF_NAME" \
               --notes-file release-notes.md

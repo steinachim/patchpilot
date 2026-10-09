@@ -21,6 +21,7 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class NordReport(
+    /** This report's layout, raised when a field changes meaning or goes away; every family's report carries one. */
     val reportVersion: Int = 2,
     val note: String,
     val identity: ReportIdentity,

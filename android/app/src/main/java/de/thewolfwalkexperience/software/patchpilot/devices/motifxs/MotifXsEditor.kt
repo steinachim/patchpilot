@@ -146,7 +146,7 @@ internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEdito
     override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String {
         motif.requireWritable(dst)
         requireSameKind(src, dst)
-        if (src == dst) throw InstrumentException.NotSupported("copy a voice onto itself")
+        require(src != dst) { "A voice cannot be copied onto itself." }
 
         val payload = motif.readVoicePayload(src)
         val name = MotifXsVoice.nameOf(payload)

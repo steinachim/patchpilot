@@ -4,7 +4,6 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import android.util.Log
-import androidx.annotation.VisibleForTesting
 import de.thewolfwalkexperience.software.patchpilot.BuildConfig
 import de.thewolfwalkexperience.software.patchpilot.core.ComposedEditor
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
@@ -26,11 +25,9 @@ internal interface Pro800Store {
 
 /**
  * Every edit on an instrument that has none of them as a command, composed by [ComposedEditor]
- * from reads and writes. Two rules on top of its transaction model:
- *
- *  1. Verify by reading back after every write; the write's own status carries no address and is
- *     not waited for (see [Pro800Instrument.write]).
- *  2. Keep what was overwritten in [undoBuffer] for the session.
+ * from reads and writes. On top of its transaction model, every write is verified by reading it
+ * back: the write's own status carries no address and is not waited for (see
+ * [Pro800Instrument.write]).
  */
 class Pro800Editor internal constructor(
     private val store: Pro800Store,
@@ -39,23 +36,6 @@ class Pro800Editor internal constructor(
 
     /** The name field is sixteen characters wide; the instrument keeps the first sixteen of anything longer. */
     override val maxNameLength = Pro800ProgramFields.NAME_LENGTH
-
-    /**
-     * The bytes that were at an address before this session overwrote them, newest first. If a
-     * rollback itself fails, the only copy of the overwritten preset is here.
-     */
-    private val _undoBuffer = ArrayDeque<UndoEntry>()
-
-    @VisibleForTesting
-    val undoBuffer: List<UndoEntry> get() = _undoBuffer.toList()
-
-    data class UndoEntry(val address: SlotAddress, val displayId: String, val blob: ByteArray) {
-        // Content equality for the array member.
-        override fun equals(other: Any?) =
-            other is UndoEntry && address == other.address && blob.contentEquals(other.blob)
-
-        override fun hashCode() = 31 * address.hashCode() + blob.contentHashCode()
-    }
 
     // ---- ComposedEditor ----
 
@@ -77,13 +57,6 @@ class Pro800Editor internal constructor(
 
     override suspend fun storeName(address: SlotAddress, preset: Pro800Program, name: String) =
         writeRecord(address, preset.withName(name), expectName = name)
-
-    override fun overwriting(address: SlotAddress, preset: Pro800Program) {
-        _undoBuffer.addFirst(
-            UndoEntry(address, displayIdOf(address), Pro800ProgramCodec.encode(preset.dense)),
-        )
-        while (_undoBuffer.size > UNDO_DEPTH) _undoBuffer.removeLast()
-    }
 
     // ---- Write plumbing ----
 
@@ -153,9 +126,4 @@ class Pro800Editor internal constructor(
 
     /** The pause the reference implementation leaves between writes, taken here before reading back. */
     private suspend fun settle() = delay(Pro800SysEx.WRITE_SETTLE_MS)
-
-    private companion object {
-        /** A few kilobytes at ~200 bytes per preset. */
-        const val UNDO_DEPTH = 32
-    }
 }

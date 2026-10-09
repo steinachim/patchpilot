@@ -4,41 +4,11 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import android.util.Log
-import de.thewolfwalkexperience.software.patchpilot.core.AddressFormat
-import de.thewolfwalkexperience.software.patchpilot.core.BankSpec
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
-import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
-import de.thewolfwalkexperience.software.patchpilot.core.EditOp
-import de.thewolfwalkexperience.software.patchpilot.core.FactoryNameCheck
-import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
-import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
-import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
-import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
-import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
-import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
-import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
-import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
-import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
-import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
-import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
-import de.thewolfwalkexperience.software.patchpilot.core.indexWalk
-import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "MotifXsSelection"

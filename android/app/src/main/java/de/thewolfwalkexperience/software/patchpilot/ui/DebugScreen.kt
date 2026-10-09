@@ -22,13 +22,16 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -69,7 +72,9 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
     val run by runner.state.collectAsStateWithLifecycle()
     val pending by runner.question.collectAsStateWithLifecycle()
     val runError by runner.error.collectAsStateWithLifecycle()
-    var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
+    // Which report's filename prompt is open, rather than the prompt itself: its callback belongs
+    // to the composition that built it, so a rotation rebuilds it from the held report instead.
+    var shareOpen by rememberSaveable { mutableStateOf<String?>(null) }
     // The device report, read and held in the ViewModel like the regression run, so neither the
     // read nor the result is lost to a rotation - see DeviceReportRunner.
     val reportRunner = viewModel.deviceReportRunner
@@ -217,18 +222,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                 report != null -> DeviceReportReadyView(
                     sizeBytes = report.json.toByteArray().size,
                     failures = report.failures,
-                    onShare = {
-                        pendingShare = PendingShare(
-                            title = reportShareTitle,
-                            description = report.description,
-                            suffix = jsonSuffix,
-                            initialStem = report.stem,
-                            // From the held report: the read is the slow part this view keeps.
-                            onConfirm = { stem ->
-                                share("$stem$jsonSuffix", report.json, JSON_MIME_TYPE, reportShareTitle)
-                            },
-                        )
-                    },
+                    onShare = { shareOpen = SHARE_DEVICE_REPORT },
                     onSave = { saveJsonLauncher.launch(report.stem + jsonSuffix) },
                     onBackToMenu = ::backToMenu,
                 )
@@ -241,17 +235,7 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
 
                 finished != null -> RegressionReportView(
                     report = finished.report,
-                    onShare = {
-                        pendingShare = PendingShare(
-                            title = regressionShareTitle,
-                            description = finished.report.summary,
-                            suffix = txtSuffix,
-                            initialStem = "${finished.stem}$REGRESSION_STEM_SUFFIX",
-                            onConfirm = { stem ->
-                                share("$stem$txtSuffix", finished.report.asText(), TEXT_MIME_TYPE, regressionShareTitle)
-                            },
-                        )
-                    },
+                    onShare = { shareOpen = SHARE_REGRESSION },
                     onSave = { saveTextLauncher.launch("${finished.stem}$REGRESSION_STEM_SUFFIX$txtSuffix") },
                     onBackToMenu = ::backToMenu,
                 )
@@ -315,8 +299,9 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                                 )
                             } else {
                                 Text(
-                                    stringResource(
-                                        R.string.debug_verify_mismatches,
+                                    pluralStringResource(
+                                        R.plurals.debug_verify_mismatches,
+                                        mismatches.size,
                                         verifyBank.orEmpty(),
                                         mismatches.size,
                                     ),
@@ -380,10 +365,43 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
         )
     }
 
-    pendingShare?.let { share ->
-        ShareFilenameDialog(share, onDismiss = { pendingShare = null })
+    if (shareOpen != null) {
+        // From the held report: the read is the slow part this view keeps. Gone with the report
+        // (back to the menu, a new run), the prompt closes rather than reopening later.
+        val heldReport = (reportState as? RunState.Done)?.result
+        val finishedRun = (run as? RunState.Done)?.result
+        val pending = when (shareOpen) {
+            SHARE_DEVICE_REPORT -> heldReport?.let { report ->
+                PendingShare(
+                    title = reportShareTitle,
+                    description = report.description,
+                    suffix = jsonSuffix,
+                    initialStem = report.stem,
+                    onConfirm = { stem -> share("$stem$jsonSuffix", report.json, JSON_MIME_TYPE, reportShareTitle) },
+                )
+            }
+
+            SHARE_REGRESSION -> finishedRun?.let { finished ->
+                PendingShare(
+                    title = regressionShareTitle,
+                    description = finished.report.summary,
+                    suffix = txtSuffix,
+                    initialStem = "${finished.stem}$REGRESSION_STEM_SUFFIX",
+                    onConfirm = { stem ->
+                        share("$stem$txtSuffix", finished.report.asText(), TEXT_MIME_TYPE, regressionShareTitle)
+                    },
+                )
+            }
+
+            else -> null
+        }
+        if (pending == null) SideEffect { shareOpen = null } else ShareFilenameDialog(pending) { shareOpen = null }
     }
 }
+
+/** What [DebugScreen]'s saved `shareOpen` names: which held report the filename prompt is for. */
+private const val SHARE_DEVICE_REPORT = "deviceReport"
+private const val SHARE_REGRESSION = "regression"
 
 /** A title, an indeterminate bar and the current step - what either report looks like mid-read. */
 @Composable

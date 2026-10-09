@@ -4,22 +4,9 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.util.Log
-import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressFormat
-import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
-import de.thewolfwalkexperience.software.patchpilot.core.printableAscii
-import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareAdvisory
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice.CategorySpace
-import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
-import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferException
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
 
 private const val TAG = "NordStorageCalibration"
 

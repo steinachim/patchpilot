@@ -622,7 +622,7 @@ class RegressionTesterTest {
 
         assertEquals(Status.PASS, report.of("Offers: Loads presets").status)
         assertEquals(Status.PASS, report.of("Offers: Edits presets").status)
-        // This profile mirrors a Pro-800, which has no device report of its own.
+        // The fixture declares no device report.
         assertEquals(Status.SKIPPED, report.of("Offers: Describes itself").status)
         assertNotEquals("", report.summary)
         assertTrue(report.asText(), report.asText().contains(report.summary))

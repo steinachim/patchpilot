@@ -1,6 +1,6 @@
 # Hardware test plan
 
-Manual checks on a real phone against real instruments, for what the JVM tests cannot reach: permission dialogs, cable pulls, rotation, backgrounding, process death and the instruments' own timing. Run the debug menu's regression test first; it already covers loading, reading, every edit and the device report against whatever is connected.
+Manual checks on a real phone against real instruments, for what the JVM tests cannot reach: permission dialogs, cable pulls, rotation, backgrounding, process death and the instruments' own timing. Run the debug menu's regression test first; it already covers loading, reading, every edit and the device report against whatever is connected. Categories and favorites it only lists, so their cases below are the only check they get.
 
 **Result:** ✓ passed, ✗ failed, ◐ passed with an open item (named in the cell), – not run. **Last run:** the date and the unit of the most recent run.
 
@@ -31,16 +31,16 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | X4 | Plugged in while backgrounded | Home, plug in, return; also from "No supported instrument was found" in the foreground | Connects with no Retry tap | 2026-09-20, Nord Grand | ✓ |
 | X5 | Rotation mid regression run | Start the regression test, rotate | The run continues; its progress shows in the new orientation; the result is kept | 2026-09-20, Nord Grand | ✓ |
 | X6 | Rotation mid device report | Start a device report, rotate | As X5 | 2026-09-20, Nord Grand | ✓ |
-| X7 | Rotation mid listing | Open the presets, rotate mid-listing | The listing continues where it was | 2026-09-20 | ✓ |
-| X8 | Home mid transfer | Start a listing or the regression run, Home for several seconds, return | A USB instrument's listing stops on Home and restarts on return; a MIDI instrument's (Pro-800, Axe-Fx III, Subsequent 37) keeps running. A report or regression run continues, and the return waits for it. No screen is left waiting | 2026-09-20, Nord Grand | ✓ |
+| X7 | Rotation mid listing | Open the presets, rotate mid-listing | The listing continues where it was | 2026-09-20, unit not recorded | ✓ |
+| X8 | Home mid transfer | Start a listing or the regression run, Home for several seconds, return | A USB instrument's listing stops on Home and restarts on return; a MIDI instrument's (Pro-800, Axe-Fx III, Subsequent 37) keeps running. A report or regression run continues, and the return waits for it. No screen is left waiting | 2026-09-20, Nord Grand | ◐ open: the MIDI half (Pro-800, Axe-Fx III, Subsequent 37) not run |
 | X9 | Force-stop mid report, relaunch | Start a report, force-stop mid-read, relaunch | The running report is gone; the relaunch connects (logcat shows the queued bytes drained). A dead endpoint ends in "unplug the USB cable, plug it back in and try again" | 2026-09-20, Nord Grand | ✓ |
 | X10 | Soft kill with a finished report held | Finish a report, soft kill before sharing it, relaunch from Recents | The report is restored; Share and Save work on it | 2026-09-20, Nord Grand | ✓ |
 | X11 | Cable pulled mid listing | Start a listing, unplug | The detach is reported; a replug reconnects with nothing left of the aborted listing | – | – not run on its own; X20, which included it, failed |
 | X12 | Cable pulled mid regression write | Unplug during a copy, rename, move or swap step | "Instrument disconnected" at once, and the run is gone; after reconnecting, a second regression run finds every slot consistent | – | – not run on its own |
 | X13 | Unplug and replug at once | Unplug and replug within a second, idle session | Recovers without a restart or a second permission request | – | – not run on its own; X20, which covers it, failed |
 | X14 | Contents changed while unplugged | Browse, unplug; change the contents on the panel (or plug in another unit of the same model); replug without restarting the app | The listing shows the current contents, not the one from before the unplug | 2026-09-20, Nord Grand | ✓ |
-| X15 | Unrelated USB device alongside | Plug a USB drive or keyboard in through a hub next to the instrument | The instrument is found and preferred; the other device is at most a picker row | 2026-09-20 | ✓ |
-| X16 | Only an unrecognised device | Plug in something not in the catalog | "No supported instrument was found" or the picker; no crash | 2026-09-20 | ✓ |
+| X15 | Unrelated USB device alongside | Plug a USB drive or keyboard in through a hub next to the instrument | The instrument is found and preferred; the other device is at most a picker row | 2026-09-20, unit not recorded | ✓ |
+| X16 | Only an unrecognised device | Plug in something not in the catalog | "No supported instrument was found" or the picker; no crash | 2026-09-20, unit not recorded | ✓ |
 | X17 | Bus power through a passive OTG adapter | Use the adapter an end user would have, not a powered hub | No dropouts | – | – |
 | X18 | Screen lock mid transfer | Start a listing or regression run, lock, wait, unlock | As X8; a Motif XS leaves "dump in progress" within a second of the lock | 2026-09-20, Nord Grand | ✓ |
 | X19 | Unplug on the debug screen | Idle on the debug screen, unplug; separately, Home and return with the cable in | Leaves for "Instrument disconnected"; after the return the buttons are enabled again | 2026-09-20, Nord Grand | ✓ |
@@ -78,9 +78,9 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | # | Case | Steps | Pass when | Last run | Result |
 |---|---|---|---|---|---|
 | M1 | MIDI routing not USB | Utility → [F5] Control → [SF2] MIDI → MIDI In/Out away from USB, then connect | The steps to fix it are shown, not a timeout | 2026-09-20, Motif XS | ✓ |
-| M2 | Memory pressure during a full listing | Induce pressure during the 416-voice listing | A damaged dump is retried; the list is complete | 2026-09-20 | – (blocked: pressure cannot be induced with the app in the foreground) |
-| M3 | Memory pressure during a drum kit read | As M2, for one drum kit | Read or retried; never a truncated kit | 2026-09-20 | – (blocked, as M2) |
-| M4 | Listing interrupted early, mid, late | At under 10 %, about 50 % and over 90 %: rotate, Home and return, lock, unplug | A listing that did not finish without failures is never cached; Home and lock end "dump in progress" at once | 2026-09-20, Motif XS | ✓ |
+| M2 | Memory pressure during a full listing | Induce pressure during the 416-voice listing | A damaged dump is retried; the list is complete | – | – (tried 2026-09-20; blocked: pressure cannot be induced with the app in the foreground) |
+| M3 | Memory pressure during a drum kit read | As M2, for one drum kit | Read or retried; never a truncated kit | – | – (tried 2026-09-20; blocked, as M2) |
+| M4 | Listing interrupted early, mid, late | At under 10 %, about 50 % and over 90 %: rotate, Home and return, lock, unplug | A listing that did not finish is never cached; Home and lock end "dump in progress" at once | 2026-09-20, Motif XS | ✓ |
 | M5 | Killed mid write | Force-stop while the panel shows "receiving midi bulk data" (a drum kit rename gives the widest window) | Record whether the instrument recovers or needs a power cycle | 2026-09-20, Motif XS | ✓ recovered on its own, no power cycle |
 | M6 | Session closed mid read, reconnect at once | Leave or reconnect during a read, reconnect at once | The reconnect claims the interface | 2026-09-20, Motif XS | ✓ |
 | M7 | Favorites | Set and clear a favorite several times | Each shows within 3 s; no hang. Never send a malformed favorites write: it can hang the instrument's MIDI until a power cycle | 2026-09-20, Motif XS | ✓ |

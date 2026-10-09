@@ -54,6 +54,21 @@ jobs:
           # and a pull request's later runs reuse its first's.
           cache-read-only: false
 
+      # ktlint, with the settings in android/build.gradle.kts. `./gradlew spotlessApply` fixes
+      # what it reports.
+      - name: Formatting
+        run: ./gradlew spotlessCheck
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest
+
+      # Errors fail the run; warnings do not, so a newer dependency release or the yearly
+      # target-API bump never breaks a build on its own.
+      - name: Lint
+        run: ./gradlew lintRelease
+
+      # Only now, after the steps that run third-party code it does not need (ktlint, the tests
+      # and their Robolectric SDK jars, lint): the key is on disk for the signing build alone.
       - name: Install release signing key
         if: github.event_name == 'push'
         env:
@@ -68,30 +83,19 @@ jobs:
           fi
           mkdir -p keystore
           printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 -d > keystore/patchpilot-release.jks
+          # Properties.load reads a backslash as an escape, so each is doubled to arrive as written.
+          esc() { printf '%s' "${1//\\/\\\\}"; }
           {
             echo "RELEASE_STORE_FILE=keystore/patchpilot-release.jks"
-            echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
-            echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
-            echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+            echo "RELEASE_STORE_PASSWORD=$(esc "$RELEASE_STORE_PASSWORD")"
+            echo "RELEASE_KEY_ALIAS=$(esc "$RELEASE_KEY_ALIAS")"
+            echo "RELEASE_KEY_PASSWORD=$(esc "$RELEASE_KEY_PASSWORD")"
           } > local.properties
-
-      # ktlint, with the settings in android/build.gradle.kts. `./gradlew spotlessApply` fixes
-      # what it reports.
-      - name: Formatting
-        run: ./gradlew spotlessCheck
-
-      - name: Unit tests
-        run: ./gradlew testDebugUnitTest
 
       # Release rather than debug on PRs too: R8 only runs for release builds, and a ProGuard
       # rule that is missing should fail the PR, not the release.
       - name: Build release APK and bundle
         run: ./gradlew assembleRelease bundleRelease
-
-      # Errors fail the run; warnings do not, so a newer dependency release or the yearly
-      # target-API bump never breaks a build on its own.
-      - name: Lint
-        run: ./gradlew lintRelease
 
       - name: Upload test and lint reports
         if: failure()

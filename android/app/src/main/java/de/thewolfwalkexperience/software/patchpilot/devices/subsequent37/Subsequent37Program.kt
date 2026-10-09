@@ -3,6 +3,8 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
 
+import de.thewolfwalkexperience.software.patchpilot.core.printableAscii
+
 /**
  * One stored program: the 488-byte payload a single-program message or a bulk-dump block carries.
  *
@@ -32,15 +34,11 @@ class Subsequent37Program(payload: ByteArray) {
     /**
      * The name as stored, trailing spaces removed. A run of spaces inside it is kept: the panel
      * shows the field as two lines of 12, and a name that fills the first line with spaces
-     * continues on the second.
+     * continues on the second. A byte outside printable ASCII is dropped, as every family drops
+     * one ([printableAscii]).
      */
     val name: String
-        get() = String(
-            CharArray(NAME_LENGTH) { i ->
-                val code = bytes[i].toInt() and 0xFF
-                if (code in PRINTABLE) code.toChar() else '?'
-            },
-        ).trimEnd()
+        get() = printableAscii(String(bytes, 0, NAME_LENGTH, Charsets.ISO_8859_1)).trimEnd()
 
     /**
      * Empty, as this app counts it: named `Init Preset`, which is what both a never-written slot

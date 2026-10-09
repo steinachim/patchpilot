@@ -199,7 +199,7 @@ class ConnectionCoordinatorTest {
     }
 
     @Test
-    fun `a failed open closes nothing it did not open and reports the failure`() = runSession { session ->
+    fun `a failed open reports the failure in the words it failed with`() = runSession { session ->
         val coordinator = coordinator(
             session,
             FakeUsbHost(),

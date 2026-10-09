@@ -329,7 +329,7 @@ class InstrumentFacetTest {
 
     /** Every report opens the same way, whatever the family reads after it. */
     @Test
-    fun `every family's report opens with a note and an identity`() = runTest {
+    fun `every family's report opens with a version, a note and an identity`() = runTest {
         val pro800 = FakePro800()
         val reporters = listOf(
             "demo" to DemoInstrument(),
@@ -341,6 +341,7 @@ class InstrumentFacetTest {
         for ((name, instrument) in reporters) {
             instrument.connect()
             val json = Json.parseToJsonElement(instrument.report!!.buildReport().json).jsonObject
+            assertTrue("$name: no reportVersion", json["reportVersion"]?.jsonPrimitive?.content?.toIntOrNull() != null)
             assertTrue("$name: no note", json["note"]?.jsonPrimitive?.content?.isNotBlank() == true)
             val identity = json["identity"]?.jsonObject
             assertEquals(

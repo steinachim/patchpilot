@@ -27,6 +27,8 @@ val ktlintSettings = mapOf(
     "ktlint_standard_class-signature" to "disabled",
     // Composables are named like types.
     "ktlint_function_naming_ignore_when_annotated_with" to "Composable",
+    // On: this code style leaves it off, and nothing else in the build catches an unused import.
+    "ktlint_standard_no-unused-imports" to "enabled",
 )
 spotless {
     kotlin {

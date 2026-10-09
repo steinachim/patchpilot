@@ -29,7 +29,7 @@ A Gradle bump also updates `distributionSha256Sum` in `android/gradle/wrapper/gr
 
 ## 3. Tag and publish on GitHub
 
-Fast-forward `main` to the release commit and push both branch and tag. The push to `main` runs the signed CI build (`android.yml`); the tag push runs `release.yml`, which tests, lints and builds its own signed APK and then creates the GitHub Release, using the `## <version>` section of `CHANGELOG.md` as the release notes. The build job has a read-only token; only the publishing job, which never runs the build, can write to the repository.
+Fast-forward `main` to the release commit and push both branch and tag. The push to `main` runs the signed CI build (`android.yml`); the tag push runs `release.yml`, which checks formatting, tests, lints and builds its own signed APK and bundle, then creates the GitHub Release with the APK and R8's mapping file (`patchpilot-v<version>-mapping.txt`, which only that build produces and without which a stack trace from it cannot be read), using the `## <version>` section of `CHANGELOG.md` as the release notes. The build job has a read-only token; only the publishing job, which never runs the build, can write to the repository.
 
 ```
 git checkout main && git merge --ff-only dev
@@ -58,5 +58,7 @@ for k in RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
   sed -n "s/^$k=//p" local.properties | gh secret set "$k"
 done
 ```
+
+The secrets hold each value as it is. `local.properties` needs a backslash written twice, since `Properties.load` reads one as an escape, so for a value with a backslash in it the snippet above copies the doubled form: set that secret by hand. Both workflows double the backslashes again when they write `local.properties`, and write the key only after formatting, the tests and lint have run.
 
 A push to `main` without these secrets fails at the signing step rather than producing an unsigned APK. Pull-request and manual builds never use the key.

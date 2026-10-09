@@ -4,8 +4,10 @@
 package de.thewolfwalkexperience.software.patchpilot.demo
 
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
+import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -54,6 +56,32 @@ class DemoInstrumentTest {
         assertTrue("got $failure", failure is InstrumentException.SlotStateChanged)
         assertEquals(before, demo.refresh(first).name)
         assertNull(demo.refresh(empty).name)
+    }
+
+    @Test
+    fun `the same slot twice is a no-op for a move or swap, and refused for a copy`() = runTest {
+        val demo = DemoInstrument()
+        val name = demo.refresh(first).name
+        demo.move(first, first)
+        demo.swap(first, first)
+        assertTrue(refusal { demo.copyProgram(first, first) } is IllegalArgumentException)
+        assertEquals(name, demo.refresh(first).name)
+    }
+
+    /** A copy is named as the instrument names it, and still within the limit the rename dialog enforces. */
+    @Test
+    fun `a copy's name fits the name limit`() = runTest {
+        val demo = DemoInstrument()
+        val longest = demo.index().toList().filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }
+            .filterNot { it.isEmpty }
+            .maxBy { it.name!!.length }
+        assertTrue("needs a name the number would push over", longest.name!!.length > demo.maxNameLength!! - 2)
+
+        val copyName = demo.copyProgram(longest.address, empty)
+
+        assertTrue(copyName, copyName.length <= demo.maxNameLength!!)
+        assertTrue(copyName, copyName.endsWith(" 2"))
+        assertEquals(null, demo.nameProblem(copyName))
     }
 
     // ---- Categories, shaped like a Nord's ----

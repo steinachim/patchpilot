@@ -38,9 +38,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -105,9 +106,10 @@ fun ProgramsScreen(
     val ops = viewModel.programs
 
     // Whether a row has room for its category badges beside the preset id: Material's medium
-    // width breakpoint, a phone in landscape or a tablet. From the configuration rather than
-    // measured per row, so every row agrees.
-    val badgesFit = LocalConfiguration.current.screenWidthDp >= BADGE_MIN_WIDTH_DP
+    // width breakpoint, a phone in landscape or a tablet. From the window rather than measured
+    // per row, so every row agrees; the window rather than the screen, so split screen counts.
+    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val badgesFit = windowWidth >= BADGE_MIN_WIDTH_DP.dp
 
     val resources = LocalResources.current
     // Saveable, so a rotation keeps what the user filtered by and chose to see.

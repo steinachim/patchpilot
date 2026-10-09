@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,8 +46,8 @@ internal class ProgramListDragState(
      * row: the dragged row's layout slot scrolls off the viewport after about one screen height of
      * auto-scroll, since `LazyColumn` culls on layout position rather than on the translation.
      */
-    private var pointerY by mutableStateOf(0f)
-    private var grabOffsetWithinRowPx by mutableStateOf(0f)
+    private var pointerY by mutableFloatStateOf(0f)
+    private var grabOffsetWithinRowPx by mutableFloatStateOf(0f)
 
     /** Where to draw the floating "ghost" row that stands in for the one being dragged. */
     val ghostOffsetY: Int get() = (pointerY - grabOffsetWithinRowPx).roundToInt()

@@ -83,9 +83,6 @@ abstract class ComposedEditor<P : Any> : PresetEditor {
     /** Stores [preset], as [peek] read it from [address], under [name], and proves it. */
     protected abstract suspend fun storeName(address: SlotAddress, preset: P, name: String)
 
-    /** Called with each occupied preset, as [peek] read it, before an edit overwrites or empties its slot. */
-    protected open fun overwriting(address: SlotAddress, preset: P) = Unit
-
     // ---- The edits ----
 
     override suspend fun rename(address: SlotAddress, newName: String) {
@@ -99,7 +96,7 @@ abstract class ComposedEditor<P : Any> : PresetEditor {
 
     /** Writes the source's preset to an empty slot and returns its name there. */
     override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String {
-        if (src == dst) throw InstrumentException.NotSupported("copy a preset onto itself")
+        require(src != dst) { "A preset cannot be copied onto itself." }
         return operation(emptyMap()) {
             val source = requireOccupied(src)
             requireEmpty(dst)
@@ -114,7 +111,6 @@ abstract class ComposedEditor<P : Any> : PresetEditor {
             val source = requireOccupied(from)
             requireEmpty(to)
             val preset = load(from, source)
-            overwriting(from, source)
             withContext(NonCancellable) {
                 writeVerified(to, preset)
                 try {
@@ -141,8 +137,6 @@ abstract class ComposedEditor<P : Any> : PresetEditor {
             if (isEmpty(first) && isEmpty(second)) return@operation
             val presetA = load(a, first)
             val presetB = load(b, second)
-            if (!isEmpty(first)) overwriting(a, first)
-            if (!isEmpty(second)) overwriting(b, second)
             withContext(NonCancellable) {
                 try {
                     writeVerified(b, presetA)
@@ -164,7 +158,6 @@ abstract class ComposedEditor<P : Any> : PresetEditor {
             val current = peek(address)
             // Already empty; deleting it again is not an error.
             if (isEmpty(current)) return@operation
-            overwriting(address, current)
             erase(address)
         }
     }

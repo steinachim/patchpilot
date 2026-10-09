@@ -110,7 +110,7 @@ class Subsequent37EditorTest {
         val empty = Subsequent37Fixtures.emptyPrograms(2)
         thrownBy<InstrumentException.SlotStateChanged> { editor.copyProgram(address(2), address(3)) }
         thrownBy<InstrumentException.SlotStateChanged> { editor.copyProgram(address(empty[0]), address(empty[1])) }
-        thrownBy<InstrumentException.NotSupported> { editor.copyProgram(address(2), address(2)) }
+        thrownBy<IllegalArgumentException> { editor.copyProgram(address(2), address(2)) }
         assertTrue(fake.writes.isEmpty())
     }
 

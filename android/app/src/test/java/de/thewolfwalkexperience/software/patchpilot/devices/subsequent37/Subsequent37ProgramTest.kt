@@ -27,6 +27,15 @@ class Subsequent37ProgramTest {
         assertEquals(Subsequent37Categories.UNSET, Subsequent37Program(Subsequent37Fixtures.BLANK).category)
     }
 
+    /** A byte outside printable ASCII is dropped, as every family drops one, rather than shown as `?`. */
+    @Test
+    fun `a stored name's unprintable bytes are dropped`() {
+        val payload = Subsequent37Fixtures.unpackBlock(0)
+        payload[3] = 0x07 // inside "Preset 000"
+        payload[9] = 0x00
+        assertEquals("Preet 00", Subsequent37Program(payload).name)
+    }
+
     /** The vendor editor's rename appended `Test` after the first 12-character line and changed nothing else. */
     @Test
     fun `a rename is the editor's own, byte for byte`() {

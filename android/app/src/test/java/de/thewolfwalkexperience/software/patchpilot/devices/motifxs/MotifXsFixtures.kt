@@ -4,6 +4,8 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
+import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 
 /**
  * Recorded bulk-dump byte sequences: what the instrument actually sends.
@@ -87,3 +89,6 @@ object MotifXsFixtures {
         return text.hexToBytes()
     }
 }
+
+/** Every row a listing emitted, in order. */
+internal fun List<IndexUpdate>.slots(): List<PresetSlot> = filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }

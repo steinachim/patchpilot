@@ -80,26 +80,45 @@ class CachingBrowserTest {
     }
 
     /**
-     * A run with an unreadable address is not cached.
-     *
-     * A transient failure is retried on the next reconnect. Caching a run that contained one
-     * would freeze it for the session - and a missing address is indistinguishable from an empty
-     * slot, since `PresetSlot.isEmpty` is `name == null`.
+     * A run with an unreadable address is cached with that address, and a replay reads only it
+     * again: one slot that will not read would otherwise cost every reconnect the whole listing.
      */
     @Test
-    fun `a run with a failed address is not cached`() = runTest {
+    fun `a run with a failed address is cached, and a replay re-reads only that address`() = runTest {
         val cache = PresetIndexCache()
         val delegate = CountingBrowser(
             slots = listOf(slot(0, 0, "One")),
             failures = listOf(SlotAddress(0, 1)),
         )
         val browser = CachingBrowser(delegate, cache, key)
-
         browser.index().toList()
-        assertFalse(cache.holds(key))
+        assertEquals(setOf(SlotAddress(0, 1)), cache.unreadable(key))
 
+        val replay = browser.index().toList()
+
+        assertEquals("the listing is not read again", 1, delegate.indexRuns)
+        assertEquals(listOf(SlotAddress(0, 1)), delegate.refreshes)
+        assertEquals(
+            listOf("One", "refreshed"),
+            replay.filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }.map { it.name },
+        )
+        assertEquals("read now, so no longer unknown", emptySet<SlotAddress>(), cache.unreadable(key))
+    }
+
+    /** Never left out: a missing row would read as an empty slot, free to copy into. */
+    @Test
+    fun `an address still unreadable on a replay is reported as such`() = runTest {
+        val cache = PresetIndexCache()
+        val delegate = CountingBrowser(slots = listOf(slot(0, 0, "One")), failures = listOf(SlotAddress(0, 1)))
+            .apply { refreshResult = { error("timed out") } }
+        val browser = CachingBrowser(delegate, cache, key)
         browser.index().toList()
-        assertEquals("it must be retried, not served from a partial cache", 2, delegate.indexRuns)
+
+        val replay = browser.index().toList()
+
+        assertEquals(listOf(SlotAddress(0, 1)), replay.filterIsInstance<IndexUpdate.Failed>().map { it.address })
+        assertTrue(replay.last() is IndexUpdate.Complete)
+        assertEquals(setOf(SlotAddress(0, 1)), cache.unreadable(key))
     }
 
     /** An index that never reached Complete is a partial one, whatever it emitted. */

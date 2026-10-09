@@ -187,13 +187,20 @@ class NordInstrument(
         }
     }
 
-    override suspend fun move(from: SlotAddress, to: SlotAddress) =
+    override suspend fun move(from: SlotAddress, to: SlotAddress) {
+        if (from == to) return
         exclusive("move a preset", "moving a preset") {
             intoEmpty(to) { device.moveProgram(from.bank, from.slot, to.bank, to.slot) }
         }
+    }
 
     /** Both slots must hold a preset; an empty one answers status 1, which does not say which. */
-    override suspend fun swap(a: SlotAddress, b: SlotAddress) = exclusive("swap two presets", "swapping two presets") {
+    override suspend fun swap(a: SlotAddress, b: SlotAddress) {
+        if (a == b) return
+        exclusive("swap two presets", "swapping two presets") { swapPrograms(a, b) }
+    }
+
+    private suspend fun swapPrograms(a: SlotAddress, b: SlotAddress) {
         try {
             device.swapPrograms(a.bank, a.slot, b.bank, b.slot)
         } catch (e: NordStatusException) {
@@ -210,11 +217,17 @@ class NordInstrument(
     override suspend fun delete(address: SlotAddress) =
         exclusive("delete a preset", "deleting a preset") { device.deleteProgram(address.bank, address.slot) }
 
-    /** Sub-opcode 22/23: the instrument duplicates the record and names the copy itself. */
-    override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String =
-        exclusive("copy a preset", "copying a preset") {
+    /**
+     * Sub-opcode 22/23: the instrument duplicates the record and names the copy itself. The same
+     * slot twice is checked outside [exclusive], whose failure mapping would read the refusal as
+     * an unparseable reply.
+     */
+    override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String {
+        require(src != dst) { "A preset cannot be copied onto itself." }
+        return exclusive("copy a preset", "copying a preset") {
             intoEmpty(dst) { device.copyProgram(src.bank, src.slot, dst.bank, dst.slot) }
         }
+    }
 
     /**
      * Status 4 ("file exists") from [block] as [InstrumentException.SlotStateChanged]: the app

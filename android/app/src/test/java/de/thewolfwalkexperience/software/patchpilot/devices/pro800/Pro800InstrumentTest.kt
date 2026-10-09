@@ -535,7 +535,7 @@ class Pro800InstrumentTest {
         val (pro800, _) = instrument(backgroundScope)
         // Read-only, and the source of the test fixtures (Pro800Reporter).
         assertTrue(pro800.report != null)
-        // With read-back verification and an undo buffer.
+        // With read-back verification.
         assertTrue(pro800.editor != null)
         // The browser is built on it.
         assertTrue(pro800.transfer != null)

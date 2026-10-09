@@ -6,10 +6,12 @@
 - The Fractal Audio Axe-Fx III is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted. Every operation was verified on a Mark I, but the app itself has not yet been run on one. A Mark II is recognized and lists all 1,024 presets, but has not been tested yet.
 - The Moog Subsequent 37 is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted, and their categories shown and set. Reading its preset list takes about 2½ minutes, the instrument's own transfer time. Every operation was verified on a unit, but the app itself has not yet been run on one.
 - An instrument can show a notice when it connects, with a “Don't show this again” option; Settings → “Show Hidden Messages Again” brings hidden notices back.
+- Each GitHub release also carries the R8 mapping file for its APK, so a stack trace from that build can be read.
 
 ### Changed
 - The rename dialog says why a name can't be stored (characters outside plain ASCII, or a name the instrument reserves) and only enables Rename for a name that can, before anything is sent.
 - On a Nord, the preset list updates faster after an edit: only the changed slots are read back, not the whole program list.
+- The messages after a rename or delete read like the others: "Renamed A:1:1 to "Pad"." and "Deleted A:1:1."
 
 ### Fixed
 - Unplugging an instrument that had failed to open no longer interrupts a session started afterwards, such as demo mode.
@@ -69,6 +71,12 @@
 - Refresh is off while picking a "Copy to…" or "Move to…" destination, and no slot can be picked while the list is still loading.
 - On a Yamaha Motif XS, "Copy to…", "Move to…" and dragging offer only slots of the same kind (drum kit or normal voice), and the refusal names the bank instead of calling an empty slot a drum kit.
 - On a Yamaha Motif XS, favoriting a user voice deleted on the panel since the list was read asks for a refresh instead of marking an empty slot.
+- When a preset slot can't be read, returning to the app re-reads only that slot instead of the whole preset list (about 1½ minutes on a Yamaha Motif XS).
+- A Moog Subsequent 37 preset name with unprintable characters is shown without them, as on the other instruments, instead of with question marks.
+- A Moog Subsequent 37 error names a preset as the list shows it (B03/P06), not by its 0-based program number.
+- Rotating the phone with the connect screen's "Share device details" filename prompt open keeps the prompt and the name typed so far.
+- In split screen, whether category badges fit is judged by the window's width, not the screen's.
+- In demo mode, a copy's name stays within the 16-character name limit.
 
 ## 1.1
 

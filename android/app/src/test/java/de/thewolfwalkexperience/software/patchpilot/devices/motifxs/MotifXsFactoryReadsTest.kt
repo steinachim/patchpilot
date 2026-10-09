@@ -3,9 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
-import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
-import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
@@ -121,9 +119,6 @@ class MotifXsFactoryReadsTest {
             factoryVoices = factoryVoices,
         )
     }
-
-    private fun List<IndexUpdate>.slots(): List<PresetSlot> =
-        filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }
 
     @Test
     fun `the factory listing names and badges every row without a single dump`() = runTest {

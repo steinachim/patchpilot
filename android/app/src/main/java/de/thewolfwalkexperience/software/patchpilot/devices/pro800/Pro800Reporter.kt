@@ -136,6 +136,8 @@ private data class Pro800SlotReport(
 
 @Serializable
 data class Pro800Report(
+    /** This report's layout, raised when a field changes meaning or goes away; every family's report carries one. */
+    val reportVersion: Int = 1,
     val note: String,
     val identity: ReportIdentity,
     val deviceNameReplyHex: String,

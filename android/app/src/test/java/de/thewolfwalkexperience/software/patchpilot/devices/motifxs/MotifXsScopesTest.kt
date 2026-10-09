@@ -5,7 +5,6 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
-import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlin.time.Duration.Companion.milliseconds
@@ -111,9 +110,6 @@ class MotifXsScopesTest {
             factoryVoices = names,
         ) to transport
     }
-
-    private fun List<IndexUpdate>.slots(): List<PresetSlot> =
-        filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }
 
     private fun FakeMidiTransport.dumpRequests(): List<Triple<Int, Int, Int>> =
         sent.filter { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_DUMP_REQUEST }

@@ -134,6 +134,17 @@ class NordFailureMappingTest {
         assertTrue(transport.sentRequests.none { it.subOp == NordDevice.FileTransferSubOp.SET_NAME.code })
     }
 
+    /** As on every family: the same slot twice is a no-op for a move or swap, and the caller's mistake for a copy. */
+    @Test
+    fun `a move or swap onto the same slot sends nothing, and a copy onto it is refused`() = runTest {
+        val transport = ReplayTransport(emptyList())
+        val instrument = NordInstrument(NordFixtures.device(transport, NordFixtures.GRAND_PROFILE))
+        instrument.move(SlotAddress(0, 0), SlotAddress(0, 0))
+        instrument.swap(SlotAddress(0, 0), SlotAddress(0, 0))
+        thrownBy<IllegalArgumentException> { instrument.copyProgram(SlotAddress(0, 0), SlotAddress(0, 0)) }
+        assertTrue(transport.sentRequests.isEmpty())
+    }
+
     /** A swap needs two presets; status 1 says one slot is empty, though not which. */
     @Test
     fun `swapping with an empty slot asks for a refresh`() = runTest {

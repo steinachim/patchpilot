@@ -322,7 +322,11 @@ interface PresetEditor {
 
     /** Stores [newName] as given: the caller trims it, as the rename dialog does. */
     suspend fun rename(address: SlotAddress, newName: String)
+
+    /** Moving a slot onto itself does nothing, on every family. */
     suspend fun move(from: SlotAddress, to: SlotAddress)
+
+    /** Swapping a slot with itself does nothing, on every family. */
     suspend fun swap(a: SlotAddress, b: SlotAddress)
     suspend fun delete(address: SlotAddress)
 
@@ -332,7 +336,8 @@ interface PresetEditor {
      * "Synth Strings 2"), so only a read-back knows what was stored.
      *
      * The only edit with a default implementation: a family that offers it declares
-     * [EditOp.COPY] and overrides this; one that does not inherits the refusal.
+     * [EditOp.COPY] and overrides this; one that does not inherits the refusal. [src] and [dst]
+     * must differ: the same slot twice is the caller's mistake, an [IllegalArgumentException].
      */
     suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String =
         throw InstrumentException.NotSupported("copy a preset")

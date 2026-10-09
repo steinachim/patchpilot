@@ -34,8 +34,9 @@ data class RegressionReport(val results: List<RegressionResult>, val summary: St
 }
 
 /**
- * Exercises every feature the app enables for the connected instrument, without destroying
- * anything, and says what worked.
+ * Exercises loading, reading, every edit and the device report the app enables for the connected
+ * instrument, without destroying anything, and says what worked. Categories and favorites are
+ * listed among what the instrument declares, not set.
  *
  * In `core/` because it tests the facets rather than a family: an operation the instrument does
  * not declare is skipped and said to be skipped, so one engine covers every family.
@@ -81,7 +82,7 @@ class RegressionTester(
     private fun facetInventory(): List<RegressionResult> = listOf(
         "Loads presets" to instrument.selector,
         "Edits presets" to instrument.editor,
-        "Reads and writes preset data" to instrument.transfer,
+        "Reads preset data" to instrument.transfer,
         "Describes itself" to instrument.report,
         "Categorises and favorites presets" to instrument.tagger,
     ).map { (what, facet) ->

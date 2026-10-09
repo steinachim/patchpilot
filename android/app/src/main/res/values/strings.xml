@@ -188,13 +188,13 @@
     -->
     <string name="result_moved">Moved %1$s to %2$s.</string>
     <string name="result_swapped">Swapped %1$s and %2$s.</string>
-    <string name="result_renamed">Preset %1$s has been renamed to %2$s.</string>
+    <string name="result_renamed">Renamed %1$s to \"%2$s\".</string>
     <string name="result_favorite_set">%1$s is now a favorite.</string>
     <string name="result_favorite_cleared">%1$s is no longer a favorite.</string>
     <string name="result_categories_set">%1$s is now filed under %2$s.</string>
     <string name="result_categories_cleared">%1$s no longer has a category.</string>
     <string name="result_copied">Copied %1$s to %2$s as \"%3$s\".</string>
-    <string name="result_deleted">Preset %1$s has been deleted.</string>
+    <string name="result_deleted">Deleted %1$s.</string>
 
     <!-- Connection failures the app itself raises, as opposed to ones an instrument reports. -->
     <string name="connect_failed">Failed to connect</string>
@@ -249,7 +249,6 @@
     <string name="debug_verify_action">Check %1$s against the instrument</string>
     <string name="debug_verify_starting">Reading the bank…</string>
     <string name="debug_verify_ok">%1$s: every name matches what the app ships.</string>
-    <string name="debug_verify_mismatches">%1$s: %2$d name(s) disagree with what the app ships:</string>
     <string name="debug_regression_running">Running the regression test…</string>
     <string name="debug_regression_share">Share regression report</string>
     <string name="debug_save_failed">The report could not be saved.</string>
@@ -273,6 +272,10 @@
       One slot failing is not the same as the scan failing, which is why this is
       a count rather than an error: the other 415 are still worth showing.
     -->
+    <plurals name="debug_verify_mismatches">
+        <item quantity="one">%1$s: %2$d name disagrees with what the app ships:</item>
+        <item quantity="other">%1$s: %2$d names disagree with what the app ships:</item>
+    </plurals>
     <plurals name="programs_unreadable_slots">
         <item quantity="one">%1$d slot could not be read.</item>
         <item quantity="other">%1$d slots could not be read.</item>
