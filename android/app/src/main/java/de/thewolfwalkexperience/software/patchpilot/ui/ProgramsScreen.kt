@@ -267,12 +267,12 @@ fun ProgramsScreen(
         drag.autoScroll { i -> canDropOn(visibleRows, drag.draggedIndex, i, rules.fits) }
     }
 
-    // System back does what the arrow does, so it never reaches the activity: there it would
-    // finish the activity and close the session on Android 8 to 11, and only send the task to the
-    // back from 12 on. In pick mode it ends the pick first. While an edit runs it is refused, the
-    // system-back half of `backEnabled` below: with `enableOnBackInvokedCallback` set, a
-    // predictive-back swipe would otherwise animate this screen away mid-write.
-    BackHandler {
+    // The arrow and system back. In pick mode both end the pick, as its Cancel does. System back
+    // never reaches the activity: there it would finish the activity and close the session on
+    // Android 8 to 11, and only send the task to the back from 12 on. While an edit runs it is
+    // refused, the system-back half of `backEnabled` below: with `enableOnBackInvokedCallback`
+    // set, a predictive-back swipe would otherwise animate this screen away mid-write.
+    val handleBack: () -> Unit = {
         when {
             // Refused; the progress line says what is running.
             ops.busy != null -> Unit
@@ -282,6 +282,7 @@ fun ProgramsScreen(
             else -> onBack()
         }
     }
+    BackHandler(onBack = handleBack)
 
     PatchPilotScaffold(
         // The instrument's own name, not the word "Presets". This is the only screen that shows
@@ -296,8 +297,8 @@ fun ProgramsScreen(
         titleModifier = Modifier.pointerInput(Unit) {
             detectTapGestures { if (debugTaps.tap()) onOpenDebugMenu() }
         },
-        // Back closes the session and returns to the connect screen's picker.
-        onBack = onBack,
+        // Back closes the session and returns to the connect screen's picker, after ending a pick.
+        onBack = handleBack,
         // Off while an edit is in flight, which `busy` only ever is - never the index scan, which
         // leaves back available for the whole 93 seconds it can take. Not the safety itself
         // (launchEdit and exchangeAfterAll are), but what tells the user why nothing happened.

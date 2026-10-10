@@ -133,6 +133,22 @@ class PresetScreenLifecycleTest {
         compose.onNodeWithContentDescription(text(R.string.cd_back)).assertExists()
     }
 
+    /** The arrow does what system back and the pick's Cancel do: it ends the pick and stays. */
+    @Test
+    fun `the arrow while picking a destination ends the pick`() {
+        openDemoPresets()
+        compose.waitUntil(10_000) { viewModel.listings.userIndex.value.complete }
+        val slot = viewModel.listings.userIndex.value.slots.first { !it.isEmpty }
+        compose.runOnUiThread { viewModel.programs.beginPicking(slot) }
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription(text(R.string.cd_back)).performClick()
+        compose.waitForIdle()
+
+        assertFalse(viewModel.programs.picking)
+        compose.onNodeWithContentDescription(text(R.string.cd_back)).assertExists()
+    }
+
     /** What the user filtered by survives a rotation, as the list it narrows does. */
     @Test
     fun `recreating the activity keeps the filter text`() {
