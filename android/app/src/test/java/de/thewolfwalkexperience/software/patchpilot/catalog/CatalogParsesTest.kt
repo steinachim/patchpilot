@@ -12,6 +12,9 @@ import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequ
 import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37SysEx
 import java.io.File
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -320,6 +323,21 @@ class CatalogParsesTest {
             assertEquals(xs6Config.banks, siblingConfig.banks)
             assertEquals(xs6Config.deviceNumber, siblingConfig.deviceNumber)
         }
+    }
+
+    /** The firmware list the advisory is raised from is the catalog's, not a built-in default. */
+    @Test
+    fun `a Motif XS inherits the firmware versions of the shared family config`() {
+        val shared = JsonObject(mapOf("supportedFirmwareVersions" to JsonArray(listOf(JsonPrimitive("1.50")))))
+        val own = JsonObject(emptyMap())
+        assertEquals(setOf("1.50"), resolvedConfig(shared, own, json).supportedFirmwareVersions)
+    }
+
+    @Test
+    fun `a Motif XS keeps firmware versions its own entry names`() {
+        val shared = JsonObject(mapOf("supportedFirmwareVersions" to JsonArray(listOf(JsonPrimitive("1.50")))))
+        val own = JsonObject(mapOf("supportedFirmwareVersions" to JsonArray(listOf(JsonPrimitive("1.60")))))
+        assertEquals(setOf("1.60"), resolvedConfig(shared, own, json).supportedFirmwareVersions)
     }
 
     /**

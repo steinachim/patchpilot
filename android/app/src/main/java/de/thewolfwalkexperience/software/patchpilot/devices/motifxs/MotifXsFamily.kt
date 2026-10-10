@@ -172,6 +172,13 @@ internal fun resolvedConfig(
     return own.copy(
         banks = own.banks.ifEmpty { shared.banks },
         categoryEncoding = own.categoryEncoding ?: shared.categoryEncoding,
+        // By presence in the device's own block: the field has a default, so an unset one reads
+        // the same as a device that names the default.
+        supportedFirmwareVersions = if ("supportedFirmwareVersions" in deviceFamilyConfig) {
+            own.supportedFirmwareVersions
+        } else {
+            shared.supportedFirmwareVersions
+        },
     )
 }
 
