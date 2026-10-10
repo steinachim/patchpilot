@@ -8,6 +8,7 @@
 - An instrument can show a notice when it connects, with a “Don't show this again” option; Settings → “Show Hidden Messages Again” brings hidden notices back.
 - Each GitHub release also carries the R8 mapping file for its APK, so a stack trace from that build can be read.
 - On a Nord, a notice on connecting says that every edit loads the program it changes, so unsaved changes on the panel should be stored first.
+- On a Yamaha Motif XS, a notice on connecting says that renaming the loaded voice reloads it, so unsaved changes on the panel should be stored first.
 
 ### Changed
 - The rename dialog says why a name can't be stored (characters outside plain ASCII, or a name the instrument reserves) and only enables Rename for a name that can, before anything is sent.

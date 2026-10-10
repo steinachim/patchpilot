@@ -14,6 +14,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentNotice
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
@@ -115,6 +116,21 @@ class MotifXsInstrument(
     // Neither is implemented for this instrument: no raw voice transfer, no device report.
     override val transfer: PresetTransfer? = null
     override val report: DeviceReporter? = null
+
+    /**
+     * Renaming the voice that is loaded in Voice mode reloads it, so the display shows the new
+     * name; the stored write does not touch the edit buffer. Unsaved panel changes to that voice
+     * are lost (measured on an XS6). Any other voice, and every other edit, leaves the panel alone.
+     */
+    override val notices: List<InstrumentNotice> = listOf(
+        InstrumentNotice(
+            id = RENAME_RELOADS_VOICE_NOTICE,
+            title = "Renaming reloads the voice",
+            message = "Renaming the voice that is loaded on the Motif reloads it, so the display shows " +
+                "the new name. Unsaved changes to that voice are lost, so store them on the " +
+                "instrument first. Other voices, and other changes, leave the panel alone.",
+        ),
+    )
 
     /** Categories and favorites; null where the catalog carries no category encoding, which is what names the byte values. */
     override val tagger: PresetTagger? =
@@ -713,6 +729,9 @@ class MotifXsInstrument(
 
     companion object {
         const val FAMILY = "motifxs"
+
+        /** The id a hidden "renaming reloads the voice" notice is remembered by. */
+        const val RENAME_RELOADS_VOICE_NOTICE = "motifxs.rename_reloads_voice"
 
         /** Emitting every 8 voices fills the list without a recomposition per round trip - at ~160 ms each, a batch every ~1.3 s. */
         private const val BATCH_SIZE = 8

@@ -264,6 +264,15 @@ class InstrumentFacetTest {
         assertEquals(listOf(NordInstrument.EDITS_LOAD_PROGRAMS_NOTICE), nord().notices.map { it.id })
     }
 
+    /** Measured on an XS6: renaming the loaded voice reloads it and drops its unsaved panel changes. */
+    @Test
+    fun `a Motif XS announces that renaming the loaded voice reloads it`() = runTest {
+        assertEquals(
+            listOf(MotifXsInstrument.RENAME_RELOADS_VOICE_NOTICE),
+            motifXs(backgroundScope).notices.map { it.id },
+        )
+    }
+
     @Test
     fun `a Nord offers the facets its protocol has, and only those`() {
         val instrument = nord()
