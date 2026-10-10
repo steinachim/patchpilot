@@ -37,6 +37,7 @@
 - Rotating the phone, opening Settings or switching the theme while an edit runs no longer loses its progress line or result, or re-enables Back and other edits before it finishes; an open dialog or destination pick stays open too.
 - A preset edited while the user list was still loading no longer appears unedited after returning to the app.
 - Pulling to refresh while the preset list is still loading no longer starts the list over.
+- A Yamaha Motif XS voice whose name was cleared on the instrument is listed as "(unnamed)" instead of as an empty slot, when it has a category, so a copy or move can no longer overwrite it unasked.
 - Retry after the instrument asks for a setting change, or after a refused USB permission, now tries that instrument again instead of ending at the device list when auto-connect is off.
 - The Back arrow and the system Back gesture on the preset list now do the same: they end a “Copy to…” or “Move to…” pick, and otherwise return to the instrument list. The gesture no longer closes the app on Android 8 to 11.
 - A preset list stops with a message once three presets in a row go unanswered, instead of waiting out every remaining one - minutes on a Pro-800 or Motif XS whose MIDI connection has stopped answering.

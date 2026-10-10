@@ -3,6 +3,8 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+
 /**
  * What this app decodes out of a Motif XS voice dump: its name and its category assignments. A
  * voice dump is roughly 1.9 kB and the rest is not decoded.
@@ -55,6 +57,9 @@ object MotifXsVoice {
      */
     const val NAME_TRAILER_BYTES = 6
 
+    /** [figuresOf] of the slots read as empty when they carry no name: unassigned, and the two blanks. */
+    private val EMPTY_SLOT_FIGURES = setOf(listOf(null, null), listOf(0, 0), listOf(192, 192))
+
     /**
      * A safety bound on the greedy scan, not a field width: the trailer rule is what settles a
      * name's length, and capping the scan at 20 would truncate a printable run that legitimately
@@ -70,7 +75,8 @@ object MotifXsVoice {
     const val NAME_LENGTH = 20
 
     /**
-     * The voice's name, or null where the slot holds none: the name starts after the
+     * The voice's name ([UNNAMED_PRESET] for a nameless voice that carries a category), or null
+     * where the slot holds none: the name starts after the
      * variable-width figure pair, runs while printable, and ends where the trailer-and-repeat
      * says. An empty slot presents as no name, which is the only emptiness signal available,
      * since every address answers a request.
@@ -94,7 +100,7 @@ object MotifXsVoice {
         ) {
             run++
         }
-        if (run == 0) return null
+        if (run == 0) return namelessName(dense)
         val length = trueNameLength(dense, start, run)
 
         // A name has to be corroborated by its own repeat: `0C`'s layout past the name field is
@@ -102,13 +108,24 @@ object MotifXsVoice {
         // voice. The strict and greedy readings agree everywhere except on a cleared slot.
         val at = start + length + NAME_TRAILER_BYTES
         if (at >= dense.size || (dense[at].toInt() and 0x7F) != (dense[start].toInt() and 0x7F)) {
-            return null
+            return namelessName(dense)
         }
 
         val text = StringBuilder()
         for (i in start until start + length) text.append((dense[i].toInt() and 0xFF).toChar())
         return text.toString().trim().ifEmpty { null }
     }
+
+    /**
+     * What a slot with no name reads as: [UNNAMED_PRESET] where it carries a category that no
+     * cleared slot does, null (empty) otherwise. The instrument keeps a voice's sound when its
+     * name is cleared on the panel (measured on an XS6), and nothing but the name marks a slot as
+     * used. The figure pairs of the slots that are empty - `256:256:` for one never written,
+     * `0:0:` and `192:192:` for the app's own blanks - are the only ones read as empty; a nameless
+     * voice that carries one of those pairs still reads as empty.
+     */
+    private fun namelessName(dense: ByteArray): String? =
+        if (figuresOf(dense) in EMPTY_SLOT_FIGURES) null else UNNAMED_PRESET
 
     /**
      * [run] overshoots by one when the trailer's first byte is printable, told apart by where the

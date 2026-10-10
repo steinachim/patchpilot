@@ -96,6 +96,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | M12 | Destinations of the other kind | "Copy to…" and "Move to…" on a USER 1 voice; drag it over the USER DR rows | No USER DR slot is offered or highlighted; the reverse for a drum kit | 2026-10-10, Motif XS6 | ✓ |
 | M13 | Firmware and advisory | Connect; then set `supportedFirmwareVersions` in `devices/yamaha_motif_xs.json` to `["1.50"]`, rebuild and connect | "Firmware: 1.60" and no advisory; with the edited catalog the advisory names 1.60 and Continue anyway connects | – | – not run in the app; the version byte `06` is confirmed as 1.60 |
 | M14 | Renaming the loaded voice | Load a voice and change something on the panel without storing; rename that voice in the app; then rename a different voice | The "Renaming reloads the voice" notice shows when connecting; renaming the loaded voice reloads it and drops the unsaved change, renaming another leaves the panel alone | 2026-10-10, Motif XS6 | ✓ |
+| M15 | Voice with its name cleared | On the panel, clear the name of a stored voice (spaces or delete the characters; the instrument stores no name); refresh the list in the app; then try to copy another voice onto that slot | The voice is listed as "(unnamed)" where it carries a category, also with "Show empty slots" off; the copy is refused as the slot being occupied | 2026-10-10, Motif XS6 | ✓ (the panel stores an empty name and keeps the sound; listed as "(unnamed)", refused as a destination, delete empties it) |
 
 ## 5. Behringer Pro-800
 

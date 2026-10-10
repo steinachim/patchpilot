@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -145,6 +146,22 @@ class MotifXsDecodingTest {
                 name + ByteArray(24),
         )
         assertEquals("Kit", MotifXsVoice.nameOf(real))
+    }
+
+    /**
+     * Measured on an XS6: a voice whose name was cleared on the panel keeps its sound and its
+     * figure pair (`114:256:` there, then no name byte at all); the app's own blank is `0:0:` and
+     * a slot never written `256:256:`.
+     */
+    @Test
+    fun `a nameless voice reads as occupied only where it carries a category`() {
+        fun nameless(figures: String) = packed(figures.toByteArray() + ByteArray(40))
+
+        assertEquals(UNNAMED_PRESET, MotifXsVoice.nameOf(nameless("114:256:")))
+        assertEquals(UNNAMED_PRESET, MotifXsVoice.nameOf(nameless("256:3:")))
+        assertNull(MotifXsVoice.nameOf(nameless("256:256:")))
+        assertNull(MotifXsVoice.nameOf(nameless("0:0:")))
+        assertNull(MotifXsVoice.nameOf(nameless("192:192:")))
     }
 
     /** MSB-packs a dense stream and prefixes the two bytes a payload carries before it. */
