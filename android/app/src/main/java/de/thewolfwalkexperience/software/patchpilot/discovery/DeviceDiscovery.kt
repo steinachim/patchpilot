@@ -16,6 +16,10 @@ import de.thewolfwalkexperience.software.patchpilot.transport.Transport
  * [physicalKey] identifies the physical device rather than the port it was found through, for
  * cross-bus deduplication: a Nord exposes a class-compliant USB-MIDI interface alongside the
  * vendor interface this app uses, so it turns up on both scans.
+ *
+ * [via] names the interface a MIDI instrument was found through where that is not its own USB
+ * connection - a MIDI interface or hub it is cabled to, or a Bluetooth device - so two rows for
+ * one instrument can be told apart. Null where it was found directly.
  */
 data class Candidate(
     val descriptor: InstrumentDescriptor,
@@ -23,6 +27,7 @@ data class Candidate(
     val bus: Bus,
     val physicalKey: String,
     val handle: Any,
+    val via: String? = null,
 )
 
 /** One bus's view of what is attached. */

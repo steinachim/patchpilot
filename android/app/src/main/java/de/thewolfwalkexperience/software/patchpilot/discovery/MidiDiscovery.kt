@@ -76,6 +76,7 @@ class MidiDiscovery(private val ports: MidiPorts) : DeviceDiscovery {
                 bus = bus,
                 physicalKey = port.physicalKey,
                 handle = port,
+                via = if (identified.isDirectlyOn(port)) null else port.label,
             )
         }
     }
@@ -141,6 +142,15 @@ class MidiDiscovery(private val ports: MidiPorts) : DeviceDiscovery {
          */
         const val PROBE_TIMEOUT_MS = 600L
     }
+}
+
+/**
+ * Whether [port] is this MIDI instrument's own USB connection. Where the catalog names none, every
+ * port counts as direct: nothing says otherwise.
+ */
+private fun InstrumentDescriptor.isDirectlyOn(port: MidiPort): Boolean {
+    val ids = (match as? DeviceMatch.MidiIdentity)?.launchOnUsbAttach ?: return true
+    return port.usbIds == ids
 }
 
 /** Whether [port] is this MIDI instrument plugged in directly: its USB ids are the descriptor's `launchOnUsbAttach`. */

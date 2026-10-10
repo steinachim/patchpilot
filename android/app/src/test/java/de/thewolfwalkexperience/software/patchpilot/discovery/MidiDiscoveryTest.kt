@@ -222,6 +222,28 @@ class MidiDiscoveryTest {
         assertTrue(ports.transports.first().sent.single().contentEquals(probe))
     }
 
+    /** One Axe-Fx III reached twice, as it is when a MIDI interface is cabled to it: the rows need telling apart. */
+    @Test
+    fun `an instrument found through another interface says which`() = runTest {
+        val axeDirect = descriptor(
+            "axefx3",
+            "f0 00 01 74 10 08 1d f7",
+            "f0 00 01 74 10 08",
+            launchOnUsbAttach = UsbIds(0x2466, 0x8010),
+        )
+        val axeReply = "f0 00 01 74 10 08 0a 0b f7".hexToBytes()
+        val direct = FakePort("Axe-Fx III", UsbIds(0x2466, 0x8010))
+        val interfacePort = FakePort("mioXL", UsbIds(0x2301, 0x0026))
+        val noUsb = FakePort("Bluetooth keyboard")
+        val ports = FakePorts(listOf(interfacePort, direct, noUsb)) { _, _ -> answering(axeReply) }
+
+        val byPort = MidiDiscovery(ports).scan(listOf(axeDirect)).associateBy { (it.handle as FakePort).label }
+
+        assertEquals(null, byPort.getValue("Axe-Fx III").via)
+        assertEquals("mioXL", byPort.getValue("mioXL").via)
+        assertEquals("Bluetooth keyboard", byPort.getValue("Bluetooth keyboard").via)
+    }
+
     @Test
     fun `a catalog with no MIDI instruments opens nothing`() = runTest {
         val usbOnly =

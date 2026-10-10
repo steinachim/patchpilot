@@ -239,10 +239,17 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                         // Recognised entries come first from the view model, and each says which it is.
                         s.entries.forEach { entry ->
                             val sublabel = when (entry) {
-                                is PickerEntry.Known -> stringResource(
-                                    R.string.connect_entry_known,
-                                    entry.candidate.bus.label,
-                                )
+                                is PickerEntry.Known -> entry.candidate.via.let { via ->
+                                    if (via == null) {
+                                        stringResource(R.string.connect_entry_known, entry.candidate.bus.label)
+                                    } else {
+                                        stringResource(
+                                            R.string.connect_entry_known_via,
+                                            entry.candidate.bus.label,
+                                            via,
+                                        )
+                                    }
+                                }
 
                                 is PickerEntry.Unknown -> stringResource(R.string.connect_entry_unknown)
                             }
