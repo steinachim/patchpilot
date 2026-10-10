@@ -57,8 +57,9 @@ private const val REGRESSION_STEM_SUFFIX = "_regression"
  *
  * Both entries put the instrument, rather than the app, under test:
  *
- * - the device report, always available here and on the preset screen only for a device outside
- *   the catalog or on untested firmware. Read once, then offered for sharing or saving.
+ * - the device report, always available here for an instrument that has one (the Motif XS has
+ *   none), and on the preset screen only for a device outside the catalog or on untested
+ *   firmware. Read once, then offered for sharing or saving.
  * - the regression test, which exercises every operation the connected instrument declares - see
  *   [de.thewolfwalkexperience.software.patchpilot.core.RegressionTester] for what it will and
  *   will not do.
@@ -241,18 +242,22 @@ fun DebugScreen(viewModel: InstrumentViewModel, onBack: () -> Unit) {
                 )
 
                 else -> {
-                    Text(stringResource(R.string.debug_report_body), style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(8.dp))
-                    // Gated on the factory-name check, whose progress and verdict live inline on
-                    // this menu: a report read replaces the menu and would hide them mid-read.
-                    theme.FilledButton(
-                        onClick = { reportRunner.start(readingLabel) },
-                        enabled = hasReport && verifyProgress == null,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.debug_report_action))
+                    // Not offered for a connected instrument that has no report. Shown, disabled,
+                    // while nothing is connected, so the menu does not shift across a reconnect.
+                    if (hasReport || capabilities.instrumentName == null) {
+                        Text(stringResource(R.string.debug_report_body), style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(8.dp))
+                        // Gated on the factory-name check, whose progress and verdict live inline on
+                        // this menu: a report read replaces the menu and would hide them mid-read.
+                        theme.FilledButton(
+                            onClick = { reportRunner.start(readingLabel) },
+                            enabled = hasReport && verifyProgress == null,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.debug_report_action))
+                        }
+                        Spacer(Modifier.height(24.dp))
                     }
-                    Spacer(Modifier.height(24.dp))
                     Text(stringResource(R.string.debug_regression_body), style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
                     theme.FilledButton(
