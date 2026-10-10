@@ -28,6 +28,89 @@ class SysExExchangeTest {
             payload +
             Pro800SysEx.SYSEX_END
 
+    /** Behind another interface everything crosses a DIN cable: the timeout grows by the time that takes. */
+    @Test
+    fun `a slow link allows for the time to send the request and receive a message`() = runTest {
+        // 1,500 bytes at 1,500 B/s is a second out, a full message about 2.7 s back: 5.7 s in all.
+        val request = ByteArray(1_500) { 0x01 }
+        val reply = dump(5)
+
+        val slowTransport = FakeMidiTransport { emptyList() }.apply { slowLink = true }
+        val slow = SysExExchange(slowTransport, backgroundScope)
+        val answered = async {
+            runCatching { slow.exchange(request, "sending", timeout = 1.seconds, retries = 0) { true } }
+        }
+        delay(4.seconds)
+        slowTransport.inject(reply)
+        assertTrue(answered.await().isSuccess)
+
+        val fastTransport = FakeMidiTransport { emptyList() }
+        val fast = SysExExchange(fastTransport, backgroundScope)
+        val timedOut = async {
+            runCatching { fast.exchange(request, "sending", timeout = 1.seconds, retries = 0) { true } }
+        }
+        delay(4.seconds)
+        fastTransport.inject(reply)
+        assertTrue(timedOut.await().exceptionOrNull() is InstrumentException.Timeout)
+    }
+
+    /** A dump behind a MIDI interface trickles in: what counts is that it is still arriving. */
+    @Test
+    fun `a sequence that keeps arriving is not cut off by an idle timeout shorter than the whole`() = runTest {
+        val transport = FakeMidiTransport { emptyList() }
+        val exchange = SysExExchange(transport, backgroundScope)
+        val arrivals = launch {
+            repeat(9) {
+                delay(800.milliseconds)
+                transport.inject(dump(it))
+            }
+            delay(800.milliseconds)
+            transport.inject(dump(99))
+        }
+
+        val collected = exchange.exchangeSequence(
+            Pro800SysEx.requestDump(0),
+            what = "reading a dump",
+            timeout = 60.seconds,
+            idleTimeout = 1.seconds,
+            done = { Pro800SysEx.addressOf(it) == 99 },
+        )
+
+        // Eight seconds in all, against an idle limit of one.
+        assertEquals(10, collected.size)
+        arrivals.join()
+    }
+
+    @Test
+    fun `a sequence that stops arriving ends after the idle time, not the cap`() = runTest {
+        val transport = FakeMidiTransport { emptyList() }
+        val exchange = SysExExchange(transport, backgroundScope)
+        launch {
+            delay(200.milliseconds)
+            transport.inject(dump(1))
+            delay(200.milliseconds)
+            transport.inject(dump(2))
+        }
+        val started = testScheduler.currentTime
+
+        val failure = runCatching {
+            exchange.exchangeSequence(
+                Pro800SysEx.requestDump(0),
+                what = "reading a dump",
+                timeout = 60.seconds,
+                idleTimeout = 1.seconds,
+                done = { false },
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is InstrumentException.Timeout)
+        // The last message arrived 400 ms in; one idle second later it is over, far short of the cap.
+        assertTrue(
+            "took ${testScheduler.currentTime - started} ms",
+            testScheduler.currentTime - started in 1_300L..1_500L,
+        )
+    }
+
     @Test
     fun `an exchange returns the first matching reply`() = runTest {
         val transport = FakeMidiTransport { listOf(dump(7)) }

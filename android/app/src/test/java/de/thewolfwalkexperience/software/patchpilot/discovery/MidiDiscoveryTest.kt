@@ -244,6 +244,27 @@ class MidiDiscoveryTest {
         assertEquals("Bluetooth keyboard", byPort.getValue("Bluetooth keyboard").via)
     }
 
+    /** Everything an instrument found through another interface says and hears crosses a DIN cable. */
+    @Test
+    fun `an instrument found through another interface is opened as a slow link`() = runTest {
+        val axe = descriptor(
+            "axefx3",
+            "f0 00 01 74 10 08 1d f7",
+            "f0 00 01 74 10 08",
+            launchOnUsbAttach = UsbIds(0x2466, 0x8010),
+        )
+        val axeReply = "f0 00 01 74 10 08 0a 0b f7".hexToBytes()
+        val direct = FakePort("Axe-Fx III", UsbIds(0x2466, 0x8010))
+        val interfacePort = FakePort("mioXL", UsbIds(0x2301, 0x0026))
+        val ports = FakePorts(listOf(direct, interfacePort)) { _, _ -> answering(axeReply) }
+        val discovery = MidiDiscovery(ports)
+
+        val byPort = discovery.scan(listOf(axe)).associateBy { (it.handle as FakePort).label }
+
+        assertEquals(false, discovery.open(byPort.getValue("Axe-Fx III")).let { (it as MidiTransport).slowLink })
+        assertEquals(true, (discovery.open(byPort.getValue("mioXL")) as MidiTransport).slowLink)
+    }
+
     @Test
     fun `a catalog with no MIDI instruments opens nothing`() = runTest {
         val usbOnly =

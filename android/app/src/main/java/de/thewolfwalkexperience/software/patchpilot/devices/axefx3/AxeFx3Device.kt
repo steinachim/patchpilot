@@ -138,7 +138,8 @@ class AxeFx3Device(private val exchange: SysExExchange) {
         val messages = exchange.exchangeSequence(
             AxeFx3SysEx.dumpReadRequest(number),
             what = "reading preset $number",
-            timeout = READ_TIMEOUT,
+            timeout = READ_CAP,
+            idleTimeout = READ_IDLE_TIMEOUT,
             accept = { message ->
                 val command = AxeFx3SysEx.commandOf(message)
                 val accepted = if (!started) {
@@ -196,8 +197,13 @@ class AxeFx3Device(private val exchange: SysExExchange) {
         /** The flash write behind a store takes about 600 ms. */
         private val STORE_TIMEOUT = 5.seconds
 
-        /** A dump is acknowledged within 5 ms and complete after about 470 ms. */
-        private val READ_TIMEOUT = 5.seconds
+        /**
+         * A dump is acknowledged within 5 ms and complete after about 470 to 730 ms over USB: it
+         * is given up on after a silence, not a total, so that one trickling in over a slow link
+         * (see `MidiTransport.slowLink`) is let finish. The cap is for a trickle that never ends.
+         */
+        private val READ_IDLE_TIMEOUT = 2.seconds
+        private val READ_CAP = 90.seconds
         private val READ_RETRY_PAUSE = 500.milliseconds
 
         /** Each chunk is acknowledged after about 20 ms. */

@@ -43,14 +43,29 @@ class AxeFx3DumpImage private constructor(
      * preset it stores ([AxeFx3SysEx.STORE_REWRITTEN_OFFSETS]), so a read-back never equals what
      * was written byte for byte.
      */
-    fun sameStoredDataAs(other: AxeFx3DumpImage): Boolean {
+    fun sameStoredDataAs(other: AxeFx3DumpImage): Boolean = differencesFrom(other) == null
+
+    /**
+     * Where [other] differs from this image beyond the bytes a store rewrites, worded for an
+     * error message: the count and the first few offsets with both values. Null where the two
+     * hold the same preset.
+     */
+    fun differencesFrom(other: AxeFx3DumpImage): String? {
         val a = decodedData
         val b = other.decodedData
-        if (a.size != b.size) return false
-        return a.indices.all { it in AxeFx3SysEx.STORE_REWRITTEN_OFFSETS || a[it] == b[it] }
+        if (a.size != b.size) return "${a.size} decoded bytes were written, ${b.size} read back"
+        val differing = a.indices.filter { it !in AxeFx3SysEx.STORE_REWRITTEN_OFFSETS && a[it] != b[it] }
+        if (differing.isEmpty()) return null
+        val first = differing.take(MAX_DIFFERENCES_LISTED).joinToString { offset ->
+            "$offset: wrote %02X, read %02X".format(a[offset], b[offset])
+        }
+        val more = differing.size - MAX_DIFFERENCES_LISTED
+        return "${differing.size} bytes differ (offset $first${if (more > 0) ", and $more more" else ""})"
     }
 
     companion object {
+        private const val MAX_DIFFERENCES_LISTED = 6
+
         /**
          * An image from its raw bytes, e.g. a shipped blank or a file. Throws
          * [IllegalArgumentException] for anything that is not exactly 16 well-formed chunk

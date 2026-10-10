@@ -11,6 +11,7 @@ import de.thewolfwalkexperience.software.patchpilot.catalog.UsbIds
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
+import de.thewolfwalkexperience.software.patchpilot.transport.SlowLinkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -132,7 +133,9 @@ class MidiDiscovery(private val ports: MidiPorts) : DeviceDiscovery {
         val port = candidate.handle as? MidiPort ?: error("Not a MIDI candidate: ${candidate.displayName}")
         // The same port the descriptor was identified on.
         val portIndex = (candidate.descriptor.match as? DeviceMatch.MidiIdentity)?.portIndex ?: 0
-        return ports.open(port, portIndex)
+        val transport = ports.open(port, portIndex)
+        // Found through another interface: everything it says and hears crosses a DIN cable.
+        return if (candidate.via != null) SlowLinkTransport(transport) else transport
     }
 
     private companion object {

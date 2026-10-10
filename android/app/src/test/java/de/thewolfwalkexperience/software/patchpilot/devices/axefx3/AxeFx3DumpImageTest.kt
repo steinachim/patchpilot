@@ -78,6 +78,17 @@ class AxeFx3DumpImageTest {
         assertFalse(original.sameStoredDataAs(AxeFx3DumpImage.parse(FakeAxeFx3.presetImage(7))))
     }
 
+    @Test
+    fun `a difference is described by its offsets and values`() {
+        val original = AxeFx3DumpImage.parse(AxeFx3Fixtures.NEVER_USED_IMAGE)
+        assertEquals(null, original.differencesFrom(original))
+
+        val different = AxeFx3DumpImage.parse(FakeAxeFx3.mutate(original.raw, chunk = 0, at = 5 + 5, xor = 0x7F))
+        val described = original.differencesFrom(different)!!
+        assertTrue(described, described.startsWith("2 bytes differ (offset 2: wrote "))
+        assertTrue(described, "read" in described)
+    }
+
     /** Padding bits are not data: two images differing only there hold the same preset. */
     @Test
     fun `padding bits are not part of the stored data`() {

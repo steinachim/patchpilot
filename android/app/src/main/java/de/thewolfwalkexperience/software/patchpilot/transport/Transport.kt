@@ -71,4 +71,11 @@ interface MidiTransport : Transport {
      */
     suspend fun send(bytes: ByteArray)
     val incoming: Flow<ByteArray>
+
+    /**
+     * Whether the instrument is reached through another MIDI interface, over DIN cables at 31.25
+     * kbit/s, rather than on its own USB connection. A request and a reply then take time that
+     * a USB timeout leaves out: a 3 kB message about two seconds, a preset dump half a minute.
+     */
+    val slowLink: Boolean get() = false
 }

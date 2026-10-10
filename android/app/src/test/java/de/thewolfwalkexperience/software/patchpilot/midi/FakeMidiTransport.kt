@@ -47,6 +47,8 @@ class FakeMidiTransport(
         _incoming.tryEmit(chunk)
     }
 
+    override var slowLink = false
+
     var closed = false
         private set
 

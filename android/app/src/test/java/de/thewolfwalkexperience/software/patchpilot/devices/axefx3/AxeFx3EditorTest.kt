@@ -164,6 +164,29 @@ class AxeFx3EditorTest {
         thrownBy<InstrumentException.ProtocolDesync> { instrument.editor.copyProgram(at(1), at(2)) }
     }
 
+    /** Measured: a factory preset written to another slot reads back converted, then stays as it is. */
+    @Test
+    fun `a copy the instrument converts on the way in is accepted once it is stable`() = runTest {
+        val fake = FakeAxeFx3().apply { conversionOnStore = FakeAxeFx3.Conversion.ONCE }
+        fake.put(1, "Lead")
+        val instrument = connected(fake)
+
+        assertEquals("Lead", instrument.editor.copyProgram(at(1), at(2)))
+
+        assertEquals("Lead", fake.nameAt(2))
+    }
+
+    @Test
+    fun `a copy whose stored data keeps changing is an error naming both differences`() = runTest {
+        val fake = FakeAxeFx3().apply { conversionOnStore = FakeAxeFx3.Conversion.ALWAYS }
+        fake.put(1, "Lead")
+        val instrument = connected(fake)
+
+        val failure = thrownBy<InstrumentException.ProtocolDesync> { instrument.editor.copyProgram(at(1), at(2)) }
+
+        assertTrue(failure.message, "storing that again changed it further" in failure.message.orEmpty())
+    }
+
     @Test
     fun `a rejected write stores nothing and reloads the target's stored preset`() = runTest {
         val fake = FakeAxeFx3().apply { endStatusOf = { 0x13 } }

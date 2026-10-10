@@ -18,6 +18,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -153,6 +154,7 @@ class SysExExchange(
         intact: (ByteArray) -> Boolean = { true },
         matches: (ByteArray) -> Boolean,
     ): ByteArray = lock.withLock {
+        val limit = timeout + linkTime(request.size + MAX_REPLY_BYTES)
         var damaged = false
         repeat(retries + 1) { attempt ->
             if (attempt > 0) {
@@ -162,7 +164,7 @@ class SysExExchange(
             // The framer is not cleared between attempts: the collector coroutine feeds it, so
             // clearing it from this one would race its buffer, and SysEx is self-delimiting
             // anyway.
-            val reply = withTimeoutOrNull(timeout) {
+            val reply = withTimeoutOrNull(limit) {
                 coroutineScope {
                     // Subscribed before the send - see the class doc.
                     val awaited = async(start = CoroutineStart.UNDISPATCHED) {
@@ -191,7 +193,11 @@ class SysExExchange(
      * for a device that answers one request with a sequence, such as a Motif XS voice read at its
      * Bulk Header address (26 messages bracketed by a header and a footer).
      *
-     * The timeout bounds the whole sequence, not each message. A sequence that never sends its
+     * The timeout bounds the whole sequence, not each message. With [idleTimeout] the sequence also
+     * ends once that long has passed with no message at all, so [timeout] can be a generous cap: a
+     * sequence that keeps arriving, however slowly (a preset dump over a DIN cable behind a MIDI
+     * interface takes half a minute), is not cut off, and one that has stopped is given up on
+     * after [idleTimeout] rather than after the cap. A sequence that never sends its
      * terminator ends in [InstrumentException.Timeout] with whatever arrived discarded: a partial
      * block sequence is an unusable voice, not a partial one.
      */
@@ -199,20 +205,36 @@ class SysExExchange(
         request: ByteArray,
         what: String,
         timeout: Duration = defaultTimeout,
+        idleTimeout: Duration? = null,
         accept: (ByteArray) -> Boolean = { true },
         done: (ByteArray) -> Boolean,
     ): List<ByteArray> = lock.withLock {
         val collected = ArrayList<ByteArray>()
-        val finished = withTimeoutOrNull(timeout) {
+        val idle = idleTimeout?.let { it + linkTime(MAX_REPLY_BYTES) }
+        val finished = withTimeoutOrNull(timeout + linkTime(request.size)) {
             coroutineScope {
-                val awaited = async(start = CoroutineStart.UNDISPATCHED) {
-                    messages.first { message ->
-                        if (accept(message)) collected.add(message)
-                        done(message)
-                    }
+                // Subscribed before the send, which the flow's missing replay requires, and drained
+                // at once into a channel, so a slow consumer here cannot make the flow drop messages.
+                val arrived = Channel<ByteArray>(Channel.UNLIMITED)
+                val feeder = launch(start = CoroutineStart.UNDISPATCHED) {
+                    messages.collect { arrived.trySend(it) }
                 }
-                sendOrLost(request, what)
-                awaited.await()
+                try {
+                    sendOrLost(request, what)
+                    while (true) {
+                        val message = if (idle == null) {
+                            arrived.receive()
+                        } else {
+                            withTimeoutOrNull(idle) { arrived.receive() } ?: return@coroutineScope null
+                        }
+                        if (accept(message)) collected.add(message)
+                        if (done(message)) return@coroutineScope message
+                    }
+                    @Suppress("UNREACHABLE_CODE")
+                    null
+                } finally {
+                    feeder.cancel()
+                }
             }
         }
         if (finished == null) {
@@ -245,7 +267,7 @@ class SysExExchange(
         matches: (ByteArray) -> Boolean,
     ): ByteArray = lock.withLock {
         require(sequence.isNotEmpty()) { "exchangeAfterAll needs at least one message to send" }
-        val reply = withTimeoutOrNull(timeout) {
+        val reply = withTimeoutOrNull(timeout + linkTime(sequence.sumOf { it.size })) {
             coroutineScope {
                 val awaited = async(start = CoroutineStart.UNDISPATCHED) {
                     messages.first { message ->
@@ -316,8 +338,22 @@ class SysExExchange(
         }
     }
 
+    /**
+     * What it takes to move [bytes] over a [MidiTransport.slowLink], to be added to a timeout set
+     * for USB; nothing on any other link. The rate is what an Axe-Fx III dump measured behind an
+     * iConnectivity mioXL, 1.85 kB/s, a little under the 3.1 kB/s of a DIN cable, which also has
+     * to carry the interface's own delay.
+     */
+    private fun linkTime(bytes: Int): Duration =
+        if (transport.slowLink) (bytes * 1000L / SLOW_LINK_BYTES_PER_SECOND).milliseconds else Duration.ZERO
+
     private companion object {
         val DRAIN_WINDOW = 50.milliseconds
+
+        const val SLOW_LINK_BYTES_PER_SECOND = 1_500
+
+        /** The longest message a framer passes on, which a reply may be. */
+        const val MAX_REPLY_BYTES = SysExFramer.DEFAULT_MAX_MESSAGE_BYTES
     }
 }
 

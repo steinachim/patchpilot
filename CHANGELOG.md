@@ -10,6 +10,7 @@
 - On a Nord, a notice on connecting says that every edit loads the program it changes, so unsaved changes on the panel should be stored first.
 - On a Yamaha Motif XS, a notice on connecting says that renaming the loaded voice reloads it, so unsaved changes on the panel should be stored first.
 - When a MIDI instrument is reached through another MIDI interface (a hub or an interface it is cabled to), its row in the device list says which, so it can be told apart from its own USB connection.
+- A MIDI instrument reached through another MIDI interface (shown as "via …" in the device list) gets timeouts that allow for the cable's speed: a preset transfer there takes about half a minute instead of a second.
 
 ### Changed
 - The rename dialog says why a name can't be stored (characters outside plain ASCII, or a name the instrument reserves) and only enables Rename for a name that can, before anything is sent.

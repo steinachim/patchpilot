@@ -338,16 +338,32 @@ class AxeFx3Instrument(
         }
     }
 
-    /** [writeUnit], then a read-back that must hold the same preset. */
+    /**
+     * [writeUnit], then a read-back that must hold the same preset - or, where the instrument
+     * converted it on the way in, a stable one.
+     *
+     * A preset the instrument holds in an older form, a factory preset never saved since, comes
+     * back converted from the first store: thousands of bytes differ (measured on a Mark I with
+     * firmware 32.06, preset 0 written to 384). The converted form is what the instrument keeps:
+     * stored once more, it reads back unchanged. So a difference is followed by one more write,
+     * of the instrument's own version, which must read back the same; anything that still
+     * changes is not a conversion and is an error. The end of the transfer is acknowledged only
+     * for data whose checksum holds, so the first write itself cannot have been damaged.
+     */
     internal suspend fun writeVerified(number: Int, image: AxeFx3DumpImage) {
         writeUnit(number, image)
         // Decoding both images is a few milliseconds of bit shuffling, cheap enough for any thread.
-        if (!device.readDump(number).sameStoredDataAs(image)) {
+        val stored = device.readDump(number)
+        val differences = image.differencesFrom(stored) ?: return
+        writeUnit(number, stored)
+        stored.differencesFrom(device.readDump(number))?.let { stillChanging ->
             throw InstrumentException.ProtocolDesync(
-                "Wrote ${displayIdOf(number)}, but reading it back gave different data. The " +
-                    "preset may not have been stored.",
+                "Wrote ${displayIdOf(number)}, but reading it back gave different data ($differences), " +
+                    "and storing that again changed it further ($stillChanging). The preset may not " +
+                    "have been stored.",
             )
         }
+        Log.i(TAG, "${displayIdOf(number)} was converted by the instrument when stored: $differences")
     }
 
     /**

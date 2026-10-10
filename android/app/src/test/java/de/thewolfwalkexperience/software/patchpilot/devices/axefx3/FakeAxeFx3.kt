@@ -77,6 +77,16 @@ class FakeAxeFx3(
     /** Performs stores without acknowledging them. */
     var silentStores = false
 
+    /**
+     * How a store changes what it is given, beyond the header bytes: [ONCE] converts an image
+     * the first time it is stored and leaves the converted form as it is, as the instrument does
+     * with a preset in an older form; [ALWAYS] changes whatever is stored, every time.
+     */
+    enum class Conversion { NONE, ONCE, ALWAYS }
+
+    var conversionOnStore = Conversion.NONE
+    private val converted = HashSet<ByteBuffer>()
+
     enum class ReadFault { BAD_CHECKSUM, MISSING_CHUNK, NO_END }
 
     var readFault: ReadFault? = null
@@ -248,8 +258,16 @@ class FakeAxeFx3(
         if (buffer.image.contentEquals(AxeFx3Fixtures.EMPTY_PRESET_IMAGE)) {
             return Slot(null, AxeFx3Fixtures.NEVER_USED_IMAGE)
         }
+        var data = buffer.image
+        if (conversionOnStore == Conversion.ALWAYS ||
+            (conversionOnStore == Conversion.ONCE && key(data) !in converted)
+        ) {
+            data = mutate(data, chunk = 3, at = 200, xor = 0x15)
+            converted += key(data)
+        }
         // Wire byte 8 of chunk 0's packed region carries dense bits 56-62: decoded byte 5.
-        val image = mutate(buffer.image, chunk = 0, at = 5 + 8)
+        val image = mutate(data, chunk = 0, at = 5 + 8)
+        if (conversionOnStore == Conversion.ONCE) converted += key(image)
         known[key(image)] = buffer.name
         return Slot(buffer.name, image)
     }
