@@ -7,12 +7,17 @@ import android.media.midi.MidiDevice
 import android.media.midi.MidiInputPort
 import android.media.midi.MidiOutputPort
 import android.media.midi.MidiReceiver
+import android.os.Process
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
+
+private const val TAG = "AndroidMidiTransport"
 
 /**
  * [MidiTransport] over `android.media.midi`, which handles USB-MIDI enumeration and unpacks the
@@ -28,8 +33,8 @@ class AndroidMidiTransport(
 ) : MidiTransport {
 
     /**
-     * DROP_OLDEST rather than suspending: this is fed from [MidiReceiver.onSend], a platform
-     * callback that must return promptly.
+     * DROP_OLDEST rather than suspending: this is fed from [MidiReceiveQueue]'s consumer, which
+     * must not wait on a slow collector either.
      *
      * Sized for the fastest large reply any family reads, an Axe-Fx III preset dump: 49 KB at
      * about 105 bytes per millisecond. Assumed, not measured on this path: a platform that hands
@@ -52,16 +57,32 @@ class AndroidMidiTransport(
     /** A MIDI port keeps working across a stay in the background - see [Transport.rebuildOnResume]. */
     override val rebuildOnResume = false
 
+    private val scope = transportScope("MIDI port")
+
+    private val queue = MidiReceiveQueue(scope) { _incoming.tryEmit(it) }
+
+    private var readerBoosted = false
+
     private val receiver = object : MidiReceiver() {
         override fun onSend(data: ByteArray, offset: Int, count: Int, timestamp: Long) {
-            // Clamped rather than trusted: `android.media.midi` also carries virtual ports
-            // published by other apps, and an out-of-range pair would throw on a platform
-            // callback thread.
-            val start = offset.coerceIn(0, data.size)
-            val end = (offset + count).coerceIn(start, data.size)
-            if (end <= start) return
-            // Copied out of the platform's buffer, which it may reuse the moment this returns.
-            _incoming.tryEmit(data.copyOfRange(start, end))
+            if (!readerBoosted) {
+                readerBoosted = true
+                raiseReaderPriority()
+            }
+            queue.push(data, offset, count)
+        }
+    }
+
+    /**
+     * Called on the platform's reader thread, once: a thread at normal priority is descheduled
+     * for long enough, on a busy phone, to overrun the service's small socket during a dump. A
+     * refusal is only logged; the queue alone is still worth having.
+     */
+    private fun raiseReaderPriority() {
+        try {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Couldn't raise the MIDI reader thread's priority", e)
         }
     }
 
@@ -80,6 +101,7 @@ class AndroidMidiTransport(
      */
     override fun close() {
         runCatching { outputPort.disconnect(receiver) }
+        scope.cancel()
         runCatching { outputPort.close() }
         runCatching { inputPort.close() }
         runCatching { device.close() }
