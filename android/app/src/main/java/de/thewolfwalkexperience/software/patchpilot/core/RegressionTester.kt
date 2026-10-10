@@ -3,8 +3,11 @@
 
 package de.thewolfwalkexperience.software.patchpilot.core
 
+import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+
+private const val TAG = "RegressionTester"
 
 enum class Status { PASS, FAIL, SKIPPED }
 
@@ -347,6 +350,8 @@ class RegressionTester(
         check(instrument.browser.refresh(a).name == bName) {
             "${display(a)} does not hold \"$bName\" after the swap."
         }
+        // Until the swap-back lands, an interrupted run leaves the two presets exchanged.
+        Log.i(TAG, "Swapped ${display(a)} and ${display(b)}; swapping back")
         delay(STEP_PAUSE_MS)
         editor.swap(a, b)
         refreshEdited(listOf(a, b))
