@@ -61,6 +61,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | X35 | Search speed | With virtual MIDI ports on the phone (another app's): Back from the presets to the device list; then nothing attached, Retry; then a Pro-800, Axe-Fx III or Subsequent 37 plugged in directly | The device list and "No supported instrument was found" appear within a second; the log's MIDI scan line counts the virtual ports as skipped; the MIDI instrument is still found | 2026-10-10, Nord Grand and Pro-800 | ✓ (114 ms with either attached; the Pro-800 found by probing 1 of 5 ports) |
 | X36 | Retry reopens the failed instrument | Auto-connect off. On a Motif XS set MIDI In/Out away from USB, pick it, wait for the advice, set it back to USB, tap Retry. Separately: deny the USB permission, then tap Retry | The same instrument opens, with no stop at the device list | 2026-10-10, Motif XS6 | ✓ |
 | X37 | One instrument through two paths | A MIDI instrument on the hub, with a MIDI interface or hub cabled to its DIN ports on the same hub (an Axe-Fx III and an iConnectivity mioXL) | Two rows, told apart by "via <interface>" on the one that is not its own USB connection; either connects | 2026-10-10, Axe-Fx III with an iConnectivity mioXL | ✓ (both rows list presets; the one via the interface is much slower, limited by the DIN MIDI rate) |
+| X38 | Regression run behind a MIDI interface | The X37 setup, on the row marked "via": run the debug menu's regression test | It takes minutes, not seconds, and passes: no step times out because of the cable's speed | 2026-10-10, Axe-Fx III with an iConnectivity mioXL | ◐ open: a copy of preset 000, a read, a write and a delete passed (about 4 min for the copy); the full regression run not run |
 
 ## 3. Nord
 
@@ -117,13 +118,13 @@ Not yet run in the app. Use scratch slots, and back the unit up with Axe-Edit II
 
 | # | Case | Steps | Pass when | Last run | Result |
 |---|---|---|---|---|---|
-| A1 | Discovery and attach | Connect fresh next to another MIDI port; unplug and replug with the app backgrounded | No permission prompt; found by its firmware query; the replug offers the app and connects without Retry | – | – |
-| A2 | Model and firmware | Connect; generate the device report | "Fractal Audio Axe-Fx III Mark I", firmware 32.06, no advisory; `capabilities` `336, 2048, 2048, 16, 512`; record `loadedPresetQueryWorks` and `loadedPresetNumber` against the display | – | – |
-| A3 | Connect notice | Dismiss the notice; replug; then "Don't show this again", force-stop, relaunch; then Settings → Show Hidden Messages Again, reconnect | Once per run; hidden for good after the tick; back after the Settings item | – | – |
-| A4 | Full listing | Time a listing; compare with Axe-Edit III | All 512 names match; `<EMPTY>` reads as empty; ids `000`–`511`; the rail jumps to `000`/`128`/`256`/`384` | – | – |
-| A5 | Selection | Load about ten presets, listening | Display and sound change every time | – | – |
-| A6 | Dump integrity | The device report three times, once under memory pressure | Every dump read is 17 messages (3,082 bytes ×16, then 11) and the reads agree; a damaged read is retried | – | – |
-| A7 | Regression run | At least two empty slots; run it; check the slots in Axe-Edit III | Every step passes; only the scratch slots were touched, and they are empty again | – | – |
+| A1 | Discovery and attach | Connect fresh next to another MIDI port; unplug and replug with the app backgrounded | No permission prompt; found by its firmware query; the replug offers the app and connects without Retry | 2026-10-10, Axe-Fx III Mark I 32.06 | ◐ open: found by its firmware query and connected; the replug with the app backgrounded not run |
+| A2 | Model and firmware | Connect; generate the device report | "Fractal Audio Axe-Fx III Mark I", firmware 32.06, no advisory; `capabilities` `336, 2048, 2048, 16, 512`; record `loadedPresetQueryWorks` and `loadedPresetNumber` against the display | 2026-10-10, Axe-Fx III Mark I 32.06 | ◐ open: "Fractal Audio Axe-Fx III Mark I", firmware 32.06, 512 presets, no advisory, loaded-preset query works; `capabilities` and `loadedPresetNumber` not compared with the display |
+| A3 | Connect notice | Dismiss the notice; replug; then "Don't show this again", force-stop, relaunch; then Settings → Show Hidden Messages Again, reconnect | Once per run; hidden for good after the tick; back after the Settings item | 2026-10-10, Axe-Fx III Mark I 32.06 | ◐ open: the notice shows once per run; the "Don't show this again" and Settings parts not run |
+| A4 | Full listing | Time a listing; compare with Axe-Edit III | All 512 names match; `<EMPTY>` reads as empty; ids `000`–`511`; the rail jumps to `000`/`128`/`256`/`384` | 2026-10-10, Axe-Fx III Mark I 32.06 | ◐ open: 512 slots listed in about 2 s over USB (about 20 s through a MIDI interface); the names not compared with Axe-Edit III |
+| A5 | Selection | Load about ten presets, listening | Display and sound change every time | 2026-10-10, Axe-Fx III Mark I 32.06 | ✓ |
+| A6 | Dump integrity | The device report three times | Every dump read is 17 messages (3,082 bytes ×16, then 11) and the reads agree; a damaged read is retried | 2026-10-10, Axe-Fx III Mark I 32.06 | ◐ open: a damaged read (14 messages of 17) was retried and the dump read; the device report three times not run |
+| A7 | Regression run | At least two empty slots; run it; check the slots in Axe-Edit III | Every step passes; only the scratch slots were touched, and they are empty again | 2026-10-10, Axe-Fx III Mark I 32.06 | ◐ open: 13 passed, 1 skipped (categories and favorites); the slots not checked in Axe-Edit III |
 | A8 | The loaded preset is restored | Load X; rename, copy, move X, swap X, delete X | After each edit the unit is back on X (at its new number after a move or swap) | – | – |
 | A9 | Names | Rename to 31 characters with `-_.()/!`; give a slot a 32-character name in Axe-Edit III and refresh | The renames read back exactly; a 32-character name listing whole means the limit can be 32 | – | – |
 | A10 | Unsaved panel changes | Change a parameter on X without saving, copy X in the app | Record whether the copy carries the change; X's change is lost, as the notice says | – | – |
@@ -132,6 +133,7 @@ Not yet run in the app. Use scratch slots, and back the unit up with Axe-Edit II
 | A13 | Home and lock during a listing | Start a listing; Home and return; then lock and unlock | The listing continues and is complete on return | – | – |
 | A14 | Phone audio | Play audio while connected | Record whether it goes to the unit's USB audio | – | – |
 | A15 | Mark II | On a Mark II or Mark II Turbo: A2, A4, then copy and delete above 511 | "Mark II" with 1,024 presets behind the untested-model advisory; edits above 511 work | – | – (no unit) |
+| A16 | Copy a factory preset | Copy preset 000 to a free slot, then copy that copy to another | Both copies are accepted; the first reads back converted by the instrument (thousands of bytes differ), the second identical | 2026-10-10, Axe-Fx III Mark I 32.06 | ✓ |
 
 ## 7. Moog Subsequent 37
 
