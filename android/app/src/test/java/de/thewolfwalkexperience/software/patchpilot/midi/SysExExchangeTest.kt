@@ -28,6 +28,65 @@ class SysExExchangeTest {
             payload +
             Pro800SysEx.SYSEX_END
 
+    /** Android's MIDI service drops a receiver that falls behind, and the port is then silent for good. */
+    @Test
+    fun `a request unanswered because the port was dropped is answered after the transport recovers`() = runTest {
+        var dropped = true
+        val transport = FakeMidiTransport { if (dropped) emptyList() else listOf(dump(7)) }
+        transport.onRecover = { dropped = false }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val reply = exchange.exchange(Pro800SysEx.requestDump(7), "reading 7", timeout = 1.seconds, retries = 1) {
+            Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_DUMP
+        }
+
+        assertEquals(7, Pro800SysEx.addressOf(reply))
+        assertEquals(1, transport.recoveries)
+    }
+
+    @Test
+    fun `an answered request does not touch the transport`() = runTest {
+        val transport = FakeMidiTransport { listOf(dump(7)) }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        exchange.exchange(Pro800SysEx.requestDump(7), "reading 7") { true }
+
+        assertEquals(0, transport.recoveries)
+    }
+
+    @Test
+    fun `a sequence that goes silent ends in a timeout after asking the transport to recover`() = runTest {
+        val transport = FakeMidiTransport { emptyList() }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val failure = runCatching {
+            exchange.exchangeSequence(
+                Pro800SysEx.requestDump(0),
+                what = "reading a dump",
+                timeout = 5.seconds,
+                idleTimeout = 1.seconds,
+                done = { false },
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is InstrumentException.Timeout)
+        assertEquals(1, transport.recoveries)
+    }
+
+    /** A failing recovery is logged; what the caller sees is still the request's own timeout. */
+    @Test
+    fun `a recovery that fails does not hide the timeout`() = runTest {
+        val transport = FakeMidiTransport { emptyList() }
+        transport.onRecover = { error("the port cannot be reopened") }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val failure = runCatching {
+            exchange.exchange(Pro800SysEx.requestDump(7), "reading 7", timeout = 1.seconds, retries = 0) { true }
+        }.exceptionOrNull()
+
+        assertTrue(failure is InstrumentException.Timeout)
+    }
+
     /** Behind another interface everything crosses a DIN cable: the timeout grows by the time that takes. */
     @Test
     fun `a slow link allows for the time to send the request and receive a message`() = runTest {

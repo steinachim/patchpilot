@@ -49,6 +49,18 @@ class FakeMidiTransport(
 
     override var slowLink = false
 
+    /** How many times the exchange asked for [recover], after a request went unanswered. */
+    var recoveries = 0
+        private set
+
+    /** Runs when the exchange asks the transport to [recover]. */
+    var onRecover: () -> Unit = {}
+
+    override suspend fun recover() {
+        recoveries++
+        onRecover()
+    }
+
     var closed = false
         private set
 

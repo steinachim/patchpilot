@@ -28,9 +28,14 @@ private const val TAG = "AndroidMidiTransport"
  */
 class AndroidMidiTransport(
     private val device: MidiDevice,
+    private val portIndex: Int,
     private val inputPort: MidiInputPort,
-    private val outputPort: MidiOutputPort,
+    outputPort: MidiOutputPort,
 ) : MidiTransport {
+
+    /** Replaced by [recover]; the service drops the one it has when its socket to this app overflows. */
+    @Volatile
+    private var outputPort: MidiOutputPort = outputPort
 
     /**
      * DROP_OLDEST rather than suspending: this is fed from [MidiReceiveQueue]'s consumer, which
@@ -61,6 +66,7 @@ class AndroidMidiTransport(
 
     private val queue = MidiReceiveQueue(scope) { _incoming.tryEmit(it) }
 
+    @Volatile
     private var readerBoosted = false
 
     private val receiver = object : MidiReceiver() {
@@ -87,7 +93,24 @@ class AndroidMidiTransport(
     }
 
     init {
-        outputPort.connect(receiver)
+        this.outputPort.connect(receiver)
+    }
+
+    /**
+     * Opens the device's output port again and connects the receiver to it: the service reads
+     * `mOutputPortOpenCount=[0]` for a port it has dropped, and a new one is the way back. An
+     * output port can be open in several places, so this also works where nothing was dropped.
+     * The reader thread is the new port's, so it is raised again.
+     */
+    override suspend fun recover() = withContext(Dispatchers.IO) {
+        val fresh = device.openOutputPort(portIndex) ?: return@withContext
+        val old = outputPort
+        fresh.connect(receiver)
+        outputPort = fresh
+        readerBoosted = false
+        runCatching { old.disconnect(receiver) }
+        runCatching { old.close() }
+        Log.w(TAG, "Reopened the MIDI output port after a request went unanswered")
     }
 
     /** [MidiInputPort.send] writes to the MIDI service's socket, so it runs off the caller's thread. */

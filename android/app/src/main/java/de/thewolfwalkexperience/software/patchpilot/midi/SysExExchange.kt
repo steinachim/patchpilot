@@ -183,6 +183,8 @@ class SysExExchange(
                 }
             }
             if (reply != null) return@withLock reply
+            // Before the retry, which a dropped port would otherwise find as silent as the first.
+            recoverQuietly(what)
         }
         if (damaged) throw InstrumentException.ReplyDamaged(what)
         throw InstrumentException.Timeout(what)
@@ -239,6 +241,7 @@ class SysExExchange(
         }
         if (finished == null) {
             Log.w(TAG, "'$what': sequence never terminated (${collected.size} messages in)")
+            recoverQuietly(what)
             throw InstrumentException.Timeout(what)
         }
         collected
@@ -288,7 +291,11 @@ class SysExExchange(
                 awaited.await()
             }
         }
-        reply ?: throw InstrumentException.Timeout(what)
+        if (reply == null) {
+            recoverQuietly(what)
+            throw InstrumentException.Timeout(what)
+        }
+        reply
     }
 
     /**
@@ -335,6 +342,17 @@ class SysExExchange(
     private suspend fun drainStale() {
         withTimeoutOrNull(DRAIN_WINDOW) {
             messages.collect { /* discard */ }
+        }
+    }
+
+    /** [MidiTransport.recover] after an unanswered request: a failure there must not hide the timeout. */
+    private suspend fun recoverQuietly(what: String) {
+        try {
+            transport.recover()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Couldn't recover the port after '$what' went unanswered", e)
         }
     }
 

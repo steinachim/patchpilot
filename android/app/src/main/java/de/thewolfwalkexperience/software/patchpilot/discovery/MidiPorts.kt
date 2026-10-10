@@ -87,7 +87,7 @@ class AndroidMidiPorts(context: Context) : MidiPorts {
                 device.close()
                 error("${port.label} has no output port $index to listen on.")
             }
-        return AndroidMidiTransport(device, inputPort, outputPort)
+        return AndroidMidiTransport(device, index, inputPort, outputPort)
     }
 
     /**

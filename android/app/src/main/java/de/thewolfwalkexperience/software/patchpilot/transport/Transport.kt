@@ -78,4 +78,12 @@ interface MidiTransport : Transport {
      * a USB timeout leaves out: a 3 kB message about two seconds, a preset dump half a minute.
      */
     val slowLink: Boolean get() = false
+
+    /**
+     * Called after a request went unanswered, before it is asked again: reopens whatever the
+     * platform may have dropped meanwhile. Android's MIDI service drops an app's receiver for good
+     * when its socket to the app overflows, and nothing says so: the port just stays silent. A
+     * transport with nothing to reopen does nothing, and one that has been fine loses nothing.
+     */
+    suspend fun recover() {}
 }
