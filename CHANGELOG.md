@@ -15,7 +15,7 @@
 - On a Nord, the preset list updates faster after an edit: only the changed slots are read back, not the whole program list.
 - The messages after a rename or delete read like the others: "Renamed A:1:1 to "Pad"." and "Deleted A:1:1."
 - The warning about untested firmware above the preset list now takes one line; Details shows the full text.
-- The untested-firmware and unknown-device warnings no longer offer demo mode; the device list they lead back to does.
+- The screens that ask about one instrument (untested firmware, unknown device, USB permission, a setting to change, a connection error) no longer offer demo mode; the device list they lead back to does.
 - Searching for instruments skips the virtual MIDI ports other apps provide and a Nord's own MIDI port, which cost about 2 seconds each; an instrument plugged in directly is tried first.
 
 ### Fixed

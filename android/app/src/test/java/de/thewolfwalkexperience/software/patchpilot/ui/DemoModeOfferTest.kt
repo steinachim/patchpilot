@@ -9,7 +9,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Where the connect screen offers demo mode: off the two gates, on the screens they lead back to. */
+/** Where the connect screen offers demo mode: off the screens about one instrument, on the screens they lead back to. */
 class DemoModeOfferTest {
 
     private val device = object : AttachedUsbDevice {
@@ -21,9 +21,12 @@ class DemoModeOfferTest {
     }
 
     @Test
-    fun `the advisory and unknown-device gates do not offer demo mode`() {
+    fun `the screens that ask about one instrument do not offer demo mode`() {
         assertFalse(offersDemoMode(ConnectionState.AdvisoryWarning(DemoInstrument(), "Untested firmware.")))
         assertFalse(offersDemoMode(ConnectionState.UnknownDeviceWarning(device)))
+        assertFalse(offersDemoMode(ConnectionState.PermissionDenied("Nord Grand")))
+        assertFalse(offersDemoMode(ConnectionState.NeedsManualSetting("Not answering.", emptyList(), null)))
+        assertFalse(offersDemoMode(ConnectionState.Error("Failed.")))
     }
 
     @Test

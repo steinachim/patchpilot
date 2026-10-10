@@ -364,8 +364,9 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
 /**
  * Whether the connect screen offers demo mode in [state]. Not while a real connection attempt is
  * in flight or has landed: Connected navigates away, and Searching/Opening are moments when an
- * instrument might show up. Nor on the advisory and unknown-device gates: each asks one question
- * about the instrument in front of it, and both lead back to the device list, which offers it.
+ * instrument might show up. Nor on the screens that ask about one instrument - the advisory, the
+ * unknown device, the permission, the setting to change and the error: all lead back to the
+ * device list, which offers it, and so does "No supported instrument was found".
  */
 internal fun offersDemoMode(state: ConnectionState): Boolean = when (state) {
     ConnectionState.Searching,
@@ -373,12 +374,12 @@ internal fun offersDemoMode(state: ConnectionState): Boolean = when (state) {
     is ConnectionState.Connected,
     is ConnectionState.AdvisoryWarning,
     is ConnectionState.UnknownDeviceWarning,
+    is ConnectionState.PermissionDenied,
+    is ConnectionState.NeedsManualSetting,
+    is ConnectionState.Error,
     -> false
 
     ConnectionState.Disconnected,
-    is ConnectionState.Error,
-    is ConnectionState.PermissionDenied,
-    is ConnectionState.NeedsManualSetting,
     is ConnectionState.NothingFound,
     is ConnectionState.DeviceSelection,
     is ConnectionState.DeviceLost,
