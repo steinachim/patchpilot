@@ -348,24 +348,41 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                     }
                 }
 
-                // Not offered while a real connection attempt is in flight or has landed: Connected
-                // navigates away, and Searching/Opening are moments when an instrument might show up.
-                if (state !is ConnectionState.Searching &&
-                    state !is ConnectionState.Opening &&
-                    state !is ConnectionState.Connected
-                ) {
+                if (offersDemoMode(state)) {
                     Spacer(Modifier.height(24.dp))
                     // One demo device, not one per family: a second entry would read as a second
-                    // instrument the app claims to support. Off while a report reads, as Continue
-                    // anyway is: switching to demo mode would wait for the read and then drop it.
-                    TextButton(
-                        onClick = { viewModel.connection.connectDemo() },
-                        enabled = !reportShare.running,
-                    ) { Text(stringResource(R.string.action_try_demo)) }
+                    // instrument the app claims to support.
+                    TextButton(onClick = { viewModel.connection.connectDemo() }) {
+                        Text(stringResource(R.string.action_try_demo))
+                    }
                 }
             }
         }
     }
+}
+
+/**
+ * Whether the connect screen offers demo mode in [state]. Not while a real connection attempt is
+ * in flight or has landed: Connected navigates away, and Searching/Opening are moments when an
+ * instrument might show up. Nor on the advisory and unknown-device gates: each asks one question
+ * about the instrument in front of it, and both lead back to the device list, which offers it.
+ */
+internal fun offersDemoMode(state: ConnectionState): Boolean = when (state) {
+    ConnectionState.Searching,
+    is ConnectionState.Opening,
+    is ConnectionState.Connected,
+    is ConnectionState.AdvisoryWarning,
+    is ConnectionState.UnknownDeviceWarning,
+    -> false
+
+    ConnectionState.Disconnected,
+    is ConnectionState.Error,
+    is ConnectionState.PermissionDenied,
+    is ConnectionState.NeedsManualSetting,
+    is ConnectionState.NothingFound,
+    is ConnectionState.DeviceSelection,
+    is ConnectionState.DeviceLost,
+    -> true
 }
 
 /**

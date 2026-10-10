@@ -640,8 +640,7 @@ internal class ConnectionCoordinator(
      */
     fun connectDemo() {
         launchConnect(failureMessage = strings.get(R.string.connect_failed_demo)) {
-            // Offered on the advisory gate, where a real instrument is already the session: it is
-            // closed here, so its port is not left claimed.
+            // Whatever session is still open is closed first, so its port is not left claimed.
             teardownCurrentInstrument()
             // No bus and no device handle: nothing to detach, and nothing for the cache to key on.
             connectAndPublish(demo(), origin = null, physicalKey = null, handle = null)

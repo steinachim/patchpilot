@@ -14,6 +14,7 @@
 - On a Nord, the preset list updates faster after an edit: only the changed slots are read back, not the whole program list.
 - The messages after a rename or delete read like the others: "Renamed A:1:1 to "Pad"." and "Deleted A:1:1."
 - The warning about untested firmware above the preset list now takes one line; Details shows the full text.
+- The untested-firmware and unknown-device warnings no longer offer demo mode; the device list they lead back to does.
 
 ### Fixed
 - Unplugging an instrument that had failed to open no longer interrupts a session started afterwards, such as demo mode.
@@ -26,7 +27,6 @@
 - After Android closes Patch Pilot in the background, reopening it reconnects the instrument instead of staying on “Connecting…”.
 - Leaving the preset list while a device report or another operation is running now goes straight to the instrument list, instead of bouncing back or stopping at “Connecting…”.
 - Returning to the app reconnects the instrument that was in use: with two attached it no longer switches to the other, and with auto-connect off it no longer asks which one every time.
-- Choosing demo mode on the untested-firmware warning releases the instrument, so the next search finds it.
 - An accepted firmware warning is no longer shown again each time the app returns from the background.
 - On a Nord, an edit the instrument applies to a different slot than the one chosen is reported as such, with a prompt to refresh the list, instead of as a refusal; and a write is no longer reported as failed when only the display refresh after it goes unconfirmed.
 - Moving a Yamaha Motif XS voice onto a slot that holds one, which an out-of-date list can show as empty, is now refused instead of overwriting that voice.
