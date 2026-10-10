@@ -7,6 +7,7 @@ import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
 import de.thewolfwalkexperience.software.patchpilot.discovery.Candidate
 import de.thewolfwalkexperience.software.patchpilot.discovery.DeviceDiscovery
@@ -328,6 +329,95 @@ class ConnectionCoordinatorTest {
             listOf(stageKey, grandKey),
             picker.entries.map { (it as PickerEntry.Known).candidate.physicalKey },
         )
+    }
+
+    /**
+     * The instrument is fixed (a setting changed on it), and Retry opens it again: with auto-connect
+     * off a search would end at the picker instead.
+     */
+    @Test
+    fun `retry after a setting to change opens the same instrument, with auto-connect off`() = runSession { session ->
+        val events = mutableListOf<String>()
+        var answers = false
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate)) { FakeTransport() },
+            autoConnect = false,
+            events = events,
+            create = {
+                if (!answers) {
+                    throw InstrumentException.NeedsManualSetting("Not answering.", steps = listOf("Change it."))
+                }
+                DemoInstrument()
+            },
+        )
+        coordinator.connect()
+        advanceUntilIdle()
+        coordinator.selectEntry(PickerEntry.Known(stageCandidate))
+        advanceUntilIdle()
+        assertTrue(coordinator.state.value is ConnectionState.NeedsManualSetting)
+
+        answers = true
+        coordinator.retry()
+        advanceUntilIdle()
+
+        assertTrue("got ${coordinator.state.value}", coordinator.state.value is ConnectionState.Connected)
+    }
+
+    @Test
+    fun `retry after a refused permission opens the same instrument, with auto-connect off`() = runSession { session ->
+        var granted = false
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate)) {
+                if (!granted) throw SecurityException("denied") else FakeTransport()
+            },
+            autoConnect = false,
+        )
+        coordinator.connect()
+        advanceUntilIdle()
+        coordinator.selectEntry(PickerEntry.Known(stageCandidate))
+        advanceUntilIdle()
+        assertTrue(coordinator.state.value is ConnectionState.PermissionDenied)
+
+        granted = true
+        coordinator.retry()
+        advanceUntilIdle()
+
+        assertTrue("got ${coordinator.state.value}", coordinator.state.value is ConnectionState.Connected)
+    }
+
+    @Test
+    fun `retry with no failed attempt behind it searches as connect does`() = runSession { session ->
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate)) { FakeTransport() },
+            autoConnect = false,
+        )
+        coordinator.retry()
+        advanceUntilIdle()
+        assertTrue("got ${coordinator.state.value}", coordinator.state.value is ConnectionState.DeviceSelection)
+    }
+
+    /** The instrument that failed is gone: the search offers what is there, never another instrument unasked. */
+    @Test
+    fun `retry after the failed instrument was unplugged does not open another one`() = runSession { session ->
+        val discovery = FakeDiscovery(listOf(stageCandidate, grandCandidate)) { candidate ->
+            if (candidate == stageCandidate) throw SecurityException("denied") else FakeTransport()
+        }
+        val coordinator = coordinator(session, FakeUsbHost(), discovery, autoConnect = true)
+        coordinator.connect()
+        advanceUntilIdle()
+        assertTrue(coordinator.state.value is ConnectionState.PermissionDenied)
+
+        discovery.candidates = listOf(grandCandidate)
+        coordinator.retry()
+        advanceUntilIdle()
+
+        assertTrue("got ${coordinator.state.value}", coordinator.state.value is ConnectionState.DeviceSelection)
     }
 
     /** One unplug that fails to be handled must not end detection for the rest of the session. */

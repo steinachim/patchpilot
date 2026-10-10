@@ -166,6 +166,17 @@ internal class ConnectionCoordinator(
     private var lastScanForcedPicker = false
 
     /**
+     * The device the latest attempt tried to open, for [retry]: after a failure that is the
+     * instrument's to fix (a permission, a setting on the instrument), Retry asks about that
+     * device again instead of searching, which with auto-connect off ends at the picker. Cleared
+     * by every new search, so a failure of the search itself retries as a search.
+     */
+    private var lastAttempt: SessionOrigin? = null
+
+    /** The unrecognised device behind [lastAttempt] when it is [SessionOrigin.Guessed]. */
+    private var lastAttemptedUnknown: AttachedUsbDevice? = null
+
+    /**
      * Starts listening for USB detaches; called once. Guarded, unlike this class's other
      * fire-and-forget launches: the scope installs no CoroutineExceptionHandler, and registering a
      * receiver can fail for reasons outside this app's control. Losing detach detection is a small
@@ -377,6 +388,25 @@ internal class ConnectionCoordinator(
     }
 
     /**
+     * Retry after a failed attempt: opens the device that attempt tried again, found by a scan of
+     * its bus ([reopen]), whatever auto-connect says. Searches as [connect] does where no device
+     * was being opened, and offers the picker where that device is gone.
+     */
+    fun retry() {
+        val attempt = lastAttempt
+        val unknown = lastAttemptedUnknown
+        when {
+            attempt is SessionOrigin.Recognised -> launchConnect { reopen(attempt.candidate) }
+
+            attempt == SessionOrigin.Guessed && unknown != null &&
+                usb.attachedDevices().any { it.physicalKey == unknown.physicalKey } ->
+                launchConnect { connectUnknownDevice(unknown) }
+
+            else -> connect()
+        }
+    }
+
+    /**
      * Scans and offers the picker whatever auto-connect says: from the permission screen, where
      * Retry asks about the same device again and another attached one would be out of reach.
      */
@@ -400,6 +430,8 @@ internal class ConnectionCoordinator(
      */
     private suspend fun performConnect(forcePicker: Boolean) {
         lastScanForcedPicker = forcePicker
+        lastAttempt = null
+        lastAttemptedUnknown = null
         _state.value = ConnectionState.Searching
         val catalog = catalog()
         val autoConnect = autoConnect()
@@ -431,6 +463,7 @@ internal class ConnectionCoordinator(
 
     /** Opens a recognized candidate on whichever bus found it and builds its family's instrument. */
     private suspend fun connectCandidate(candidate: Candidate) {
+        lastAttempt = SessionOrigin.Recognised(candidate)
         val transport = whileOpening(candidate.physicalKey) {
             _state.value = ConnectionState.Opening(candidate.displayName, candidate.bus)
             try {
@@ -621,6 +654,8 @@ internal class ConnectionCoordinator(
     private suspend fun connectUnknownDevice(device: AttachedUsbDevice) {
         val familyId = UnknownDevicePolicy.familyFor(catalog(), device.vendorId)
             ?: error("${device.label} cannot be opened this way.")
+        lastAttempt = SessionOrigin.Guessed
+        lastAttemptedUnknown = device
         val transport = whileOpening(device.physicalKey) {
             _state.value = ConnectionState.Opening(device.label, Bus.USB)
             if (!usb.requestPermission(device)) {
