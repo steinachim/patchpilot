@@ -13,6 +13,7 @@
 - The rename dialog says why a name can't be stored (characters outside plain ASCII, or a name the instrument reserves) and only enables Rename for a name that can, before anything is sent.
 - On a Nord, the preset list updates faster after an edit: only the changed slots are read back, not the whole program list.
 - The messages after a rename or delete read like the others: "Renamed A:1:1 to "Pad"." and "Deleted A:1:1."
+- The warning about untested firmware above the preset list now takes one line; Details shows the full text.
 
 ### Fixed
 - Unplugging an instrument that had failed to open no longer interrupts a session started afterwards, such as demo mode.

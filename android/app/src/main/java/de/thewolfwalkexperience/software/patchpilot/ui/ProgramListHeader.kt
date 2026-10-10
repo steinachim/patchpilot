@@ -23,11 +23,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
@@ -68,22 +73,7 @@ internal fun ProgramListHeader(
             onSelect = onSelectScope,
         )
     }
-    // Stays for the whole session: the reason has to still be on screen when a rename goes
-    // wrong an hour after the connect screen asked.
-    if (advisory != null) {
-        Surface(
-            color = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-            shape = MaterialTheme.shapes.small,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-        ) {
-            Text(
-                advisory,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(12.dp),
-            )
-        }
-    }
+    if (advisory != null) AdvisoryBanner(advisory)
     // Picking a destination happens in the list itself rather than behind a dialog: occupied
     // rows grey out, empty rows show regardless of the filter, and tapping one resolves the
     // pick (see [ProgramsController.onPickConfirmed]). This banner is the persistent sign
@@ -235,4 +225,42 @@ private fun PresetScope.noteRes(): Int? = when (this) {
     PresetScope.USER -> null
     PresetScope.FACTORY -> R.string.programs_scope_note_factory
     PresetScope.FAVORITES -> R.string.programs_scope_note_favorites
+}
+
+/**
+ * The advisory, for the whole session: the reason has to still be on screen when a rename goes
+ * wrong an hour after the connect screen asked. One line above the list, with the full text a
+ * tap away, since the connect screen has already shown it in full.
+ */
+@Composable
+internal fun AdvisoryBanner(advisory: String) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+    ) {
+        Column(Modifier.padding(start = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.connect_advisory_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(stringResource(if (expanded) R.string.action_hide_details else R.string.action_details))
+                }
+            }
+            if (expanded) {
+                Text(
+                    advisory,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(end = 12.dp, bottom = 12.dp),
+                )
+            }
+        }
+    }
 }
