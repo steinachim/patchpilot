@@ -36,6 +36,9 @@ interface MidiPort {
 
     /** The backing USB device's ids, where the platform exposes one. */
     val usbIds: UsbIds?
+
+    /** Whether another app provides this port (a `MidiDeviceService`) rather than hardware behind USB or Bluetooth. */
+    val virtual: Boolean
 }
 
 /** What discovery needs of the MIDI bus: [AndroidMidiPorts] in the app, a fake in a test. */
@@ -118,6 +121,7 @@ private class AndroidMidiPort(val info: MidiDeviceInfo) : MidiPort {
     override val physicalKey: String get() = info.usbDevice()?.physicalKey() ?: "midi:${info.id}"
     override val handle: String get() = "midi:${info.id}"
     override val usbIds: UsbIds? get() = info.usbDevice()?.let { UsbIds(it.vendorId, it.productId) }
+    override val virtual: Boolean get() = info.type == MidiDeviceInfo.TYPE_VIRTUAL
 }
 
 /**

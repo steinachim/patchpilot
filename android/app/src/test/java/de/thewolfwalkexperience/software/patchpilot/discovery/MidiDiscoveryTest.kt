@@ -25,6 +25,7 @@ class MidiDiscoveryTest {
     private class FakePort(
         override val label: String,
         override val usbIds: UsbIds? = null,
+        override val virtual: Boolean = false,
     ) : MidiPort {
         override val physicalKey get() = usbIds?.let { "usb:${it.vendorId}:${it.productId}" } ?: "midi:$label"
         override val handle get() = "midi:$label"
@@ -53,6 +54,7 @@ class MidiDiscoveryTest {
         prefix: String,
         usbHint: DeviceMatch.Usb? = null,
         portIndex: Int = 0,
+        launchOnUsbAttach: UsbIds? = null,
     ) = InstrumentDescriptor(
         id = id,
         family = id,
@@ -61,6 +63,7 @@ class MidiDiscoveryTest {
             probeHex = probe,
             replyPrefixHex = prefix,
             usbHint = usbHint,
+            launchOnUsbAttach = launchOnUsbAttach,
             portIndex = portIndex,
         ),
     )
@@ -177,6 +180,46 @@ class MidiDiscoveryTest {
 
         assertSame(broad, MidiDiscovery(ports).scan(listOf(broad, pro800)).single().descriptor)
         assertEquals(1, ports.opened.size)
+    }
+
+    /** Another app's port: each one would cost every probe's timeout, and no instrument is reached through one. */
+    @Test
+    fun `a virtual port is never opened, even one that would answer`() = runTest {
+        val ports = FakePorts(listOf(FakePort("MS-1", virtual = true))) { _, _ -> answering(pro800Reply) }
+        assertTrue(MidiDiscovery(ports).scan(listOf(pro800)).isEmpty())
+        assertTrue(ports.opened.isEmpty())
+    }
+
+    /** A Nord's class-compliant interface: the USB scan claims the Nord through its vendor interface. */
+    @Test
+    fun `the MIDI interface of an instrument matched over USB is never opened`() = runTest {
+        val nord =
+            InstrumentDescriptor(id = "nord", family = "nord", name = "Nord", match = DeviceMatch.Usb(0x0FFC, 0x2B))
+        val ports = FakePorts(listOf(FakePort("Nord Grand", UsbIds(0x0FFC, 0x2B)))) { _, _ -> answering(pro800Reply) }
+        assertTrue(MidiDiscovery(ports).scan(listOf(nord, pro800)).isEmpty())
+        assertTrue(ports.opened.isEmpty())
+    }
+
+    @Test
+    fun `an instrument plugged in directly is probed first, with its own probe first`() = runTest {
+        val pro800Direct = descriptor(
+            "pro800",
+            "f0 00 20 32 00 01 24 00 06 f7",
+            "f0 00 20 32 00 01 24 00 07",
+            launchOnUsbAttach = UsbIds(0x1397, 0x125F),
+        )
+        val interfacePort = FakePort("USB MIDI Interface", UsbIds(0x1234, 0x0001))
+        val direct = FakePort("PRO 800", UsbIds(0x1397, 0x125F))
+        val ports = FakePorts(listOf(interfacePort, direct)) { port, _ ->
+            if (port === direct) answering(pro800Reply) else answering()
+        }
+
+        val candidates = MidiDiscovery(ports).scan(listOf(axeFx3, pro800Direct))
+
+        assertEquals(listOf("PRO 800" to 0, "USB MIDI Interface" to 0), ports.opened)
+        assertSame(direct, candidates.first().handle)
+        val probe = (pro800Direct.match as DeviceMatch.MidiIdentity).probe
+        assertTrue(ports.transports.first().sent.single().contentEquals(probe))
     }
 
     @Test

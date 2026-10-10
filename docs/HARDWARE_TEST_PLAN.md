@@ -58,6 +58,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | X32 | Second instrument after a denial | Two supported instruments attached, auto-connect on: Deny the permission for the first, tap "Show all devices", pick the second | The picker lists both; the second connects | – | – |
 | X33 | Permission request left unanswered | As X1, but leave the permission dialog up for over a minute, then Allow | After a minute the app shows "did not get USB access", visible once the dialog is closed; after Allow, Retry connects with no second dialog | 2026-10-10, Nord Grand | ✓ |
 | X34 | Release build | Install the release APK (an uninstall first where a debug build is installed); look at the launcher icon, the connect screen, the preset list, Settings and the debug menu, in both themes | Nothing missing: icon, text, images and fonts as in a debug build | 2026-10-10, Pixel 6 | ✓ |
+| X35 | Search speed | With virtual MIDI ports on the phone (another app's): Back from the presets to the device list; then nothing attached, Retry; then a Pro-800, Axe-Fx III or Subsequent 37 plugged in directly | The device list and "No supported instrument was found" appear within a second; the log's MIDI scan line counts the virtual ports as skipped; the MIDI instrument is still found | – | – |
 
 ## 3. Nord
 

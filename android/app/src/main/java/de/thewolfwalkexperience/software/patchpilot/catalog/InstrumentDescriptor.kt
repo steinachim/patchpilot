@@ -66,10 +66,11 @@ sealed interface DeviceMatch {
         val replyPrefixHex: String,
         val usbHint: Usb? = null,
         /**
-         * The USB ids Android should launch the app for when this device is plugged in. Read only
-         * by the `generate<Variant>UsbDeviceFilter` Gradle task; nothing at runtime matches on it.
-         * Kept apart from [usbHint], which narrows probing: an instrument reached through some
-         * other USB-MIDI interface must still be found.
+         * The USB ids Android should launch the app for when this device is plugged in, read by
+         * the `generate<Variant>UsbDeviceFilter` Gradle task. At runtime it only orders the MIDI
+         * scan: a port with these ids is probed first, with this probe first. Kept apart from
+         * [usbHint], which narrows probing: an instrument reached through some other USB-MIDI
+         * interface must still be found.
          */
         val launchOnUsbAttach: UsbIds? = null,
         /** Which of the device's MIDI ports to probe and then talk on. Zero for every instrument matched this way. */

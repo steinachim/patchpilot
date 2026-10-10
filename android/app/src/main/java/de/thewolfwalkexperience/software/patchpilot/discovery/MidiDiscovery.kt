@@ -28,6 +28,13 @@ private const val TAG = "MidiDiscovery"
  * probed but never decides. Every probe is read-only and idempotent - see
  * [DeviceMatch.MidiIdentity].
  *
+ * A silent port costs every descriptor's probe timeout, so two kinds of port are never probed: a
+ * virtual one, which another app provides and none of the supported instruments is reached
+ * through, and the MIDI interface of a device the catalog matches over USB (a Nord's), which the
+ * USB scan claims through its vendor interface. A port whose USB ids are a descriptor's
+ * `launchOnUsbAttach` goes first, with that descriptor's probe first, so an instrument plugged in
+ * directly answers before anything behind a separate interface is asked.
+ *
  * The bus comes in as [MidiPorts], so the probing runs in a unit test against fake ports.
  */
 class MidiDiscovery(private val ports: MidiPorts) : DeviceDiscovery {
@@ -40,12 +47,26 @@ class MidiDiscovery(private val ports: MidiPorts) : DeviceDiscovery {
         val midiDescriptors = catalog.filter { it.match is DeviceMatch.MidiIdentity }
         if (midiDescriptors.isEmpty()) return emptyList()
 
-        return ports.list().mapNotNull { port ->
+        val listed = ports.list()
+        val claimedOverUsb = catalog.mapNotNull { descriptor ->
+            (descriptor.match as? DeviceMatch.Usb)?.let { UsbIds(it.vendorId, it.productId) }
+        }.toSet()
+        val (virtual, hardware) = listed.partition { it.virtual }
+        val (claimed, unclaimed) = hardware.partition { port -> port.usbIds?.let { it in claimedOverUsb } == true }
+        // Stable, so ports keep the platform's order within each group.
+        val probed = unclaimed.sortedByDescending { port -> midiDescriptors.any { it.launchesFor(port) } }
+        Log.i(
+            TAG,
+            "Probing ${probed.size} of ${listed.size} MIDI ports; skipped ${virtual.size} virtual and " +
+                "${claimed.size} claimed over USB",
+        )
+
+        return probed.mapNotNull { port ->
             // Probing costs a device open, so narrow first where a hint lets us.
             val plausible = midiDescriptors.filter { descriptor ->
                 val hint = (descriptor.match as DeviceMatch.MidiIdentity).usbHint
                 hint == null || port.usbIds == UsbIds(hint.vendorId, hint.productId)
-            }
+            }.sortedByDescending { it.launchesFor(port) }
             if (plausible.isEmpty()) return@mapNotNull null
 
             val identified = identify(port, plausible) ?: return@mapNotNull null
@@ -120,6 +141,12 @@ class MidiDiscovery(private val ports: MidiPorts) : DeviceDiscovery {
          */
         const val PROBE_TIMEOUT_MS = 600L
     }
+}
+
+/** Whether [port] is this MIDI instrument plugged in directly: its USB ids are the descriptor's `launchOnUsbAttach`. */
+private fun InstrumentDescriptor.launchesFor(port: MidiPort): Boolean {
+    val ids = (match as? DeviceMatch.MidiIdentity)?.launchOnUsbAttach ?: return false
+    return port.usbIds == ids
 }
 
 /**

@@ -25,7 +25,7 @@ The `generate<Variant>UsbDeviceFilter` task generates the `xml/device_filter.xml
 A device entry's `match` decides which bus finds it and how:
 
 - `usb`: a USB vendor/product id pair, opened on the USB host bus. `endpointOut`/`endpointIn` default to the Nord vendor interface's `0x03`/`0x82`; the Motif XS uses `0x01`/`0x82`. `midiCable`, when present, says the bulk endpoints carry USB-MIDI event packets on that cable rather than a vendor protocol, and the family wraps the transport in a `UsbMidiBulkTransport`.
-- `midiIdentity`: a MIDI port whose device answers `probeHex` with a reply starting `replyPrefixHex`. `usbHint` narrows which ports are probed and never decides on its own. `launchOnUsbAttach` is a vendor/product id pair for the generated attach filter alone, so Android offers the app when the instrument is plugged in; it does not narrow probing. The probe must be read-only and idempotent.
+- `midiIdentity`: a MIDI port whose device answers `probeHex` with a reply starting `replyPrefixHex`. `usbHint` narrows which ports are probed and never decides on its own. `launchOnUsbAttach` is a vendor/product id pair for the generated attach filter, so Android offers the app when the instrument is plugged in; the MIDI scan also probes a port with these ids first, and it never narrows probing. The probe must be read-only and idempotent.
 
 The Nord file is in its own shape and every entry is a `usb` match on Clavia's vendor id `0x0FFC`.
 
