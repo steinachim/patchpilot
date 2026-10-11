@@ -385,7 +385,7 @@ class Subsequent37Instrument(
             // Assumption: silence here means RCV PGM CHG is off; the instrument says nothing.
             throw InstrumentException.NeedsManualSetting(
                 message = "The Subsequent 37 did not acknowledge loading $displayId. It ignores " +
-                    "Program Changes when RCV PGM CHG is off.",
+                    "Program Changes when RCV PGM CHG is off in the MIDI settings.",
                 steps = listOf(
                     "Press the MIDI button to open the MIDI MENU.",
                     "Go to RCV PGM CHG (MIDI MENU 1.4) and set it to ON.",

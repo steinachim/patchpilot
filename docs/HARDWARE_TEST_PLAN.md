@@ -114,7 +114,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 
 ## 6. Fractal Audio Axe-Fx III
 
-Not yet run in the app. Use scratch slots, and back the unit up with Axe-Edit III first.
+Use scratch slots, and back the unit up with Axe-Edit III first.
 
 | # | Case | Steps | Pass when | Last run | Result |
 |---|---|---|---|---|---|
@@ -137,7 +137,7 @@ Not yet run in the app. Use scratch slots, and back the unit up with Axe-Edit II
 
 ## 7. Moog Subsequent 37
 
-Not yet run in the app. Use scratch slots.
+Use scratch slots.
 
 | # | Case | Steps | Pass when | Last run | Result |
 |---|---|---|---|---|---|
@@ -148,7 +148,7 @@ Not yet run in the app. Use scratch slots.
 | S5 | Dump integrity | During S4, read the `Subsequent37Instrument` log | No "did not arrive whole"; if there is one, record where the dump broke and how long the single reads took | 2026-10-10, Subsequent 37 1.2.0 | ✓ (no "did not arrive whole", dropped message or port recovery in three dumps) |
 | S6 | Panel touched mid dump | Turn a knob about 60 s into a listing | Record whether the dump survives; if not, the listing finishes by single reads once the MIDI button stops blinking | 2026-10-11, Subsequent 37 1.2.0 | ✓ (knobs turned about 60 s into a listing: the dump survived, 256 slots in 145 s, no warning and no single-read fallback in the log) |
 | S7 | Home and lock during a listing | As A13 | As A13 | 2026-10-10, Subsequent 37 1.2.0 | ✓ (Home for 30 s, and a locked screen, in the middle of a listing: both listings finished with all 256 slots; the list was complete on return) |
-| S8 | Reconnect mid dump | About 30 s into a listing, pull and replug the cable | Record what the connect screen shows while the dump runs on; connecting works once the MIDI button stops blinking | 2026-10-11, Subsequent 37 1.2.0 | ✓ (cable pulled and replugged 29 s into a listing: the app was offered and opened on the device list, "No supported instrument was found" with the Moog "Not recognised", until the dump ended 151 s after it started; Retry search then connected. Finding: the text does not say the instrument is busy sending its dump) |
+| S8 | Reconnect mid dump | About 30 s into a listing, pull and replug the cable | Record what the connect screen shows while the dump runs on; connecting works once the MIDI button stops blinking | 2026-10-11, Subsequent 37 1.2.0 | ✓ (cable pulled and replugged 29 s into a listing: the app was offered and opened on the device list, "No supported instrument was found" with the Moog "Not recognised", until the dump ended 151 s after it started; Retry search then connected. The row now reads "Looks like Moog Subsequent 37, which did not answer. It may be busy: wait a moment, then retry.") |
 | S9 | Selection | Load about ten presets with IN CHANNEL at 1, ALL and 4, reconnecting between; then RCV PGM CHG off; then change IN CHANNEL without reconnecting | The panel follows every time; with RCV PGM CHG off the app shows the steps to fix it; after the channel change it still works | 2026-10-11, Subsequent 37 1.2.0 | ✓ (B01/P01 to P08 loaded at IN CHANNEL 4, 1 and ALL, the app re-picked each time and reading the channel: the panel followed all eight every time. With RCV PGM CHG off the load ends after about 2 s with "The Subsequent 37 did not acknowledge loading B01/P02. It ignores Program Changes when RCV PGM CHG is off." (names the setting, not the panel menu path); with it back on, loading works without reconnecting. IN CHANNEL changed to 2 without reconnecting: the next load needed one retry and then worked) |
 | S10 | Busy during a listing | Tap a preset, open the report and rename while a listing runs | Each refused at once with the time left | 2026-10-10, Subsequent 37 1.2.0 | ✓ (a load and the device report were refused at once with "about 2 minutes left"; the row menu stays closed during a listing) |
 | S11 | Regression run | At least two `Init Preset` slots; take a bulk dump with any SysEx tool before and after, and diff | Every step passes; only the scratch slots differ, holding the panel's Initialize | 2026-10-11, Subsequent 37 1.2.0 | ✓ (14 passed, 0 failed, 0 skipped on two empty slots, B09/P16 and B10/P02, "the instrument is as it was"; the bulk dump taken before and after is byte-identical, 203,800 bytes, same md5) |

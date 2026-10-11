@@ -23,6 +23,7 @@
 - Searching for instruments skips the virtual MIDI ports other apps provide and a Nord's own MIDI port, which cost about 2 seconds each; an instrument plugged in directly is tried first.
 - Instruments found on the device list, and the one auto-connect picks, are now ordered alphabetically instead of in the order Android lists USB devices.
 - A MIDI instrument that is attached but did not answer is listed as "Looks like <name>, which did not answer. It may be busy: wait a moment, then retry." instead of "Not recognised", under a heading that says a supported instrument is attached.
+- The Subsequent 37's message about ignored Program Changes says the setting is in the MIDI settings.
 
 ### Fixed
 - Unplugging an instrument that had failed to open no longer interrupts a session started afterwards, such as demo mode.
