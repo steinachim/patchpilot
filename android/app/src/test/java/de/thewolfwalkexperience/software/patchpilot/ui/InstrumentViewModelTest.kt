@@ -111,6 +111,18 @@ class InstrumentViewModelTest {
         assertEquals("Stored Over", runBlocking { demo.refresh(row.address).name })
     }
 
+    /** A replug that beat the edit's failure leaves the preset screen's failure line to say it. */
+    @Test
+    fun `an interrupted edit reported while a session is up is not kept for the disconnect screen`() {
+        val viewModel = viewModel().apply { awaitSettled() }
+        viewModel.connection.connectDemo()
+        viewModel.awaitSettled()
+
+        viewModel.programs.onEditInterrupted?.invoke("Swapping A1 and A2 stopped part way.")
+
+        assertEquals(null, viewModel.interruptedEdit.value)
+    }
+
     private fun remedyOffer() = BlockedOperation("Blocked.", null, "Fix", apply = {}, retry = {})
 
     /** Runs the main looper until the ViewModel's session collector has cleared the remedy offer. */

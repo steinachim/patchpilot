@@ -127,6 +127,15 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      */
     val interruptedEdit: StateFlow<String?> = _interruptedEdit.asStateFlow()
 
+    /**
+     * Kept for the disconnect screen only while that screen is up. After a replug that beat the
+     * edit's failure, the preset screen's own failure line shows the same text, and one kept now
+     * would surface at an unrelated disconnect later.
+     */
+    internal fun keepInterruptedEdit(detail: String) {
+        if (state.value is ConnectionState.DeviceLost) _interruptedEdit.value = detail
+    }
+
     /** The instrument the last session was on, so a session on another one starts [programs] afresh. */
     private var lastSessionKey: String? = null
     private var lastInstrument: Instrument? = null
@@ -148,7 +157,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     )
 
     init {
-        programs.onEditInterrupted = { _interruptedEdit.value = it }
+        programs.onEditInterrupted = ::keepInterruptedEdit
         connection.start()
         // From here rather than from a screen: after process death the restored back stack can
         // start on the preset screen, where nothing else would ever connect.
