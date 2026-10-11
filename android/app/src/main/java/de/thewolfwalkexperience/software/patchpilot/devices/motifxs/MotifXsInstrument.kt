@@ -779,10 +779,9 @@ class MotifXsInstrument(
         /** Pacing between the blocks of a write sequence, matching the vendor editor's spacing. */
         private val BLOCK_GAP = 15.milliseconds
 
-        /** What a failed write leaves behind, whichever way it failed - see `MotifXsEditor.committed`. */
+        /** What an accepted write that could not be taken back leaves behind - see `MotifXsEditor.committed`. */
         internal const val ARMED_WRITE_WARNING =
-            "If this operation had already written another slot, that write is sitting " +
-                "accepted-but-uncommitted inside the instrument and will be applied by the next " +
-                "thing that commits. Switching the instrument off and on discards it."
+            "It is sitting accepted-but-uncommitted inside the instrument and will be applied by " +
+                "the next thing that commits. Switching the instrument off and on discards it."
     }
 }

@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
+import de.thewolfwalkexperience.software.patchpilot.causedBy
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
@@ -1338,26 +1339,36 @@ class MotifXsInstrumentTest {
     // ---- When a write or its commit fails ----
 
     /**
-     * A refused second write leaves the first armed, not stored. The move says so, with the
-     * warning about the armed write, and no commit follows that would apply half of it.
+     * A refused second write leaves the first armed, so the move offers the destination's original
+     * again and commits: the slots end as they were, and the failure is the refusal alone.
      */
     @Test
-    fun `a move whose second write is refused commits nothing and says why`() = runTest {
+    fun `a move whose second write is refused takes the first write back`() = runTest {
         // Bank 0 (USR1, address-mid 0x0A) refuses writes: the move's second write clears its source there.
         val (motif, transport) = instrument(backgroundScope, fake = FakeMotifXs(readOnlyBanks = setOf(0x0A)))
+        val from = SlotAddress(0, 0)
         val to = SlotAddress(1, 1)
+        val sourceBefore = motif.browser.refresh(from).name
 
-        val failure = runCatching { motif.editor!!.move(SlotAddress(0, 0), to) }.exceptionOrNull()
+        val failure = runCatching { motif.editor!!.move(from, to) }.exceptionOrNull()
 
         assertTrue("expected a timeout, got $failure", failure is InstrumentException.Timeout)
-        assertTrue(failure!!.message!!, failure.message!!.contains("accepted-but-uncommitted"))
-        assertTrue(transport.sent.none { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.STORE_HI })
-        assertNull("nothing was committed, so the destination is still empty", motif.browser.refresh(to).name)
+        assertTrue(failure!!.message!!, !failure.message!!.contains("accepted-but-uncommitted"))
+        assertEquals(
+            "the take-back is committed",
+            1,
+            transport.sent.count {
+                MotifXsSysEx.addressOf(it)?.first ==
+                    MotifXsSysEx.STORE_HI
+            },
+        )
+        assertNull("the destination is empty again", motif.browser.refresh(to).name)
+        assertEquals(sourceBefore, motif.browser.refresh(from).name)
     }
 
-    /** As the move: the first write stays armed, so the swap says so and commits nothing. */
+    /** As the move: the swap's first slot gets its original back, and the second was never written. */
     @Test
-    fun `a swap whose second write is refused commits nothing and says why`() = runTest {
+    fun `a swap whose second write is refused takes the first write back`() = runTest {
         // USER 1 (address-mid 0x0A) refuses writes; the swap writes USER 2's slot first.
         val (motif, transport) = instrument(backgroundScope, fake = FakeMotifXs(readOnlyBanks = setOf(0x0A)))
         val a = SlotAddress(1, 0)
@@ -1367,9 +1378,31 @@ class MotifXsInstrumentTest {
         val failure = runCatching { motif.editor!!.swap(a, b) }.exceptionOrNull()
 
         assertTrue("expected a timeout, got $failure", failure is InstrumentException.Timeout)
+        assertTrue(failure!!.message!!, !failure.message!!.contains("accepted-but-uncommitted"))
+        assertEquals(
+            "the take-back is committed",
+            1,
+            transport.sent.count {
+                MotifXsSysEx.addressOf(it)?.first ==
+                    MotifXsSysEx.STORE_HI
+            },
+        )
+        assertEquals("the first slot is as it was", before, motif.browser.refresh(a).name)
+    }
+
+    /** The take-back is refused too: the instrument holds a write, and the failure says so, keeping why. */
+    @Test
+    fun `a swap whose first write cannot be taken back is partly applied`() = runTest {
+        val fake = FakeMotifXs().also { it.slots.refuseAfterAccepted = 1 }
+        val (motif, _) = instrument(backgroundScope, fake = fake)
+        val a = SlotAddress(1, 0)
+        val b = SlotAddress(0, 2)
+
+        val failure = runCatching { motif.editor!!.swap(a, b) }.exceptionOrNull()
+
+        assertTrue("expected a partly applied edit, got $failure", failure is InstrumentException.PartlyApplied)
         assertTrue(failure!!.message!!, failure.message!!.contains("accepted-but-uncommitted"))
-        assertTrue(transport.sent.none { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.STORE_HI })
-        assertEquals("nothing was committed", before, motif.browser.refresh(a).name)
+        assertTrue("why the second write failed is kept", failure.causedBy { it is InstrumentException.Timeout })
     }
 
     @Test

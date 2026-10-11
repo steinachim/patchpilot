@@ -61,6 +61,10 @@ internal class FakeMotifXsSlots(private val readOnly: Set<Int> = emptySet()) {
     /** Stores every committed write with one data bit flipped, so a read-back disagrees. */
     var misstore = false
 
+    /** After this many accepted writes every further data dump is refused; null never refuses. */
+    var refuseAfterAccepted: Int? = null
+    private var accepted = 0
+
     /**
      * Answers a host bulk dump the way the instrument does: a write is acknowledged and
      * *held*, and only `11 00 00` stores it. Writes wait in [pending] until a marker arrives,
@@ -91,6 +95,8 @@ internal class FakeMotifXsSlots(private val readOnly: Set<Int> = emptySet()) {
         }
         if (!MotifXsSysEx.isWellFormedBulkDump(request)) return emptyList()
         if (address.second in readOnly) return emptyList()
+        if (refuseAfterAccepted?.let { accepted >= it } == true) return emptyList()
+        accepted++
         pending[address] = MotifXsSysEx.dumpPayload(request)
         return listOf(ACK)
     }

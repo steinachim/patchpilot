@@ -23,10 +23,10 @@ private const val TAG = "MotifXsEditor"
  *
  * Every operation is write, write, commit, verify. All the writes precede the single commit: a
  * refused write is answered with silence and is not buffered, so a rejected second write stops
- * the operation before anything is committed. That holds only until the next commit, though: a
- * write accepted before the refusal stays held, and the next commit from any edit applies it
- * (see [write]). The read-back comes after the commit, since an acknowledgement is a claim about
- * the message and not about the flash.
+ * the operation before anything is committed. A write accepted before the refusal stays held,
+ * and the next commit from any edit would apply it, so [committed] offers the originals again and
+ * commits, which puts the slots back. The read-back comes after the commit, since an
+ * acknowledgement is a claim about the message and not about the flash.
  */
 internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEditor {
     override val supported =
@@ -113,8 +113,8 @@ internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEdito
     override suspend fun delete(address: SlotAddress) {
         motif.requireWritable(address)
         val blank = blankPayloadFor(address.bank)
-        committed {
-            write(address, blank)
+        committed(emptyMap()) { offers ->
+            write(address, blank, offers)
         }
         verify(address, blank)
     }
@@ -129,9 +129,9 @@ internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEdito
         val payloadB = motif.readVoicePayload(b)
         // Two empty slots swapped are the same two empty slots.
         if (MotifXsVoice.nameOf(payloadA) == null && MotifXsVoice.nameOf(payloadB) == null) return
-        committed {
-            write(a, payloadB)
-            write(b, payloadA)
+        committed(mapOf(a to payloadA, b to payloadB)) { offers ->
+            write(a, payloadB, offers)
+            write(b, payloadA, offers)
         }
         verify(a, payloadB)
         verify(b, payloadA)
@@ -158,8 +158,8 @@ internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEdito
             throw InstrumentException.SlotStateChanged.occupied(motif.layout.format.format(dst))
         }
 
-        committed {
-            write(dst, payload)
+        committed(emptyMap()) { offers ->
+            write(dst, payload, offers)
         }
         verify(dst, payload)
         return name
@@ -182,15 +182,16 @@ internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEdito
         }
         // As in [copyProgram]: the instrument would overwrite an occupied slot without
         // complaint, and a listing out of date offers one as empty.
-        if (MotifXsVoice.nameOf(motif.readVoicePayload(to)) != null) {
+        val toBefore = motif.readVoicePayload(to)
+        if (MotifXsVoice.nameOf(toBefore) != null) {
             throw InstrumentException.SlotStateChanged.occupied(motif.layout.format.format(to))
         }
         // Sourced before the first write, so a bank with no blank to copy fails before
         // anything has been changed rather than after the destination is already written.
         val blank = blankPayloadFor(from.bank)
-        committed {
-            write(to, payload)
-            write(from, blank)
+        committed(mapOf(to to toBefore, from to payload)) { offers ->
+            write(to, payload, offers)
+            write(from, blank, offers)
         }
         verify(to, payload)
         verify(from, blank)
@@ -229,13 +230,11 @@ internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEdito
     /**
      * Offers one slot's worth of new contents and waits to hear it accepted. Nothing is stored
      * yet when this returns (see [commit]); what it establishes is that the instrument took
-     * the message, since a refusal is silence.
-     *
-     * A failure is not always "nothing happened": an earlier accepted write in the same
-     * operation is still held, and the next commit from anywhere applies it. The message says
-     * so, and that a power cycle discards it.
+     * the message, since a refusal is silence. An accepted write is recorded in [offers]: it is
+     * held, and the next commit from anywhere applies it, so [committed] takes it back if a
+     * later write fails.
      */
-    private suspend fun write(address: SlotAddress, payload: ByteArray) {
+    private suspend fun write(address: SlotAddress, payload: ByteArray, offers: Offers) {
         val bank = motif.config.banks[address.bank]
         val where = motif.layout.format.format(address)
         try {
@@ -258,15 +257,20 @@ internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEdito
                 "writing $where",
                 e,
                 explanation = "The instrument refused the write to $where, so nothing has " +
-                    "been stored. ${MotifXsInstrument.ARMED_WRITE_WARNING}",
+                    "been stored.",
             )
         } catch (e: Exception) {
             throw InstrumentException.TransportLost(
-                "The write to $where failed (${e.message}), so nothing has been stored. " +
-                    MotifXsInstrument.ARMED_WRITE_WARNING,
+                "The write to $where failed (${e.message}), so nothing has been stored.",
                 e,
             )
         }
+        offers.accepted += address
+    }
+
+    /** The writes accepted since the last commit: held by the instrument, applied by the next commit. */
+    private class Offers {
+        val accepted = mutableListOf<SlotAddress>()
     }
 
     /**
@@ -277,12 +281,53 @@ internal class MotifXsEditor(private val motif: MotifXsInstrument) : PresetEdito
      * operation. `viewModelScope` removes the ordinary triggers
      * (`InstrumentViewModel.launchEdit`) but not `onCleared()`.
      *
+     * A failed write after an accepted one leaves that one armed. [originals] holds what each
+     * slot written holds now: the instrument replaces a held write with a later one to the same
+     * address (measured), so offering the originals again and committing puts the slots back.
+     * Where that fails too, the instrument is left holding a write the next commit will apply,
+     * and the failure says so.
+     *
      * The verify stays outside: it is a read, so cancelling it changes nothing on the
      * instrument and lets a torn-down session stop promptly.
      */
-    private suspend fun committed(writes: suspend () -> Unit) = withContext(NonCancellable) {
-        writes()
-        commit()
+    private suspend fun committed(originals: Map<SlotAddress, ByteArray>, writes: suspend (Offers) -> Unit) =
+        withContext(NonCancellable) {
+            val offers = Offers()
+            try {
+                writes(offers)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                throw afterFailedWrite(offers, originals, e)
+            }
+            commit()
+        }
+
+    /** What to throw once a write has failed: [failure] itself where the instrument is as it was, else [InstrumentException.PartlyApplied]. */
+    private suspend fun afterFailedWrite(
+        offers: Offers,
+        originals: Map<SlotAddress, ByteArray>,
+        failure: Exception,
+    ): Exception {
+        if (offers.accepted.isEmpty()) return failure
+        val held = offers.accepted.toList()
+        val where = held.joinToString { motif.layout.format.format(it) }
+        val restore = Offers()
+        try {
+            held.forEach { write(it, originals.getValue(it), restore) }
+            commit()
+            Log.w(TAG, "Took back the accepted write to $where")
+            return failure
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not take back the accepted write to $where after: ${failure.message}", e)
+            return InstrumentException.PartlyApplied(
+                "${failure.message} The write to $where had been accepted and could not be taken " +
+                    "back. ${MotifXsInstrument.ARMED_WRITE_WARNING}",
+                failure,
+            )
+        }
     }
 
     /**
