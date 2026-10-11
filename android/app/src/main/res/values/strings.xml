@@ -74,6 +74,8 @@
     <string name="settings_show_hidden_notices_none">No messages are hidden.</string>
     <string name="settings_legal_heading">Legal</string>
     <string name="settings_open_source_licenses">Open Source Licenses</string>
+    <string name="settings_source_code">Source Code on GitHub</string>
+    <string name="settings_source_code_url" translatable="false">https://github.com/steinachim/patchpilot</string>
     <string name="licenses_title">Open Source Licenses</string>
     <string name="licenses_patchpilot_license">GNU General Public License v3.0</string>
     <string name="licenses_apache_license">Apache License, Version 2.0</string>

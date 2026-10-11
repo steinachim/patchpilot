@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
+import android.content.ActivityNotFoundException
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -27,7 +29,7 @@ import de.thewolfwalkexperience.software.patchpilot.ui.theme.AppTheme
 
 /**
  * The theme picker, the auto-connect toggle, bringing back hidden instrument notices, and the
- * legal links. The theme picker is a radio list rather than a switch, since [AppTheme] is what a
+ * legal and source-code links. The theme picker is a radio list rather than a switch, since [AppTheme] is what a
  * third skin would extend. Every setting applies immediately: each writes through DataStore,
  * which its readers collect live.
  */
@@ -42,6 +44,8 @@ fun SettingsScreen(
     val storedTheme by preferences.theme.collectAsStateWithLifecycle(initialValue = null)
     val storedAutoConnect by preferences.autoConnectToFirstFound.collectAsStateWithLifecycle(initialValue = null)
     val storedHiddenNotices by preferences.hiddenNotices.collectAsStateWithLifecycle(initialValue = null)
+    val uriHandler = LocalUriHandler.current
+    val sourceCodeUrl = stringResource(R.string.settings_source_code_url)
 
     PatchPilotScaffold(title = stringResource(R.string.settings_title), onBack = onBack) { innerPadding ->
         val current = storedTheme ?: return@PatchPilotScaffold
@@ -118,6 +122,19 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onOpenLicenses),
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_source_code)) },
+                supportingContent = { Text(sourceCodeUrl) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button) {
+                        // A device without a browser has nothing to open the link with.
+                        try {
+                            uriHandler.openUri(sourceCodeUrl)
+                        } catch (_: ActivityNotFoundException) {
+                        }
+                    },
             )
         }
     }
