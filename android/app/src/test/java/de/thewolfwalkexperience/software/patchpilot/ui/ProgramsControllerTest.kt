@@ -149,6 +149,32 @@ class ProgramsControllerTest {
         assertEquals("stopped part way", controller.operationError)
     }
 
+    /** A write cut off by a lost link may or may not have landed, and nothing read it back. */
+    @Test
+    fun `a stored edit that loses the link says it may not have been applied`() = runTest {
+        val (controller, ops) = controller()
+        val told = mutableListOf<String>()
+        controller.onEditInterrupted = { told += it }
+        ops.failWith = InstrumentException.TransportLost("write failed")
+        controller.onDeleteConfirmed(slot(0, 1))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(1, told.size)
+        assertTrue(told.single(), told.single().contains("res") && told.single().contains("A1"))
+    }
+
+    @Test
+    fun `a selection that loses the link has nothing to warn about`() = runTest {
+        val (controller, ops) = controller()
+        val told = mutableListOf<String>()
+        controller.onEditInterrupted = { told += it }
+        ops.failWith = InstrumentException.TransportLost("write failed")
+        controller.onProgramTapped(slot(0, 1))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(emptyList<String>(), told)
+    }
+
     @Test
     fun `an edit left partly applied for another reason stays on the screen`() = runTest {
         val (controller, ops) = controller()

@@ -52,7 +52,8 @@ internal class ProgramsController(
     var operationError by mutableStateOf<String?>(null)
 
     /**
-     * Told what an edit left behind when the link broke part way through it. [operationError]
+     * Told what an edit left behind when the link broke part way through it - what is known, or
+     * that the outcome is not. [operationError]
      * cannot carry that: a lost link replaces the preset screen with the disconnect screen, and
      * [reset] clears it. Set by the ViewModel, which holds the text where that screen can show it.
      */
@@ -191,6 +192,11 @@ internal class ProgramsController(
                 if (generateSequence(e.cause) { it.cause }.any { it is InstrumentException.TransportLost }) {
                     e.message?.let { onEditInterrupted?.invoke(it) }
                 }
+            } catch (e: InstrumentException.TransportLost) {
+                operationError = reportFailure(what, e, failed)
+                // An edit that stores something and lost the link may have landed or not; the
+                // read-back that would say never came. A selection stores nothing.
+                if (reloadAfter) onEditInterrupted?.invoke(strings.get(R.string.programs_edit_interrupted, what))
             } catch (e: Exception) {
                 operationError = reportFailure(what, e, failed)
             } finally {

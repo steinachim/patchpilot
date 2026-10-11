@@ -186,6 +186,7 @@
     <string name="programs_busy_swapping">Swapping %1$s and %2$s\u2026</string>
     <string name="programs_busy_applying_fix">Changing the instrument\'s state\u2026</string>
     <string name="programs_operation_failed">%1$s failed.</string>
+    <string name="programs_edit_interrupted">The last change (%1$s) was interrupted, and the instrument may or may not have applied it. Check it after reconnecting.</string>
 
     <!--
       What an operation reports back once it has succeeded. These sit here rather than beside the
