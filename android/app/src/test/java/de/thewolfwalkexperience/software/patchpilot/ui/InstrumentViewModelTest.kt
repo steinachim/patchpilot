@@ -123,6 +123,25 @@ class InstrumentViewModelTest {
         assertEquals(null, viewModel.interruptedEdit.value)
     }
 
+    /** A replug that beat the edit's failure: the text meets the new session's start, which clears the screen's state, so it is carried over. */
+    @Test
+    fun `an interrupted edit reported between a replug and the new session reaches the new session's failure line`() {
+        val viewModel = viewModel().apply { awaitSettled() }
+        check(viewModel.state.value is ConnectionState.NothingFound)
+
+        viewModel.programs.onEditInterrupted?.invoke("Swapping A1 and A2 stopped part way.")
+        assertEquals(null, viewModel.interruptedEdit.value)
+
+        viewModel.connection.connectDemo()
+        val deadline = System.nanoTime() + 10_000_000_000
+        while (viewModel.programs.operationError == null) {
+            check(System.nanoTime() < deadline) { "Nothing carried over (${viewModel.state.value})" }
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(10)
+        }
+        assertEquals("Swapping A1 and A2 stopped part way.", viewModel.programs.operationError)
+    }
+
     private fun remedyOffer() = BlockedOperation("Blocked.", null, "Fix", apply = {}, retry = {})
 
     /** Runs the main looper until the ViewModel's session collector has cleared the remedy offer. */

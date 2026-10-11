@@ -127,13 +127,22 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
      */
     val interruptedEdit: StateFlow<String?> = _interruptedEdit.asStateFlow()
 
+    /** An interrupted edit's text that arrived after a replug but before the new session, so it reaches that session's failure line. */
+    private var carriedEdit: String? = null
+
     /**
-     * Kept for the disconnect screen only while that screen is up. After a replug that beat the
-     * edit's failure, the preset screen's own failure line shows the same text, and one kept now
-     * would surface at an unrelated disconnect later.
+     * Where an interrupted edit's text goes depends on when it arrives. On the disconnect screen
+     * it is shown there. In a live session the preset screen's own failure line shows it. Between
+     * a replug and the new session it would be cleared by that session's start, so it is carried
+     * to the new session's failure line; kept for the disconnect screen it would surface at an
+     * unrelated disconnect later.
      */
     internal fun keepInterruptedEdit(detail: String) {
-        if (state.value is ConnectionState.DeviceLost) _interruptedEdit.value = detail
+        when (state.value) {
+            is ConnectionState.DeviceLost -> _interruptedEdit.value = detail
+            is ConnectionState.Connected -> Unit
+            else -> carriedEdit = detail
+        }
     }
 
     /** The instrument the last session was on, so a session on another one starts [programs] afresh. */
@@ -172,6 +181,10 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
                     _pendingNotice.value = null
                 }
                 forgetOperationsOnSessionChange(s)
+                if (s is ConnectionState.Connected) {
+                    carriedEdit?.let { programs.operationError = it }
+                    carriedEdit = null
+                }
             }
         }
     }
