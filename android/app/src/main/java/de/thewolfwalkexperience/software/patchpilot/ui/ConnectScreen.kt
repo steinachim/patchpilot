@@ -56,6 +56,7 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
     // the composition that built it, so a rotation rebuilds it from [reportShare] instead.
     var shareOpen by rememberSaveable { mutableStateOf(false) }
     val capabilities by viewModel.capabilities.collectAsStateWithLifecycle()
+    val interruptedEdit by viewModel.interruptedEdit.collectAsStateWithLifecycle()
     // Said rather than swallowed: a read the cable interrupted lands in the same Done as a whole
     // one, and the report is shared the moment it is read. Kept until the next read.
     var incompleteReads by rememberSaveable { mutableIntStateOf(0) }
@@ -313,6 +314,10 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                             stringResource(R.string.connect_device_lost_message, s.instrumentName),
                             color = MaterialTheme.colorScheme.error,
                         )
+                        interruptedEdit?.let { detail ->
+                            Spacer(Modifier.height(8.dp))
+                            Text(detail, color = MaterialTheme.colorScheme.error)
+                        }
                         Spacer(Modifier.height(16.dp))
                         theme.FilledButton(onClick = {
                             viewModel.connection.connect()

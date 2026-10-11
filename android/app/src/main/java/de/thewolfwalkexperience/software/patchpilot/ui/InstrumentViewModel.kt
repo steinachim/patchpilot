@@ -119,6 +119,14 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     /** The preset screen's operations and the state they own, held here so a rotation mid-edit keeps it - see [ProgramsController]. */
     internal val programs = ProgramsController(this, strings)
 
+    private val _interruptedEdit = MutableStateFlow<String?>(null)
+
+    /**
+     * What an edit left on the instrument when the link broke part way through it, for the
+     * disconnect screen. Not kept across a session: the next connection lists the real contents.
+     */
+    val interruptedEdit: StateFlow<String?> = _interruptedEdit.asStateFlow()
+
     /** The instrument the last session was on, so a session on another one starts [programs] afresh. */
     private var lastSessionKey: String? = null
     private var lastInstrument: Instrument? = null
@@ -140,6 +148,7 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     )
 
     init {
+        programs.onEditInterrupted = { _interruptedEdit.value = it }
         connection.start()
         // From here rather than from a screen: after process death the restored back stack can
         // start on the preset screen, where nothing else would ever connect.
@@ -147,7 +156,12 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
         // Offered once the session is usable, so a notice never sits on top of the advisory gate.
         viewModelScope.launch {
             state.collect { s ->
-                if (s is ConnectionState.Connected) offerNotice(s.instrument) else _pendingNotice.value = null
+                if (s is ConnectionState.Connected) {
+                    _interruptedEdit.value = null
+                    offerNotice(s.instrument)
+                } else {
+                    _pendingNotice.value = null
+                }
                 forgetOperationsOnSessionChange(s)
             }
         }

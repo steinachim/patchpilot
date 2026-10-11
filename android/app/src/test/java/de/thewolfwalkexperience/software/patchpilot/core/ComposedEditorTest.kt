@@ -107,6 +107,27 @@ class ComposedEditorTest {
         assertEquals(listOf("Pad", "Lead"), editor.slots)
     }
 
+    /**
+     * The link breaks after the first write landed, so the write-back that restores the slot fails
+     * as well: one preset now exists only in memory, and the swap says so rather than reporting
+     * the transport error alone.
+     */
+    @Test
+    fun `a swap that cannot be undone is partly applied, names both presets and keeps why`() = runTest {
+        val lost = InstrumentException.TransportLost("write failed")
+        val editor = MemoryEditor("Pad", "Lead").apply {
+            failWrite = { _, _ -> lost.takeIf { writes.size > 1 } }
+        }
+
+        val failure = thrownBy<InstrumentException.PartlyApplied> { editor.swap(at(0), at(1)) }
+
+        assertTrue("why the swap stopped is kept", failure.causedBy { it === lost })
+        val message = failure.message!!
+        assertTrue(message, message.contains("#0 and #1"))
+        assertTrue(message, message.contains("\"Pad\"") && message.contains("\"Lead\""))
+        assertEquals("the first write stayed", listOf("Pad", "Pad"), editor.slots)
+    }
+
     @Test
     fun `swapping two empty slots and deleting an empty one write nothing`() = runTest {
         val editor = MemoryEditor(null, null)

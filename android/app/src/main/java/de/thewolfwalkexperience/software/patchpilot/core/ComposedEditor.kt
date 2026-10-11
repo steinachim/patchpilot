@@ -20,7 +20,9 @@ private const val TAG = "ComposedEditor"
  *  - A move writes the destination before it empties the source, so a failure leaves the preset
  *    in both slots rather than in neither, and says so ([InstrumentException.PartlyApplied]).
  *  - A swap reads both presets before writing either, and writes the first slot back if either
- *    write fails - the first included, since a write can land and still fail its read-back.
+ *    write fails - the first included, since a write can land and still fail its read-back. If
+ *    that write-back fails too, the swap is [InstrumentException.PartlyApplied]: one preset may
+ *    exist only in memory.
  *  - Moves and swaps run under [NonCancellable]: a cancelled one finishes rather than stopping
  *    half done.
  *
@@ -146,8 +148,14 @@ abstract class ComposedEditor<P : Any> : PresetEditor {
                 } catch (e: Exception) {
                     // Also after the first write: its read-back can fail with the write already
                     // stored, and b's preset would then exist only here.
-                    rollback(b, presetB, e)
-                    throw e
+                    if (rollback(b, presetB, e)) throw e
+                    throw InstrumentException.PartlyApplied(
+                        "Swapping ${displayIdOf(a)} and ${displayIdOf(b)} stopped part way and could not " +
+                            "be undone. Each slot now holds either \"${shownName(presetA)}\" or " +
+                            "\"${shownName(presetB)}\", and one of the two may be gone. Check " +
+                            "${displayIdOf(a)} and ${displayIdOf(b)} after reconnecting.",
+                        e,
+                    )
                 }
             }
         }
@@ -175,13 +183,14 @@ abstract class ComposedEditor<P : Any> : PresetEditor {
     }
 
     /**
-     * Best-effort restore of a slot just overwritten. A failure is logged rather than thrown, so
-     * it cannot mask the error that caused the rollback.
+     * Best-effort restore of a slot just overwritten; whether it worked. A failure is logged
+     * rather than thrown, so it cannot mask the error that caused the rollback.
      */
-    private suspend fun rollback(address: SlotAddress, original: P, becauseOf: Exception) {
+    private suspend fun rollback(address: SlotAddress, original: P, becauseOf: Exception): Boolean {
         try {
             writeVerified(address, original)
             Log.w(TAG, "Rolled ${displayIdOf(address)} back after: ${becauseOf.message}")
+            return true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -191,6 +200,7 @@ abstract class ComposedEditor<P : Any> : PresetEditor {
                     "contents are no longer on the instrument.",
                 e,
             )
+            return false
         }
     }
 }

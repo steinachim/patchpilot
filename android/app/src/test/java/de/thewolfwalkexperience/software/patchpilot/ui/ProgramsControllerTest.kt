@@ -132,6 +132,39 @@ class ProgramsControllerTest {
         assertNotNull("the failure has to reach the screen", controller.operationError)
     }
 
+    /** A lost link takes the preset screen away, so what the edit left behind goes to whoever listens. */
+    @Test
+    fun `an edit left partly applied by a lost link is reported beyond the screen`() = runTest {
+        val (controller, ops) = controller()
+        val told = mutableListOf<String>()
+        controller.onEditInterrupted = { told += it }
+        ops.failWith = InstrumentException.PartlyApplied(
+            "stopped part way",
+            InstrumentException.TransportLost("write failed"),
+        )
+        controller.onDeleteConfirmed(slot(0, 1))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(listOf("stopped part way"), told)
+        assertEquals("stopped part way", controller.operationError)
+    }
+
+    @Test
+    fun `an edit left partly applied for another reason stays on the screen`() = runTest {
+        val (controller, ops) = controller()
+        val told = mutableListOf<String>()
+        controller.onEditInterrupted = { told += it }
+        ops.failWith = InstrumentException.PartlyApplied(
+            "in both slots",
+            InstrumentException.DeviceRejected("store a preset", status = 3),
+        )
+        controller.onDeleteConfirmed(slot(0, 1))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(emptyList<String>(), told)
+        assertEquals("in both slots", controller.operationError)
+    }
+
     /**
      * The busy entry is registered before the edit's coroutine runs: a gate that only closed once
      * the coroutine had started would let two taps in the same frame both through.

@@ -12,6 +12,7 @@
 - When a MIDI instrument is reached through another MIDI interface (a hub or an interface it is cabled to), its row in the device list says which, so it can be told apart from its own USB connection.
 - A MIDI instrument reached through another MIDI interface (shown as "via …" in the device list) gets timeouts that allow for the cable's speed: a preset transfer there takes about half a minute instead of a second.
 - Settings → Legal has a "Source Code on GitHub" link to the project repository.
+- A swap interrupted by a lost connection now says which presets may be affected, on the disconnect screen.
 
 ### Changed
 - The rename dialog says why a name can't be stored (characters outside plain ASCII, or a name the instrument reserves) and only enables Rename for a name that can, before anything is sent.

@@ -52,6 +52,13 @@ internal class ProgramsController(
     var operationError by mutableStateOf<String?>(null)
 
     /**
+     * Told what an edit left behind when the link broke part way through it. [operationError]
+     * cannot carry that: a lost link replaces the preset screen with the disconnect screen, and
+     * [reset] clears it. Set by the ViewModel, which holds the text where that screen can show it.
+     */
+    var onEditInterrupted: ((String) -> Unit)? = null
+
+    /**
      * The operation in flight, or null - where more than one is, the one with a progress line.
      *
      * **These are seconds, not milliseconds, and the instrument gives nothing away.** A copy is a
@@ -178,6 +185,11 @@ internal class ProgramsController(
                         apply = fix,
                         retry = retry,
                     )
+                }
+            } catch (e: InstrumentException.PartlyApplied) {
+                operationError = reportFailure(what, e, failed)
+                if (generateSequence(e.cause) { it.cause }.any { it is InstrumentException.TransportLost }) {
+                    e.message?.let { onEditInterrupted?.invoke(it) }
                 }
             } catch (e: Exception) {
                 operationError = reportFailure(what, e, failed)
