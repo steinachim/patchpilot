@@ -15,8 +15,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -25,8 +27,8 @@ import androidx.core.content.FileProvider
 import de.thewolfwalkexperience.software.patchpilot.R
 import java.io.File
 import java.io.IOException
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Hands [content] to whatever app the user picks - the one place this app talks to another.
@@ -35,9 +37,10 @@ import androidx.compose.runtime.setValue
  *
  * [filename] carries its own extension and is sanitised here rather than by each caller, since it
  * reaches the filesystem and one caller takes it from a text field. The sanitised name is
- * returned, so a caller can say what was written.
+ * returned, so a caller can say what was written. Suspends while the file is written, which
+ * happens off the main thread; the chooser starts from the caller's.
  */
-fun shareTextReport(
+suspend fun shareTextReport(
     context: Context,
     filename: String,
     content: String,
@@ -51,12 +54,14 @@ fun shareTextReport(
     // report names the user's presets and a device report carries firmware and protocol hex, so
     // keeping only the file being shared is the smaller footprint. It also narrows what
     // file_paths.xml has to expose.
-    val dir = File(context.cacheDir, SHARE_DIR).apply {
-        deleteRecursively()
-        mkdirs()
+    val uri = withContext(Dispatchers.IO) {
+        val dir = File(context.cacheDir, SHARE_DIR).apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val file = File(dir, safeName).apply { writeText(content) }
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
-    val file = File(dir, safeName).apply { writeText(content) }
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = mimeType
         putExtra(Intent.EXTRA_STREAM, uri)
@@ -80,8 +85,10 @@ fun saveTextReport(context: Context, uri: Uri, content: String) {
     stream.use { it.write(content.toByteArray()) }
 }
 
-/** Subdirectory of `cacheDir` holding the one report currently being shared - see
- * [shareTextReport] and the `<cache-path>` entry in `res/xml/file_paths.xml`. */
+/**
+ * Subdirectory of `cacheDir` holding the one report currently being shared - see
+ * [shareTextReport] and the `<cache-path>` entry in `res/xml/file_paths.xml`.
+ */
 const val SHARE_DIR = "shared"
 
 /** The MIME type a device report is shared as. Its `.json` half is `R.string.programs_json_suffix`. */
@@ -104,12 +111,12 @@ data class PendingShare(
 
 /**
  * Lets the user rename the file before it goes anywhere - the same prompt for every kind of report
- * this app shares. The stem lives in this composable's own state: each appearance is a fresh
- * composition, so there is nothing to preserve between prompts.
+ * this app shares. The stem typed so far is saveable, so a rotation keeps it; a prompt for another
+ * file starts again from its own [PendingShare.initialStem].
  */
 @Composable
 fun ShareFilenameDialog(pending: PendingShare, onDismiss: () -> Unit) {
-    var stem by remember { mutableStateOf(pending.initialStem) }
+    var stem by rememberSaveable(pending.initialStem) { mutableStateOf(pending.initialStem) }
     val keyboardController = LocalSoftwareKeyboardController.current
     DisposableEffect(Unit) {
         onDispose { keyboardController?.hide() }
@@ -134,7 +141,10 @@ fun ShareFilenameDialog(pending: PendingShare, onDismiss: () -> Unit) {
             // Dismisses itself, or the dialog would stand over the progress text it reveals.
             TextButton(
                 enabled = stem.isNotBlank(),
-                onClick = { pending.onConfirm(stem); onDismiss() },
+                onClick = {
+                    pending.onConfirm(stem)
+                    onDismiss()
+                },
             ) {
                 Text(stringResource(R.string.action_share))
             }

@@ -3,8 +3,6 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
-import de.thewolfwalkexperience.software.patchpilot.R
-import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,9 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.BarAction
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.LocalThemeStyle
 
@@ -122,9 +122,9 @@ internal val TOP_BAR_ACTION_INSET = 4.dp
 /**
  * [WindowInsets.systemGestures], with each side's width held to at most [max]. The reported
  * inset is meant to keep a tap out of the edge-swipe-back strip, but some configurations report
- * one well past that (see the audit that added this - a plain phone measured 4dp before this
- * fix and needed it, an emulator measured 45dp with it, more than the strip itself). A generous
- * fixed ceiling keeps the clearance real without letting an outlier value eat the title.
+ * one well past that (measured: 4dp on a phone, 45dp on an emulator - more than the strip
+ * itself). A generous fixed ceiling keeps the clearance real without letting an outlier value eat
+ * the title.
  */
 @Composable
 internal fun cappedSystemGestures(max: Dp = 24.dp): WindowInsets {
@@ -151,11 +151,11 @@ fun CenteredMessage(modifier: Modifier = Modifier, content: @Composable () -> Un
     )
 }
 
-/** The muted styling an empty slot gets. */
+/** The muted styling an empty slot gets, and a slot whose read failed, which may or may not be empty. */
 @Composable
-fun EmptySlotText(modifier: Modifier = Modifier) {
+fun EmptySlotText(modifier: Modifier = Modifier, unreadable: Boolean = false) {
     Text(
-        stringResource(R.string.programs_slot_empty),
+        stringResource(if (unreadable) R.string.programs_slot_unreadable else R.string.programs_slot_empty),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier,

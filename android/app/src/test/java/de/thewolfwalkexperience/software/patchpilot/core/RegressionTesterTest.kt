@@ -3,7 +3,10 @@
 
 package de.thewolfwalkexperience.software.patchpilot.core
 
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
+import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.FakeAxeFx3
+import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.axeFx3
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordProfile
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordTransport
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
 import kotlinx.coroutines.flow.toList
@@ -14,21 +17,21 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
 
 /**
  * What the debug menu's regression test does to an instrument, checked against the wire-level Nord
- * fake and the in-memory demo instrument rather than hardware.
+ * and Axe-Fx III fakes and [NoCopyFixtureInstrument] rather than hardware.
  *
- * **The property under test is "the instrument is exactly as it was afterwards."** Every case below
- * compares the whole program listing before and after the run, because that - not the individual
- * PASS lines - is what makes a test suite safe to point at somebody's own instrument.
+ * **The property under test is "the instrument is exactly as it was afterwards."** Most cases
+ * compare the whole program listing before and after the run, because that - not the individual
+ * PASS lines - is what makes a test suite safe to point at somebody's own instrument; a case whose
+ * instrument fails part-way checks that the report says what was left behind.
  */
 class RegressionTesterTest {
 
     /** A Nord whose wire is answered by the stateful fake: real protocol code, no hardware. */
     private suspend fun nord(): NordInstrument =
-        NordInstrument(NordDevice(DemoUsbTransport(), DemoProfile.profile())).also { it.connect() }
+        NordInstrument(NordDevice(FakeNordTransport(), FakeNordProfile.profile())).also { it.connect() }
 
     /** A family with no copy of its own - see [NoCopyFixtureInstrument]. */
     private suspend fun noCopyFamily(): NoCopyFixtureInstrument =
@@ -47,6 +50,39 @@ class RegressionTesterTest {
 
     private fun RegressionReport.failures(): List<RegressionResult> =
         results.filter { it.status == Status.FAIL }
+
+    /**
+     * The Axe-Fx III over its wire-level fake: every edit is a dump read and write through the
+     * edit buffer, so this is the whole write path end to end, sandbox included.
+     */
+    @Test
+    fun `an Axe-Fx III passes every test and is left as it was`() = runTest {
+        val fake = FakeAxeFx3()
+        fake.put(0, "59 Bassguy")
+        fake.put(1, "Vibrato Lux")
+        val instrument = axeFx3(fake).also { it.connect() }
+        val before = listing(instrument)
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { instrument.layout.allAddresses().toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = {
+                fail("the sandbox should have sufficed")
+                false
+            },
+            refreshEdited = {},
+        ).run {}
+
+        assertEquals(emptyList<RegressionResult>(), report.failures())
+        // Only the facet it lacks is skipped: nothing that writes was left out.
+        assertEquals(
+            listOf("Offers: Categorises and favorites presets"),
+            report.results.filter { it.status == Status.SKIPPED }.map { it.name },
+        )
+        assertEquals(before, listing(instrument))
+    }
 
     /**
      * An instrument whose selector is blocked by device state until its own remedy is applied.
@@ -152,20 +188,86 @@ class RegressionTesterTest {
             allSlots = { instrument.layout.allAddresses().toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { realSlotAsked++; true },
+            onConfirmRealSlotMutation = {
+                realSlotAsked++
+                true
+            },
             refreshEdited = {},
         ).run {}
 
         assertEquals(emptyList<RegressionResult>(), report.failures())
         listOf(
-            "Load a preset", "Build a device report", "Copy a preset",
-            "Rename a preset", "Move a preset", "Swap two presets", "Delete a preset",
+            "Load a preset",
+            "Build a device report",
+            "Copy a preset",
+            "Rename a preset",
+            "Move a preset",
+            "Swap two presets",
+            "Delete a preset",
         ).forEach { assertEquals(it, Status.PASS, report.of(it).status) }
 
         // The whole point of the sandbox: no question is ever put to the user, because no slot
         // holding real data is written.
         assertEquals(0, realSlotAsked)
         assertEquals(before, listing(instrument))
+    }
+
+    /**
+     * A run interrupted before its clean-up leaves a copy named as the test names it. The next
+     * run points it out, leaves it alone, and names its own copy around it: a Nord makes a
+     * clashing name unique by changing it, which failed every step after the rename.
+     */
+    @Test
+    fun `a copy an earlier run left is pointed out, and the new copy is named around it`() = runTest {
+        val instrument = nord()
+        instrument.editor!!.rename(listing(instrument).keys.first(), "PatchPilot Test")
+        val before = listing(instrument)
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { instrument.layout.allAddresses().toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { true },
+            refreshEdited = {},
+            presetNames = { before },
+        ).run {}
+
+        val leftovers = report.of("Copies left by an earlier run")
+        assertTrue(leftovers.detail, leftovers.detail.contains("\"PatchPilot Test\""))
+        assertEquals("the leftover is the only failure", listOf(leftovers), report.failures())
+        val rename = report.of("Rename a preset")
+        assertFalse(rename.detail, rename.detail.contains("to \"PatchPilot Test\""))
+        assertEquals(before, listing(instrument))
+    }
+
+    /** A rename stored under another name than asked for fails, and the copy is still followed to the end. */
+    @Test
+    fun `a copy renamed under another name is still moved, swapped and deleted`() = runTest {
+        val real = nord()
+        val before = listing(real)
+        val instrument = object : Instrument by real {
+            override val editor = object : PresetEditor by real.editor!! {
+                // As a Nord does with a name already in use.
+                override suspend fun rename(address: SlotAddress, newName: String) =
+                    real.editor!!.rename(address, "Renamed Else")
+            }
+        }
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { real.layout.allAddresses().toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { true },
+            refreshEdited = {},
+        ).run {}
+
+        assertEquals(Status.FAIL, report.of("Rename a preset").status)
+        for (step in listOf("Move a preset", "Swap two presets", "Delete a preset")) {
+            assertEquals(report.of(step).detail, Status.PASS, report.of(step).status)
+        }
+        assertEquals(before, listing(real))
     }
 
     /** The instrument names the copy, so the report has to carry the name it chose. */
@@ -206,7 +308,10 @@ class RegressionTesterTest {
             allSlots = { instrument.layout.allAddresses().toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { realSlotAsked++; true },
+            onConfirmRealSlotMutation = {
+                realSlotAsked++
+                true
+            },
             refreshEdited = {},
         ).run {}
 
@@ -221,6 +326,9 @@ class RegressionTesterTest {
         // Never attempted without a sandbox, whatever the user answered.
         assertEquals(Status.SKIPPED, report.of("Delete a preset").status)
         assertEquals(before, listing(instrument))
+        // The sandbox path's order, so the two reports read alike.
+        val edits = listOf("Copy a preset", "Rename a preset", "Move a preset", "Swap two presets", "Delete a preset")
+        assertEquals(edits, report.results.map { it.name }.filter { it in edits })
     }
 
     /**
@@ -249,7 +357,10 @@ class RegressionTesterTest {
             allSlots = { real.layout.allAddresses().toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { fail("no question is asked while there is room for a second copy"); false },
+            onConfirmRealSlotMutation = {
+                fail("no question is asked while there is room for a second copy")
+                false
+            },
             refreshEdited = {},
         ).run {}
 
@@ -265,6 +376,99 @@ class RegressionTesterTest {
         assertEquals(Status.PASS, delete.status)
         assertTrue(delete.detail, delete.detail.startsWith("Deleted the copies from"))
         assertEquals(before, listing(real))
+    }
+
+    /**
+     * A copy that landed but whose check could not confirm it is still on the instrument, so it
+     * is cleaned up like any other: the run leaves nothing behind, and skips only the tests that
+     * needed a confirmed copy.
+     */
+    @Test
+    fun `a copy whose check fails is still deleted`() = runTest {
+        val real = nord()
+        val before = listing(real)
+        var copies = 0
+        var checkFailed = false
+        val instrument = object : Instrument by real {
+            override val editor = object : PresetEditor by real.editor!! {
+                override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String {
+                    copies++
+                    return real.editor!!.copyProgram(src, dst)
+                }
+            }
+            override val browser = object : PresetBrowser by real.browser {
+                override suspend fun refresh(address: SlotAddress): PresetSlot {
+                    // The copy step's own check, once: the copy has landed by then.
+                    if (copies == 1 && !checkFailed) {
+                        checkFailed = true
+                        throw InstrumentException.Timeout("re-reading a preset")
+                    }
+                    return real.browser.refresh(address)
+                }
+            }
+        }
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { real.layout.allAddresses().toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { true },
+            refreshEdited = {},
+        ).run {}
+
+        assertEquals(Status.FAIL, report.of("Copy a preset").status)
+        for (skipped in listOf("Rename a preset", "Move a preset", "Swap two presets")) {
+            assertEquals(skipped, Status.SKIPPED, report.of(skipped).status)
+        }
+        assertEquals(Status.PASS, report.of("Delete a preset").status)
+        assertEquals(before, listing(real))
+    }
+
+    /**
+     * The clean-up reads each copy's slot before deleting it. An instrument that stops answering
+     * there fails that one step, leaves the copies alone and says so; the run still ends in a
+     * report, with every earlier result in it.
+     */
+    @Test
+    fun `a clean-up that cannot read the copies fails its step, not the run`() = runTest {
+        val real = nord()
+        val before = listing(real)
+        var swaps = 0
+        var readsAfterSwapBack = 0
+        val instrument = object : Instrument by real {
+            override val editor = object : PresetEditor by real.editor!! {
+                override suspend fun swap(a: SlotAddress, b: SlotAddress) {
+                    swaps++
+                    real.editor!!.swap(a, b)
+                }
+            }
+            override val browser = object : PresetBrowser by real.browser {
+                override suspend fun refresh(address: SlotAddress): PresetSlot {
+                    // The swap test checks both slots after swapping back; every read after that
+                    // is the clean-up's.
+                    if (swaps >= 2 && ++readsAfterSwapBack > 2) {
+                        throw InstrumentException.Timeout("re-reading a preset")
+                    }
+                    return real.browser.refresh(address)
+                }
+            }
+        }
+
+        val report = RegressionTester(
+            instrument = instrument,
+            allSlots = { real.layout.allAddresses().toList() },
+            occupiedSlots = { before.keys },
+            onConfirmSelect = { true },
+            onConfirmRealSlotMutation = { true },
+            refreshEdited = {},
+        ).run {}
+
+        assertEquals(Status.PASS, report.of("Swap two presets").status)
+        val delete = report.of("Delete a preset")
+        assertEquals(Status.FAIL, delete.status)
+        assertTrue(delete.detail, delete.detail.contains("could not be read"))
+        assertEquals(listOf(delete), report.failures())
     }
 
     /**
@@ -284,7 +488,10 @@ class RegressionTesterTest {
             allSlots = { (before.keys + free).toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { asked += it; true },
+            onConfirmRealSlotMutation = {
+                asked += it
+                true
+            },
             refreshEdited = {},
         ).run {}
 
@@ -338,7 +545,10 @@ class RegressionTesterTest {
             allSlots = { before.keys.toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { realSlotAsked++; true },
+            onConfirmRealSlotMutation = {
+                realSlotAsked++
+                true
+            },
             refreshEdited = {},
         ).run {}
 
@@ -363,7 +573,10 @@ class RegressionTesterTest {
             allSlots = { before.keys.toList() },
             occupiedSlots = { before.keys },
             onConfirmSelect = { true },
-            onConfirmRealSlotMutation = { realSlotAsked++; false },
+            onConfirmRealSlotMutation = {
+                realSlotAsked++
+                false
+            },
             refreshEdited = {},
         ).run {}
 
@@ -414,7 +627,10 @@ class RegressionTesterTest {
             instrument = instrument,
             allSlots = { instrument.layout.allAddresses().toList() },
             occupiedSlots = { before.keys },
-            onConfirmSelect = { text -> shown += text; true },
+            onConfirmSelect = { text ->
+                shown += text
+                true
+            },
             onConfirmRealSlotMutation = { true },
             refreshEdited = {},
         ).run {}
@@ -436,7 +652,10 @@ class RegressionTesterTest {
             instrument = instrument,
             allSlots = { instrument.layout.allAddresses().toList() },
             occupiedSlots = { before.keys },
-            onConfirmSelect = { confirmations++; false },
+            onConfirmSelect = {
+                confirmations++
+                false
+            },
             onConfirmRealSlotMutation = { true },
             refreshEdited = {},
         ).run {}
@@ -461,7 +680,7 @@ class RegressionTesterTest {
 
         assertEquals(Status.PASS, report.of("Offers: Loads presets").status)
         assertEquals(Status.PASS, report.of("Offers: Edits presets").status)
-        // This profile mirrors a Pro-800, which has no device report of its own.
+        // The fixture declares no device report.
         assertEquals(Status.SKIPPED, report.of("Offers: Describes itself").status)
         assertNotEquals("", report.summary)
         assertTrue(report.asText(), report.asText().contains(report.summary))

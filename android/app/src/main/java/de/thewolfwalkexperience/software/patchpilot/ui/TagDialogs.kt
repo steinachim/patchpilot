@@ -14,10 +14,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -130,7 +130,8 @@ internal fun SetFavoriteDialog(
  *
  * @param allowsUnassigned whether to offer a synthetic "None" meaning no category. False on a
  *   Nord, which has a real category called `None`, and two entries with one word would put a
- *   value the instrument cannot store in the dropdown.
+ *   value the instrument cannot store in the dropdown. Where false, a preset read with no category
+ *   it can name shows "Not set", and Save waits for a real choice ([categoriesSavable]).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,6 +148,7 @@ internal fun SetCategoriesDialog(
         List(assignmentCount) { tags.categories.getOrNull(it) }.toMutableStateList()
     }
     val noneLabel = stringResource(R.string.programs_categories_none)
+    val notSetLabel = stringResource(R.string.programs_categories_not_set)
     val noSubLabel = stringResource(R.string.programs_categories_no_sub)
     // How far the dropdown's indices run ahead of the taxonomy's: 1 while the synthetic "None"
     // occupies row 0, 0 without it. Written once, so the two callbacks below cannot disagree.
@@ -166,14 +168,19 @@ internal fun SetCategoriesDialog(
                     Picker(
                         // Numbered only where there is more than one to tell apart.
                         label = pluralStringResource(
-                            R.plurals.programs_categories_main, assignmentCount, slot + 1,
+                            R.plurals.programs_categories_main,
+                            assignmentCount,
+                            slot + 1,
                         ),
-                        selected = main?.name ?: noneLabel,
+                        selected = main?.name ?: if (allowsUnassigned) noneLabel else notSetLabel,
                         options = (if (allowsUnassigned) listOf(noneLabel) else emptyList()) +
                             taxonomy.mains.map { it.name },
                         onSelect = { index ->
-                            picks[slot] = if (allowsUnassigned && index == 0) null
-                            else CategoryRef(index - offset, null)
+                            picks[slot] = if (allowsUnassigned && index == 0) {
+                                null
+                            } else {
+                                CategoryRef(index - offset, null)
+                            }
                         },
                     )
 
@@ -195,7 +202,10 @@ internal fun SetCategoriesDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(picks.toList()) }) {
+            TextButton(
+                onClick = { onConfirm(picks.toList()) },
+                enabled = categoriesSavable(picks, allowsUnassigned),
+            ) {
                 Text(stringResource(R.string.action_save))
             }
         },
@@ -204,6 +214,16 @@ internal fun SetCategoriesDialog(
         },
     )
 }
+
+/**
+ * Whether [SetCategoriesDialog] may send [picks]. Where the instrument has no way to store "no
+ * category" ([allowsUnassigned] false), a pick left at none is a preset whose stored value the app
+ * could not name: a Nord's `No Cat`, a Subsequent 37's unassigned byte or one it does not know.
+ * Sending it unchanged would fail on the Nord and overwrite the unknown value on the
+ * Subsequent 37, so Save waits until every pick is a real category.
+ */
+internal fun categoriesSavable(picks: List<CategoryRef?>, allowsUnassigned: Boolean): Boolean =
+    allowsUnassigned || picks.none { it == null }
 
 /** A read-only text field that drops a menu - Material's own shape for a short, closed choice. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -230,7 +250,10 @@ private fun Picker(
             options.forEachIndexed { index, option ->
                 DropdownMenuItem(
                     text = { Text(option) },
-                    onClick = { expanded = false; onSelect(index) },
+                    onClick = {
+                        expanded = false
+                        onSelect(index)
+                    },
                 )
             }
         }

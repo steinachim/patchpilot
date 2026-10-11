@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -56,9 +57,8 @@ class MotifXsDecodingTest {
     /**
      * The framer must be configured for this instrument, not left on its default.
      *
-     * This is the regression test for a bug that would have shipped: the default cap is 4096
-     * bytes, sized for a Pro-800's 210-byte program, and every drum voice exceeds it. The failure
-     * mode is silent - the message is dropped, the read times out, and the DRUM bank simply lists
+     * The default cap is 4096 bytes, sized for a Pro-800's 210-byte program, and every drum voice
+     * exceeds it. The failure mode is silent - the message is dropped, the read times out, and the DRUM bank simply lists
      * as 32 unreadable slots.
      */
     @Test
@@ -101,12 +101,15 @@ class MotifXsDecodingTest {
      */
     @Test
     fun `a name ends where its repeat says it does`() {
-        assertEquals("TWE2 Stranger", MotifXsVoice.nameOf(
-            MotifXsSysEx.dumpPayload(MotifXsFixtures.overshootVoice)))
-        assertEquals("TWE2 Addicted", MotifXsVoice.nameOf(
-            MotifXsSysEx.dumpPayload(MotifXsFixtures.secondOvershootVoice)))
-        assertEquals("TWE2 Dreadnought 2.0", MotifXsVoice.nameOf(
-            MotifXsSysEx.dumpPayload(MotifXsFixtures.longNameVoice)))
+        assertEquals("TWE2 Stranger", MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.overshootVoice)))
+        assertEquals(
+            "TWE2 Addicted",
+            MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.secondOvershootVoice)),
+        )
+        assertEquals(
+            "TWE2 Dreadnought 2.0",
+            MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.longNameVoice)),
+        )
     }
 
     // `TWE2 Growing Pains` is why no "strip a trailing letter" rule is used: its `s` is genuine,
@@ -140,15 +143,32 @@ class MotifXsDecodingTest {
         val name = "Kit".toByteArray()
         val real = packed(
             "192:192:".toByteArray() + name + ByteArray(MotifXsVoice.NAME_TRAILER_BYTES) +
-                name + ByteArray(24)
+                name + ByteArray(24),
         )
         assertEquals("Kit", MotifXsVoice.nameOf(real))
+    }
+
+    /**
+     * Measured on an XS6: a voice whose name was cleared on the panel keeps its sound and its
+     * figure pair (`114:256:` there, then no name byte at all); the app's own blank is `0:0:` and
+     * a slot never written `256:256:`.
+     */
+    @Test
+    fun `a nameless voice reads as occupied only where it carries a category`() {
+        fun nameless(figures: String) = packed(figures.toByteArray() + ByteArray(40))
+
+        assertEquals(UNNAMED_PRESET, MotifXsVoice.nameOf(nameless("114:256:")))
+        assertEquals(UNNAMED_PRESET, MotifXsVoice.nameOf(nameless("256:3:")))
+        assertNull(MotifXsVoice.nameOf(nameless("256:256:")))
+        assertNull(MotifXsVoice.nameOf(nameless("0:0:")))
+        assertNull(MotifXsVoice.nameOf(nameless("192:192:")))
     }
 
     /** MSB-packs a dense stream and prefixes the two bytes a payload carries before it. */
     private fun packed(dense: ByteArray): ByteArray {
         val out = ArrayList<Byte>()
-        out.add(0); out.add(0)
+        out.add(0)
+        out.add(0)
         var i = 0
         while (i < dense.size) {
             var msb = 0
@@ -168,8 +188,10 @@ class MotifXsDecodingTest {
 
     @Test
     fun `a genuine trailing letter is not stripped`() {
-        assertEquals("TWE2 Growing Pains", MotifXsVoice.nameOf(
-            MotifXsSysEx.dumpPayload(MotifXsFixtures.genuineTrailingLetterVoice)))
+        assertEquals(
+            "TWE2 Growing Pains",
+            MotifXsVoice.nameOf(MotifXsSysEx.dumpPayload(MotifXsFixtures.genuineTrailingLetterVoice)),
+        )
     }
 
     /** 20 is an observation the trailer rule yields, not a bound fed into it. */
@@ -188,14 +210,18 @@ class MotifXsDecodingTest {
     @Test
     fun `a narrower figure pair moves where the name starts`() {
         val short = MotifXsSysEx.dumpPayload(MotifXsFixtures.shortPrefixVoice)
-        assertEquals(7, MotifXsVoice.nameStart(MotifXsVoice.unpack(short.copyOfRange(
-            MotifXsVoice.PACKED_OFFSET, short.size))))
+        assertEquals(
+            7,
+            MotifXsVoice.nameStart(MotifXsVoice.unpack(short.copyOfRange(MotifXsVoice.PACKED_OFFSET, short.size))),
+        )
         assertEquals("TWE2 Ashes", MotifXsVoice.nameOf(short))
         assertNotEquals("WE2 Ashes", MotifXsVoice.nameOf(short))
 
         val zero = MotifXsSysEx.dumpPayload(MotifXsFixtures.zeroPrefixVoice)
-        assertEquals(4, MotifXsVoice.nameStart(MotifXsVoice.unpack(zero.copyOfRange(
-            MotifXsVoice.PACKED_OFFSET, zero.size))))
+        assertEquals(
+            4,
+            MotifXsVoice.nameStart(MotifXsVoice.unpack(zero.copyOfRange(MotifXsVoice.PACKED_OFFSET, zero.size))),
+        )
         assertEquals("TWE2 Capital Of Low", MotifXsVoice.nameOf(zero))
     }
 
@@ -243,8 +269,10 @@ class MotifXsDecodingTest {
         assertNotEquals(correct, misread)
     }
 
-    /** [MotifXsVoice.nameOf]'s scan, applied to an already-unpacked stream, so a test can ask
-     * what a *differently* unpacked stream would have named the voice. */
+    /**
+     * [MotifXsVoice.nameOf]'s scan, applied to an already-unpacked stream, so a test can ask
+     * what a *differently* unpacked stream would have named the voice.
+     */
     private fun readNameAt(dense: ByteArray): String? {
         val start = MotifXsVoice.nameStart(dense) ?: return null
         val text = StringBuilder()
@@ -258,8 +286,10 @@ class MotifXsDecodingTest {
         return text.toString().trim().ifEmpty { null }
     }
 
-    /** MSB packing, checked on a group whose high bits are known: 7 bytes per 8, high bit set by
-     * the leading byte's bit j. */
+    /**
+     * MSB packing, checked on a group whose high bits are known: 7 bytes per 8, high bit set by
+     * the leading byte's bit j.
+     */
     @Test
     fun `unpack lifts each group's high bits out of its leading byte`() {
         val packed = byteArrayOf(0b0000_0101, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07)
@@ -271,15 +301,27 @@ class MotifXsDecodingTest {
         assertEquals(0x04.toByte(), dense[3])
     }
 
-    /** A truncated group must not run off the end. This shape does not occur in a well-formed
+    /**
+     * A truncated group must not run off the end. This shape does not occur in a well-formed
      * dump, but a dropped USB frame produces exactly this and would otherwise index past the
-     * array. */
+     * array.
+     */
     @Test
     fun `unpack tolerates a group cut short`() {
         val dense = MotifXsVoice.unpack(byteArrayOf(0b0000_0010, 0x41, 0x42))
         assertEquals(2, dense.size)
         assertEquals(0x41.toByte(), dense[0])
         assertEquals(0xC2.toByte(), dense[1])
+    }
+
+    /** Every length of last group, from none to a full seven, sized and filled exactly. */
+    @Test
+    fun `unpack inverts packing at every length`() {
+        val random = kotlin.random.Random(20261004)
+        for (length in 0..40) {
+            val dense = ByteArray(length) { random.nextInt(256).toByte() }
+            assertArrayEquals("length $length", dense, MotifXsVoice.unpack(packMsb(dense)))
+        }
     }
 
     @Test

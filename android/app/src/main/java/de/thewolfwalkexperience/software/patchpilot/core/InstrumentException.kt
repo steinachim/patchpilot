@@ -7,8 +7,15 @@ package de.thewolfwalkexperience.software.patchpilot.core
  * What went wrong, in terms the UI can act on without matching on message strings, which would
  * stop working the moment a second family worded its failures differently.
  *
- * The distinction that matters to a screen is "would retrying help?": [Timeout] and
- * [TransportLost] may, [NotSupported] and [DeviceRejected] will not.
+ * The distinction that matters to a screen is "would retrying help?": [Timeout], [ReplyDamaged]
+ * and [TransportLost] may, [NotSupported] and [DeviceRejected] will not, and [SlotStateChanged]
+ * and [PartlyApplied] will after a refresh.
+ *
+ * The convention every family follows: anything the instrument or the link causes is one of
+ * these, with the underlying exception kept as its cause. A bad argument from the caller is an
+ * [IllegalArgumentException] and is never mapped to one of these. A failed send becomes
+ * [TransportLost] where the link is wrapped: `mapNordFailure` for the Nord, `SysExExchange` for
+ * the MIDI families.
  */
 sealed class InstrumentException(message: String, cause: Throwable? = null) :
     Exception(message, cause) {
@@ -16,9 +23,45 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
     /** The instrument, or this app's support for it, has no such operation. */
     class NotSupported(what: String) : InstrumentException("This instrument cannot $what.")
 
-    /** No reply arrived in time. */
-    class Timeout(what: String, cause: Throwable? = null) :
-        InstrumentException("The instrument did not answer while $what.", cause)
+    /**
+     * A slot is not in the state the list showed: it holds a preset where the list showed it
+     * empty, or the other way round. The list is older than the instrument's contents (a preset
+     * stored or deleted on the panel since the last read), so the remedy is a refresh. Distinct
+     * from [NotSupported] ("never, on this device") and from [DeviceRejected] (a refusal with no
+     * known reason). Built with [occupied] and [empty], so every family says the same thing.
+     */
+    class SlotStateChanged(detail: String, cause: Throwable? = null) :
+        InstrumentException("$detail Refresh the list and try again.", cause) {
+        companion object {
+            /** [displayId] holds a preset where the operation needs an empty slot. */
+            fun occupied(displayId: String, cause: Throwable? = null) =
+                SlotStateChanged("$displayId holds a preset, though the list shows it as empty.", cause)
+
+            /** [displayId] is empty where the operation needs a preset. */
+            fun empty(displayId: String, cause: Throwable? = null) =
+                SlotStateChanged("$displayId is empty, though the list shows a preset there.", cause)
+
+            /** [displayId] holds [now], stored over the [listed] preset the list still shows. */
+            fun replaced(displayId: String, now: String, listed: String) =
+                SlotStateChanged("$displayId now holds \"$now\", not \"$listed\" as the list shows.")
+        }
+    }
+
+    /**
+     * No reply arrived in time.
+     *
+     * @param explanation what the silence means, where the family knows - shown instead of the
+     *   bare sentence, as [DeviceRejected]'s is.
+     */
+    class Timeout(what: String, cause: Throwable? = null, explanation: String? = null) :
+        InstrumentException(explanation ?: "The instrument did not answer while $what.", cause)
+
+    /**
+     * A reply arrived on every attempt, but damaged: a wrong length, a checksum that does not
+     * close, a record spliced with another. Distinct from [Timeout], since something is answering.
+     */
+    class ReplyDamaged(what: String, cause: Throwable? = null) :
+        InstrumentException("The instrument's answer while $what arrived damaged on every attempt.", cause)
 
     /**
      * The instrument answered, and said no. [status] is its own code, verbatim.
@@ -27,10 +70,23 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
      *   bare "(status 4)", which says nothing about what to do. [status] is still carried for the
      *   log.
      */
-    class DeviceRejected(what: String, val status: Int, val explanation: String? = null) :
-        InstrumentException(
-            explanation ?: "The instrument refused to $what (status $status).",
-        )
+    class DeviceRejected(
+        what: String,
+        val status: Int,
+        val explanation: String? = null,
+        cause: Throwable? = null,
+    ) : InstrumentException(
+        explanation ?: "The instrument refused to $what (status $status).",
+        cause,
+    )
+
+    /**
+     * An edit that changed the instrument and then failed before it finished: [detail] says what
+     * the instrument holds now, and [cause] keeps why the edit stopped - a timeout, a lost link, a
+     * refusal. Its own type because neither half alone is the answer: the edit is not undone, and
+     * repeating it would meet a slot already changed, so the remedy is a refresh.
+     */
+    class PartlyApplied(detail: String, cause: Throwable) : InstrumentException(detail, cause)
 
     /** A reply arrived that this app cannot make sense of - a bug, or an unprofiled device. */
     class ProtocolDesync(detail: String, cause: Throwable? = null) :
@@ -44,8 +100,9 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
      * The instrument's own state blocks this operation, and the app may be able to change it.
      *
      * Distinct from [NotSupported] ("never, on this device"): this is "not right now, and here is
-     * what would fix it", so the screen can offer the fix. The case it covers: a Motif XS
-     * silently ignores a voice selection unless it is in Voice mode.
+     * what would fix it", so the screen can offer the fix. The cases it covers: a Motif XS
+     * silently ignores a voice selection unless it is in Voice mode, and a Subsequent 37 answers
+     * nothing else while it sends its preset list.
      *
      * [remedy] changes the instrument, so it is never run without asking: switching a player out
      * of the Performance they are using is a visible change to their setup. [remedyDetail] is
@@ -65,9 +122,9 @@ sealed class InstrumentException(message: String, cause: Throwable? = null) :
      *
      * The sibling of [BlockedByDeviceState] for the case where the app cannot send the fix,
      * because the instrument is not receiving what the app sends. [steps] is the button sequence
-     * the screen shows as a list. The case it covers: a Motif XS routes MIDI to exactly one of
+     * the screen shows as a list. The cases it covers: a Motif XS routes MIDI to exactly one of
      * its ports (DIN, USB or mLAN) and, set to any but USB, still enumerates and opens while
-     * answering nothing.
+     * answering nothing; and a Subsequent 37 ignores a Program Change while RCV PGM CHG is off.
      *
      * [alsoCheck] carries the other explanations for the same silence - a cable, another
      * application holding the device - since the cause is inferred from an absence.

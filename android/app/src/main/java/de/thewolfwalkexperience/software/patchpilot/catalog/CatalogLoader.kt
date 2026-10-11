@@ -32,3 +32,7 @@ class CatalogLoader<T : Any>(
     private fun decode(context: Context): T =
         context.assets.open(assetName).bufferedReader().use { json.decodeFromString(serializer, it.readText()) }
 }
+
+/** A generic catalog's [FamilyCatalog.familyConfig], decoded as [config]. */
+fun <C> CatalogLoader<FamilyCatalog>.familyConfig(context: Context, config: KSerializer<C>): C =
+    format.decodeFromJsonElement(config, load(context).familyConfig)

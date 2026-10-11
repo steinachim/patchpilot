@@ -63,6 +63,9 @@ object MotifXsSysEx {
      */
     const val BULK_OVERHEAD = 12
 
+    /** The largest count two 7-bit bytes can declare. */
+    const val MAX_BULK_PAYLOAD = 0x3FFF
+
     /** `F0 43 2n 7F 03 <addr> F7` - nine bytes, no payload. */
     fun requestDump(device: Int, addressHi: Int, addressMid: Int, addressLo: Int): ByteArray =
         byteArrayOf(
@@ -177,12 +180,14 @@ object MotifXsSysEx {
 
     /**
      * A bulk dump addressed to [addressHi]/[addressMid]/[addressLo] carrying [payload]. The byte
-     * count and checksum are computed here; the payload is passed through untouched.
+     * count and checksum are computed here; the payload is passed through untouched. The count is
+     * two 7-bit bytes, so a payload past [MAX_BULK_PAYLOAD] cannot be described and is refused.
      */
     fun bulkDump(device: Int, addressHi: Int, addressMid: Int, addressLo: Int, payload: ByteArray): ByteArray {
         // The counted region is the payload only: a 1,903-byte dump declares 1,891, its payload
         // length, and 1,891 + BULK_OVERHEAD = 1,903.
         val count = payload.size
+        require(count <= MAX_BULK_PAYLOAD) { "a bulk dump carries at most $MAX_BULK_PAYLOAD bytes, not $count" }
         val out = ByteArray(payload.size + BULK_OVERHEAD)
         out[0] = SYSEX_START
         out[1] = MANUFACTURER.toByte()
@@ -191,9 +196,9 @@ object MotifXsSysEx {
         out[4] = MODEL_HOST.toByte()
         out[5] = ((count shr 7) and 0x7F).toByte()
         out[6] = (count and 0x7F).toByte()
-        out[7] = addressHi.toByte()
-        out[8] = addressMid.toByte()
-        out[9] = addressLo.toByte()
+        out[7] = (addressHi and 0x7F).toByte()
+        out[8] = (addressMid and 0x7F).toByte()
+        out[9] = (addressLo and 0x7F).toByte()
         payload.copyInto(out, 10)
         out[out.size - 2] = checksumOf(out).toByte()
         out[out.size - 1] = SYSEX_END
@@ -239,8 +244,8 @@ object MotifXsSysEx {
 
     /**
      * The instrument's current mode, readable with a parameter request at `0A 00 01`. The `4n`
-     * selection works in Voice mode only, and its echo repeats what was sent rather than what
-     * happened, so reading the mode is the only way to tell.
+     * selection works in Voice mode only and draws no echo outside it, so reading the mode is what
+     * turns that silence into a reason.
      */
     const val MODE_ADDRESS_HI = 0x0A
     const val MODE_ADDRESS_MID = 0x00
@@ -349,6 +354,17 @@ object MotifXsSysEx {
      */
     fun identityRequest(): ByteArray =
         byteArrayOf(SYSEX_START, 0x7E, 0x00, 0x06, 0x01, SYSEX_END)
+
+    /**
+     * The firmware version an identity reply names, from the first of its four version bytes:
+     * `06` is 1.60 (measured on a unit running 1.60, the latest release). How other releases are
+     * numbered is unmeasured, so any other value is shown as its code rather than guessed at. The
+     * other three bytes read `00 00 7F` and are not used.
+     */
+    fun firmwareVersionOf(versionByte: Int): String =
+        FIRMWARE_BY_VERSION_BYTE[versionByte] ?: "code 0x%02X".format(versionByte)
+
+    private val FIRMWARE_BY_VERSION_BYTE = mapOf(0x06 to "1.60")
 
     fun isOurs(message: ByteArray): Boolean =
         message.size >= MIN_MESSAGE_SIZE &&

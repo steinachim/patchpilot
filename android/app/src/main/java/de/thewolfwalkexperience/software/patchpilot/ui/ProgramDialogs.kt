@@ -4,30 +4,42 @@
 package de.thewolfwalkexperience.software.patchpilot.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import de.thewolfwalkexperience.software.patchpilot.R
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentNotice
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 
 /*
- * The preset screen's three question dialogs. Each is self-contained and reads no screen state
- * beyond what it is handed, which is what lets them live apart from `ProgramsScreen`.
+ * The preset screen's dialogs. Each is self-contained and reads no screen state beyond what it is
+ * handed, which is what lets them live apart from `ProgramsScreen`.
  */
 
 /**
  * The one operation on the preset screen that asks first: move and swap leave the data somewhere
- * (see `runRelocation`), while a delete has nowhere for the preset to have gone, and on two of
- * the three families nothing in this app can put it back.
+ * (see `runRelocation`), while a delete has nowhere for the preset to have gone, and nothing in
+ * this app can put it back.
  *
  * @param emulated true where the family composes the erase from a write rather than issuing one
  *   command, which decides which effect sentence is shown.
@@ -53,10 +65,12 @@ internal fun DeleteConfirmationDialog(
                 Text(
                     stringResource(
                         if (emulated) {
-                            // Pro-800, Motif XS: an initialised preset is written over the slot.
+                            // Every family but the Nord: an empty or initialised preset is
+                            // written over the slot.
                             R.string.programs_delete_effect_emulated
                         } else {
-                            // Nord: sub-opcode 20/21, space is only reclaimable, not freed.
+                            // Nord, and demo mode, which mirrors one: sub-opcode 20/21, space
+                            // is only reclaimable, not freed.
                             R.string.programs_delete_effect_native
                         },
                     ),
@@ -115,6 +129,8 @@ internal fun BlockedOperationDialog(
  * @param maxNameLength null where the instrument declares no limit. Where it does, the field is
  *   capped as the user types rather than validated afterwards, since the instrument accepts an
  *   over-long name and quietly stores its first characters.
+ * @param nameProblem why a name cannot be stored, or null - asked of the trimmed text, which is
+ *   what a rename sends. Shown in place of the counter, and Rename stays off while there is one.
  */
 @Composable
 internal fun RenameDialog(
@@ -122,30 +138,85 @@ internal fun RenameDialog(
     text: String,
     onTextChange: (String) -> Unit,
     maxNameLength: Int?,
+    nameProblem: (String) -> String?,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // Not asked of a blank field: an empty box is not yet a mistake, and Rename is off anyway.
+    val problem = if (text.isBlank()) null else nameProblem(text.trim())
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.programs_rename_title, target.displayId)) },
         text = {
             OutlinedTextField(
                 value = text,
-                onValueChange = { typed -> onTextChange(if (maxNameLength != null) typed.take(maxNameLength) else typed) },
+                onValueChange = { typed ->
+                    onTextChange(if (maxNameLength != null) typed.take(maxNameLength) else typed)
+                },
                 label = { Text(stringResource(R.string.programs_new_name)) },
-                supportingText = maxNameLength?.let {
-                    { Text(stringResource(R.string.programs_name_counter, text.length, it)) }
+                isError = problem != null,
+                supportingText = when {
+                    problem != null -> {
+                        { Text(problem) }
+                    }
+
+                    maxNameLength != null -> {
+                        { Text(stringResource(R.string.programs_name_counter, text.length, maxNameLength)) }
+                    }
+
+                    else -> null
                 },
                 singleLine = true,
             )
         },
         confirmButton = {
-            TextButton(enabled = text.isNotBlank(), onClick = onConfirm) {
+            TextButton(enabled = text.isNotBlank() && problem == null, onClick = onConfirm) {
                 Text(stringResource(R.string.action_rename))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+/**
+ * One [de.thewolfwalkexperience.software.patchpilot.core.Instrument.notices] entry, shown when a
+ * session connects. Only acknowledged, never answered: the checkbox decides whether it comes back
+ * on the next app start, and Settings can bring a hidden one back.
+ */
+@Composable
+internal fun InstrumentNoticeDialog(
+    notice: InstrumentNotice,
+    onDismiss: (hideForever: Boolean) -> Unit,
+) {
+    var hideForever by rememberSaveable(notice.id) { mutableStateOf(false) }
+    AlertDialog(
+        // A tap outside closes it for this run only, like OK with the box unticked.
+        onDismissRequest = { onDismiss(false) },
+        title = { Text(notice.title) },
+        text = {
+            Column {
+                Text(notice.message)
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .toggleable(
+                            value = hideForever,
+                            onValueChange = { hideForever = it },
+                            role = Role.Checkbox,
+                        ),
+                ) {
+                    Checkbox(checked = hideForever, onCheckedChange = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.notice_hide_forever))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onDismiss(hideForever) }) { Text(stringResource(R.string.action_ok)) }
         },
     )
 }

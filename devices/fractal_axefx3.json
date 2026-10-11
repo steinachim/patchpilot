@@ -1,0 +1,30 @@
+{
+  "family": "axefx3",
+  "schemaVersion": 1,
+  "familyConfig": {
+    "presetsPerBank": 128,
+    "supportedFirmwareVersions": [
+      "32.06"
+    ],
+    "testedPresetCounts": [
+      512
+    ],
+    "restoreLoadedPresetAfterEdit": true
+  },
+  "devices": [
+    {
+      "id": "fractal_axefx3",
+      "family": "axefx3",
+      "name": "Fractal Audio Axe-Fx III",
+      "match": {
+        "type": "midiIdentity",
+        "probeHex": "f0 00 01 74 10 08 1d f7",
+        "replyPrefixHex": "f0 00 01 74 10 08",
+        "launchOnUsbAttach": {
+          "vendorId": 9318,
+          "productId": 32784
+        }
+      }
+    }
+  ]
+}

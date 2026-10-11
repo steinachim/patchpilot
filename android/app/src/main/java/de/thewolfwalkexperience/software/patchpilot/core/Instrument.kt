@@ -39,6 +39,9 @@ interface Instrument {
      */
     val tagger: PresetTagger?
 
+    /** Checks the factory names this app ships against the instrument - see [FactoryNameCheck]. */
+    val factoryNames: FactoryNameCheck? get() = null
+
     /**
      * Something the user must be told before using this instrument, or null where all is well.
      *
@@ -50,6 +53,14 @@ interface Instrument {
      * session useless throws. The screens gate on this once, then keep it visible.
      */
     val advisory: String? get() = null
+
+    /**
+     * Things worth knowing about how this app works with this instrument, shown when a session
+     * connects, each until the user hides it for good. Unlike [advisory], nothing is wrong: an
+     * Axe-Fx III edit loads the preset it writes, which the user should hear about once rather
+     * than in every dialog that can cause it.
+     */
+    val notices: List<InstrumentNotice> get() = emptyList()
 
     /**
      * Whether returning to the foreground should rebuild this session - see
@@ -83,6 +94,37 @@ data class InstrumentIdentity(
     /** Which bus this session is actually running over. */
     val bus: Bus,
     val stableKey: String,
+) {
+    /** Opened on a guess at its family's protocol, with no catalog entry - see `UnknownDevicePolicy`. */
+    val isGuessed: Boolean get() = descriptorId == UNKNOWN_DESCRIPTOR_ID
+
+    companion object {
+        /** The [descriptorId] of an instrument the catalog does not list. */
+        const val UNKNOWN_DESCRIPTOR_ID = "unknown"
+    }
+}
+
+/**
+ * Compares the factory preset names this app ships with what the instrument itself reports - the
+ * only way to catch a wrongly transcribed name, which renders exactly like a right one. Read-only.
+ * Offered where the app ships factory names (a Motif XS); null everywhere else.
+ */
+interface FactoryNameCheck {
+    /** The banks that can be checked, as (bank index, display label). */
+    val banks: List<Pair<Int, String>>
+
+    /** Reads [bank] off the instrument and returns one line per disagreement; empty where all agree. */
+    suspend fun verify(bank: Int, progress: (String) -> Unit): List<String>
+}
+
+/**
+ * One [Instrument.notices] entry. [id] is what a hidden notice is remembered by, so it must stay
+ * the same across releases for as long as the text means the same thing.
+ */
+data class InstrumentNotice(
+    val id: String,
+    val title: String,
+    val message: String,
 )
 
 // ---- Facets ----
@@ -142,19 +184,25 @@ sealed interface IndexUpdate {
     data object Complete : IndexUpdate
 }
 
+/** How many timeouts in a row end an [indexWalk]: one or two are a slot, three are a silent instrument. */
+internal const val SILENT_SLOTS_BEFORE_GIVING_UP = 3
+
 /**
  * The sequential read-every-slot walk, for the families that have no directory to read instead
- * (Pro-800, Motif XS). Rows are emitted as they arrive, one unreadable slot costs only itself,
- * and the final partial batch is always flushed.
+ * (Pro-800, Motif XS, Axe-Fx III). Rows are emitted as they arrive, one unreadable slot costs only
+ * itself, and the final partial batch is always flushed.
  *
  * @param batchSize per family: 25 slots on a Pro-800, 8 on a Motif XS, whose reads are an order
- *   of magnitude larger.
+ *   of magnitude larger, and 32 on an Axe-Fx III, whose name queries take about a millisecond.
  * @param onFailure lets a family log the cause; the emitted [IndexUpdate.Failed] carries only a
  *   reason string.
  * @param addresses walked in order; [total] is stated separately so a [Sequence] need not be
  *   counted twice.
- * @param readSlot may throw - anything but [kotlinx.coroutines.CancellationException] becomes an
- *   [IndexUpdate.Failed] and the walk goes on. Cancellation is always propagated.
+ * @param readSlot may throw. A failure becomes an [IndexUpdate.Failed] and the walk goes on, with
+ *   two exceptions that end it, keeping the rows already read: [InstrumentException.TransportLost],
+ *   and [SILENT_SLOTS_BEFORE_GIVING_UP] timeouts in a row, since an instrument that has gone
+ *   silent would otherwise cost the full timeout on every remaining slot. Cancellation is always
+ *   propagated.
  */
 fun indexWalk(
     addresses: Iterable<SlotAddress>,
@@ -166,16 +214,31 @@ fun indexWalk(
 ): Flow<IndexUpdate> = flow {
     val batch = mutableListOf<PresetSlot>()
     var done = 0
+    var silentInARow = 0
 
     for (address in addresses) {
         val displayId = layout.format.format(address)
         try {
             batch += readSlot(address, displayId)
+            silentInARow = 0
         } catch (e: CancellationException) {
+            throw e
+        } catch (e: InstrumentException.TransportLost) {
+            if (batch.isNotEmpty()) emit(IndexUpdate.Slots(batch.toList()))
             throw e
         } catch (e: Exception) {
             onFailure(displayId, e)
             emit(IndexUpdate.Failed(address, e.message ?: "unreadable"))
+            silentInARow = if (e is InstrumentException.Timeout) silentInARow + 1 else 0
+            if (silentInARow >= SILENT_SLOTS_BEFORE_GIVING_UP) {
+                if (batch.isNotEmpty()) emit(IndexUpdate.Slots(batch.toList()))
+                throw InstrumentException.Timeout(
+                    "listing presets",
+                    e,
+                    explanation = "The instrument stopped answering: $silentInARow presets in a row went " +
+                        "unanswered. Check the cable and the instrument's MIDI settings, then refresh the list.",
+                )
+            }
         }
         done++
         // `done == total` flushes a short final batch.
@@ -212,9 +275,10 @@ interface PresetSelector {
     /**
      * What to tell the user after [select] returns.
      *
-     * Every family verifies its own selection before returning (a Nord checks the echoed
-     * address, a Pro-800 reads its pointer back), so the default states it as a fact. Overridable
-     * because what a family can honestly claim is a property of its wire protocol.
+     * The default states the selection as a fact, for a family that verifies it before returning
+     * (a Nord checks the echoed address, a Pro-800 reads its pointer back). Overridable because
+     * what a family can honestly claim is a property of its wire protocol: an Axe-Fx III whose
+     * loaded-preset query goes unanswered says it asked.
      */
     fun confirmationFor(displayId: String): String = "Selected $displayId."
 }
@@ -238,11 +302,31 @@ interface PresetEditor {
      */
     val maxNameLength: Int? get() = null
 
+    /**
+     * Why [name] cannot be stored as a preset name, or null where it can. The rename dialog asks
+     * as the user types, so a name the instrument would refuse or change is caught before anything
+     * is sent; [rename] checks again for itself. The default is [printableAsciiNameProblem]; a
+     * family with a further rule, such as a name it reserves for an empty slot, adds it.
+     */
+    fun nameProblem(name: String): String? = printableAsciiNameProblem(name, maxNameLength)
+
     /** True where [op] is composed host-side from reads and writes rather than being one call. */
     fun isEmulated(op: EditOp): Boolean
 
+    /**
+     * Whether a preset from [source] can be put into [destination] at all, whatever either holds
+     * now - false only where the two store different kinds of preset (a Motif XS's drum banks and
+     * its normal ones). A destination pick and a drag offer only the slots this allows.
+     */
+    fun fits(source: SlotAddress, destination: SlotAddress): Boolean = true
+
+    /** Stores [newName] as given: the caller trims it, as the rename dialog does. */
     suspend fun rename(address: SlotAddress, newName: String)
+
+    /** Moving a slot onto itself does nothing, on every family. */
     suspend fun move(from: SlotAddress, to: SlotAddress)
+
+    /** Swapping a slot with itself does nothing, on every family. */
     suspend fun swap(a: SlotAddress, b: SlotAddress)
     suspend fun delete(address: SlotAddress)
 
@@ -252,22 +336,63 @@ interface PresetEditor {
      * "Synth Strings 2"), so only a read-back knows what was stored.
      *
      * The only edit with a default implementation: a family that offers it declares
-     * [EditOp.COPY] and overrides this; one that does not inherits the refusal.
+     * [EditOp.COPY] and overrides this; one that does not inherits the refusal. [src] and [dst]
+     * must differ: the same slot twice is the caller's mistake, an [IllegalArgumentException].
      */
     suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String =
-        throw UnsupportedOperationException("This instrument cannot copy a preset.")
+        throw InstrumentException.NotSupported("copy a preset")
 }
 
 /**
- * Reads and writes a preset's own data blob - backup and restore.
+ * Re-reads [listed]'s slot and throws [InstrumentException.SlotStateChanged] where it no longer
+ * holds the preset the list showed: emptied on the panel, or holding another one stored over it.
+ * For an edit the user confirmed against that row, a delete above all, which would otherwise erase
+ * a preset nobody saw named. A preset of the same name stored over it is not told apart.
+ */
+suspend fun PresetBrowser.requireStillHolds(listed: PresetSlot) {
+    val current = refresh(listed.address)
+    if (current.isEmpty) throw InstrumentException.SlotStateChanged.empty(listed.displayId)
+    if (current.name != listed.name) {
+        throw InstrumentException.SlotStateChanged.replaced(
+            listed.displayId,
+            now = current.name ?: UNNAMED_PRESET,
+            listed = listed.name ?: UNNAMED_PRESET,
+        )
+    }
+}
+
+/**
+ * The name rule every family shares: not blank, only printable ASCII (`0x20`-`0x7E`, the range
+ * every family's name field stores and reads back unchanged), and no longer than [maxLength] where
+ * one is known.
+ */
+fun printableAsciiNameProblem(name: String, maxLength: Int?): String? {
+    if (name.isBlank()) return "A preset name cannot be blank."
+    name.firstOrNull { it.code !in 0x20..0x7E }?.let { char ->
+        return if (char.isISOControl()) {
+            "A preset name cannot hold control characters."
+        } else {
+            "\u201c$char\u201d cannot be stored: a preset name can hold only plain ASCII letters, " +
+                "digits, spaces and punctuation."
+        }
+    }
+    if (maxLength != null && name.length > maxLength) {
+        return "A preset name can be at most $maxLength characters."
+    }
+    return null
+}
+
+/**
+ * Reads one preset's own data blob, as the instrument stores it. The regression test checks it,
+ * and the Pro-800's browser is built on it.
  *
- * Only the Pro-800 implements it: there a dump is the listing operation, so its browser is built
- * on [read]. The other families return null until an item-data read/write path is implemented.
+ * The Pro-800, the Axe-Fx III and the Subsequent 37 implement it: a whole-preset read is how each
+ * of them is read at all. The Nord and the Motif XS return null, having no item-data read path.
+ * There is no write here: the app has no backup or restore, and each family's editor writes
+ * through its own device operations.
  */
 interface PresetTransfer {
     suspend fun read(address: SlotAddress): ByteArray
-    suspend fun write(address: SlotAddress, blob: ByteArray)
-    val fileExtension: String
 }
 
 /**

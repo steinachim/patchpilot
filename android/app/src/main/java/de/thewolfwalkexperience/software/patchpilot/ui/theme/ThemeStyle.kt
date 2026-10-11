@@ -21,11 +21,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -68,13 +69,18 @@ interface ThemeStyle {
     /** The app-wide background texture, applied once at the root ([MainActivity]'s `Surface`). */
     fun screenTexture(base: Modifier): Modifier
 
-    /** The panel treatment for one preset row, including drag/drop-target highlighting. */
+    /**
+     * The panel treatment for one preset row, including drag/drop-target highlighting. Read-only
+     * composable, so a theme can take its colours and shapes from `MaterialTheme`.
+     */
+    @Composable
+    @ReadOnlyComposable
     fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean): Modifier
 
     /** The decoration for the bank fast-scroll rail (`BankIndex`). */
     fun railDecoration(base: Modifier): Modifier
 
-    /** Stands in for a bare spinner while the connect screen is searching for/opening a device. */
+    /** Stands in for a bare spinner: while a device is searched for or opened, and while the preset screen waits for a session or a listing. */
     @Composable
     fun ProgressIndicator(modifier: Modifier = Modifier)
 
@@ -111,8 +117,8 @@ interface ThemeStyle {
 /** The actions a top bar can carry, whichever screen puts them there. */
 enum class BarAction { Back, Refresh, Settings }
 
-/** Material's disabled alpha, for the pieces a theme dims for itself rather than by token. */
-internal const val DISABLED_HANDLE_ALPHA = 0.38f
+/** Material's disabled alpha, for what is dimmed by hand rather than by a component's own token. */
+internal const val DISABLED_ALPHA = 0.38f
 
 /** Plain Material: every function hands back [base] untouched or renders the stock component. */
 object DefaultThemeStyle : ThemeStyle {
@@ -121,7 +127,9 @@ object DefaultThemeStyle : ThemeStyle {
         val icon = when (action) {
             // Mirrored in a right-to-left locale, where a `<-` glyph is not.
             BarAction.Back -> Icons.AutoMirrored.Filled.ArrowBack
+
             BarAction.Refresh -> Icons.Filled.Refresh
+
             BarAction.Settings -> Icons.Filled.Settings
         }
         Icon(icon, contentDescription = contentDescription, modifier = modifier)
@@ -129,6 +137,9 @@ object DefaultThemeStyle : ThemeStyle {
 
     override fun screenFrame(base: Modifier) = base
     override fun screenTexture(base: Modifier) = base
+
+    @Composable
+    @ReadOnlyComposable
     override fun rowPanel(base: Modifier, dragged: Boolean, dropTarget: Boolean) = base
     override fun railDecoration(base: Modifier) = base
 
@@ -140,7 +151,7 @@ object DefaultThemeStyle : ThemeStyle {
             color = if (enabled) {
                 LocalContentColor.current
             } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_HANDLE_ALPHA)
+                MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
             },
             modifier = modifier,
         )
@@ -204,6 +215,8 @@ val AppTheme.style: ThemeStyle
 
 /**
  * The active [ThemeStyle], provided by [PatchPilotTheme]. Defaults to [DefaultThemeStyle], so a
- * composable previewed outside it degrades to the plain look rather than crashing.
+ * composable previewed outside it degrades to the plain look rather than crashing. Static: it
+ * changes only on a theme switch, which recomposes everything below anyway, so tracking its
+ * readers would cost on every composition for nothing.
  */
-val LocalThemeStyle = compositionLocalOf<ThemeStyle> { DefaultThemeStyle }
+val LocalThemeStyle = staticCompositionLocalOf<ThemeStyle> { DefaultThemeStyle }

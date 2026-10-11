@@ -3,6 +3,7 @@
 
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
+import androidx.annotation.VisibleForTesting
 import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
 
 /**
@@ -10,11 +11,11 @@ import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
  * model newer than the catalog, say), and which must be refused.
  *
  * The rule: guess a family from a vendor id only where two verified members already share one
- * protocol. Clavia's vendor id covers several verified models; Yamaha's and Behringer's cover one
- * verified instrument each (the XS7 and XS8 are catalogued on inferred product ids), which is no
- * evidence about the vendor's other synths. [FAMILIES_ALLOWING_A_GUESS] is that rule applied by
- * hand; revisit it if a second Yamaha or Behringer instrument is verified on its sibling's
- * protocol.
+ * protocol. Clavia's vendor id covers several verified models; Yamaha's, Behringer's, Fractal's
+ * and Moog's cover one verified instrument each (the XS7 and XS8 are catalogued on inferred
+ * product ids), which is no evidence about the vendor's other devices.
+ * [FAMILIES_ALLOWING_A_GUESS] is that rule applied by hand; revisit it if a second instrument from
+ * one of them is verified on its sibling's protocol.
  *
  * Without this gate, picking a keyboard, a hub or a charger would claim its interface and send
  * Clavia's vendor protocol - which carries destructive sub-opcodes - at it.
@@ -24,14 +25,25 @@ object UnknownDevicePolicy {
     /** Families whose protocol may be tried on an unrecognised device of the same vendor. */
     private val FAMILIES_ALLOWING_A_GUESS = setOf(NordInstrument.FAMILY)
 
-    /** Vendor ids for which [allows] returns true, read from the catalog so adding a Nord model needs no change here. */
-    fun vendorIdsAllowingAGuess(descriptors: List<InstrumentDescriptor>): Set<Int> =
-        descriptors
-            .filter { it.family in FAMILIES_ALLOWING_A_GUESS }
-            .mapNotNull { (it.match as? DeviceMatch.Usb)?.vendorId }
-            .toSet()
+    /**
+     * The family whose protocol an unrecognised device with [vendorId] may be opened on, or null
+     * where none may. Read from the catalog, so adding a Nord model needs no change here; fails
+     * closed on an empty catalog.
+     */
+    fun familyFor(descriptors: List<InstrumentDescriptor>, vendorId: Int): String? =
+        descriptors.firstOrNull { descriptor ->
+            descriptor.family in FAMILIES_ALLOWING_A_GUESS &&
+                (descriptor.match as? DeviceMatch.Usb)?.vendorId == vendorId
+        }?.family
 
-    /** May an unrecognised device with [vendorId] be opened on a guess? Fails closed on an empty catalog. */
+    /** Why [label], a device [familyFor] refuses, cannot be opened, for the device picker. */
+    fun refusalFor(label: String): String =
+        "$label is not a Clavia device, so there is no protocol to try on it. Only an " +
+            "unrecognised Nord can be opened this way - everything else the app supports is " +
+            "matched by its exact USB ids."
+
+    /** May an unrecognised device with [vendorId] be opened on a guess? */
+    @VisibleForTesting
     fun allows(descriptors: List<InstrumentDescriptor>, vendorId: Int): Boolean =
-        vendorId in vendorIdsAllowingAGuess(descriptors)
+        familyFor(descriptors, vendorId) != null
 }

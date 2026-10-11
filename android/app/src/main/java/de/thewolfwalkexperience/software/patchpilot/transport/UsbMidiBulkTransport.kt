@@ -66,6 +66,10 @@ class UsbMidiBulkTransport(
     /** USB host mode, so the same reasoning as [AndroidUsbBulkTransport]: rebuild on resume. */
     override val rebuildOnResume = true
 
+    /** Set once the reader has given up on the IN endpoint; every later [send] fails at once. */
+    @Volatile
+    private var readerGaveUp = false
+
     private val reader: Job = scope.launch {
         var consecutiveFailures = 0
         while (isActive) {
@@ -77,8 +81,13 @@ class UsbMidiBulkTransport(
                 // Never rethrown: a dead endpoint is a session outcome, not something for the
                 // scope's exception handler (see transportScope).
                 if (++consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                    Log.w(TAG, "Giving up on the IN endpoint after $consecutiveFailures " +
-                        "consecutive failures; this session is over.", e)
+                    readerGaveUp = true
+                    Log.w(
+                        TAG,
+                        "Giving up on the IN endpoint after $consecutiveFailures " +
+                            "consecutive failures; this session is over.",
+                        e,
+                    )
                     return@launch
                 }
                 delay(FAILURE_BACKOFF_MS)
@@ -106,6 +115,12 @@ class UsbMidiBulkTransport(
         require(bytes.size >= 2 && bytes.first() == 0xF0.toByte() && bytes.last() == 0xF7.toByte()) {
             "UsbMidiBulkTransport sends complete F0..F7 messages; got ${bytes.size} bytes " +
                 "starting ${bytes.firstOrNull()?.toInt()?.and(0xFF)?.toString(16)}"
+        }
+        // Nothing could arrive in reply, so fail now rather than wait out the reply's timeout.
+        if (readerGaveUp) {
+            throw UsbTransferException(
+                "The instrument's USB connection stopped delivering data. Unplug the USB cable, plug it back in and try again.",
+            )
         }
         // A bulk write blocks until the instrument has taken the data, and the caller is
         // normally on the main dispatcher.
@@ -140,8 +155,10 @@ class UsbMidiBulkTransport(
          */
         const val DEFAULT_READ_TIMEOUT_MS = 20
 
-        /** How long the reader idles after an empty read, so a driver returning instantly cannot
-         * turn the loop into a busy-spin. */
+        /**
+         * How long the reader idles after an empty read, so a driver returning instantly cannot
+         * turn the loop into a busy-spin.
+         */
         private const val IDLE_BACKOFF_MS = 1L
 
         /** Longer than [IDLE_BACKOFF_MS]: a failing read is not the normal idle case. */
@@ -150,7 +167,8 @@ class UsbMidiBulkTransport(
         /**
          * Consecutive read failures before the reader concludes the endpoint is gone and stops.
          * With the reader stopped, whatever operation is in flight ends in the timeout
-         * [SysExExchange] raises.
+         * `SysExExchange` raises, and every later [send] throws [UsbTransferException], which it
+         * raises as a lost connection.
          */
         private const val MAX_CONSECUTIVE_FAILURES = 20
 

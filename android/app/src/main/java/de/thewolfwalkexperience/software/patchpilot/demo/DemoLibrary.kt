@@ -3,6 +3,8 @@
 
 package de.thewolfwalkexperience.software.patchpilot.demo
 
+import de.thewolfwalkexperience.software.patchpilot.core.AddressFormat
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
@@ -15,6 +17,8 @@ import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 class DemoLibrary(
     private val nameList: List<String>,
     private val slotsPerBank: Int,
+    /** Names a slot in a refusal, as the browser does. */
+    private val format: AddressFormat,
     /**
      * What each seeded preset's category tag starts as, by preset name. Empty for a caller with no
      * categories at all, which is what leaves every row unbadged.
@@ -29,6 +33,7 @@ class DemoLibrary(
      */
     data class Program(val name: String, val category: String? = null)
 
+    /** Not synchronised: every caller is a coroutine on the ViewModel's scope, which runs on the main thread. */
     private val programs: MutableMap<SlotAddress, Program> = seedPrograms().toMutableMap()
 
     /** Every occupied slot, in device order, as browser rows. */
@@ -48,8 +53,13 @@ class DemoLibrary(
         badges = listOfNotNull(programs[address]?.category),
     )
 
+    /** Refused as a real instrument refuses an edit on a list out of date. */
     fun requireOccupied(address: SlotAddress) {
-        check(address in programs) { "No preset is stored at that slot." }
+        if (address !in programs) throw InstrumentException.SlotStateChanged.empty(format.format(address))
+    }
+
+    private fun requireEmpty(address: SlotAddress) {
+        if (address in programs) throw InstrumentException.SlotStateChanged.occupied(format.format(address))
     }
 
     fun rename(address: SlotAddress, newName: String) {
@@ -68,7 +78,7 @@ class DemoLibrary(
 
     fun move(from: SlotAddress, to: SlotAddress) {
         requireOccupied(from)
-        check(to !in programs) { "That slot already holds a preset; a move needs an empty one." }
+        requireEmpty(to)
         programs[to] = programs.remove(from)!!
     }
 
@@ -76,25 +86,28 @@ class DemoLibrary(
      * Duplicates [from] into the empty slot [to], leaving [from] alone, and names the copy itself
      * as a real Nord does, so
      * [de.thewolfwalkexperience.software.patchpilot.core.PresetEditor.copyProgram]'s contract
-     * holds here too.
+     * holds here too. The source's name is shortened where the number would take the copy's past
+     * [maxNameLength], the limit the rename dialog holds every name to.
      */
-    fun copy(from: SlotAddress, to: SlotAddress): String {
+    fun copy(from: SlotAddress, to: SlotAddress, maxNameLength: Int): String {
         requireOccupied(from)
-        check(to !in programs) { "That slot already holds a preset; a copy needs an empty one." }
+        requireEmpty(to)
         val source = programs.getValue(from)
         val copyName = generateSequence(2) { it + 1 }
-            .map { "${source.name} $it" }
+            .map { n -> " $n".let { suffix -> source.name.take(maxNameLength - suffix.length).trimEnd() + suffix } }
             .first { candidate -> programs.values.none { it.name == candidate } }
         // The copy keeps the source's category, the way a real instrument's copy does.
         programs[to] = source.copy(name = copyName)
         return copyName
     }
 
+    /** Both slots must hold a preset, as on the Nord this mirrors. */
     fun swap(a: SlotAddress, b: SlotAddress) {
-        val left = programs[a]
-        val right = programs[b]
-        if (right != null) programs[a] = right else programs.remove(a)
-        if (left != null) programs[b] = left else programs.remove(b)
+        requireOccupied(a)
+        requireOccupied(b)
+        val left = programs.getValue(a)
+        programs[a] = programs.getValue(b)
+        programs[b] = left
     }
 
     fun delete(address: SlotAddress) {

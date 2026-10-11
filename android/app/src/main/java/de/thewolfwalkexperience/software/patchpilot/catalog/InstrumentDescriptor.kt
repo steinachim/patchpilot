@@ -18,6 +18,12 @@ data class InstrumentDescriptor(
     /** The factory key - "nord", "pro800". */
     val family: String,
     val name: String,
+    /**
+     * The trailing part of [name] that tells this model from its siblings in the same family -
+     * "6" for a Motif XS6, "2 EX" for a Nord Stage 2 EX. Read only to put siblings on one line
+     * of the supported-instrument list; see [supportedModelLines].
+     */
+    val variant: String? = null,
     val match: DeviceMatch,
     /** Everything only this family understands, decoded by its own factory. */
     val familyConfig: JsonObject = JsonObject(emptyMap()),
@@ -60,10 +66,11 @@ sealed interface DeviceMatch {
         val replyPrefixHex: String,
         val usbHint: Usb? = null,
         /**
-         * The USB ids Android should launch the app for when this device is plugged in. Read only
-         * by the `generateUsbDeviceFilter` Gradle task; nothing at runtime matches on it. Kept
-         * apart from [usbHint], which narrows probing: an instrument reached through some other
-         * USB-MIDI interface must still be found.
+         * The USB ids Android should launch the app for when this device is plugged in, read by
+         * the `generate<Variant>UsbDeviceFilter` Gradle task. At runtime it only orders the MIDI
+         * scan: a port with these ids is probed first, with this probe first. Kept apart from
+         * [usbHint], which narrows probing: an instrument reached through some other USB-MIDI
+         * interface must still be found.
          */
         val launchOnUsbAttach: UsbIds? = null,
         /** Which of the device's MIDI ports to probe and then talk on. Zero for every instrument matched this way. */

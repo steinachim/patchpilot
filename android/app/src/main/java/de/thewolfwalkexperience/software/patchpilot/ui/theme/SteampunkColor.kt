@@ -8,9 +8,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 
 /**
- * The "Brass & Aether" palette: brass primary,
- * copper secondary, verdigris tertiary (also what the connect screen's "connected" jewel and
- * device-row status read as), a rust error role, warm near-black surfaces, parchment text.
+ * The "Brass & Aether" palette: brass primary, copper secondary, verdigris tertiary, a rust error
+ * role, warm near-black surfaces, parchment text.
  *
  * Dark-only, deliberately - like a real WinAmp skin, this is a single committed look rather than
  * something that flips with the system's light/dark setting. [AppTheme.Default] is what still
@@ -85,13 +84,12 @@ val SteampunkColorScheme: ColorScheme = darkColorScheme(
     scrim = Ink,
 )
 
-/** Exposed for the bespoke Steampunk composables (gauge ticks, borders) that draw outside the
- *  `ColorScheme` roles above. */
+/**
+ * Exposed for the bespoke Steampunk drawing (borders, the backdrop texture) that works outside
+ *  the `ColorScheme` roles above.
+ */
 object SteampunkAccents {
     val brassLight = BrassLight
     val brassDark = BrassDark
-    val verdigris = Verdigris
-    val rust = Rust
     val parchment = Parchment
-    val parchmentDim = ParchmentDim
 }

@@ -4,7 +4,14 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.emptyItemRecord
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.itemRecord
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.readUInt32BE
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,31 +46,13 @@ class NordTaggerTest {
 
     private val categories = NordCategories.resolve(profile, master)!!
 
-    private fun uint32BE(value: Int) = byteArrayOf(
-        (value ushr 24).toByte(), (value ushr 16).toByte(), (value ushr 8).toByte(), value.toByte(),
-    )
-
-    private fun readUInt32BE(b: ByteArray, off: Int): Int =
-        ((b[off].toInt() and 0xFF) shl 24) or ((b[off + 1].toInt() and 0xFF) shl 16) or
-            ((b[off + 2].toInt() and 0xFF) shl 8) or (b[off + 3].toInt() and 0xFF)
-
-    /** The sub-opcode 1 reply, with `Program` at index 1 - what getProgramCategoryIndex reads. */
-    private fun rootList(): ByteArray {
-        val names = listOf("Piano", "Program", "Settings")
-        var out = uint32BE(0) + byteArrayOf(names.size.toByte())
-        for (name in names) {
-            out += uint32BE(name.length) + name.toByteArray(Charsets.US_ASCII) + ByteArray(29)
-        }
-        return out
-    }
-
     // ---- The wire ----
 
     @Test
     fun `setPresetCategory sends sub-op 51 with bank, item and id`() = runTest {
         val transport = ReplayTransport(
             listOf(
-                1 to rootList(), // ROOT_CATEGORY_LIST, via getProgramCategoryIndex
+                1 to rootListPayload(), // ROOT_CATEGORY_LIST, via getProgramCategoryIndex
                 5 to ByteArray(0), // SELECT_CATEGORY - locks the instrument
                 52 to (uint32BE(0) + uint32BE(1) + uint32BE(11)), // SET_CATEGORY echo
                 48 to (uint32BE(0) + uint32BE(1) + uint32BE(11)), // the display re-select
@@ -90,7 +79,7 @@ class NordTaggerTest {
     fun `the write is bracketed by the category select and the unlock`() = runTest {
         val transport = ReplayTransport(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 52 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
                 48 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
@@ -117,42 +106,34 @@ class NordTaggerTest {
     fun `a mismatched echo fails the write but still unlocks`() = runTest {
         val transport = ReplayTransport(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 52 to (uint32BE(0) + uint32BE(1) + uint32BE(12)), // wrong item echoed back
                 7 to ByteArray(0),
             ),
         )
         val device = NordFixtures.device(transport, profile)
-        try {
-            device.setPresetCategory(1, 11, 22)
-            fail("a mismatched echo should be refused")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        thrownBy<NordProtocolException> { device.setPresetCategory(1, 11, 22) }
         assertEquals(
             NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code,
             transport.sentRequests.last().subOp,
         )
+        transport.assertAllConsumed()
     }
 
     @Test
     fun `a non-zero status fails the write`() = runTest {
         val transport = ReplayTransport(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 52 to (uint32BE(2) + uint32BE(1) + uint32BE(11)), // status 2 = refused
                 7 to ByteArray(0),
             ),
         )
         val device = NordFixtures.device(transport, profile)
-        try {
-            device.setPresetCategory(1, 11, 22)
-            fail("a non-zero status should be refused")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        assertEquals(2, thrownBy<NordStatusException> { device.setPresetCategory(1, 11, 22) }.status)
+        transport.assertAllConsumed()
     }
 
     // ---- The facet ----
@@ -206,18 +187,17 @@ class NordTaggerTest {
 
         val transport = ReplayTransport(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
+                // The slot as it stands, read first.
+                5 to ByteArray(0),
+                31 to itemRecord(bank = 0, item = 0, categoryId = 3, name = "White Grand"),
+                7 to ByteArray(0),
                 5 to ByteArray(0),
                 52 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
                 48 to (uint32BE(0) + uint32BE(0) + uint32BE(0)),
                 7 to ByteArray(0),
-                // The read-back verification walks the program list, which re-asks for the
-                // category index first - getProgramCategoryIndex() queries every time.
-                1 to rootList(), // ROOT_CATEGORY_LIST
-                3 to childList(banks = 1), // GET_CATEGORY_CHILD, bounds the walk
+                // The read-back fetches the slot by address; the category index is already known.
                 5 to ByteArray(0), // SELECT_CATEGORY
-                9 to (uint32BE(0) + uint32BE(1)), // GET_ITEM_COUNT -> one item
-                33 to (uint32BE(0) + uint32BE(0) + uint32BE(0)), // CURSOR_NEXT_ITEM -> item 0
                 31 to itemRecord(bank = 0, item = 0, categoryId = 21, name = "White Grand"),
                 7 to ByteArray(0), // UNLOCK_CATEGORY_SELECTION
             ),
@@ -231,31 +211,38 @@ class NordTaggerTest {
         assertEquals(21, readUInt32BE(sent.payload, 8))
     }
 
-    /**
-     * A sub-opcode 2/3 reply listing [banks] banks of 25 slots - what bounds the item walk.
-     *
-     * `status(4) | categoryIndex(4) | childCount(1) | [ nameLen(4) | name | capacity(4) ]*`
-     */
-    private fun childList(banks: Int): ByteArray {
-        var out = uint32BE(0) + uint32BE(1) + byteArrayOf(banks.toByte())
-        repeat(banks) {
-            val name = "Bank".toByteArray(Charsets.US_ASCII)
-            out += uint32BE(name.size) + name + uint32BE(25)
-        }
-        return out
+    /** As every family: a category the program already carries is not written again. */
+    @Test
+    fun `a category the program already carries is not written`() = runTest {
+        val grand = categories.refOf(21)!!
+        val transport = ReplayTransport(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                31 to itemRecord(bank = 0, item = 0, categoryId = 21, name = "White Grand"),
+                7 to ByteArray(0),
+            ),
+        )
+        NordTagger(NordFixtures.device(transport, profile), categories).setCategories(SlotAddress(0, 0), listOf(grand))
+
+        assertTrue(transport.sentRequests.none { it.subOp == NordDevice.FileTransferSubOp.SET_CATEGORY.code })
     }
 
-    /**
-     * A minimal `ngp` item record: the fields the parser reads, at the offsets it reads them.
-     *
-     * The content tag is spelled out as bytes rather than as a string, because it is NUL-padded -
-     * `6e 67 70 00` - and a NUL inside a source literal is invisible to anyone reading it.
-     */
-    private fun itemRecord(bank: Int, item: Int, categoryId: Int, name: String): ByteArray {
-        val text = name.toByteArray(Charsets.US_ASCII)
-        val ngp = byteArrayOf(0x6E, 0x67, 0x70, 0x00)
-        return uint32BE(0) + uint32BE(bank) + uint32BE(item) + uint32BE(0) +
-            ngp + uint32BE(101) + uint32BE(0) + uint32BE(categoryId) +
-            uint32BE(text.size) + text + ByteArray(12)
+    /** A program deleted on the panel since the list was read: refresh, as on every other family. */
+    @Test
+    fun `setting the category of a slot emptied on the panel asks for a refresh`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                31 to emptyItemRecord(bank = 0, item = 0),
+                7 to ByteArray(0),
+            ),
+        )
+        val tagger = NordTagger(NordFixtures.device(transport, profile), categories)
+        thrownBy<InstrumentException.SlotStateChanged> {
+            tagger.setCategories(SlotAddress(0, 0), listOf(categories.refOf(21)!!))
+        }
+        assertTrue(transport.sentRequests.none { it.subOp == NordDevice.FileTransferSubOp.SET_CATEGORY.code })
     }
 }

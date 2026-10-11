@@ -17,8 +17,11 @@ Patch Pilot is a native Android app for browsing, organizing and editing the pre
 | Behringer Pro-800 | USB-MIDI (class compliant) | Verified on hardware |
 | Yamaha Motif XS6 | USB (USB-MIDI packets on a vendor interface) | Verified on hardware |
 | Yamaha Motif XS7, XS8 | as XS6 | **Assumed.** Their USB product ids are inferred from Yamaha's driver files and have not been confirmed on a unit. |
+| Fractal Audio Axe-Fx III (Mark I) | USB-MIDI (class compliant) | Verified on hardware |
+| Fractal Audio Axe-Fx III Mark II, Mark II Turbo | as Mark I | **Assumed.** Recognized by the model record the unit sends, and listed with its 1,024 presets behind a warning; never run on one. |
+| Moog Subsequent 37 | USB-MIDI (class compliant) | Verified on hardware. The Sub 37 and the Subsequent 37 CV are different instruments and are not supported. |
 
-"Verified on hardware" means the app has been run against that model. For the Nord models and the Pro-800 the firmware versions it was run with are listed in the device catalog under [devices/](devices/), and connecting with a firmware version that is not listed shows a warning but is allowed. The Motif XS reads its firmware version for display only; no version check is made for it.
+"Verified on hardware" means the app has been run against that model. The device catalog under [devices/](devices/) lists the firmware versions the app was run with. Connecting with a firmware version that is not listed shows a warning but is allowed.
 
 ### Other Nord instruments
 
@@ -28,7 +31,7 @@ An unrecognized Nord (Clavia USB vendor id) can be opened anyway from the connec
 
 ### Other manufacturers
 
-The Behringer Pro-800 and the Yamaha Motif XS each have their own protocol implementation, and neither says anything about other instruments from the same manufacturer. A further Behringer or Yamaha instrument needs its own implementation, verified against real hardware. Requests are welcome as issues; support depends on access to the instrument.
+The Behringer Pro-800, the Yamaha Motif XS, the Fractal Audio Axe-Fx III and the Moog Subsequent 37 each have their own protocol implementation, and none says anything about other instruments from the same manufacturer. A further Behringer, Yamaha, Fractal Audio or Moog instrument (an FM3, say, or a Sub 37) needs its own implementation, verified against real hardware. Requests are welcome as issues; support depends on access to the instrument.
 
 ## Screenshots
 
@@ -42,7 +45,7 @@ The app has two themes, System Default and Steampunk.
 
 Without an instrument, the connect screen offers a demo mode with a simulated instrument.
 
-By default the app connects straight to the first instrument it finds over USB, without waiting for the slower MIDI bus scan a Pro-800 or Motif XS would need. Settings has an "Auto-Connect to First Found Instrument" toggle to turn that off, so the connect screen always scans both buses and shows the device list instead.
+By default the app connects straight to the first instrument it finds over USB, without waiting for the slower MIDI bus scan a Pro-800, an Axe-Fx III or a Subsequent 37 would need. Settings has an "Auto-Connect to First Found Instrument" toggle to turn that off, so the connect screen always scans both buses and shows the device list instead.
 
 ## Building
 
@@ -60,11 +63,13 @@ cd android
 ./gradlew testDebugUnitTest
 ```
 
+Formatting is ktlint through Spotless: `./gradlew spotlessCheck` reports, `./gradlew spotlessApply` fixes. The settings are in `android/build.gradle.kts`, repeated in `android/.editorconfig` for editors.
+
 The build reads the device catalog from `../devices` relative to `android/` (the JSON descriptors and the binary blanks under `devices/blanks/`) and copies it into the app's assets; it also generates the USB device filter from the catalog's USB ids. Keep `devices/` and `android/` as siblings.
 
 ### Continuous integration
 
-[GitHub Actions](.github/workflows/android.yml) runs the unit tests and `assembleRelease bundleRelease` on every pull request and on every push to `main`. Pushes to other branches without a pull request do not trigger a build. On `main` the release APK and bundle are signed with the release key held in repository secrets (see [RELEASING.md](docs/RELEASING.md#signing)) and attached to the run as an artifact for 30 days. Pull-request builds are unsigned.
+[GitHub Actions](.github/workflows/android.yml) checks formatting, runs the unit tests, `assembleRelease bundleRelease` and `lintRelease` on every pull request and on every push to `main`. Pushes to other branches do not trigger a build on their own; a run can be started by hand on any branch from the Actions tab. On a push to `main` the release APK and bundle are signed with the release key held in repository secrets (see [RELEASING.md](docs/RELEASING.md#signing)) and attached to the run as an artifact for 30 days. Pull-request and manual builds are unsigned.
 
 ## Documentation
 
@@ -78,7 +83,7 @@ The build reads the device catalog from `../devices` relative to `android/` (the
 
 Patch Pilot collects no data and has no network access; see [PRIVACY.md](PRIVACY.md).
 
-Patch Pilot is an independent, unofficial project. It is not affiliated with, endorsed by, or supported by Clavia DMI AB (Nord), Music Tribe / Behringer, or Yamaha Corporation. Product and brand names are used solely to identify the hardware this app is compatible with.
+Patch Pilot is an independent, unofficial project. It is not affiliated with, endorsed by, or supported by Clavia DMI AB (Nord), Music Tribe / Behringer, Yamaha Corporation, Fractal Audio Systems, or Moog Music. Product and brand names are used solely to identify the hardware this app is compatible with.
 
 This software changes your instrument's internal storage, including operations that overwrite or delete presets. It is provided "AS IS", without warranty of any kind, as permitted by the license below. Use with real hardware is at your own risk.
 

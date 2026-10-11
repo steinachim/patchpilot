@@ -9,6 +9,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,9 +30,8 @@ import org.junit.Test
  * Every one of these is a rule the screen's own comments state as deliberate - a delete dialog
  * dismissed before the work rather than after it, a copy picker that closes only on success, a
  * blocked operation becoming answerable only when the family offers both a remedy and a retry.
- * They were unreachable without standing up a whole composition, so none of them was covered;
  * [ProgramsController] taking [ProgramsOperations] and [StringResolver] rather than a ViewModel
- * and a Context is what makes them ordinary functions to call.
+ * and a Context is what makes them ordinary functions to call, with no composition.
  */
 class ProgramsControllerTest {
 
@@ -58,6 +58,9 @@ class ProgramsControllerTest {
         var tagsToReturn = PresetTags(categories = emptyList())
         var failWith: Throwable? = null
 
+        /** Holds a delete on the instrument until completed, so another operation can finish first. */
+        var holdDelete: CompletableDeferred<Unit>? = null
+
         private val _scope = MutableStateFlow(initialScope)
         override val scope: StateFlow<PresetScope> = _scope
 
@@ -68,9 +71,8 @@ class ProgramsControllerTest {
 
         override fun launchEdit(block: suspend () -> Unit): Job = testScope.launch { block() }
 
-        override fun reloadIndex(): Int? {
+        override fun reloadAfterEdit() {
             reloads++
-            return null
         }
 
         private fun <T> answer(call: String, value: T): T {
@@ -79,10 +81,17 @@ class ProgramsControllerTest {
             return value
         }
 
+        override suspend fun applyRemedy(remedy: suspend () -> Unit) {
+            calls += "applyRemedy"
+            remedy()
+        }
         override suspend fun selectProgram(slot: PresetSlot) = answer("select(${slot.displayId})", "Selected")
         override suspend fun renameProgram(slot: PresetSlot, newName: String) =
             answer("rename(${slot.displayId},$newName)", "Renamed")
-        override suspend fun deleteProgram(slot: PresetSlot) = answer("delete(${slot.displayId})", "Deleted")
+        override suspend fun deleteProgram(slot: PresetSlot): String {
+            holdDelete?.await()
+            return answer("delete(${slot.displayId})", "Deleted")
+        }
         override suspend fun copyProgram(source: PresetSlot, destination: PresetSlot) =
             answer("copy(${source.displayId}->${destination.displayId})", "Copied")
         override suspend fun moveProgram(source: PresetSlot, target: PresetSlot, targetIsEmpty: Boolean) =
@@ -123,6 +132,65 @@ class ProgramsControllerTest {
         assertNotNull("the failure has to reach the screen", controller.operationError)
     }
 
+    /** A lost link takes the preset screen away, so what the edit left behind goes to whoever listens. */
+    @Test
+    fun `an edit left partly applied by a lost link is reported beyond the screen`() = runTest {
+        val (controller, ops) = controller()
+        val told = mutableListOf<String>()
+        controller.onEditInterrupted = { told += it }
+        ops.failWith = InstrumentException.PartlyApplied(
+            "stopped part way",
+            InstrumentException.TransportLost("write failed"),
+        )
+        controller.onDeleteConfirmed(slot(0, 1))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(listOf("stopped part way"), told)
+        assertEquals("stopped part way", controller.operationError)
+    }
+
+    /** A write cut off by a lost link may or may not have landed, and nothing read it back. */
+    @Test
+    fun `a stored edit that loses the link says it may not have been applied`() = runTest {
+        val (controller, ops) = controller()
+        val told = mutableListOf<String>()
+        controller.onEditInterrupted = { told += it }
+        ops.failWith = InstrumentException.TransportLost("write failed")
+        controller.onDeleteConfirmed(slot(0, 1))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(1, told.size)
+        assertTrue(told.single(), told.single().contains("res") && told.single().contains("A1"))
+    }
+
+    @Test
+    fun `a selection that loses the link has nothing to warn about`() = runTest {
+        val (controller, ops) = controller()
+        val told = mutableListOf<String>()
+        controller.onEditInterrupted = { told += it }
+        ops.failWith = InstrumentException.TransportLost("write failed")
+        controller.onProgramTapped(slot(0, 1))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(emptyList<String>(), told)
+    }
+
+    @Test
+    fun `an edit left partly applied for another reason stays on the screen`() = runTest {
+        val (controller, ops) = controller()
+        val told = mutableListOf<String>()
+        controller.onEditInterrupted = { told += it }
+        ops.failWith = InstrumentException.PartlyApplied(
+            "in both slots",
+            InstrumentException.DeviceRejected("store a preset", status = 3),
+        )
+        controller.onDeleteConfirmed(slot(0, 1))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(emptyList<String>(), told)
+        assertEquals("in both slots", controller.operationError)
+    }
+
     /**
      * The busy entry is registered before the edit's coroutine runs: a gate that only closed once
      * the coroutine had started would let two taps in the same frame both through.
@@ -140,13 +208,18 @@ class ProgramsControllerTest {
     /** Selection is not gated on an edit, so the two overlap - and the edit's line has to win. */
     @Test
     fun `a selection finishing during an edit does not clear the edit's busy line`() = runTest {
-        val (controller, _) = controller()
-        controller.onProgramTapped(slot(0, 2))
+        val ops = FakeOperations(this).apply { holdDelete = CompletableDeferred() }
+        val (controller, _) = controller(ops)
         controller.onDeleteConfirmed(slot(0, 1))
+        controller.onProgramTapped(slot(0, 2))
+        testScheduler.runCurrent()
 
+        assertTrue("the selection has finished", ops.calls.any { it.startsWith("select(") })
         val shown = controller.busy
-        assertNotNull(shown)
+        assertNotNull("the delete still holds the instrument", shown)
         assertTrue("the line shows the edit, not the selection", shown!!.showProgress)
+
+        ops.holdDelete!!.complete(Unit)
         testScheduler.advanceUntilIdle()
         assertNull(controller.busy)
     }
@@ -161,6 +234,16 @@ class ProgramsControllerTest {
 
         // Before advancing: the edit has not run yet, and the dialog is already gone.
         assertNull("a dialog left standing over an edit hides the progress line", controller.deleteTarget)
+    }
+
+    /** Every family reads its names back trimmed, so an untrimmed name would fail its own read-back. */
+    @Test
+    fun `rename sends the name trimmed at both ends`() = runTest {
+        val (controller, ops) = controller()
+        controller.onRenameConfirmed(slot(0, 1), "  New Name  ")
+        testScheduler.advanceUntilIdle()
+
+        assertEquals("rename(${slot(0, 1).displayId},New Name)", ops.calls.single())
     }
 
     @Test
@@ -208,6 +291,33 @@ class ProgramsControllerTest {
 
         assertNotNull("a remedy plus a retry is answerable, so it must open the dialog", controller.blocked)
         assertNull("and must not also be reported as a plain failure", controller.operationError)
+    }
+
+    /** The fix is an edit like any other: busy while it runs, and run through the session's lock. */
+    @Test
+    fun `a confirmed remedy runs as an edit, then retries the blocked one`() = runTest {
+        val (controller, ops) = controller()
+        var fixed = false
+        ops.failWith = InstrumentException.BlockedByDeviceState(
+            message = "The instrument is in Performance mode.",
+            remedy = {
+                assertNotNull("the fix must show as busy", controller.busy)
+                fixed = true
+                ops.failWith = null
+            },
+            remedyLabel = "Switch to Voice mode",
+        )
+        controller.onProgramTapped(slot(0, 3))
+        testScheduler.advanceUntilIdle()
+
+        controller.onBlockedRemedyConfirmed(controller.blocked!!)
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(fixed)
+        assertEquals(listOf("select(A3)", "applyRemedy", "select(A3)"), ops.calls)
+        assertNull(controller.busy)
+        assertNull(controller.blocked)
+        assertNull(controller.operationError)
     }
 
     @Test
@@ -290,6 +400,30 @@ class ProgramsControllerTest {
         assertTrue("show what went wrong against the copy that was about to be made", controller.picking)
     }
 
+    /**
+     * The controller outlives the screen, so the ViewModel resets it for a session other than the
+     * one its dialogs and picks were opened in. An edit still running keeps its line: it holds
+     * the instrument either way.
+     */
+    @Test
+    fun `reset forgets dialogs, picks and results but not an edit in flight`() = runTest {
+        val ops = FakeOperations(this)
+        val (controller, _) = controller(ops)
+        controller.beginPicking(slot(0, 1))
+        controller.renameTarget = slot(0, 2)
+        controller.deleteTarget = slot(0, 3)
+        controller.operationError = "earlier failure"
+        controller.onDeleteConfirmed(slot(0, 4))
+
+        controller.reset()
+
+        assertFalse(controller.picking)
+        assertNull(controller.renameTarget)
+        assertNull(controller.deleteTarget)
+        assertNull(controller.operationError)
+        assertNotNull("an edit in flight keeps its line until it ends", controller.busy)
+    }
+
     // ---- "Move to…", the reachable equivalent of the drag gesture ----
 
     @Test
@@ -363,6 +497,20 @@ class ProgramsControllerTest {
             listOf("move(A1->A2,empty=true)", "move(A1->A3,empty=false)"),
             ops.calls,
         )
+    }
+
+    /** Taken as empty, a drop onto a slot that could not be read would move over whatever it holds. */
+    @Test
+    fun `dropping onto an unreadable row is refused and says why`() = runTest {
+        val (controller, ops) = controller()
+        val source = slot(0, 1)
+        val unreadable = slot(0, 2)
+
+        controller.onSwapDropped(source, unreadable, setOf(source.address), setOf(unreadable.address))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(emptyList<String>(), ops.calls)
+        assertTrue(controller.operationError != null)
     }
 
     @Test

@@ -6,6 +6,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.FavoriteModel
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
@@ -39,6 +40,8 @@ internal class MotifXsTagger(
     override val assignmentCount: Int = ASSIGNMENTS
 
     override val favorites: FavoriteModel = FavoriteModel.PER_ASSIGNMENT
+
+    override val favoritePanelHint = "hold [CATEGORY SEARCH] and use the [FAVORITE] bank."
 
     /** Inside the voice, so a factory bank is out - the same rule a rename obeys. */
     override fun canSetCategories(address: SlotAddress): Boolean =
@@ -86,22 +89,32 @@ internal class MotifXsTagger(
             listOf(main, sub)
         }
 
-        instrument.editStoredCategories(address, bytes)
+        val written = instrument.editStoredCategories(address, bytes) { payload -> storedRefs(payload) == wanted }
+        if (!written) return
 
         // Read back through `0C`, the same path the browser lists with.
-        val stored = MotifXsVoice.categoriesOf(instrument.readVoicePayload(address)).orEmpty()
-            .map { figure -> figure?.let { MotifXsCategories.refOf(it, taxonomy) } }
-        val storedPadded = List(ASSIGNMENTS) { stored.getOrNull(it) }
-        check(storedPadded == wanted) {
-            "set the categories of ${instrument.describe(address)} but they read back as " +
-                storedPadded.joinToString { it?.let(taxonomy::label) ?: "none" }
+        val storedPadded = storedRefs(instrument.readVoicePayload(address))
+        if (storedPadded != wanted) {
+            throw InstrumentException.ProtocolDesync(
+                "Set the categories of ${instrument.describe(address)} but they read back as " +
+                    storedPadded.joinToString { it?.let(taxonomy::label) ?: "none" } + ".",
+            )
         }
         invalidate(address.bank)
     }
 
+    /** The [ASSIGNMENTS] categories a voice as read through `0C` carries, null where unassigned. */
+    private fun storedRefs(voicePayload: ByteArray): List<CategoryRef?> {
+        val stored = MotifXsVoice.categoriesOf(voicePayload).orEmpty()
+            .map { figure -> figure?.let { MotifXsCategories.refOf(it, taxonomy) } }
+        return List(ASSIGNMENTS) { stored.getOrNull(it) }
+    }
+
     /**
      * Files [address] under [under], or clears the mark when it is empty: read the bank's whole
-     * table, change one byte, send it back - see [MotifXsSysEx.writeFavorites].
+     * table, change one byte, send it back - see [MotifXsSysEx.writeFavorites]. A user slot is
+     * read first, as for categories: one emptied on the panel would otherwise be marked, and
+     * Favorites would list an empty row.
      */
     override suspend fun setFavorite(address: SlotAddress, under: Set<Int>) {
         val spec = config.banks.getOrNull(address.bank)
@@ -110,6 +123,9 @@ internal class MotifXsTagger(
             "A Motif XS voice has $ASSIGNMENTS category slots; $under names another."
         }
 
+        if (!spec.readOnly && MotifXsVoice.nameOf(instrument.readVoicePayload(address)) == null) {
+            throw InstrumentException.SlotStateChanged.empty(instrument.describe(address))
+        }
         // A mark against an unassigned category is legal and the instrument makes them itself:
         // marking a category-less USER voice from its own Category Search -> FAVORITE writes `2`,
         // the same value `setOf(0)` encodes to, and the voice then appears under no category. So
@@ -132,8 +148,11 @@ internal class MotifXsTagger(
     /** `0` none, `1` both, `2` Category 1 only, `3` Category 2 only. Not a bitmask: `1` is both. */
     private fun decodeMark(value: Int): Set<Int> = when (value) {
         MARK_BOTH -> setOf(0, 1)
+
         MARK_FIRST -> setOf(0)
+
         MARK_SECOND -> setOf(1)
+
         // 0, and anything the instrument has been left holding that means nothing to it.
         else -> emptySet()
     }
@@ -152,6 +171,10 @@ internal class MotifXsTagger(
      * every time. The table also changes when the player marks something on the front panel, so
      * the cache is dropped on every write and at the start of every listing - see
      * `MotifXsInstrument.index`.
+     *
+     * Not synchronised: every caller is a coroutine on the ViewModel's scope, which runs on the
+     * main thread. Two of them can still interleave at a suspension point, where the worst case is
+     * a table read just before an invalidation being kept - one that was read from the instrument.
      */
     private val marks = HashMap<String, ByteArray>()
 

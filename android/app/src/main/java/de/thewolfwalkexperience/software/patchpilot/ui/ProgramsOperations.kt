@@ -24,7 +24,14 @@ internal interface ProgramsOperations {
     /** Runs an edit on a scope that outlives the screen - see [InstrumentViewModel.launchEdit]. */
     fun launchEdit(block: suspend () -> Unit): Job
 
-    fun reloadIndex(): Int?
+    /** After an edit, re-collects the listing on screen where the edit left it unconfirmed. */
+    fun reloadAfterEdit()
+
+    /**
+     * Runs a [de.thewolfwalkexperience.software.patchpilot.core.InstrumentException.BlockedByDeviceState]
+     * remedy under the session's lock, as every edit runs.
+     */
+    suspend fun applyRemedy(remedy: suspend () -> Unit)
 
     suspend fun selectProgram(slot: PresetSlot): String
     suspend fun renameProgram(slot: PresetSlot, newName: String): String

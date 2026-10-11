@@ -3,15 +3,21 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
+import de.thewolfwalkexperience.software.patchpilot.causedBy
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
+import de.thewolfwalkexperience.software.patchpilot.core.assertEveryDeclaredEditCompletes
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -43,6 +49,12 @@ class Pro800EditorTest {
 
     /** Bank B. With five slots per bank in this fixture, B03 is program number 8. */
     private fun b(slot: Int) = SlotAddress(1, slot)
+
+    /** The contract every family is held to - see `assertEveryDeclaredEditCompletes`. */
+    @Test
+    fun `every edit the Pro-800 declares completes`() = runTest {
+        assertEveryDeclaredEditCompletes("the Pro-800", instrument(fake(), backgroundScope))
+    }
 
     // ---- Copy ----
 
@@ -87,8 +99,8 @@ class Pro800EditorTest {
         try {
             pro800.editor!!.copyProgram(a(1), a(0))
             throw AssertionError("expected a refusal")
-        } catch (e: InstrumentException.NotSupported) {
-            assertTrue(e.message!!.contains("occupied"))
+        } catch (e: InstrumentException.SlotStateChanged) {
+            assertTrue(e.message!!.contains("holds a preset"))
         }
         assertArrayEquals("the destination must be untouched", before, fake.contentsOf(0))
         assertEquals("Strings", fake.nameAt(1))
@@ -101,22 +113,18 @@ class Pro800EditorTest {
         try {
             pro800.editor!!.copyProgram(a(3), b(3))
             throw AssertionError("expected a refusal")
-        } catch (e: InstrumentException.NotSupported) {
+        } catch (e: InstrumentException.SlotStateChanged) {
             assertTrue(e.message!!.contains("empty"))
         }
         assertNull("no preset may be conjured at the destination", fake.contentsOf(8))
     }
 
     @Test
-    fun `copy onto itself is refused`() = runTest {
+    fun `copy onto itself is refused as the caller's mistake`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        try {
-            pro800.editor!!.copyProgram(a(1), a(1))
-            throw AssertionError("expected a refusal")
-        } catch (e: InstrumentException.NotSupported) {
-            assertTrue(e.message!!.contains("itself"))
-        }
+        val e = thrownBy<IllegalArgumentException> { pro800.editor!!.copyProgram(a(1), a(1)) }
+        assertTrue(e.message!!.contains("itself"))
         assertEquals("Strings", fake.nameAt(1))
     }
 
@@ -132,7 +140,7 @@ class Pro800EditorTest {
         val pro800 = instrument(fake, backgroundScope)
         val name = pro800.editor!!.copyProgram(a(2), b(3))
 
-        assertEquals(Pro800Instrument.UNNAMED, name)
+        assertEquals(UNNAMED_PRESET, name)
         assertEquals(
             "the browser and the copy must agree on what to call it",
             name,
@@ -158,7 +166,7 @@ class Pro800EditorTest {
 
         assertEquals("Warm Pad", fake.nameAt(1))
         // Format 109 must stay 109: the reference implementation silently upgrades a short record
-        // to 111 when it resizes one, which converts a preset nobody asked to convert (§11.7).
+        // to 111 when it resizes one, which converts a preset nobody asked to convert.
         assertEquals(109, Pro800Program.fromEncoded(fake.contentsOf(1)!!).version)
     }
 
@@ -169,7 +177,7 @@ class Pro800EditorTest {
         try {
             pro800.editor!!.rename(a(3), "New")
             throw AssertionError("renamed a slot that holds nothing")
-        } catch (expected: InstrumentException.NotSupported) {
+        } catch (expected: InstrumentException.SlotStateChanged) {
             assertTrue(fake.isEmptyAt(3))
         }
     }
@@ -285,6 +293,22 @@ class Pro800EditorTest {
         }
     }
 
+    /** The destination is written first, so an erase that fails leaves a duplicate, and says so. */
+    @Test
+    fun `a move whose erase fails says the preset is in both slots`() = runTest {
+        val fake = fake()
+        fake.failWritesTo = setOf(0)
+        val pro800 = instrument(fake, backgroundScope)
+
+        val failure = runCatching { pro800.editor!!.move(a(0), b(3)) }.exceptionOrNull()
+
+        assertTrue("got $failure", failure is InstrumentException.PartlyApplied)
+        assertTrue(failure!!.message!!, failure.message!!.contains("in both slots"))
+        assertTrue("why the erase failed is kept", failure.causedBy { it is InstrumentException })
+        assertEquals("Organ I", fake.nameAt(0))
+        assertEquals("Organ I", fake.nameAt(8))
+    }
+
     @Test
     fun `move onto an occupied slot is refused - that is what swap is for`() = runTest {
         val fake = fake()
@@ -292,7 +316,7 @@ class Pro800EditorTest {
         try {
             pro800.editor!!.move(a(0), a(1))
             throw AssertionError("moved onto an occupied slot")
-        } catch (expected: InstrumentException.NotSupported) {
+        } catch (expected: InstrumentException.SlotStateChanged) {
             assertEquals("Organ I", fake.nameAt(0))
             assertEquals("Strings", fake.nameAt(1))
         }
@@ -320,15 +344,33 @@ class Pro800EditorTest {
         assertEquals("Organ I", fake.nameAt(3))
     }
 
+    /** Cancelled after its first write, a swap still finishes: stopping there would leave one preset in two slots. */
+    @Test
+    fun `a cancelled swap finishes rather than stopping half done`() = runTest {
+        val fake = fake()
+        val pro800 = instrument(fake, backgroundScope)
+        var swap: Job? = null
+        fake.onWrite = { swap?.cancel() }
+        swap = launch(start = CoroutineStart.LAZY) { pro800.editor!!.swap(a(0), a(1)) }
+        swap.start()
+        // Joined rather than run to idle: the replies arrive through the exchange's collector in
+        // backgroundScope, which advanceUntilIdle does not wait for.
+        swap.join()
+
+        assertTrue(swap.isCancelled)
+        assertEquals("Strings", fake.nameAt(0))
+        assertEquals("Organ I", fake.nameAt(1))
+    }
+
     /**
-     * **The one operation that can destroy a preset outright.** Once `a` has been overwritten with
-     * `b`'s contents, the only copy of `a`'s original is in memory - so a failure on the second
+     * **The one operation that can destroy a preset outright.** Once `b` has been overwritten with
+     * `a`'s contents, the only copy of `b`'s original is in memory - so a failure on the second
      * write has to put it back.
      */
     @Test
     fun `a swap that fails halfway rolls the first write back`() = runTest {
         val fake = fake()
-        fake.failWritesTo = setOf(1) // the second write will not take
+        fake.failWritesTo = setOf(0) // the second write, to A00, will not take
         val pro800 = instrument(fake, backgroundScope)
 
         try {
@@ -336,6 +378,32 @@ class Pro800EditorTest {
             throw AssertionError("a half-completed swap reported success")
         } catch (expected: InstrumentException.ProtocolDesync) {
             // Both presets survive, in their original places.
+            assertEquals("Organ I", fake.nameAt(0))
+            assertEquals("Strings", fake.nameAt(1))
+        }
+    }
+
+    /**
+     * The first write can land and still fail: its read-back goes unanswered. The slot then holds
+     * the other preset, and its own exists only in memory - so it is put back here too.
+     */
+    @Test
+    fun `a swap whose first read-back fails puts the first slot back`() = runTest {
+        val fake = fake()
+        var first = true
+        fake.onWrite = { programNumber ->
+            // Both attempts of the read-back that follows the first write to A01 are lost.
+            if (programNumber == 1 && first) {
+                first = false
+                fake.unansweredReads[1] = 2
+            }
+        }
+        val pro800 = instrument(fake, backgroundScope)
+
+        try {
+            pro800.editor!!.swap(a(0), a(1))
+            throw AssertionError("a swap whose first write was never confirmed reported success")
+        } catch (expected: InstrumentException.Timeout) {
             assertEquals("Organ I", fake.nameAt(0))
             assertEquals("Strings", fake.nameAt(1))
         }
@@ -362,33 +430,17 @@ class Pro800EditorTest {
         }
     }
 
-    // ---- Undo buffer ----
-
-    @Test
-    fun `overwritten bytes are kept for the session`() = runTest {
-        val fake = fake()
-        val pro800 = instrument(fake, backgroundScope)
-        val editor = pro800.editor as Pro800Editor
-
-        pro800.editor!!.delete(a(0))
-        val entry = editor.undoBuffer.first()
-        assertEquals(a(0), entry.address)
-        assertEquals("A00", entry.displayId)
-        assertEquals("Organ I", Pro800Program.fromEncoded(entry.blob).name)
-    }
-
     // ---- Declaration ----
 
     @Test
-    fun `every edit this instrument can do is declared, and all are emulated`() {
+    fun `every edit this instrument can do is declared, and all are emulated`() = runTest {
         val editor = Pro800Editor(
-            transfer = object : de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer {
+            store = object : Pro800Store {
                 override suspend fun read(address: SlotAddress) = ByteArray(0)
                 override suspend fun write(address: SlotAddress, blob: ByteArray) = Unit
-                override val fileExtension = "syx"
             },
             layout = Pro800Instrument(
-                SysExExchange(FakePro800().transport, CoroutineScope(kotlinx.coroutines.Job())),
+                SysExExchange(FakePro800().transport, backgroundScope),
                 config,
             ).layout,
         )
@@ -400,7 +452,5 @@ class Pro800EditorTest {
         )
         assertEquals("every EditOp there is", EditOp.entries.toSet(), editor.supported)
         EditOp.entries.forEach { assertTrue("$it should be emulated", editor.isEmulated(it)) }
-        assertFalse(editor.supported.isEmpty())
-        assertNull(null)
     }
 }

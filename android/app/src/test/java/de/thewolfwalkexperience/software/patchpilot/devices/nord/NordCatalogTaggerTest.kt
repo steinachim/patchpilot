@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.core.FavoriteModel
+import java.io.File
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -11,7 +12,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * The **shipped** catalog produces a working tagger for every Nord this app profiles.
@@ -25,11 +25,11 @@ import java.io.File
  */
 class NordCatalogTaggerTest {
 
-    private val catalog: DeviceCatalog by lazy {
+    private val catalog: NordCatalog by lazy {
         val dir = System.getProperty("deviceCatalogDir")
             ?: error("deviceCatalogDir is not set; see the Test task config in app/build.gradle.kts")
         Json { ignoreUnknownKeys = true }.decodeFromString(
-            DeviceCatalog.serializer(),
+            NordCatalog.serializer(),
             File(dir).resolve("nord_devices.json").readText(),
         )
     }

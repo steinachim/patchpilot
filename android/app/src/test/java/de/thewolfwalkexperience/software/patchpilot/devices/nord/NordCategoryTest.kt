@@ -4,20 +4,20 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
+import java.io.File
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * A program's category tag: decoding it out of the item record, and resolving ids to names.
  *
  * **The decode is checked against recordings with an independently known answer.** The `ngp`
- * fixture is `A:1:1` "White Grand"; the protocol notes capture a sub-opcode 51 write on that
- * *same* preset carrying category id 21 for "Grand". So the value asserted here comes from a
- * different message on a different day than the record it is read out of.
+ * fixture is `A:1:1` "White Grand", and a sub-opcode 51 write captured on that *same* preset
+ * carried category id 21 for "Grand". So the value asserted here comes from a different message
+ * on a different day than the record it is read out of.
  */
 class NordCategoryTest {
 
@@ -62,20 +62,20 @@ class NordCategoryTest {
     @Test
     fun `collectItemNames carries the category alongside the name`() {
         val item = device.collectItemNames(listOf(record(NordFixtures.NGP_RECORD_RESPONSE))).single()
-        assertEquals("A:1:1", item.presetId)
+        assertEquals(0 to 0, item.bank to item.item)
         assertEquals("White Grand", item.name)
         assertEquals(21, item.categoryId)
     }
 
     // ---- Resolving ----
 
-    private val catalog: DeviceCatalog by lazy {
+    private val catalog: NordCatalog by lazy {
         // The real shipped catalog, so a name or id this test relies on cannot be one only a
         // fixture has.
         val dir = System.getProperty("deviceCatalogDir")
             ?: error("deviceCatalogDir is not set; see the Test task config in app/build.gradle.kts")
         Json { ignoreUnknownKeys = true }.decodeFromString(
-            DeviceCatalog.serializer(),
+            NordCatalog.serializer(),
             File(dir).resolve("nord_devices.json").readText(),
         )
     }
@@ -90,7 +90,7 @@ class NordCategoryTest {
         assertEquals("None", catalog.programCategories["17"])
     }
 
-    /** Both profiled instruments offer the same 21, and both relabel 23/24. */
+    /** The Grand and the Stage 2 EX offer the same 21, and both relabel 23/24. */
     @Test
     fun `each model resolves its own subset, overrides applied`() {
         for (id in listOf("nord_grand", "nord_stage_2ex")) {
@@ -113,6 +113,19 @@ class NordCategoryTest {
         val rest = names.dropLast(1)
         assertEquals(rest.sortedBy { it.lowercase() }, rest)
         assertEquals("Acoustic", names.first())
+    }
+
+    /** On every model, by id: an Electro 7 and a Stage 4 relabel it `<None>`, which sorts first by name. */
+    @Test
+    fun `every model lists its none category last, whatever it calls it`() {
+        for (device in catalog.devices) {
+            val categories = NordCategories.resolve(device, catalog.programCategories) ?: continue
+            val none = categories.nameOf(NordCategories.NONE_ID) ?: continue
+            val names = categories.taxonomy.mains.map { it.name }
+            assertEquals(device.id, none, names.last())
+            val rest = names.dropLast(1)
+            assertEquals(device.id, rest.sortedBy { it.lowercase() }, rest)
+        }
     }
 
     /**

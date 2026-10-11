@@ -100,12 +100,52 @@ class SysExFramerTest {
         assertArrayEquals(message, framer.feed(message).single())
     }
 
+    /** A slow message is read while it arrives: what is pending, from any offset, and nothing once it ends. */
     @Test
-    fun `reset discards a partial message so a stale reply cannot complete the next one`() {
+    fun `pendingFrom shows the message still arriving`() {
         val framer = SysExFramer()
-        framer.feed(byteArrayOf(0xF0.toByte(), 0x00, 0x20))
-        framer.reset()
-        // Without the reset these trailing bytes would complete the abandoned message.
-        assertTrue(framer.feed(byteArrayOf(0x32, 0x11, 0x22, 0xF7.toByte())).isEmpty())
+        assertEquals(0, framer.pendingFrom(0).size)
+        framer.feed(message.copyOfRange(0, 4))
+        assertArrayEquals(message.copyOfRange(0, 4), framer.pendingFrom(0))
+        assertArrayEquals(message.copyOfRange(2, 4), framer.pendingFrom(2))
+        assertEquals(0, framer.pendingFrom(4).size)
+        framer.feed(message.copyOfRange(4, 6))
+        assertArrayEquals(message.copyOfRange(4, 6), framer.pendingFrom(4))
+        framer.feed(message.copyOfRange(6, message.size))
+        assertEquals("a completed message is no longer pending", 0, framer.pendingFrom(0).size)
+    }
+
+    /**
+     * A Subsequent 37 bulk dump's size, fed in the 1 KB pieces a port delivers: the buffer grows
+     * many times over, and a short message after it comes out whole.
+     */
+    @Test
+    fun `a 203,800-byte message is assembled whole and read while it arrives`() {
+        val big = byteArrayOf(0xF0.toByte()) + ByteArray(203_798) { (it % 0x80).toByte() } +
+            byteArrayOf(0xF7.toByte())
+        val framer = SysExFramer(maxMessageBytes = 256 * 1024)
+        val completed = mutableListOf<ByteArray>()
+        var offset = 0
+        big.asList().chunked(1024).forEach { piece ->
+            completed += framer.feed(piece.toByteArray())
+            val pending = framer.pendingFrom(offset)
+            assertArrayEquals(big.copyOfRange(offset, offset + pending.size), pending)
+            offset += pending.size
+        }
+        assertArrayEquals(big, completed.single())
+        assertArrayEquals(message, framer.feed(message).single())
+    }
+
+    @Test
+    fun `messageStarts counts every F0, so a reader sees an abandoned message replaced`() {
+        val framer = SysExFramer()
+        framer.feed(byteArrayOf(0xF0.toByte(), 0x01, 0x02))
+        assertEquals(1, framer.messageStarts)
+        framer.feed(message)
+        assertEquals(2, framer.messageStarts)
+        // An abort by a status byte starts nothing.
+        framer.feed(byteArrayOf(0xF0.toByte(), 0x01, 0xB0.toByte(), 0x07, 0x64))
+        assertEquals(3, framer.messageStarts)
+        assertEquals(0, framer.pendingFrom(0).size)
     }
 }

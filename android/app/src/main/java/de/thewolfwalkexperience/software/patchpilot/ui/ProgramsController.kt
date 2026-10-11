@@ -3,14 +3,11 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalResources
 import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
@@ -35,8 +32,10 @@ internal data class TagTarget(val slot: PresetSlot, val tags: PresetTags)
  * the search text, the "show empty slots" tick, the refresh spinner, the scroll position - stays
  * in the composable.
  *
- * Held by `remember`, so it lives as long as the screen; the edits themselves outlive it (see
- * [InstrumentViewModel.launchEdit]).
+ * Held by the ViewModel, as the edits it starts are (see [InstrumentViewModel.launchEdit]): a
+ * rotation, a trip to Settings or any other configuration change mid-edit keeps the busy line,
+ * the result and an open dialog. The ViewModel calls [reset] when a session ends or another
+ * instrument's begins, so nothing carries over to a session it was not opened for.
  */
 @Stable
 internal class ProgramsController(
@@ -51,6 +50,14 @@ internal class ProgramsController(
 
     /** The line shown when one fails. Cleared at the start of the next attempt, not on dismissal. */
     var operationError by mutableStateOf<String?>(null)
+
+    /**
+     * Told what an edit left behind when the link broke part way through it - what is known, or
+     * that the outcome is not. [operationError]
+     * cannot carry that: a lost link replaces the preset screen with the disconnect screen, and
+     * [reset] clears it. Set by the ViewModel, which holds the text where that screen can show it.
+     */
+    var onEditInterrupted: ((String) -> Unit)? = null
 
     /**
      * The operation in flight, or null - where more than one is, the one with a progress line.
@@ -105,11 +112,32 @@ internal class ProgramsController(
     val picking: Boolean get() = pickSource != null
 
     /**
+     * Forgets every dialog, pick and result, for a session other than the one they were opened
+     * in. Operations still in flight keep their busy line until they end, since they hold the
+     * instrument either way.
+     */
+    fun reset() {
+        statusMessage = null
+        operationError = null
+        blocked = null
+        renameTarget = null
+        renameText = ""
+        deleteTarget = null
+        favoriteTarget = null
+        categoriesTarget = null
+        pendingShare = null
+        pickSource = null
+        pickIntent = PickIntent.COPY
+        scopeBeforePicking = null
+    }
+
+    /**
      * Runs one instrument operation, owning the busy line, the error path and the
      * blocked-by-state dialog for it.
      *
-     * @param reloadAfter re-reads the listing once the operation succeeds. False where nothing
-     *   was stored - a selection, or a read that only opened a dialog.
+     * @param reloadAfter brings the listing up to date once the operation succeeds
+     *   ([ProgramsOperations.reloadAfterEdit]). False where nothing was stored - a selection, or
+     *   a read that only opened a dialog.
      * @param retry re-runs the whole operation, which is what makes a [BlockedOperation]
      *   answerable. Null where there is nothing sensible to retry.
      * @param showProgress whether to put a progress line above the list. False for selection,
@@ -122,6 +150,8 @@ internal class ProgramsController(
         reloadAfter: Boolean = true,
         retry: (() -> Unit)? = null,
         showProgress: Boolean = true,
+        /** Started once [block] has succeeded, as its own edit. */
+        then: (() -> Unit)? = null,
         block: suspend () -> String?,
     ) {
         val what = busyLabel.trimEnd('…', ' ')
@@ -130,14 +160,15 @@ internal class ProgramsController(
         val mine = BusyOperation(busyLabel, showProgress)
         inFlight += mine
         // Not the screen's `rememberCoroutineScope()`: an edit outlives the screen - see
-        // [InstrumentViewModel.launchEdit]. Writing the result back into this object's state
-        // after the screen is gone is harmless, since nothing retains it.
+        // [InstrumentViewModel.launchEdit]. Its result lands in this object, which outlives the
+        // screen too, so it shows once the screen is back.
         viewModel.launchEdit {
             operationError = null
             statusMessage = null
             try {
                 statusMessage = block()
-                if (reloadAfter) viewModel.reloadIndex()
+                if (reloadAfter) viewModel.reloadAfterEdit()
+                then?.invoke()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: InstrumentException.BlockedByDeviceState) {
@@ -156,6 +187,16 @@ internal class ProgramsController(
                         retry = retry,
                     )
                 }
+            } catch (e: InstrumentException.PartlyApplied) {
+                operationError = reportFailure(what, e, failed)
+                if (generateSequence(e.cause) { it.cause }.any { it is InstrumentException.TransportLost }) {
+                    e.message?.let { onEditInterrupted?.invoke(it) }
+                }
+            } catch (e: InstrumentException.TransportLost) {
+                operationError = reportFailure(what, e, failed)
+                // An edit that stores something and lost the link may have landed or not; the
+                // read-back that would say never came. A selection stores nothing.
+                if (reloadAfter) onEditInterrupted?.invoke(strings.get(R.string.programs_edit_interrupted, what))
             } catch (e: Exception) {
                 operationError = reportFailure(what, e, failed)
             } finally {
@@ -177,25 +218,26 @@ internal class ProgramsController(
         ) { viewModel.selectProgram(slot) }
     }
 
+    /**
+     * Applies the fix as an edit of its own - busy, and under the session's lock - then retries
+     * the blocked edit, only once the fix has reported success: the remedy verifies itself, so a
+     * silent no-op would show the user the same dialog twice.
+     */
     fun onBlockedRemedyConfirmed(pending: BlockedOperation) {
-        // `pending.retry()` is the blocked edit, so it must not become abandonable just because
-        // it arrived through the remedy dialog.
-        viewModel.launchEdit {
-            blocked = null
-            operationError = null
-            try {
-                pending.apply()
-                // Only after the fix reports success: the remedy verifies itself, so a silent
-                // no-op would show the user the same dialog twice.
-                pending.retry()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val what = strings.get(R.string.programs_busy_applying_fix).trimEnd('…', ' ')
-                operationError =
-                    reportFailure(what, e, strings.get(R.string.programs_operation_failed, what))
-            }
+        blocked = null
+        runEdit(
+            busyLabel = strings.get(R.string.programs_busy_applying_fix),
+            reloadAfter = false,
+            then = pending.retry,
+        ) {
+            viewModel.applyRemedy(pending.apply)
+            null
         }
+    }
+
+    /** Drops an open remedy offer, whose fix is bound to an instrument since replaced. */
+    fun forgetRemedy() {
+        blocked = null
     }
 
     fun onDeleteConfirmed(slot: PresetSlot) {
@@ -207,10 +249,15 @@ internal class ProgramsController(
         }
     }
 
+    /**
+     * Sends the name trimmed at both ends: a family reads its names back trimmed, so a stored
+     * leading or trailing space would fail the read-back that confirms the rename.
+     */
     fun onRenameConfirmed(slot: PresetSlot, newName: String) {
         renameTarget = null
+        val name = newName.trim()
         runEdit(strings.get(R.string.programs_busy_renaming, slot.displayId)) {
-            viewModel.renameProgram(slot, newName)
+            viewModel.renameProgram(slot, name)
         }
     }
 
@@ -286,8 +333,11 @@ internal class ProgramsController(
         if (busy != null) return
         val label = when (pickIntent) {
             PickIntent.COPY -> strings.get(
-                R.string.programs_busy_copying, source.displayId, destination.displayId,
+                R.string.programs_busy_copying,
+                source.displayId,
+                destination.displayId,
             )
+
             PickIntent.MOVE -> strings.get(
                 if (destinationIsEmpty) R.string.programs_busy_moving else R.string.programs_busy_swapping,
                 source.displayId,
@@ -315,9 +365,20 @@ internal class ProgramsController(
     /**
      * @param occupied which addresses hold a preset, from the listing rather than re-derived,
      *   since the drop was aimed at the rows the user can see.
+     * @param unreadable which addresses the listing could not read. A drop onto one is refused:
+     *   taken as empty it would be a move, which overwrites whatever the slot does hold.
      */
-    fun onSwapDropped(source: PresetSlot, target: PresetSlot, occupied: Set<SlotAddress>) {
+    fun onSwapDropped(
+        source: PresetSlot,
+        target: PresetSlot,
+        occupied: Set<SlotAddress>,
+        unreadable: Set<SlotAddress> = emptySet(),
+    ) {
         if (source.address == target.address) return
+        if (target.address in unreadable) {
+            operationError = strings.get(R.string.programs_unreadable_target, target.displayId)
+            return
+        }
         val targetWasEmpty = target.address !in occupied
         // onDragStart already blocks a drag from an empty row; this is a re-check. An empty target
         // is valid, and targetWasEmpty picks move over swap.
@@ -325,14 +386,5 @@ internal class ProgramsController(
         // No confirmation, even for an emulated operation: the safety lives in the operation
         // itself - read-back verification, destructive step last, rollback on a half-done swap.
         runRelocation(source, target, targetWasEmpty)
-    }
-}
-
-/** Keyed on both collaborators, so a new session or configuration does not inherit a half-finished operation's dialog state. */
-@Composable
-internal fun rememberProgramsController(viewModel: InstrumentViewModel): ProgramsController {
-    val resources = LocalResources.current
-    return remember(viewModel, resources) {
-        ProgramsController(viewModel) { resId, args -> resources.getString(resId, *args) }
     }
 }

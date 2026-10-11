@@ -35,8 +35,8 @@ class AndroidUsbBulkTransport(
         // The caller opened the connection, so a claim failure or a missing endpoint here has to
         // close it again rather than leak it.
         try {
-            check(connection.claimInterface(usbInterface, true)) {
-                "Failed to claim USB interface ${usbInterface.id}"
+            if (!connection.claimInterface(usbInterface, true)) {
+                throw UsbTransferException("Failed to claim USB interface ${usbInterface.id}")
             }
             epOut = usbInterface.findEndpointByAddress(endpointOutAddress)
             epIn = usbInterface.findEndpointByAddress(endpointInAddress)
@@ -48,13 +48,19 @@ class AndroidUsbBulkTransport(
 
     override fun bulkWrite(data: ByteArray) {
         val sent = connection.bulkTransfer(epOut, data, data.size, timeoutMs)
-        check(sent == data.size) { "USB bulk write failed: sent $sent of ${data.size} bytes" }
+        if (sent != data.size) throw UsbTransferException("USB bulk write failed: sent $sent of ${data.size} bytes")
     }
 
+    /** A negative result is told apart as [bulkReadOrEmpty] does: a timeout has waited out [timeoutMs]. */
     override fun bulkRead(bufferSize: Int): ByteArray {
         val buffer = ByteArray(bufferSize)
+        val started = System.nanoTime()
         val read = connection.bulkTransfer(epIn, buffer, buffer.size, timeoutMs)
-        check(read >= 0) { "USB bulk read failed (result=$read)" }
+        if (read < 0) {
+            val elapsedMs = (System.nanoTime() - started) / 1_000_000
+            if (elapsedMs >= timeoutMs / 2) throw UsbReadTimeoutException("No reply within $timeoutMs ms")
+            throw UsbTransferException("USB bulk read failed after $elapsedMs ms (result=$read)")
+        }
         return buffer.copyOf(read)
     }
 
@@ -71,8 +77,8 @@ class AndroidUsbBulkTransport(
         if (read > 0) return buffer.copyOf(read)
         if (read < 0) {
             val elapsedMs = (System.nanoTime() - started) / 1_000_000
-            check(elapsedMs >= timeoutMs / 2) {
-                "USB bulk read failed after ${elapsedMs} ms (result=$read)"
+            if (elapsedMs < timeoutMs / 2) {
+                throw UsbTransferException("USB bulk read failed after $elapsedMs ms (result=$read)")
             }
         }
         return ByteArray(0)
@@ -107,7 +113,7 @@ class AndroidUsbBulkTransport(
     ): ByteArray {
         val buffer = ByteArray(length)
         val read = connection.controlTransfer(requestType, request, value, index, buffer, length, timeoutMs)
-        check(read == length) { "USB control transfer failed: read $read of $length bytes" }
+        if (read != length) throw UsbTransferException("USB control transfer failed: read $read of $length bytes")
         return buffer
     }
 

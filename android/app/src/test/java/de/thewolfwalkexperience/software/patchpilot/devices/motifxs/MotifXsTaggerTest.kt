@@ -5,15 +5,16 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
+import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
-import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
-import kotlin.time.Duration.Companion.milliseconds
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -85,11 +86,13 @@ class MotifXsTaggerTest {
                 slotCount = 4,
                 voices = listOf(
                     MotifXsFactoryVoice(
-                        1, "Full Concert Grand",
+                        1,
+                        "Full Concert Grand",
                         listOf(MotifXsFactoryCategory("Piano", "APno")),
                     ),
                     MotifXsFactoryVoice(
-                        2, "Ballad Key",
+                        2,
+                        "Ballad Key",
                         listOf(
                             MotifXsFactoryCategory("Piano", "Layer"),
                             MotifXsFactoryCategory("Pads", "Warm"),
@@ -126,6 +129,8 @@ class MotifXsTaggerTest {
         favorites: Map<Int, ByteArray> = emptyMap(),
         /** How many read-backs still report the old table after a favorites write is acked. */
         private val favoriteSettlesAfterReads: Int = 0,
+        /** Null answers the `0C` read as an empty slot does. */
+        val voiceName: String? = "Scratch Voice",
     ) {
         val marks = favorites.mapValues { it.value.copyOf() }.toMutableMap()
         private var stale = 0
@@ -140,10 +145,11 @@ class MotifXsTaggerTest {
          * corroborates a printable run against, and without it this voice reads as empty.
          */
         private fun voicePayload(): ByteArray {
-            val name = "Scratch Voice".toByteArray(Charsets.ISO_8859_1)
             val prefix = "${userFigures.first}:${userFigures.second}:".toByteArray(Charsets.ISO_8859_1)
-            val dense = prefix + name + ByteArray(6) + name
-            return byteArrayOf(0, 0) + pack(dense)
+            val dense = voiceName?.toByteArray(Charsets.ISO_8859_1)
+                ?.let { name -> prefix + name + ByteArray(6) + name }
+                ?: (prefix + ByteArray(32))
+            return byteArrayOf(0, 0) + packMsb(dense)
         }
 
         fun respond(request: ByteArray): List<ByteArray> {
@@ -154,6 +160,7 @@ class MotifXsTaggerTest {
                 val (hi, mid, lo) = address
                 return when (hi) {
                     0x0C -> listOf(deviceDump(0x0C, mid, lo, voicePayload()))
+
                     MotifXsSysEx.FAVORITES_ADDRESS_HI -> {
                         val table = if (stale > 0) {
                             stale--
@@ -163,7 +170,9 @@ class MotifXsTaggerTest {
                         }
                         listOf(deviceDump(hi, mid, 0, table))
                     }
+
                     MotifXsSysEx.BULK_HEADER_HI -> documentedRead(mid, lo)
+
                     else -> emptyList()
                 }
             }
@@ -178,13 +187,15 @@ class MotifXsTaggerTest {
                     staleTable = marks[mid]?.copyOf()
                     stale = favoriteSettlesAfterReads
                     marks[mid] = MotifXsSysEx.dumpPayload(request)
-                    listOf(ACK)
+                    listOf(FakeMotifXsSlots.ACK)
                 }
+
                 MotifXsSysEx.BULK_HEADER_HI -> {
                     inbound = mutableListOf()
                     inboundTarget = mid to lo
                     emptyList()
                 }
+
                 MotifXsSysEx.BULK_FOOTER_HI -> {
                     val blocks = inbound ?: return emptyList()
                     inbound = null
@@ -197,8 +208,9 @@ class MotifXsTaggerTest {
                         userFigures = (payload[o] * 16 + payload[o + 1]) to
                             (payload[o + 2] * 16 + payload[o + 3])
                     }
-                    listOf(ACK)
+                    listOf(FakeMotifXsSlots.ACK)
                 }
+
                 else -> {
                     inbound?.add(request)
                     emptyList()
@@ -255,10 +267,14 @@ class MotifXsTaggerTest {
     @Test
     fun `a factory voice can be favorited but not re-categorised`() = runTest {
         val (_, tagger, _) = instrument(backgroundScope, Device())
-        assertTrue("a factory favorite is user data the instrument accepts",
-            tagger.canSetFavorite(factorySlot))
-        assertFalse("a factory voice's own bytes are not rewritable",
-            tagger.canSetCategories(factorySlot))
+        assertTrue(
+            "a factory favorite is user data the instrument accepts",
+            tagger.canSetFavorite(factorySlot),
+        )
+        assertFalse(
+            "a factory voice's own bytes are not rewritable",
+            tagger.canSetCategories(factorySlot),
+        )
         assertTrue(tagger.canSetFavorite(userSlot))
         assertTrue(tagger.canSetCategories(userSlot))
     }
@@ -368,7 +384,8 @@ class MotifXsTaggerTest {
         device.marks[0x00] = byteArrayOf(0, 2, 0, 0)
         assertEquals(
             "still cached, which is correct until something re-reads",
-            emptySet<Int>(), tagger.read(factorySlot).favoriteUnder,
+            emptySet<Int>(),
+            tagger.read(factorySlot).favoriteUnder,
         )
 
         motif.browser.index(PresetScope.FAVORITES).toList()
@@ -533,6 +550,23 @@ class MotifXsTaggerTest {
         assertEquals(listOf(CategoryRef(piano, 0), null), tagger.read(userSlot).categories)
     }
 
+    /**
+     * `NoAsg` is the null assignment, not a category: offered as one, writing it stored `(16, 0)`,
+     * read back as null and reported a successful write as a failure.
+     */
+    @Test
+    fun `no assignment is not offered as a category`() = runTest {
+        val device = Device(favorites = mapOf(0x0A to ByteArray(4)))
+        val (_, tagger, transport) = instrument(backgroundScope, device)
+
+        assertTrue(tagger.taxonomy.mains.none { it.name == MotifXsCategoryEncoding.NO_ASSIGNMENT })
+        assertEquals(mainNames.indexOf("Ethnic"), tagger.taxonomy.mains.lastIndex)
+        val sentBefore = transport.sent.size
+        val failure = runCatching { tagger.setCategories(userSlot, listOf(CategoryRef(noAsg, null), null)) }
+        assertTrue(failure.exceptionOrNull() is IllegalArgumentException)
+        assertEquals("nothing goes out for a refused category", sentBefore, transport.sent.size)
+    }
+
     /** Inside the voice, so a factory bank is refused before a single byte goes out. */
     @Test
     fun `setting categories refuses a read-only bank`() = runTest {
@@ -549,6 +583,48 @@ class MotifXsTaggerTest {
         )
     }
 
+    /** An empty slot answers the read too, and would gain a voice with no name. */
+    @Test
+    fun `setting categories refuses an empty slot`() = runTest {
+        val device = Device(favorites = mapOf(0x00 to ByteArray(4)), voiceName = null)
+        val (_, tagger, transport) = instrument(backgroundScope, device)
+
+        val failure = runCatching {
+            tagger.setCategories(userSlot, listOf(CategoryRef(piano, 0), null))
+        }.exceptionOrNull()
+        assertTrue("expected SlotStateChanged, got $failure", failure is InstrumentException.SlotStateChanged)
+        assertTrue(
+            "nothing should have gone out",
+            transport.sent.none { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.BULK_HEADER_HI },
+        )
+    }
+
+    @Test
+    fun `setting the categories a voice already carries writes nothing`() = runTest {
+        val device = Device(favorites = mapOf(0x0A to ByteArray(4)))
+        val (_, tagger, transport) = instrument(backgroundScope, device)
+        val wanted = listOf(CategoryRef(bass, 2), CategoryRef(pads, null))
+        tagger.setCategories(userSlot, wanted)
+        val headers = { transport.sent.count { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.BULK_HEADER_HI } }
+        val written = headers()
+
+        tagger.setCategories(userSlot, wanted)
+
+        assertEquals("the voice already carries them", written, headers())
+    }
+
+    /** A user voice deleted on the panel would otherwise be marked, and Favorites list an empty row. */
+    @Test
+    fun `a favorite refuses a user slot emptied on the panel`() = runTest {
+        val device = Device(favorites = mapOf(0x0A to ByteArray(4)), voiceName = null)
+        val (_, tagger, transport) = instrument(backgroundScope, device)
+
+        val failure = runCatching { tagger.setFavorite(userSlot, setOf(0)) }.exceptionOrNull()
+
+        assertTrue("expected SlotStateChanged, got $failure", failure is InstrumentException.SlotStateChanged)
+        assertTrue(transport.favoriteWrites().isEmpty())
+    }
+
     /** A sub-category the main does not have is a caller bug, refused before the write. */
     @Test
     fun `setting categories refuses a sub the main does not have`() = runTest {
@@ -560,31 +636,5 @@ class MotifXsTaggerTest {
                 tagger.setCategories(userSlot, listOf(CategoryRef(bass, 4), null))
             }.exceptionOrNull(),
         )
-    }
-
-    private companion object {
-        val ACK = byteArrayOf(0xF0.toByte(), 0x43, 0x60, 0x02, 0xF7.toByte())
-
-        fun deviceDump(hi: Int, mid: Int, lo: Int, payload: ByteArray): ByteArray {
-            val dump = MotifXsSysEx.bulkDump(0, hi, mid, lo, payload)
-            dump[4] = MotifXsSysEx.MODEL_DEVICE.toByte()
-            dump[dump.size - 2] = MotifXsSysEx.checksumOf(dump).toByte()
-            return dump
-        }
-
-        /** Yamaha MSB packing, the inverse of [MotifXsVoice.unpack]. */
-        fun pack(dense: ByteArray): ByteArray {
-            val out = ArrayList<Byte>(dense.size + dense.size / 7 + 1)
-            var i = 0
-            while (i < dense.size) {
-                val group = dense.copyOfRange(i, minOf(i + 7, dense.size))
-                var msb = 0
-                group.forEachIndexed { j, b -> if (b.toInt() and 0x80 != 0) msb = msb or (1 shl j) }
-                out.add(msb.toByte())
-                group.forEach { out.add((it.toInt() and 0x7F).toByte()) }
-                i += 7
-            }
-            return out.toByteArray()
-        }
     }
 }

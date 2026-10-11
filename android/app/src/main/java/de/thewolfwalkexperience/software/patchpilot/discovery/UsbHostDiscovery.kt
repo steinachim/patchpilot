@@ -6,10 +6,10 @@ package de.thewolfwalkexperience.software.patchpilot.discovery
 import android.hardware.usb.UsbDevice
 import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 import de.thewolfwalkexperience.software.patchpilot.usb.UsbConnectionManager
 import de.thewolfwalkexperience.software.patchpilot.usb.displayLabel
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
 
 /**
  * Finds instruments on the USB host bus by vendor/product id. The runtime permission prompt
@@ -44,16 +44,15 @@ class UsbHostDiscovery(private val connectionManager: UsbConnectionManager) : De
         if (!connectionManager.requestPermission(device)) {
             throw SecurityException("USB permission was denied for ${device.displayLabel()}.")
         }
-        // Null on the "unrecognized, continue at your own risk" path, where the default endpoints
-        // are the only guess available.
-        val match = candidate.descriptor?.match as? DeviceMatch.Usb
-        return if (match == null) {
-            connectionManager.openTransport(device)
-        } else {
-            connectionManager.openTransport(device, match.endpointOut, match.endpointIn)
-        }
+        val match = candidate.descriptor.match as? DeviceMatch.Usb
+            ?: error("Not a USB-matched instrument: ${candidate.displayName}")
+        return connectionManager.openTransport(device, match.endpointOut, match.endpointIn)
     }
 }
 
-/** The key [MidiDiscovery] derives from a port's backing `UsbDevice` too, so both buses agree. */
+/**
+ * The key [MidiDiscovery] derives from a port's backing `UsbDevice` too, so both buses agree. Model
+ * level: two units of one model share it, so either one's detach reads as the session's device
+ * leaving - see docs/ARCHITECTURE.md, "Known limitations".
+ */
 internal fun UsbDevice.physicalKey(): String = "usb:$vendorId:$productId"

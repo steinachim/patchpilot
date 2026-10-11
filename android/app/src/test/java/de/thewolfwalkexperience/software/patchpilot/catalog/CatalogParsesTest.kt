@@ -3,14 +3,22 @@
 
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
+import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.AxeFx3Config
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.resolvedConfig
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordCatalog
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Config
+import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37Config
+import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37SysEx
+import java.io.File
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * The shipped catalog files, decoded by the same serializers the app uses.
@@ -37,13 +45,17 @@ class CatalogParsesTest {
     private fun catalog(name: String): FamilyCatalog =
         json.decodeFromString(FamilyCatalog.serializer(), catalogDir.resolve(name).readText())
 
-    /** The XS6 entry specifically - the family's other tests below are shape checks shared by
-     * XS6/7/8, and pin their assertions to the model that was actually captured. */
+    /**
+     * The XS6 entry specifically - the family's other tests below are shape checks shared by
+     * XS6/7/8, and pin their assertions to the model that was actually captured.
+     */
     private fun motifXs6(): InstrumentDescriptor =
         catalog("yamaha_motif_xs.json").devices.single { it.id == "yamaha_motif_xs6" }
 
-    /** XS6's resolved config - banks included, whichever of the device entry or the catalog's
-     * shared familyConfig they actually came from. See [resolvedConfig]. */
+    /**
+     * XS6's resolved config - banks included, whichever of the device entry or the catalog's
+     * shared familyConfig they actually came from. See [resolvedConfig].
+     */
     private fun motifXs6Config(): MotifXsConfig {
         val catalog = catalog("yamaha_motif_xs.json")
         val descriptor = catalog.devices.single { it.id == "yamaha_motif_xs6" }
@@ -63,6 +75,41 @@ class CatalogParsesTest {
         val config = json.decodeFromJsonElement(Pro800Config.serializer(), catalog.familyConfig)
         assertEquals(4, config.bankCount)
         assertEquals(100, config.slotsPerBank)
+    }
+
+    @Test
+    fun `the Axe-Fx III catalog decodes into its family config`() {
+        val catalog = catalog("fractal_axefx3.json")
+        assertEquals("axefx3", catalog.family)
+        val descriptor = catalog.devices.single()
+        assertEquals("axefx3", descriptor.family)
+        val match = descriptor.match as DeviceMatch.MidiIdentity
+        // The firmware query, addressed to model 10: read-only, and answered by an Axe-Fx III only.
+        assertEquals("f0 00 01 74 10 08 1d f7", match.probeHex)
+        assertEquals(null, match.usbHint)
+        assertEquals(UsbIds(vendorId = 0x2466, productId = 0x8010), match.launchOnUsbAttach)
+        val config = json.decodeFromJsonElement(AxeFx3Config.serializer(), catalog.familyConfig)
+        assertEquals(128, config.presetsPerBank)
+        assertEquals(setOf("32.06"), config.supportedFirmwareVersions)
+        assertEquals(setOf(512), config.testedPresetCounts)
+        assertTrue(config.restoreLoadedPresetAfterEdit)
+    }
+
+    @Test
+    fun `the Subsequent 37 catalog decodes into its family config`() {
+        val catalog = catalog("moog_subsequent37.json")
+        assertEquals("subsequent37", catalog.family)
+        val descriptor = catalog.devices.single()
+        assertEquals("subsequent37", descriptor.family)
+        assertEquals("Moog Subsequent 37", descriptor.name)
+        val match = descriptor.match as DeviceMatch.MidiIdentity
+        // The ping: read-only, and the probe bytes are exactly what Subsequent37SysEx sends.
+        assertArrayEquals(Subsequent37SysEx.ping(), match.probe)
+        assertEquals("f0 04 0c 32 7f 7f", match.replyPrefixHex)
+        assertEquals(null, match.usbHint)
+        assertEquals(UsbIds(vendorId = 0x2662, productId = 0x0FFC), match.launchOnUsbAttach)
+        val config = json.decodeFromJsonElement(Subsequent37Config.serializer(), catalog.familyConfig)
+        assertEquals(setOf("1.2.0"), config.supportedFirmwareVersions)
     }
 
     @Test
@@ -88,9 +135,9 @@ class CatalogParsesTest {
 
         val bySize = config.banks.associate { it.label to it.slotCount }
         assertEquals(128, bySize["USR1"])
-        assertEquals(32, bySize["DRUM"])    // USER DR: groups A-B only
-        assertEquals(64, bySize["PREDR"])   // PRE DR: groups A-D
-        assertEquals(1, bySize["GMDR"])     // GM DR is a single kit
+        assertEquals(32, bySize["DRUM"]) // USER DR: groups A-B only
+        assertEquals(64, bySize["PREDR"]) // PRE DR: groups A-D
+        assertEquals(1, bySize["GMDR"]) // GM DR is a single kit
 
         val byAddress = config.banks.associate { it.label to it.addressMid }
         assertEquals(0x00, byAddress["PRE1"])
@@ -164,8 +211,10 @@ class CatalogParsesTest {
             config.banks.map { it.displayLabel },
         )
         assertEquals(
-            listOf("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "GM",
-                "U1", "U2", "U3", "P DR", "G DR", "U DR"),
+            listOf(
+                "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "GM",
+                "U1", "U2", "U3", "P DR", "G DR", "U DR",
+            ),
             config.banks.map { it.shortLabel },
         )
         // "USER DR" -> "U DR", not "UD": no rule that yields one yields the other, which is why
@@ -276,11 +325,32 @@ class CatalogParsesTest {
         }
     }
 
-    /** A probe must be a read-only enquiry. Both families use a universal or documented identity
-     * query for exactly the reason in `MidiDiscovery`'s class doc. */
+    /** The firmware list the advisory is raised from is the catalog's, not a built-in default. */
+    @Test
+    fun `a Motif XS inherits the firmware versions of the shared family config`() {
+        val shared = JsonObject(mapOf("supportedFirmwareVersions" to JsonArray(listOf(JsonPrimitive("1.50")))))
+        val own = JsonObject(emptyMap())
+        assertEquals(setOf("1.50"), resolvedConfig(shared, own, json).supportedFirmwareVersions)
+    }
+
+    @Test
+    fun `a Motif XS keeps firmware versions its own entry names`() {
+        val shared = JsonObject(mapOf("supportedFirmwareVersions" to JsonArray(listOf(JsonPrimitive("1.50")))))
+        val own = JsonObject(mapOf("supportedFirmwareVersions" to JsonArray(listOf(JsonPrimitive("1.60")))))
+        assertEquals(setOf("1.60"), resolvedConfig(shared, own, json).supportedFirmwareVersions)
+    }
+
+    /**
+     * A probe must be a read-only enquiry. Every family uses a universal or documented identity
+     * query for exactly the reason in `MidiDiscovery`'s class doc. Every catalog in the generic
+     * shape is checked: all but the Nord's own and the factory-voice table.
+     */
     @Test
     fun `every MIDI probe is a single well-formed SysEx message`() {
-        for (name in listOf("behringer_pro800.json", "yamaha_motif_xs.json")) {
+        val generic = catalogDir.listFiles { file -> file.extension == "json" }!!.map { it.name }
+            .filterNot { it.startsWith("nord_devices") || it == "motifxs_factory_voices.json" }
+        assertTrue("found $generic", generic.size >= 4)
+        for (name in generic) {
             for (descriptor in catalog(name).devices) {
                 val match = descriptor.match as? DeviceMatch.MidiIdentity ?: continue
                 val probe = match.probe
@@ -289,5 +359,35 @@ class CatalogParsesTest {
                 assertEquals("$name: probe must be one message", 1, probe.count { it == 0xF7.toByte() })
             }
         }
+    }
+
+    /**
+     * The launch-on-attach filter the build generates (`generate<Variant>UsbDeviceFilter`) lists
+     * exactly the catalogs' launch ids: each USB match's, each MIDI match's `launchOnUsbAttach` and
+     * never its `usbHint`, and every Nord's.
+     */
+    @Test
+    fun `the USB device filter lists exactly the catalogs' launch ids`() {
+        val path = System.getProperty("usbDeviceFilter")
+            ?: error("usbDeviceFilter is not set; see the Test task config in app/build.gradle.kts")
+        val filter = File(path)
+        assertTrue("$filter does not exist", filter.isFile)
+        val listed = Regex("""vendor-id="(\d+)" product-id="(\d+)"""").findAll(filter.readText())
+            .map { it.groupValues[1].toInt() to it.groupValues[2].toInt() }
+            .toSet()
+
+        val generic = catalogDir.listFiles { file -> file.extension == "json" }!!
+            .filterNot { it.name.startsWith("nord_devices") || it.name == "motifxs_factory_voices.json" }
+            .flatMap { catalog(it.name).devices }
+            .mapNotNull { descriptor ->
+                when (val match = descriptor.match) {
+                    is DeviceMatch.Usb -> match.vendorId to match.productId
+                    is DeviceMatch.MidiIdentity -> match.launchOnUsbAttach?.let { it.vendorId to it.productId }
+                }
+            }
+        val nord = json.decodeFromString(NordCatalog.serializer(), catalogDir.resolve("nord_devices.json").readText())
+            .devices.map { it.vendorId to it.productId }
+
+        assertEquals((generic + nord).toSet(), listed)
     }
 }

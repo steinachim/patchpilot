@@ -23,26 +23,33 @@ internal sealed class ProgramRow {
  * @property rows what the list renders, headers interleaved.
  * @property bankLabels the banks the index rail offers, in order.
  * @property occupied addresses that actually hold a preset.
- * @property freeSlots every address a copy could be written to.
+ * @property unreadable addresses whose read failed: neither occupied nor free as far as anyone
+ *   knows, so no edit is offered on them or onto them.
  * @property bankHeaderIndex bank label -> the row index of its header, for the rail's jump.
  */
 internal data class ProgramListing(
     val rows: List<ProgramRow> = emptyList(),
     val bankLabels: List<String> = emptyList(),
     val occupied: Set<SlotAddress> = emptySet(),
-    val freeSlots: List<PresetSlot> = emptyList(),
+    val unreadable: Set<SlotAddress> = emptySet(),
     val bankHeaderIndex: Map<String, Int> = emptyMap(),
 )
 
 /**
- * Where a copy could be written: every address the layout allows that does not already hold one.
- * Its own function, because it is not a property of what is on screen - copying a factory voice
- * needs the free user slots while the factory listing, in which nothing is free, is displayed.
- * [allSlots] is therefore the caller's choice of address space.
+ * Where a copy could be written: every address the layout allows that does not already hold one
+ * and was read. Its own function, because it is not a property of what is on screen - copying a
+ * factory voice needs the free user slots while the factory listing, in which nothing is free, is
+ * displayed. [allSlots] is therefore the caller's choice of address space.
+ *
+ * @param unreadable addresses whose read failed, which may hold a preset a copy would overwrite.
  */
-internal fun freeSlots(reported: List<PresetSlot>, allSlots: List<PresetSlot>): List<PresetSlot> {
+internal fun freeSlots(
+    reported: List<PresetSlot>,
+    allSlots: List<PresetSlot>,
+    unreadable: Set<SlotAddress> = emptySet(),
+): List<PresetSlot> {
     val occupied = reported.filterNot { it.isEmpty }.map { it.address }.toSet()
-    return allSlots.filterNot { it.address in occupied }
+    return allSlots.filterNot { it.address in occupied || it.address in unreadable }
 }
 
 /**
@@ -52,6 +59,7 @@ internal fun freeSlots(reported: List<PresetSlot>, allSlots: List<PresetSlot>): 
  * @param reported what the instrument answered with. A Nord lists only what it holds; a Pro-800
  *   answers for every address, empty ones included.
  * @param allSlots every address the instrument's layout allows, in device order.
+ * @param unreadable addresses the listing could not read; see [ProgramListing.unreadable].
  */
 internal fun buildProgramListing(
     reported: List<PresetSlot>,
@@ -59,14 +67,11 @@ internal fun buildProgramListing(
     showEmptySlots: Boolean,
     picking: Boolean,
     searchText: String,
+    unreadable: Set<SlotAddress> = emptySet(),
 ): ProgramListing {
     // Addresses that actually hold a preset, not every address the index mentioned: a Pro-800
     // answers for all 400, and an empty slot must not get a drag handle and a Rename button.
     val occupied = reported.filterNot { it.isEmpty }.map { it.address }.toSet()
-
-    // From the full address space rather than the toggle, since picking a destination needs all
-    // of it whether or not "show empty slots" is on.
-    val freeSlots = freeSlots(reported, allSlots)
 
     // Bank labels come off the rows rather than being parsed out of a display id, since "A:1:1"
     // yields its bank to substringBefore(':') and "A00" does not.
@@ -121,10 +126,34 @@ internal fun buildProgramListing(
         rows = rows,
         bankLabels = bankLabels,
         occupied = occupied,
-        freeSlots = freeSlots,
+        unreadable = unreadable,
         // Row index of each bank's header, so the index rail can scroll straight to it.
         bankHeaderIndex = rows.withIndex()
             .mapNotNull { (i, row) -> (row as? ProgramRow.BankHeader)?.bank?.let { it to i } }
             .toMap(),
     )
 }
+
+/**
+ * Whether a refresh may start: never while the listing is still arriving, which a refresh would
+ * restart from zero (93 s on a Motif XS), nor while an edit runs, whose own re-read follows it,
+ * nor during a destination pick, whose targets would turn into unread rows under the finger.
+ * The app bar's button and the pull gesture both ask this, so they cannot disagree.
+ */
+internal fun refreshAllowed(index: PresetIndexState, editRunning: Boolean, picking: Boolean = false): Boolean =
+    !index.loading && !editRunning && !picking
+
+/**
+ * Whether an edit may start - the row menu, a drag, the device report button. Not while the
+ * listing on screen or the user listing is still arriving: a drop or a pick into a region that
+ * has not loaded has no defined target, and on an instrument with no lock of its own (a Motif
+ * XS) an edit would interleave with the user listing's reads even while another tab is shown.
+ * Not while an edit or a device report runs either: a second operation would only queue behind
+ * the first, minutes behind a report, with Back refused meanwhile.
+ */
+internal fun editsAllowed(
+    index: PresetIndexState,
+    userIndex: PresetIndexState,
+    editRunning: Boolean,
+    reportRunning: Boolean,
+): Boolean = index.complete && userIndex.complete && !editRunning && !reportRunning

@@ -3,11 +3,17 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.hex
+import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.readUInt32BE
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -19,23 +25,6 @@ import org.junit.Test
  * synthetic response sequences for operations the fixture subset doesn't cover end-to-end.
  */
 class NordDeviceProtocolTest {
-
-    private fun buildRootCategoryListPayload(names: List<String>, trailerLen: Int): ByteArray {
-        val out = mutableListOf<Byte>()
-        repeat(4) { out += 0.toByte() } // unused leading 4 bytes (real devices vary these)
-        out += names.size.toByte()
-        for (name in names) {
-            val nameBytes = name.toByteArray(Charsets.US_ASCII)
-            out += uint32BE(nameBytes.size).toList()
-            out += nameBytes.toList()
-            out += List(trailerLen) { 0.toByte() }
-        }
-        return out.toByteArray()
-    }
-
-    private fun uint32BE(value: Int): ByteArray = byteArrayOf(
-        (value ushr 24).toByte(), (value ushr 16).toByte(), (value ushr 8).toByte(), value.toByte(),
-    )
 
     /**
      * A sub-opcode 2/3 (GET_CATEGORY_CHILD) reply payload for [children], each a
@@ -65,16 +54,24 @@ class NordDeviceProtocolTest {
     private fun deviceInfoPayload(protocolVersionFileTransfer: Int): ByteArray =
         byteArrayOf(5, 6, 1, 7, 0, 10, 2, 12, protocolVersionFileTransfer.toByte(), 13, 0)
 
+    /** Untested firmware is warned about, not refused: the connect completes with an advisory. */
     @Test
-    fun `connect rejects unsupported firmware version`() = runTest {
-        val device = NordFixtures.device(ReplayTransport(emptyList(), firmwareVersion = 999), NordFixtures.GRAND_PROFILE)
-        try {
-            device.connect()
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
-        // The firmware gate runs before anything is sent, so nothing was.
+    fun `untested firmware connects with an advisory naming both versions`() = runTest {
+        val transport = ReplayTransport(listOf(3 to deviceInfoPayload(10)), firmwareVersion = 999)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.connect()
+        transport.assertAllConsumed()
+        val advisory = device.firmwareAdvisory!!
+        assertTrue(advisory, advisory.contains("9.99"))
+        assertTrue(advisory, advisory.contains("1.68"))
+    }
+
+    @Test
+    fun `tested firmware connects with no advisory`() = runTest {
+        val transport = ReplayTransport(listOf(3 to deviceInfoPayload(10)), firmwareVersion = 168)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.connect()
+        assertEquals(null, device.firmwareAdvisory)
     }
 
     @Test
@@ -130,7 +127,7 @@ class NordDeviceProtocolTest {
         override fun close() {}
     }
 
-    /** The tail of a content-database reply a killed session never read - what X9 left queued. */
+    /** The tail of a content-database reply a killed session never read, as a force-stop mid-report leaves it queued. */
     private fun staleFileTransferReply(): ByteArray =
         buildMessage(NordDevice.PROTOCOL_FILE_TRANSFER, 10, 31, ByteArray(390))
 
@@ -170,7 +167,7 @@ class NordDeviceProtocolTest {
     fun `a reply that never matches its request fails after a bounded number of reads`() = runTest {
         val transport = LeftoverTransport(emptyList(), deviceInfoPayload(10), answerSubOp = { it + 2 })
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        val exc = assertThrows(IllegalStateException::class.java) { runBlocking { device.connect() } }
+        val exc = thrownBy<IllegalStateException> { device.connect() }
         val cause = generateSequence<Throwable>(exc) { it.cause }.first { "out of step" in it.message.orEmpty() }
         assertTrue(cause.message, cause.message!!.contains("sub-op=2 with a reply for protocol=7 sub-op=4"))
         // MAX_STALE_REPLIES are discarded; the one after that is the refusal.
@@ -203,7 +200,7 @@ class NordDeviceProtocolTest {
         // An unparseable device-info reply: the count doesn't account for the payload.
         for (profile in listOf(
             NordFixtures.GRAND_PROFILE,
-            DeviceProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
+            NordProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
         )) {
             val transport = ReplayTransport(listOf(3 to byteArrayOf(9, 6, 1)), firmwareVersion = 168)
             val device = NordFixtures.device(transport, profile)
@@ -257,9 +254,8 @@ class NordDeviceProtocolTest {
     @Test
     fun `a Native category's 0xFFFE capacity parses instead of failing the reply`() {
         // A Nord Stage 2 EX reports 0xFFFE for every "(Native)" category - a documented
-        // sentinel, not corruption. Vetting it at parse
-        // time threw the whole child list away, which cost three of that instrument's ten
-        // categories their bank counts and showed up as three failures in a device report.
+        // sentinel, not corruption. Vetted at parse time it would throw the whole child list
+        // away, costing three of that instrument's ten categories their bank counts.
         val children = NordDevice.parseCategoryChildren(childListPayload(listOf("Bank 1" to 65534)))
 
         assertEquals(1, children.size)
@@ -269,7 +265,7 @@ class NordDeviceProtocolTest {
     @Test
     fun `an implausible capacity is still refused as an addressing bound`() = runTest {
         // The plausibility bound sits where the value becomes an addressing bound, not in the
-        // parser: deriveBankLayout feeds InstrumentViewModel.allSlots.
+        // parser: deriveBankLayout feeds PresetListings.allSlots.
         val root = parseMessage(NordFixtures.GRAND_ROOT_LIST_RESPONSE).payload
         val device = NordFixtures.device(
             ReplayTransport(listOf(1 to root, 3 to childListPayload(listOf("Bank 1" to 9_999_999)))),
@@ -412,9 +408,7 @@ class NordDeviceProtocolTest {
                 NordDevice.PROTOCOL_FILE_TRANSFER to 10,
             ),
         )
-        val failure = assertThrows(IllegalStateException::class.java) {
-            kotlinx.coroutines.runBlocking { device.capabilityQueryPayload() }
-        }
+        val failure = thrownBy<IllegalStateException> { device.capabilityQueryPayload() }
         assertTrue(failure.message!!.contains("skipped"))
         assertTrue("nothing went on the wire", transport.sentRequests.isEmpty())
     }
@@ -443,7 +437,7 @@ class NordDeviceProtocolTest {
     @Test
     fun `both instruments land on their expected trailer lengths`() {
         assertEquals(29, NordDevice.rootCategoryTrailerLenForVersion(10)) // Nord Grand
-        assertEquals(28, NordDevice.rootCategoryTrailerLenForVersion(8))  // Nord Stage 2 EX
+        assertEquals(28, NordDevice.rootCategoryTrailerLenForVersion(8)) // Nord Stage 2 EX
     }
 
     /**
@@ -471,8 +465,11 @@ class NordDeviceProtocolTest {
     @Test
     fun `an unknown device parses a real root list with nothing declared`() {
         // The case detection helps most: nothing declared, no guesses, still correct. No profile
-        // declares a trailer length any more, so this is the only way it can work at all.
-        val device = NordFixtures.device(ReplayTransport(emptyList()), DeviceProfile.unknown("Nord Something", 0x0FFC, 0x00FF))
+        // declares a trailer length, so this is the only way it works at all.
+        val device = NordFixtures.device(
+            ReplayTransport(emptyList()),
+            NordProfile.unknown("Nord Something", 0x0FFC, 0x00FF),
+        )
         val categories = device.parseRootCategoryList(parseMessage(NordFixtures.STAGE2EX_ROOT_LIST_RESPONSE).payload)
         assertEquals(10, categories.size)
         assertEquals("Program", categories[6])
@@ -511,24 +508,136 @@ class NordDeviceProtocolTest {
 
         val named = device.collectItemNames(listOf(payload))
         assertEquals(1, named.size)
-        assertEquals("A:1:1", named[0].presetId)
+        assertEquals(0 to 0, named[0].bank to named[0].item)
         assertEquals("White Grand", named[0].name)
     }
 
-    // ---- Preset id parsing ----
+    // ---- readProgram: one slot by address ----
+
+    private val programRootList get() =
+        rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
 
     @Test
-    fun `parsePresetId and formatPresetId round-trip`() {
-        val device = NordFixtures.device(ReplayTransport(emptyList()), NordFixtures.GRAND_PROFILE)
-        val bankItem = device.parsePresetId("B:2:2")
-        assertEquals(NordDevice.BankItem(1, 6), bankItem)
-        assertEquals("B:2:2", device.formatPresetId(bankItem.bank, bankItem.item))
+    fun `readProgram fetches the slot by address inside the Program lock`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList, // ROOT_CATEGORY_LIST (via getProgramCategoryIndex)
+                5 to ByteArray(0), // SELECT_CATEGORY
+                31 to itemRecordPayload(bank = 1, item = 11, name = "Upright"), // FETCH_ITEM
+                7 to ByteArray(0), // UNLOCK_CATEGORY_SELECTION
+            ),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        val read = device.readProgram(bank = 1, item = 11)
+
+        assertEquals("Upright", read?.name)
+        val fetch = transport.sentRequests.single { it.subOp == NordDevice.FileTransferSubOp.FETCH_ITEM.code }
+        assertArrayEquals(uint32BE(1) + uint32BE(11), fetch.payload)
+        assertTrue(
+            "no cursor walk",
+            transport.sentRequests.none { it.subOp == NordDevice.FileTransferSubOp.CURSOR_NEXT_ITEM.code },
+        )
+    }
+
+    /** What a Stage 2 EX answers for an empty slot: status 1, then the previous record's bytes. */
+    @Test
+    fun `readProgram reads status 1 as empty and ignores the stale name after it`() = runTest {
+        val stale = itemRecordPayload(bank = 0, item = 0, name = "White Grand")
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList,
+                5 to ByteArray(0),
+                31 to (uint32BE(NordDevice.STATUS_NOT_FOUND) + stale.copyOfRange(4, stale.size)),
+                7 to ByteArray(0),
+            ),
+        )
+        assertNull(NordFixtures.device(transport, NordFixtures.GRAND_PROFILE).readProgram(bank = 1, item = 47))
     }
 
     @Test
-    fun `parsePresetId rejects out-of-range bank`() {
-        val device = NordFixtures.device(ReplayTransport(emptyList()), NordFixtures.GRAND_PROFILE)
-        assertThrows(IllegalArgumentException::class.java) { device.parsePresetId("Z:1:1") }
+    fun `readProgram walks the program list when the fetch answers any other status`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList,
+                5 to ByteArray(0),
+                31 to (uint32BE(3) + ByteArray(32)), // FETCH_ITEM -> status 3
+                7 to ByteArray(0),
+                // The walk, with the category index already known:
+                3 to childListPayload(listOf("Bank 1" to 25)),
+                5 to ByteArray(0),
+                9 to (uint32BE(0) + uint32BE(1)),
+                33 to (uint32BE(0) + uint32BE(0) + uint32BE(4)), // CURSOR_NEXT_ITEM -> item 4
+                31 to itemRecordPayload(bank = 0, item = 4, name = "Rhodes"),
+                7 to ByteArray(0),
+            ),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        assertEquals("Rhodes", device.readProgram(bank = 0, item = 4)?.name)
+    }
+
+    /** The walk answers for every slot it holds; one it does not hold is empty. */
+    @Test
+    fun `readProgram's walk fallback reports a slot it does not find as empty`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList,
+                5 to ByteArray(0),
+                31 to (uint32BE(3) + ByteArray(32)), // FETCH_ITEM -> status 3
+                7 to ByteArray(0),
+                3 to childListPayload(listOf("Bank 1" to 25)),
+                5 to ByteArray(0),
+                9 to (uint32BE(0) + uint32BE(1)),
+                33 to (uint32BE(0) + uint32BE(0) + uint32BE(4)), // CURSOR_NEXT_ITEM -> item 4
+                31 to itemRecordPayload(bank = 0, item = 4, name = "Rhodes"),
+                7 to ByteArray(0),
+            ),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        assertNull(device.readProgram(bank = 0, item = 5))
+        transport.assertAllConsumed()
+    }
+
+    /** A reply too short to carry a status is no answer about the slot, so the walk is asked. */
+    @Test
+    fun `readProgram walks the program list when the fetch reply is too short for a status`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList,
+                5 to ByteArray(0),
+                31 to ByteArray(4),
+                7 to ByteArray(0),
+                3 to childListPayload(listOf("Bank 1" to 25)),
+                5 to ByteArray(0),
+                9 to (uint32BE(0) + uint32BE(1)),
+                33 to (uint32BE(0) + uint32BE(0) + uint32BE(4)),
+                31 to itemRecordPayload(bank = 0, item = 4, name = "Rhodes"),
+                7 to ByteArray(0),
+            ),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        assertEquals("Rhodes", device.readProgram(bank = 0, item = 4)?.name)
+        transport.assertAllConsumed()
+    }
+
+    @Test
+    fun `readProgram refuses a record for another slot, after unlocking`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to programRootList,
+                5 to ByteArray(0),
+                31 to itemRecordPayload(bank = 0, item = 1, name = "Wrong Slot"),
+                7 to ByteArray(0),
+            ),
+        )
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+
+        val failure = runCatching { device.readProgram(bank = 0, item = 0) }.exceptionOrNull()
+        assertTrue(failure is NordProtocolException)
+        assertEquals(NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code, transport.sentRequests.last().subOp)
     }
 
     // ---- fetchCategoryItems cursor walk ----
@@ -604,10 +713,9 @@ class NordDeviceProtocolTest {
         // Every bank reports itself exhausted, so the cursor yields nothing at all while
         // the count claims 3. Only a count of *zero* is treated as uninformative.
         //
-        // Running out of banks with the count unsatisfied now consults the category's
-        // child list once, so that reply is part of the expected traffic: it reports the
-        // same 16 banks the walk already covered, which raises nothing and leaves the
-        // disagreement to be reported as before.
+        // Running out of banks with the count unsatisfied consults the category's child list
+        // once, so that reply is part of the expected traffic: it reports the same 16 banks the
+        // walk already covered, which raises nothing and leaves the disagreement to be reported.
         val exhausted = uint32BE(1) + uint32BE(0) + uint32BE(0)
         val responses = listOf(
             3 to childListPayload(List(16) { "Bank" to 25 }), // the Grand's 16 banks, A-P
@@ -636,7 +744,14 @@ class NordDeviceProtocolTest {
         val perBank = listOf(5, 5, 9, 2, 1, 3) // the real distribution: 21 in A-D, 4 beyond
         val responses = mutableListOf<Pair<Int, ByteArray>>(
             3 to childListPayload(
-                listOf("Grand" to 15, "Upright" to 15, "EPiano1" to 15, "EPiano2" to 15, "Clavinet" to 15, "Harps" to 15),
+                listOf(
+                    "Grand" to 15,
+                    "Upright" to 15,
+                    "EPiano1" to 15,
+                    "EPiano2" to 15,
+                    "Clavinet" to 15,
+                    "Harps" to 15,
+                ),
             ),
             5 to ByteArray(0), // SELECT_CATEGORY
             9 to (uint32BE(0) + uint32BE(perBank.sum())), // count = 25
@@ -646,13 +761,16 @@ class NordDeviceProtocolTest {
                 responses += 33 to (uint32BE(0) + uint32BE(bank) + uint32BE(item))
                 responses += 31 to itemPayload
             }
-            responses += 33 to (uint32BE(1) + uint32BE(bank) + uint32BE(0)) // bank exhausted
+            // The walk stops once it holds as many items as the count promised, so the last
+            // bank's end is never asked for.
+            if (bank != perBank.lastIndex) responses += 33 to (uint32BE(1) + uint32BE(bank) + uint32BE(0))
         }
         responses += 7 to ByteArray(0) // UNLOCK_CATEGORY_SELECTION
 
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.STAGE2EX_PROFILE)
         assertEquals(25, device.fetchCategoryItems(1).size)
+        transport.assertAllConsumed()
         assertEquals(
             "the child list is read once per category, then cached",
             1,
@@ -688,9 +806,9 @@ class NordDeviceProtocolTest {
     @Test
     fun `fetchCategoryItems does not probe a one-bank category past its only bank`() = runTest {
         // The gain the bound buys beyond correctness: a category reporting one child is
-        // walked as one bank. Before, `Live` and `Settings` - one bank each, and an item
-        // count of 0 - were only stopped by *finding* bank 1 empty, which cost a cursor
-        // request to a bank the instrument does not have.
+        // walked as one bank. Without it, `Live` and `Settings` - one bank each, and an item
+        // count of 0 - would only stop on *finding* bank 1 empty, a cursor request to a bank
+        // the instrument does not have.
         val itemPayload = parseMessage(NordFixtures.NGP_RECORD_RESPONSE).payload
         val responses = listOf(
             3 to childListPayload(listOf("Live" to 5)),
@@ -712,25 +830,27 @@ class NordDeviceProtocolTest {
     }
 
     // ---- selectPreset / moveProgram ----
-    // Neither sends UiSubOp.ENTER_STATUS_MODE first - only
-    // SELECT_CATEGORY locks the instrument, so only the trailing unlock (sub-op 6/7) is needed.
+    // Only SELECT_CATEGORY locks the instrument, so the trailing unlock (sub-op 6/7) is all
+    // either needs.
 
     @Test
     fun `selectPreset succeeds when the device echoes the request`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList, // ROOT_CATEGORY_LIST (via getProgramCategoryIndex)
             5 to ByteArray(0), // SELECT_CATEGORY
             48 to (uint32BE(0) + uint32BE(1) + uint32BE(6)), // SELECT_PRESET echo: flag=0 bank=1 item=6
             7 to ByteArray(0), // UNLOCK_CATEGORY_SELECTION -> unlock
         )
-        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
-        device.selectPreset(1, 6) // no exception == success
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.selectPreset(1, 6)
+        transport.assertAllConsumed()
     }
 
     @Test
     fun `selectPreset throws when the echoed response does not match, but still unlocks`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
@@ -739,18 +859,14 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        try {
-            device.selectPreset(1, 6)
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        thrownBy<NordProtocolException> { device.selectPreset(1, 6) }
         assertEquals(NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code, transport.sentRequests.last().subOp)
+        transport.assertAllConsumed()
     }
 
     @Test
     fun `swapPrograms succeeds on status zero`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -761,7 +877,8 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        device.swapPrograms(0, 0, 0, 3) // no exception == success
+        device.swapPrograms(0, 0, 0, 3)
+        transport.assertAllConsumed()
         assertEquals(NordDevice.FileTransferSubOp.SWAP_PROGRAMS.code, transport.sentRequests[2].subOp)
     }
 
@@ -771,7 +888,7 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `deleteProgram uses sub-op 20 and accepts the echoed request`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -781,7 +898,8 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        device.deleteProgram(8, 12) // no exception == success
+        device.deleteProgram(8, 12)
+        transport.assertAllConsumed()
 
         val delete = transport.sentRequests[2]
         assertEquals(NordDevice.FileTransferSubOp.DELETE_ITEM.code, delete.subOp)
@@ -797,39 +915,35 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `deleteProgram rejects an echo for a different slot`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
             21 to (uint32BE(0) + uint32BE(8) + uint32BE(13)), // status 0, but item 13 not 12
             7 to ByteArray(0), // unlock still runs
         )
-        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
-        try {
-            device.deleteProgram(8, 12)
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        // Not a refusal: the instrument acted, on another slot.
+        val failure = thrownBy<NordProtocolException> { device.deleteProgram(8, 12) }
+        assertTrue(failure.message!!, failure.message!!.contains("may have changed"))
+        transport.assertAllConsumed()
     }
 
     /** A non-zero status is a refusal, whatever the echo says. */
     @Test
     fun `deleteProgram rejects a non-zero status`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
             21 to (uint32BE(9) + uint32BE(8) + uint32BE(12)),
             7 to ByteArray(0),
         )
-        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
-        try {
-            device.deleteProgram(8, 12)
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        assertEquals(9, thrownBy<NordStatusException> { device.deleteProgram(8, 12) }.status)
+        transport.assertAllConsumed()
     }
 
     /**
@@ -839,7 +953,7 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `moveProgram uses sub-op 24 and accepts the echoed request`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -851,7 +965,8 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        device.moveProgram(7, 24, 8, 0) // H:5:5 -> empty I:1:1; no exception == success
+        device.moveProgram(7, 24, 8, 0) // H:5:5 -> empty I:1:1
+        transport.assertAllConsumed()
         val move = transport.sentRequests[2]
         assertEquals(NordDevice.FileTransferSubOp.MOVE_PROGRAM.code, move.subOp)
         assertTrue((uint32BE(7) + uint32BE(24) + uint32BE(8) + uint32BE(0)).contentEquals(move.payload))
@@ -859,7 +974,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `moveProgram rejects a mismatched echo`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -867,12 +982,10 @@ class NordDeviceProtocolTest {
             25 to (uint32BE(0) + uint32BE(7) + uint32BE(24) + uint32BE(9) + uint32BE(0)),
             7 to ByteArray(0), // UNLOCK_CATEGORY_SELECTION -> unlock still runs
         )
-        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
-        try {
-            device.moveProgram(7, 24, 8, 0)
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-        }
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        thrownBy<NordProtocolException> { device.moveProgram(7, 24, 8, 0) }
+        transport.assertAllConsumed()
     }
 
     /**
@@ -882,7 +995,7 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `copyProgram uses sub-op 22 and returns the name the instrument chose`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -895,19 +1008,39 @@ class NordDeviceProtocolTest {
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
         assertEquals("Synth Strings 2", device.copyProgram(7, 23, 8, 12))
+        transport.assertAllConsumed()
 
         val copy = transport.sentRequests[2]
         assertEquals(NordDevice.FileTransferSubOp.COPY_PROGRAM.code, copy.subOp)
         assertTrue((uint32BE(7) + uint32BE(23) + uint32BE(8) + uint32BE(12)).contentEquals(copy.payload))
     }
 
+    /** A fetch of an empty slot carries the previous record's name, which is not the copy's. */
+    @Test
+    fun `copyProgram does not report the name a not-found fetch carries`() = runTest {
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val responses = listOf(
+            1 to rootList,
+            5 to ByteArray(0),
+            23 to (uint32BE(0) + uint32BE(7) + uint32BE(23) + uint32BE(8) + uint32BE(12)),
+            31 to itemRecordPayload(8, 12, "Previous Record", status = NordDevice.STATUS_NOT_FOUND),
+            48 to (uint32BE(0) + uint32BE(8) + uint32BE(12)),
+            7 to ByteArray(0),
+        )
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        val failure = thrownBy<NordProtocolException> { device.copyProgram(7, 23, 8, 12) }
+        assertFalse(failure.message!!, failure.message!!.contains("Previous Record"))
+        transport.assertAllConsumed()
+    }
+
     /**
-     * Status 4 is the instrument's "file exists", and an occupied destination is the one
-     * copy failure a caller can act on - so it is named rather than reported as a bare number.
+     * Status 4 is the instrument's "file exists". The code travels to `NordInstrument`, which
+     * names the occupied slot to the user (`NordFailureMappingTest`).
      */
     @Test
     fun `copyProgram refuses an occupied destination, but still unlocks`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
@@ -916,18 +1049,15 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        try {
-            device.copyProgram(7, 23, 8, 12)
-            fail("expected IllegalStateException")
-        } catch (e: IllegalStateException) {
-            assertTrue(e.message!!.contains("occupied"))
-        }
+        val failure = thrownBy<NordStatusException> { device.copyProgram(7, 23, 8, 12) }
+        assertEquals(NordDevice.STATUS_FILE_EXISTS, failure.status)
         assertEquals(NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code, transport.sentRequests.last().subOp)
+        transport.assertAllConsumed()
     }
 
     @Test
     fun `copyProgram rejects a mismatched echo`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
@@ -935,22 +1065,20 @@ class NordDeviceProtocolTest {
             23 to (uint32BE(0) + uint32BE(7) + uint32BE(23) + uint32BE(9) + uint32BE(12)),
             7 to ByteArray(0),
         )
-        val device = NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE)
-        try {
-            device.copyProgram(7, 23, 8, 12)
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        thrownBy<NordProtocolException> { device.copyProgram(7, 23, 8, 12) }
+        transport.assertAllConsumed()
     }
 
     /**
      * A sub-opcode 30/31 item record carrying [name]. Only the fields NordDevice.parseItemName
      * reads are filled: the length prefix at offset 32 and the name from 36.
      */
-    private fun itemRecordPayload(bank: Int, item: Int, name: String): ByteArray {
+    private fun itemRecordPayload(bank: Int, item: Int, name: String, status: Int = 0): ByteArray {
         val nameBytes = name.toByteArray(Charsets.US_ASCII)
         val record = ByteArray(36)
+        uint32BE(status).copyInto(record, 0)
         uint32BE(bank).copyInto(record, 4)
         uint32BE(item).copyInto(record, 8)
         uint32BE(nameBytes.size).copyInto(record, 32)
@@ -959,7 +1087,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `renamePreset succeeds when the device echoes the request`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList, // ROOT_CATEGORY_LIST (via getProgramCategoryIndex)
             5 to ByteArray(0), // SELECT_CATEGORY
@@ -969,7 +1097,8 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        device.renamePreset(1, 11, "Black Upright") // no exception == success
+        device.renamePreset(1, 11, "Black Upright")
+        transport.assertAllConsumed()
 
         // SET_NAME's payload is bank(4) + item(4) + nameLen(4) + name
         val sent = transport.sentRequests.first { it.subOp == NordDevice.FileTransferSubOp.SET_NAME.code }
@@ -981,7 +1110,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `renamePreset throws when the echoed response does not match, but still unlocks`() = runTest {
-        val rootList = buildRootCategoryListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
         val responses = listOf(
             1 to rootList,
             5 to ByteArray(0),
@@ -990,13 +1119,29 @@ class NordDeviceProtocolTest {
         )
         val transport = ReplayTransport(responses)
         val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
-        try {
-            device.renamePreset(1, 11, "Black Upright")
-            fail("expected IllegalStateException")
-        } catch (_: IllegalStateException) {
-            // expected
-        }
+        thrownBy<NordProtocolException> { device.renamePreset(1, 11, "Black Upright") }
         assertEquals(NordDevice.FileTransferSubOp.UNLOCK_CATEGORY_SELECTION.code, transport.sentRequests.last().subOp)
+        transport.assertAllConsumed()
+    }
+
+    /**
+     * The re-select after a write only redraws the panel. The name is already stored, so a
+     * refresh the instrument does not confirm leaves the display stale and fails nothing.
+     */
+    @Test
+    fun `renamePreset succeeds when only the display refresh is not confirmed`() = runTest {
+        val rootList = rootListPayload(listOf("Piano", "Program", "Settings"), trailerLen = 29)
+        val responses = listOf(
+            1 to rootList,
+            5 to ByteArray(0),
+            29 to (uint32BE(0) + uint32BE(1) + uint32BE(11)), // SET_NAME confirmed
+            48 to (uint32BE(0) + uint32BE(1) + uint32BE(12)), // the refresh answers for another slot
+            7 to ByteArray(0),
+        )
+        val transport = ReplayTransport(responses)
+        val device = NordFixtures.device(transport, NordFixtures.GRAND_PROFILE)
+        device.renamePreset(1, 11, "Black Upright")
+        transport.assertAllConsumed()
     }
 
     @Test
@@ -1021,12 +1166,6 @@ class NordDeviceProtocolTest {
         }
     }
 
-    private fun readUInt32BE(data: ByteArray, offset: Int): Int =
-        ((data[offset].toInt() and 0xFF) shl 24) or
-            ((data[offset + 1].toInt() and 0xFF) shl 16) or
-            ((data[offset + 2].toInt() and 0xFF) shl 8) or
-            (data[offset + 3].toInt() and 0xFF)
-
     @Test
     fun `getCategoryIndexByName finds Program in a Nord Grand's root category list`() = runTest {
         val payload = parseMessage(NordFixtures.GRAND_ROOT_LIST_RESPONSE).payload
@@ -1037,7 +1176,7 @@ class NordDeviceProtocolTest {
 
     @Test
     fun `hex helper decodes as expected`() {
-        assertTrue(hex("00ff").contentEquals(byteArrayOf(0x00, 0xFF.toByte())))
+        assertTrue("00ff".hexToBytes().contentEquals(byteArrayOf(0x00, 0xFF.toByte())))
     }
 
     // ---- Reply framing ----
@@ -1072,8 +1211,9 @@ class NordDeviceProtocolTest {
     }
 
     /**
-     * Needed on this side regardless of what the instrument does: READ_BUFSIZE is 8 KB here and
-     * a READ_ITEM_DATA reply can be 32 KB, so a large reply always spans reads.
+     * Needed on this side regardless of what the instrument does: READ_BUFSIZE is 8 KB here, and
+     * a reply can be larger (an item-data read answers with up to 65,532 bytes), so a large reply
+     * spans reads.
      */
     @Test
     fun `a message split across reads is reassembled`() = runTest {
@@ -1124,16 +1264,14 @@ class NordDeviceProtocolTest {
     }
 
     /**
-     * A device answering only with zero-length transfers makes no progress, and [readReply] used to
-     * wait on that forever - in a loop with no suspension point, so neither cancellation nor a
-     * surrounding timeout could end it. One IO thread stranded per reconnect.
+     * A device answering only with zero-length transfers makes no progress. Waited on in a loop
+     * with no suspension point, neither cancellation nor a surrounding timeout could end it, and
+     * every reconnect would strand one IO thread.
      */
     @Test
     fun `a device that only returns empty reads is given up on`() = runTest {
         val device = NordFixtures.device(EmptyReadTransport(), NordFixtures.GRAND_PROFILE)
-        val caught = assertThrows(IllegalStateException::class.java) {
-            runBlocking { device.readReply() }
-        }
+        val caught = thrownBy<IllegalStateException> { device.readReply() }
         assertTrue(caught.message!!, caught.message!!.contains("empty replies in a row"))
     }
 
@@ -1148,9 +1286,7 @@ class NordDeviceProtocolTest {
             EmptyReadTransport(first = built.copyOfRange(0, 64)),
             NordFixtures.GRAND_PROFILE,
         )
-        val caught = assertThrows(IllegalStateException::class.java) {
-            runBlocking { device.readReply() }
-        }
+        val caught = thrownBy<IllegalStateException> { device.readReply() }
         assertTrue(caught.message!!, caught.message!!.contains("empty replies in a row"))
     }
 
@@ -1169,9 +1305,9 @@ class NordDeviceProtocolTest {
     }
 
     /**
-     * The name's *length* was checked; its *contents* were not. A newline renders as two rows in
-     * the browser the user picks delete targets from, and NUL or ESC reaches the shared report and
-     * logcat. The equivalent rule was already enforced for category names and USB product strings.
+     * A name's *contents* are checked, not only its length. A newline renders as two rows in the
+     * browser the user picks delete targets from, and NUL or ESC reaches the shared report and
+     * logcat. Category names and USB product strings follow the same rule.
      */
     @Test
     fun `control characters in an item name are stripped`() = runTest {
@@ -1191,8 +1327,8 @@ class NordDeviceProtocolTest {
      */
     @Test
     fun `an unusable declared length is refused rather than awaited`() = runTest {
-        val device = chunkedDevice(hex("ffffffff") + ByteArray(32))
-        val caught = assertThrows(IllegalStateException::class.java) { runBlocking { device.readReply() } }
+        val device = chunkedDevice("ffffffff".hexToBytes() + ByteArray(32))
+        val caught = thrownBy<IllegalStateException> { device.readReply() }
         assertTrue(caught.message!!, caught.message!!.contains("unusable length"))
     }
 }

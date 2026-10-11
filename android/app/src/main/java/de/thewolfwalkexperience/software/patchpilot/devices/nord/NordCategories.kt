@@ -14,7 +14,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
  * and [CategoryRef.main] is an index into a [CategoryTaxonomy].
  *
  * Built from the catalog's family-level `programCategories` master list and the device's own
- * [DeviceProfile.programCategoryIds] subset, plus any [DeviceProfile.programCategoryNameOverrides].
+ * [NordProfile.programCategoryIds] subset, plus any [NordProfile.programCategoryNameOverrides].
  */
 internal class NordCategories private constructor(
     /** Wire ids, in taxonomy order - so `ids[ref.main]` is what sub-opcode 51 carries. */
@@ -39,16 +39,19 @@ internal class NordCategories private constructor(
         /** The category every Nord lists last: a real category with a real id, not the absence of one. */
         const val NONE = "None"
 
+        /** [NONE]'s id, which identifies it where a model relabels it (`<None>` on an Electro 7 or a Stage 4). */
+        const val NONE_ID = 17
+
         /**
          * Resolves [profile]'s subset against the catalog's [master] list. Null - and so no
          * tagging facet - when the profile declares no ids, or when any declared id cannot be
          * named from [master] or the profile's overrides: a partial list would look like a
-         * working feature. Ids 47-52 have no master name, so an override for them is expected.
+         * working feature.
          *
          * Ordered alphabetically with [NONE] last, the order the vendor's own editor lists
          * categories in; the catalog stores the ids in the instrument's own order.
          */
-        fun resolve(profile: DeviceProfile, master: Map<String, String>): NordCategories? {
+        fun resolve(profile: NordProfile, master: Map<String, String>): NordCategories? {
             val declared = profile.programCategoryIds?.takeIf { it.isNotEmpty() } ?: return null
             val overrides = profile.programCategoryNameOverrides.orEmpty()
 
@@ -66,7 +69,7 @@ internal class NordCategories private constructor(
             }
 
             val ordered = named.sortedWith(
-                compareBy({ it.second == NONE }, { it.second.lowercase() }),
+                compareBy({ it.first == NONE_ID }, { it.second.lowercase() }),
             )
             return NordCategories(
                 ids = ordered.map { it.first },

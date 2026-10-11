@@ -17,8 +17,12 @@ object Pro800SysEx {
 
     val HEADER = byteArrayOf(
         0xF0.toByte(),
-        0x00, 0x20, 0x32, // Behringer
-        0x00, 0x01, 0x24, // Pro-800
+        0x00,
+        0x20,
+        0x32, // Behringer
+        0x00,
+        0x01,
+        0x24, // Pro-800
         0x00, // device number: 00 by default, settable with type 0x00 (never sent); replies carry the instrument's
     )
 
@@ -93,6 +97,12 @@ object Pro800SysEx {
      * round trip instead, as Behringer's own editor does.
      */
     const val TYPE_SET_NAME = 0x50
+
+    /**
+     * The pause the reference implementation leaves after a write, before the instrument is asked
+     * anything else.
+     */
+    const val WRITE_SETTLE_MS = 20L
 
     /** Programs occupy 0..399; the settings block lives at 510 (`7E 03` as LSB/MSB) and never appears in a browsable index. */
     const val PROGRAM_COUNT = 400

@@ -37,7 +37,14 @@
     <string name="action_clear_filter">Clear filter</string>
     <string name="action_continue_anyway">Continue anyway</string>
     <string name="action_retry_search">Retry search</string>
+    <string name="action_show_all_devices">Show all devices</string>
     <string name="action_try_demo">Try demo mode</string>
+    <string name="action_details">Details</string>
+    <string name="action_hide_details">Hide</string>
+    <string name="action_ok">OK</string>
+
+    <!-- The checkbox in an instrument's notice dialog, shown when a session connects. -->
+    <string name="notice_hide_forever">Don\'t show this again</string>
 
     <!-- Content descriptions: spoken by a screen reader, never shown. -->
     <string name="cd_back">Back</string>
@@ -45,7 +52,7 @@
 
     <string name="cd_row_options">Options for %1$s</string>
     <string name="cd_reorder">Reorder %1$s by dragging. Move to is also in this row’s options.</string>
-    <string name="cd_reorder_unavailable">Reordering is unavailable until the listing finishes</string>
+    <string name="cd_reorder_unavailable">Reordering is unavailable while the list loads or another operation runs</string>
     <string name="cd_copy_destination">Copy into %1$s</string>
     <string name="cd_move_destination">Move into %1$s</string>
     <string name="cd_settings">Settings</string>
@@ -60,8 +67,15 @@
     <string name="settings_connection_heading">Connection</string>
     <string name="settings_auto_connect">Auto-Connect to First Found Instrument</string>
     <string name="settings_auto_connect_description">Connects automatically to the first instrument a scan finds. Turn this off to always see the device list and pick one yourself.</string>
+    <!-- Brings back the instrument notices shown on connecting that the user ticked
+         "Don't show this again" on. -->
+    <string name="settings_show_hidden_notices">Show Hidden Messages Again</string>
+    <string name="settings_show_hidden_notices_description">Messages an instrument shows on connecting, which you chose not to see again.</string>
+    <string name="settings_show_hidden_notices_none">No messages are hidden.</string>
     <string name="settings_legal_heading">Legal</string>
     <string name="settings_open_source_licenses">Open Source Licenses</string>
+    <string name="settings_source_code">Source Code on GitHub</string>
+    <string name="settings_source_code_url" translatable="false">https://github.com/steinachim/patchpilot</string>
     <string name="licenses_title">Open Source Licenses</string>
     <string name="licenses_patchpilot_license">GNU General Public License v3.0</string>
     <string name="licenses_apache_license">Apache License, Version 2.0</string>
@@ -85,11 +99,15 @@
     <string name="connect_one_found">An instrument is connected.</string>
     <string name="connect_pick_one">Select the one to use:</string>
     <string name="connect_none_found">No supported instrument was found.</string>
+    <string name="connect_silent_found">A supported instrument is attached but did not answer.</string>
     <string name="connect_supported_heading">Supported instruments:</string>
     <string name="connect_pick_unknown">Select a connected USB device to try anyway:</string>
     <string name="connect_entry_known">Recognised — %1$s</string>
+    <!-- %1$s: the bus; %2$s: the MIDI interface or hub the instrument was found through. -->
+    <string name="connect_entry_known_via">Recognised — %1$s, via %2$s</string>
     <string name="connect_entry_unknown">Not recognised</string>
-    <string name="connect_advisory_title">Untested firmware</string>
+    <string name="connect_entry_silent">Looks like %1$s, which did not answer. It may be busy: wait a moment, then retry.</string>
+    <string name="connect_advisory_title">Untested firmware or model</string>
     <string name="action_disconnect">Disconnect</string>
     <string name="connect_unknown_title">Unknown device</string>
     <string name="connect_unknown_warning">This is not a recognized instrument and is not supported by this app. Continuing is at your own risk.</string>
@@ -101,6 +119,8 @@
     <string name="programs_show_empty">Show empty slots</string>
     <string name="programs_bank_header">Bank %1$s</string>
     <string name="programs_slot_empty">Empty</string>
+    <string name="programs_slot_unreadable">Could not be read</string>
+    <string name="programs_unreadable_target">%1$s could not be read. Refresh the list before moving a preset there.</string>
     <string name="programs_no_category">No category</string>
     <string name="programs_no_presets">This instrument reports no presets.</string>
     <string name="programs_no_matches">No presets match \"%1$s\".</string>
@@ -112,7 +132,9 @@
     <string name="programs_scope_note_factory">Names come from the manufacturer\'s data list, not read from this instrument.</string>
     <string name="programs_scope_note_favorites">Marked on the instrument. Use Set favorite in a row menu to change one.</string>
     <string name="programs_no_favorites">Nothing is marked as a favorite on this instrument.</string>
-    <string name="programs_no_favorites_hint">Mark one with Set favorite in a row menu, or on the instrument itself — on a Motif XS, hold [CATEGORY SEARCH] and use the [FAVORITE] bank. Pull down to re-read them.</string>
+    <string name="programs_no_favorites_hint">Mark one with Set favorite in a row menu, or on the instrument itself. Pull down to re-read them.</string>
+    <!-- %1$s: the instrument's own way to mark one (PresetTagger.favoritePanelHint), e.g. "hold [CATEGORY SEARCH] and use the [FAVORITE] bank." -->
+    <string name="programs_no_favorites_hint_panel">Mark one with Set favorite in a row menu, or on the instrument itself: %1$s Pull down to re-read them.</string>
     <string name="programs_share_report">Share device details</string>
     <string name="share_reading_device">Reading device\u2026</string>
     <string name="programs_shared_as">Shared as %1$s.</string>
@@ -134,6 +156,8 @@
     <string name="programs_favorite_slot">Category %1$d</string>
     <string name="programs_favorite_clear_hint">Clearing every box removes the favorite.</string>
     <string name="programs_categories_sub">Sub-category</string>
+    <!-- A preset whose stored category the instrument cannot name, on one that has no "none". -->
+    <string name="programs_categories_not_set">Not set</string>
     <string name="programs_categories_none">None</string>
     <string name="programs_categories_no_sub">—</string>
     <string name="programs_delete_title">Delete %1$s?</string>
@@ -164,6 +188,7 @@
     <string name="programs_busy_swapping">Swapping %1$s and %2$s\u2026</string>
     <string name="programs_busy_applying_fix">Changing the instrument\'s state\u2026</string>
     <string name="programs_operation_failed">%1$s failed.</string>
+    <string name="programs_edit_interrupted">The last change (%1$s) was interrupted, and the instrument may or may not have applied it. Check it after reconnecting.</string>
 
     <!--
       What an operation reports back once it has succeeded. These sit here rather than beside the
@@ -172,18 +197,19 @@
     -->
     <string name="result_moved">Moved %1$s to %2$s.</string>
     <string name="result_swapped">Swapped %1$s and %2$s.</string>
-    <string name="result_renamed">Preset %1$s has been renamed to %2$s.</string>
+    <string name="result_renamed">Renamed %1$s to \"%2$s\".</string>
     <string name="result_favorite_set">%1$s is now a favorite.</string>
     <string name="result_favorite_cleared">%1$s is no longer a favorite.</string>
     <string name="result_categories_set">%1$s is now filed under %2$s.</string>
     <string name="result_categories_cleared">%1$s no longer has a category.</string>
     <string name="result_copied">Copied %1$s to %2$s as \"%3$s\".</string>
-    <string name="result_deleted">Preset %1$s has been deleted.</string>
+    <string name="result_deleted">Deleted %1$s.</string>
 
     <!-- Connection failures the app itself raises, as opposed to ones an instrument reports. -->
     <string name="connect_failed">Failed to connect</string>
     <string name="connect_failed_demo">Failed to start demo mode</string>
-    <string name="connect_usb_permission_denied">USB permission was denied for %1$s.</string>
+    <!-- Denied, or left unanswered for a minute: the request is settled either way. -->
+    <string name="connect_usb_permission_denied">Patch Pilot did not get USB access to %1$s.</string>
     <string name="connect_permission_denied_hint">Tap Retry to be asked again.</string>
     <string name="connect_opening_device_unplugged">%1$s was unplugged before the connection finished.</string>
     <string name="listing_unknown_error">Unknown error</string>
@@ -195,7 +221,7 @@
 
     <!-- Shown while nothing is connected - briefly, mid-reconnect, and never for long: a
          ProgramsScreen that lands on a settled failure/choice state hands off to ConnectScreen
-         instead of sitting here (see ProgramsScreen's session-lost effect). Says so rather than
+         instead of sitting here (see PatchPilotApp's session-lost effect). Says so rather than
          naming a screen, since a bug that manages to strand this title here should not also
          read as an unrelated screen name. -->
     <string name="programs_title_fallback">Not Connected</string>
@@ -204,7 +230,7 @@
 
     <!--
       What a delete actually does, which differs by family: a Nord empties the slot with one
-      command, while a Pro-800 and a Motif XS overwrite it with an initialised preset.
+      command, while every other family overwrites it with an empty or initialised preset.
     -->
     <string name="programs_delete_effect_emulated">The preset is overwritten with an empty one. This app cannot undo it.</string>
     <string name="programs_delete_effect_native">The instrument empties the slot. This app cannot undo it.</string>
@@ -228,14 +254,15 @@
     <string name="debug_regression_body">Runs every operation this instrument supports and reports what worked. Edits are made against a copy the test creates and deletes again; where no free slot exists, it asks first.</string>
     <string name="debug_regression_action">Run regression test</string>
     <!-- Checking the shipped factory voice names against the instrument itself. Read-only. -->
-    <string name="debug_verify_body">The factory voice names shown in the browser are transcribed from the manufacturer\'s data list, not read from this instrument. This reads one factory bank and reports any name that disagrees. It writes nothing, and takes a couple of minutes per bank.</string>
+    <string name="debug_verify_body">The factory voice names shown in the browser are transcribed from the manufacturer\'s data list, not read from this instrument. This reads one factory bank and reports any name that disagrees. It writes nothing, and takes about half a minute per bank, a minute for a drum bank.</string>
     <string name="debug_verify_action">Check %1$s against the instrument</string>
     <string name="debug_verify_starting">Reading the bank…</string>
     <string name="debug_verify_ok">%1$s: every name matches what the app ships.</string>
-    <string name="debug_verify_mismatches">%1$s: %2$d name(s) disagree with what the app ships:</string>
     <string name="debug_regression_running">Running the regression test…</string>
     <string name="debug_regression_share">Share regression report</string>
     <string name="debug_save_failed">The report could not be saved.</string>
+    <!-- Shown by every screen that hands a report to the share sheet, when that fails. -->
+    <string name="share_failed">The report could not be shared.</string>
     <string name="debug_regression_back">Back to the debug menu</string>
     <string name="debug_confirm_select_title">Check the instrument</string>
     <string name="debug_confirm_select_body">The instrument was told to load %1$s. Is that what it is showing now?</string>
@@ -254,6 +281,10 @@
       One slot failing is not the same as the scan failing, which is why this is
       a count rather than an error: the other 415 are still worth showing.
     -->
+    <plurals name="debug_verify_mismatches">
+        <item quantity="one">%1$s: %2$d name disagrees with what the app ships:</item>
+        <item quantity="other">%1$s: %2$d names disagree with what the app ships:</item>
+    </plurals>
     <plurals name="programs_unreadable_slots">
         <item quantity="one">%1$d slot could not be read.</item>
         <item quantity="other">%1$d slots could not be read.</item>

@@ -3,17 +3,17 @@
 
 package de.thewolfwalkexperience.software.patchpilot.catalog
 
-import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsCategories
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsCategoryEncoding
+import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsFactoryVoices
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsVoice
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.resolvedConfig
+import java.io.File
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * The shipped factory voice-name table, read from `devices/` in the repository.
@@ -81,7 +81,8 @@ class MotifXsFactoryVoicesTest {
             MotifXsCategoryEncoding.NO_ASSIGNMENT,
             encoding.mainByValue[MotifXsCategories.NO_ASSIGNMENT_MAIN],
         )
-        assertEquals(17, encoding.taxonomy.mains.size)
+        // NoAsg is the absence of a category, not one the dialogs offer.
+        assertEquals(16, encoding.taxonomy.mains.size)
     }
 
     /** Every model of this family inherits it; none of the three carries its own copy. */
@@ -95,7 +96,8 @@ class MotifXsFactoryVoicesTest {
             val config = resolvedConfig(catalog.familyConfig, descriptor.familyConfig, json)
             assertEquals(
                 "${descriptor.id} should resolve the family's category encoding",
-                encoding(), config.categoryEncoding,
+                encoding(),
+                config.categoryEncoding,
             )
         }
     }
@@ -148,7 +150,8 @@ class MotifXsFactoryVoicesTest {
                 val resolved = MotifXsCategories.refsOf(listed, encoding())
                 assertEquals(
                     "${bank.label}:${voice.slot} ${voice.name} has an unresolvable category",
-                    listed.size, resolved.size,
+                    listed.size,
+                    resolved.size,
                 )
                 assertTrue(resolved.all { taxonomy.label(it) != null })
             }
@@ -199,13 +202,13 @@ class MotifXsFactoryVoicesTest {
     /**
      * One value pinned against something read off real hardware.
      *
-     * `PRE1 - A:04` reads `Glasgow` on the instrument's own panel; it is the worked example the
-     * protocol notes use for voice-name decoding. It is a single point of contact between this
-     * transcribed table and a thing somebody actually saw, which is worth more than its size:
-     * a table generated from the wrong spreadsheet, or off by one slot, fails here.
+     * `PRE1 - A:04` reads `Glasgow` on the instrument's own panel. It is a single point of
+     * contact between this transcribed table and a thing somebody actually saw, which is worth
+     * more than its size: a table generated from the wrong spreadsheet, or off by one slot, fails
+     * here.
      */
     @Test
-    fun `PRE1 slot 4 is the voice the protocol notes recorded from hardware`() {
+    fun `PRE1 slot 4 is the voice read off the instrument's panel`() {
         assertEquals("Glasgow", table.name("PRE1", 3))
     }
 

@@ -2,6 +2,101 @@
 
 ## Next release
 
+## 2.0
+
+### Added
+- The Fractal Audio Axe-Fx III is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted. Verified on a Mark I. A Mark II is recognized and lists all 1,024 presets, but has not been tested yet.
+- The Moog Subsequent 37 is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted, and their categories shown and set. Reading its preset list takes about 2½ minutes, the instrument's own transfer time. Verified on a unit.
+- An instrument can show a notice when it connects, with a “Don't show this again” option; Settings → “Show Hidden Messages Again” brings hidden notices back.
+- Each GitHub release also carries the R8 mapping file for its APK, so a stack trace from that build can be read.
+- On a Nord, a notice on connecting says that every edit loads the program it changes, so unsaved changes on the panel should be stored first.
+- On a Yamaha Motif XS, a notice on connecting says that renaming the loaded voice reloads it, so unsaved changes on the panel should be stored first.
+- When a MIDI instrument is reached through another MIDI interface (a hub or an interface it is cabled to), its row in the device list says which, so it can be told apart from its own USB connection.
+- A MIDI instrument reached through another MIDI interface (shown as "via …" in the device list) gets timeouts that allow for the cable's speed: a preset transfer there takes about half a minute instead of a second.
+- Settings → Legal has a "Source Code on GitHub" link to the project repository.
+- An edit interrupted by a lost connection now says on the disconnect screen what may be affected: which presets a swap may have touched, or that another change may or may not have been applied.
+
+### Changed
+- The rename dialog says why a name can't be stored (characters outside plain ASCII, or a name the instrument reserves) and only enables Rename for a name that can, before anything is sent.
+- On a Nord, the preset list updates faster after an edit: only the changed slots are read back, not the whole program list.
+- The messages after a rename or delete read like the others: "Renamed A:1:1 to "Pad"." and "Deleted A:1:1."
+- The warning about untested firmware above the preset list now takes one line; Details shows the full text.
+- The screens that ask about one instrument (untested firmware, unknown device, USB permission, a setting to change, a connection error) no longer offer demo mode; the device list they lead back to does.
+- Searching for instruments skips the virtual MIDI ports other apps provide and a Nord's own MIDI port, which cost about 2 seconds each; an instrument plugged in directly is tried first.
+- Instruments found on the device list, and the one auto-connect picks, are now ordered alphabetically instead of in the order Android lists USB devices.
+- A MIDI instrument that is attached but did not answer is listed as "Looks like <name>, which did not answer. It may be busy: wait a moment, then retry." instead of "Not recognised", under a heading that says a supported instrument is attached.
+- The Subsequent 37's message about ignored Program Changes says the setting is in the MIDI settings.
+- If a Motif XS refuses part of a move or swap, the app now puts the slots back instead of leaving a write held inside the instrument.
+
+### Fixed
+- Unplugging an instrument that had failed to open no longer interrupts a session started afterwards, such as demo mode.
+- Yamaha Motif XS edits only accept voice data from the slot they read, so a late reply to an earlier request can no longer be written to the wrong slot.
+- The preset list no longer uses CPU while idle; the refresh icon only animates while a refresh runs.
+- On Android 8 to 12L, other apps can no longer send Patch Pilot fake USB permission answers or unplug notices.
+- Spaces before or after a new preset name are now removed before it is sent, so renaming a Behringer Pro-800 preset with them no longer fails.
+- TalkBack reads Settings → “Auto-Connect to First Found Instrument” as a single switch.
+- Plugging an instrument in while the phone is locked now opens its preset list once unlocked, instead of stopping at “Connected to …”.
+- After Android closes Patch Pilot in the background, reopening it reconnects the instrument instead of staying on “Connecting…”.
+- Leaving the preset list while a device report or another operation is running now goes straight to the instrument list, instead of bouncing back or stopping at “Connecting…”.
+- Returning to the app reconnects the instrument that was in use: with two attached it no longer switches to the other, and with auto-connect off it no longer asks which one every time.
+- An accepted firmware warning is no longer shown again each time the app returns from the background.
+- On a Nord, an edit the instrument applies to a different slot than the one chosen is reported as such, with a prompt to refresh the list, instead of as a refusal; and a write is no longer reported as failed when only the display refresh after it goes unconfirmed.
+- Moving a Yamaha Motif XS voice onto a slot that holds one, which an out-of-date list can show as empty, is now refused instead of overwriting that voice.
+- After an edit, the preset list updates only the changed rows, instead of re-reading the whole instrument whenever its list had a slot that could not be read (about 1½ minutes on a Yamaha Motif XS).
+- A preset slot that could not be read is shown as such and is no longer offered as an empty destination for a copy or move.
+- Rotating the phone, opening Settings or switching the theme while an edit runs no longer loses its progress line or result, or re-enables Back and other edits before it finishes; an open dialog or destination pick stays open too.
+- A preset edited while the user list was still loading no longer appears unedited after returning to the app.
+- Pulling to refresh while the preset list is still loading no longer starts the list over.
+- A Yamaha Motif XS voice whose name was cleared on the instrument is listed as "(unnamed)" instead of as an empty slot, when it has a category, so a copy or move can no longer overwrite it unasked.
+- Retry after the instrument asks for a setting change, or after a refused USB permission, now tries that instrument again instead of ending at the device list when auto-connect is off.
+- The Back arrow and the system Back gesture on the preset list now do the same: they end a “Copy to…” or “Move to…” pick, and otherwise return to the instrument list. The gesture no longer closes the app on Android 8 to 11.
+- A preset list stops with a message once three presets in a row go unanswered, instead of waiting out every remaining one - minutes on a Pro-800 or Motif XS whose MIDI connection has stopped answering.
+- On a Nord Electro 7 and Stage 4, the category list shows <None> last, as on the other Nords.
+- A Fractal Audio Axe-Fx III preset name with control characters in it is shown without them, as on the other instruments.
+- On a Nord, a reply that does not come in time is reported as such, rather than as a lost connection.
+- Loading a Yamaha Motif XS voice counts as done only when the instrument echoes that voice, and a preset list being read at the same time can no longer slip between the selection's messages.
+- A Behringer Pro-800 that refuses to load a preset now says so, instead of the app reporting the preset as selected.
+- When a preset was saved or deleted on the instrument since the list was read, an edit that finds the slot changed now names the slot and asks for a refresh, instead of saying the instrument cannot do it.
+- A Behringer Pro-800 move that copies the preset but cannot empty its old slot now says the preset is in both slots, as the other instruments do.
+- On a Nord, a copy is no longer reported under another preset's name when the instrument's answer about the new copy is not the copy's own record.
+- A Behringer Pro-800 preset whose reply keeps arriving damaged is reported as damaged, instead of as the instrument not answering.
+- On a Yamaha Motif XS, switching to Voice mode from the load dialog shows its progress and keeps other edits and Back off until it is done.
+- An instrument plugged in while the app is still searching is now found, instead of the search ending with "Nothing found".
+- Plugging a different unit of the same instrument into the same USB port no longer shows the previous unit's preset list.
+- Settings no longer shows default values for a moment before the saved ones.
+- Rotating the phone no longer clears the preset list's name filter or “Show empty slots”.
+- With an untested-firmware warning showing, the preset list is read only after "Continue anyway", so the warning's "Share device details" works on a Moog Subsequent 37 too.
+- On a Nord, locking the phone or leaving the app while the preset list is being read can no longer leave the instrument's front panel locked.
+- A preset swap on a Behringer Pro-800, Fractal Audio Axe-Fx III or Moog Subsequent 37 whose first write cannot be confirmed now puts that slot back too.
+- On a Yamaha Motif XS, Set categories no longer offers "NoAsg", which saved correctly but reported a failure.
+- Rotating the phone after confirming "Share device details" no longer loses the share: the report goes to the share sheet once it has been read.
+- Leaving the app during a refresh, or refreshing while the instrument reconnects, no longer leaves the refresh icon spinning and refresh unusable.
+- While a device report is being read, loading or editing a preset and "Try demo mode" are off, instead of waiting minutes behind the report with Back disabled.
+- A report that can't be handed to the share sheet now says so instead of closing the app, and a device report is kept so it can be shared again.
+- On a Yamaha Motif XS, edits wait for the user voice list to finish loading, even with Favorites or Factory shown.
+- An edit that fails partway now re-reads the slots it touched, so the list no longer shows what was there before.
+- Unplugging the instrument shows "Instrument disconnected" at once, even while a device report or another operation is running, and plugging it back in meanwhile reconnects instead of being ignored.
+- A USB permission request that gets no answer no longer leaves the app waiting until you go back: access granted through Android's own dialog is picked up within a second, and after a minute the app offers Retry.
+- After USB access is denied, "Show all devices" lists every attached instrument, so another one can be chosen.
+- On a Yamaha Motif XS whose USB connection stops delivering data, the next operation says so at once and suggests replugging, instead of waiting for an answer that cannot come.
+- On a Nord program whose category the model can't name (`No Cat`), or a Moog Subsequent 37 preset with no category, Set category shows "Not set" and saves only once a category is picked, instead of failing or overwriting the stored value.
+- On a Nord or Yamaha Motif XS, renaming a preset to the name it has or setting the categories it already carries no longer writes it again; neither does swapping two empty Motif XS slots.
+- On a Nord, renaming or setting the category of a preset deleted on the panel since the list was read asks for a refresh, as on the other instruments, instead of reporting a status code.
+- On a Nord, timeouts and refusals are worded correctly ("did not answer while renaming a preset", not "while rename a preset").
+- On a Yamaha Motif XS, the user voice list is read again after a replug or a failed re-read even while Favorites or Factory is shown, so "Copy to…" offers only slots that are free now.
+- Refresh is off while picking a "Copy to…" or "Move to…" destination, and no slot can be picked while the list is still loading.
+- On a Yamaha Motif XS, "Copy to…", "Move to…" and dragging offer only slots of the same kind (drum kit or normal voice), and the refusal names the bank instead of calling an empty slot a drum kit.
+- On a Yamaha Motif XS, favoriting a user voice deleted on the panel since the list was read asks for a refresh instead of marking an empty slot.
+- When a preset slot can't be read, returning to the app re-reads only that slot instead of the whole preset list (about 1½ minutes on a Yamaha Motif XS).
+- A Moog Subsequent 37 preset name with unprintable characters is shown without them, as on the other instruments, instead of with question marks.
+- A Moog Subsequent 37 error names a preset as the list shows it (B03/P06), not by its 0-based program number.
+- Rotating the phone with the connect screen's "Share device details" filename prompt open keeps the prompt and the name typed so far.
+- In split screen, whether category badges fit is judged by the window's width, not the screen's.
+- In demo mode, a copy's name stays within the 16-character name limit.
+- On a Yamaha Motif XS, the connect screen shows the firmware as 1.60 instead of "6.0.0.127", and a release the app has not been tested with now shows the untested-firmware warning, as on the other instruments.
+- Deleting a preset is refused when the slot was changed on the instrument's panel since the list was read, naming what it holds now, instead of erasing a preset you never saw named.
+- On a Nord, deleting a preset that was deleted or moved on the panel asks for a refresh, instead of reporting "refused … (status 1)".
+
 ## 1.1
 
 ### Added

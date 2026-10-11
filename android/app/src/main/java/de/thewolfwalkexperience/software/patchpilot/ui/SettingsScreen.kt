@@ -3,12 +3,13 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
-import de.thewolfwalkexperience.software.patchpilot.R
+import android.content.ActivityNotFoundException
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -16,34 +17,40 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.ui.theme.AppTheme
-import de.thewolfwalkexperience.software.patchpilot.ui.theme.ThemePreferences
-import kotlinx.coroutines.launch
 
 /**
- * The theme picker, the auto-connect toggle, and the legal links. The theme picker is a radio list
- * rather than a switch, since [AppTheme] is what a third skin would extend. Both settings apply
- * immediately: they write through DataStore, which their readers collect live.
+ * The theme picker, the auto-connect toggle, bringing back hidden instrument notices, and the
+ * legal and source-code links. The theme picker is a radio list rather than a switch, since [AppTheme] is what a
+ * third skin would extend. Every setting applies immediately: each writes through DataStore,
+ * which its readers collect live.
  */
 @Composable
 fun SettingsScreen(
-    themePreferences: ThemePreferences,
-    connectionPreferences: ConnectionPreferences,
+    preferences: AppPreferences,
     onOpenLicenses: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val current by themePreferences.theme.collectAsState(initial = AppTheme.Default)
-    val autoConnect by connectionPreferences.autoConnectToFirstFound.collectAsState(initial = true)
-    val scope = rememberCoroutineScope()
+    // Null until each store has answered: drawn before then, a default the user has changed
+    // would show for a frame, a switch flipping as the stored value arrives.
+    val storedTheme by preferences.theme.collectAsStateWithLifecycle(initialValue = null)
+    val storedAutoConnect by preferences.autoConnectToFirstFound.collectAsStateWithLifecycle(initialValue = null)
+    val storedHiddenNotices by preferences.hiddenNotices.collectAsStateWithLifecycle(initialValue = null)
+    val uriHandler = LocalUriHandler.current
+    val sourceCodeUrl = stringResource(R.string.settings_source_code_url)
 
     PatchPilotScaffold(title = stringResource(R.string.settings_title), onBack = onBack) { innerPadding ->
+        val current = storedTheme ?: return@PatchPilotScaffold
+        val autoConnect = storedAutoConnect ?: return@PatchPilotScaffold
+        val hiddenNotices = storedHiddenNotices ?: return@PatchPilotScaffold
         Column(Modifier.padding(innerPadding)) {
             Text(
                 stringResource(R.string.settings_theme_heading),
@@ -56,13 +63,13 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_theme_default),
                 description = stringResource(R.string.settings_theme_default_description),
                 selected = current == AppTheme.Default,
-                onSelect = { scope.launch { themePreferences.setTheme(AppTheme.Default) } },
+                onSelect = { preferences.setTheme(AppTheme.Default) },
             )
             ThemeOption(
                 title = stringResource(R.string.settings_theme_steampunk),
                 description = stringResource(R.string.settings_theme_steampunk_description),
                 selected = current == AppTheme.Steampunk,
-                onSelect = { scope.launch { themePreferences.setTheme(AppTheme.Steampunk) } },
+                onSelect = { preferences.setTheme(AppTheme.Steampunk) },
             )
             Text(
                 stringResource(R.string.settings_connection_heading),
@@ -74,18 +81,33 @@ fun SettingsScreen(
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_auto_connect)) },
                 supportingContent = { Text(stringResource(R.string.settings_auto_connect_description)) },
-                trailingContent = {
-                    Switch(
-                        checked = autoConnect,
-                        onCheckedChange = { enabled ->
-                            scope.launch { connectionPreferences.setAutoConnectToFirstFound(enabled) }
-                        },
+                // onCheckedChange = null leaves the click to the row, so TalkBack reads one switch.
+                trailingContent = { Switch(checked = autoConnect, onCheckedChange = null) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = autoConnect,
+                        onValueChange = { enabled -> preferences.setAutoConnectToFirstFound(enabled) },
+                        role = Role.Switch,
+                    ),
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_show_hidden_notices)) },
+                supportingContent = {
+                    Text(
+                        stringResource(
+                            if (hiddenNotices.isEmpty()) {
+                                R.string.settings_show_hidden_notices_none
+                            } else {
+                                R.string.settings_show_hidden_notices_description
+                            },
+                        ),
                     )
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        scope.launch { connectionPreferences.setAutoConnectToFirstFound(!autoConnect) }
+                    .clickable(enabled = hiddenNotices.isNotEmpty()) {
+                        preferences.showAllNotices()
                     },
             )
             Text(
@@ -100,6 +122,19 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onOpenLicenses),
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_source_code)) },
+                supportingContent = { Text(sourceCodeUrl) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button) {
+                        // A device without a browser has nothing to open the link with.
+                        try {
+                            uriHandler.openUri(sourceCodeUrl)
+                        } catch (_: ActivityNotFoundException) {
+                        }
+                    },
             )
         }
     }

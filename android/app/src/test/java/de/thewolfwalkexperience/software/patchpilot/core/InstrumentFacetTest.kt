@@ -4,28 +4,37 @@
 package de.thewolfwalkexperience.software.patchpilot.core
 
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoUsbTransport
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
+import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.FakeAxeFx3
+import de.thewolfwalkexperience.software.patchpilot.devices.axefx3.axeFx3
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsBank
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsBlanks
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsConfig
 import de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsInstrument
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordProfile
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.FakeNordTransport
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordDevice
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordInstrument
+import de.thewolfwalkexperience.software.patchpilot.devices.pro800.FakePro800
+import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Config
+import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Instrument
+import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.FakeSubsequent37
+import de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.subsequent37
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
 
 /**
  * The check that closes the gap a `Set<Capability>` beside a fat interface would have left open:
@@ -36,16 +45,22 @@ import de.thewolfwalkexperience.software.patchpilot.devices.nord.DemoProfile
  */
 class InstrumentFacetTest {
 
-    private fun nord(): NordInstrument = NordInstrument(NordDevice(DemoUsbTransport(), DemoProfile.profile()))
+    private fun nord(): NordInstrument = NordInstrument(NordDevice(FakeNordTransport(), FakeNordProfile.profile()))
 
     /** A Motif XS with no transport behind it - enough to ask what its editor declares. */
-    private fun motifXs(scope: CoroutineScope = CoroutineScope(SupervisorJob())): MotifXsInstrument =
+    private fun motifXs(scope: CoroutineScope): MotifXsInstrument =
         MotifXsInstrument(
             SysExExchange(NullMidiTransport, scope),
             MotifXsConfig(
                 banks = listOf(
-                    MotifXsBank(label = "USR1", slotCount = 4, addressHi = 0x0C, addressMid = 0x0A,
-                        displayLabel = "USER 1", selectLsb = 0x08),
+                    MotifXsBank(
+                        label = "USR1",
+                        slotCount = 4,
+                        addressHi = 0x0C,
+                        addressMid = 0x0A,
+                        displayLabel = "USER 1",
+                        selectLsb = 0x08,
+                    ),
                 ),
             ),
             MotifXsBlanks(normal = ByteArray(0), drum = ByteArray(0)),
@@ -69,8 +84,8 @@ class InstrumentFacetTest {
      * started returning a tagger regardless would be offering a dialog with no categories in it.
      */
     @Test
-    fun `a family without a capability declares null for it`() {
-        assertNull("no encoding in this fixture, so nothing to tag with", motifXs().tagger)
+    fun `a family without a capability declares null for it`() = runTest {
+        assertNull("no encoding in this fixture, so nothing to tag with", motifXs(backgroundScope).tagger)
         // A Nord's categories need *two* halves - the model's own id subset and the catalog's
         // master name list - and this fixture profile carries neither, so there is nothing to
         // resolve. The Nord path with both halves present is covered by NordTaggerTest.
@@ -153,36 +168,16 @@ class InstrumentFacetTest {
         editor.swap(SlotAddress(0, 1), SlotAddress(3, 24))
         assertEquals("Renamed", instrument.refresh(SlotAddress(0, 1)).name)
         assertEquals(before, instrument.refresh(SlotAddress(3, 24)).name)
-    }
 
-    /** Shared by both instruments below - the property is the same regardless of shape. */
-    private suspend fun assertEveryDeclaredEditCompletes(name: String, instrument: Instrument) {
-        instrument.connect()
-        val editor = instrument.editor!!
-        val occupied = instrument.browser.index().toList()
-            .filterIsInstance<IndexUpdate.Slots>()
-            .flatMap { it.slots }
-        val first = occupied.first().address
-        val empty = instrument.layout.allAddresses().first { address ->
-            occupied.none { it.address == address }
-        }
+        // (0, 0) was emptied by the move.
+        assertTrue(EditOp.COPY in editor.supported)
+        val copyName = editor.copyProgram(SlotAddress(0, 1), SlotAddress(0, 0))
+        assertEquals(copyName, instrument.refresh(SlotAddress(0, 0)).name)
+        assertEquals("Renamed", instrument.refresh(SlotAddress(0, 1)).name)
 
-        if (EditOp.RENAME in editor.supported) {
-            editor.rename(first, "Renamed")
-            assertEquals("Renamed", instrument.browser.refresh(first).name)
-        }
-        if (EditOp.MOVE in editor.supported) {
-            editor.move(first, empty)
-            assertNull("$name left the source occupied after a move", instrument.browser.refresh(first).name)
-        }
-        if (EditOp.SWAP in editor.supported) {
-            editor.swap(empty, first)
-            assertEquals("Renamed", instrument.browser.refresh(first).name)
-        }
-        if (EditOp.DELETE in editor.supported) {
-            editor.delete(first)
-            assertNull(instrument.browser.refresh(first).name)
-        }
+        assertTrue(EditOp.DELETE in editor.supported)
+        editor.delete(SlotAddress(0, 0))
+        assertNull(instrument.refresh(SlotAddress(0, 0)).name)
     }
 
     @Test
@@ -209,7 +204,7 @@ class InstrumentFacetTest {
         try {
             editor.copyProgram(SlotAddress(0, 0), SlotAddress(0, 1))
             throw AssertionError("copy is undeclared but ran anyway")
-        } catch (expected: UnsupportedOperationException) {
+        } catch (expected: InstrumentException.NotSupported) {
             // exactly what an undeclared op should do
         }
     }
@@ -217,18 +212,16 @@ class InstrumentFacetTest {
     /**
      * A share filename can be derived for **every** instrument, reporter or not.
      *
-     * This is the regression guard for a real crash: the debug menu's regression test is offered
-     * for every family and named its shared file with the *reporter's* helper, which requires a
-     * facet a Motif XS does not have. Tapping Share killed the app. The rule it broke is the one
-     * the whole facet design rests on - a null facet means "cannot do this at all", so a
+     * The debug menu's regression test is offered for every family, so the file it shares cannot
+     * be named by the *reporter's* helper, which needs a facet a Motif XS does not have. That is
+     * the rule the facet design rests on: a null facet means "cannot do this at all", so a
      * feature outside that facet must not route through it.
      *
-     * The Motif XS case is the one that mattered, and it is included by name because it is the
-     * shipping family whose `report` is null.
+     * The Motif XS is included by name because it is the family whose `report` is null.
      */
     @Test
     fun `a filename stem exists for every instrument, with or without a reporter`() = runTest {
-        val motif = motifXs()
+        val motif = motifXs(backgroundScope)
         assertNull("this test is pointless if the Motif XS grows a reporter", motif.report)
 
         // Asserted as a property rather than a literal: the stem comes from the *fixture's*
@@ -240,20 +233,45 @@ class InstrumentFacetTest {
             assertTrue("'$stem' is not filename-safe", stem.all { it.isDigit() || it in 'a'..'z' || it == '_' })
         }
 
-        // The one literal worth keeping, because it is the name that crashed.
+        // The one literal worth keeping: the family with no reporter.
         assertEquals("yamaha_motif_xs", slugifyDeviceId("Yamaha Motif XS"))
     }
 
-    /** Every family that declares DELETE must actually implement it - the point of this change. */
+    /** Every family that declares DELETE implements it. */
     @Test
     fun `delete is declared by every family that can do it`() = runTest {
         val nordOps = nord().also { it.connect() }.editor!!.supported
         assertTrue("a Nord deletes with sub-opcode 20/21", EditOp.DELETE in nordOps)
-        assertTrue("the Motif XS erases the slot the way a move clears its source",
-            EditOp.DELETE in motifXs().editor!!.supported)
+        assertTrue(
+            "the Motif XS erases the slot the way a move clears its source",
+            EditOp.DELETE in motifXs(backgroundScope).editor!!.supported,
+        )
+        assertTrue(
+            "an Axe-Fx III writes the editor's own empty preset",
+            EditOp.DELETE in axeFx3(FakeAxeFx3()).editor.supported,
+        )
+        assertTrue(
+            "a Subsequent 37 writes the panel's own Initialize",
+            EditOp.DELETE in subsequent37(FakeSubsequent37(backgroundScope)).editor.supported,
+        )
     }
 
     // ---- Facet presence is what the UI gates on ----
+
+    /** Measured on a Grand: every edit loads the program it changes, which a player must hear about once. */
+    @Test
+    fun `a Nord announces that edits load programs`() {
+        assertEquals(listOf(NordInstrument.EDITS_LOAD_PROGRAMS_NOTICE), nord().notices.map { it.id })
+    }
+
+    /** Measured on an XS6: renaming the loaded voice reloads it and drops its unsaved panel changes. */
+    @Test
+    fun `a Motif XS announces that renaming the loaded voice reloads it`() = runTest {
+        assertEquals(
+            listOf(MotifXsInstrument.RENAME_RELOADS_VOICE_NOTICE),
+            motifXs(backgroundScope).notices.map { it.id },
+        )
+    }
 
     @Test
     fun `a Nord offers the facets its protocol has, and only those`() {
@@ -322,5 +340,30 @@ class InstrumentFacetTest {
     fun `a selector's confirmation reflects what its instrument can honestly claim`() {
         assertEquals("Selected A:1:1.", nord().selector!!.confirmationFor("A:1:1"))
         assertEquals("Sent A00.", NoCopyFixtureInstrument().selector!!.confirmationFor("A00"))
+    }
+
+    /** Every report opens the same way, whatever the family reads after it. */
+    @Test
+    fun `every family's report opens with a version, a note and an identity`() = runTest {
+        val pro800 = FakePro800()
+        val reporters = listOf(
+            "demo" to DemoInstrument(),
+            "Nord" to nord(),
+            "Pro-800" to Pro800Instrument(SysExExchange(pro800.transport, backgroundScope), Pro800Config()),
+            "Axe-Fx III" to axeFx3(FakeAxeFx3()),
+            "Subsequent 37" to subsequent37(FakeSubsequent37(backgroundScope)),
+        )
+        for ((name, instrument) in reporters) {
+            instrument.connect()
+            val json = Json.parseToJsonElement(instrument.report!!.buildReport().json).jsonObject
+            assertTrue("$name: no reportVersion", json["reportVersion"]?.jsonPrimitive?.content?.toIntOrNull() != null)
+            assertTrue("$name: no note", json["note"]?.jsonPrimitive?.content?.isNotBlank() == true)
+            val identity = json["identity"]?.jsonObject
+            assertEquals(
+                "$name: identity",
+                instrument.identity.descriptorId,
+                identity?.get("descriptorId")?.jsonPrimitive?.content,
+            )
+        }
     }
 }

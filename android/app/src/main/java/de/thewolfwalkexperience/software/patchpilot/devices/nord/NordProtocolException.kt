@@ -10,12 +10,12 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
  *
  * Its own type so that `NordInstrument` can translate it to
  * [de.thewolfwalkexperience.software.patchpilot.core.InstrumentException.ProtocolDesync] rather
- * than to `TransportLost`, which is what a plain [IllegalStateException] from the transport
- * ("USB bulk write failed") maps to. The two differ in what a retry can do: a lost link may come
- * back, a protocol mismatch will not.
+ * than to `TransportLost`, which is what the transport's own `UsbTransferException` ("USB bulk
+ * write failed") maps to. The two differ in what a retry can do: a lost link may come back, a
+ * protocol mismatch will not.
  *
- * Still an [IllegalStateException], so a caller that does not care about the distinction - the
- * device report's probes, the protocol tests - handles it as before.
+ * An [IllegalStateException] all the same, so a caller that does not care about the distinction
+ * - the device report's probes, the protocol tests - can treat it as any other failure.
  */
 class NordProtocolException(detail: String, cause: Throwable? = null) :
     IllegalStateException(detail, cause)

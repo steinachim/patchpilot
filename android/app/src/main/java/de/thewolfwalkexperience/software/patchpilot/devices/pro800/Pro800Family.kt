@@ -4,16 +4,15 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import android.content.Context
+import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 import de.thewolfwalkexperience.software.patchpilot.catalog.FamilyCatalog
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentFamily
+import de.thewolfwalkexperience.software.patchpilot.catalog.familyConfig
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
-import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
-import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
+import de.thewolfwalkexperience.software.patchpilot.midi.familyExchange
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
-import de.thewolfwalkexperience.software.patchpilot.transport.transportScope
 import kotlinx.serialization.Serializable
-import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 
 /** Named for the one instrument it describes; the loader dispatches on the `family` field inside it. */
 private const val CATALOG_ASSET = "behringer_pro800.json"
@@ -47,14 +46,10 @@ object Pro800Family : InstrumentFamily {
         descriptor: InstrumentDescriptor,
         transport: Transport,
     ): Instrument {
-        val midi = transport as? MidiTransport
-            ?: error("A Pro-800 speaks MIDI SysEx, not ${transport::class.simpleName}.")
-        // Resolved before the exchange starts its collector, so a catalog fault cannot leave a
-        // collector running on a transport nobody owns.
-        val config = catalog.format.decodeFromJsonElement(Pro800Config.serializer(), catalog.load(context).familyConfig)
-        val scope = transportScope(descriptor.name)
+        // Resolved before the exchange - see familyExchange.
+        val config = catalog.familyConfig(context, Pro800Config.serializer())
         return Pro800Instrument(
-            SysExExchange(midi, scope),
+            familyExchange(transport, "A Pro-800", descriptor.name),
             config,
             descriptorId = descriptor.id,
             catalogName = descriptor.name,

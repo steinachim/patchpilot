@@ -1,6 +1,6 @@
 # Releasing
 
-How a version of Patch Pilot gets from `dev` to GitHub Releases, and, once the app is listed there, to F-Droid and Google Play. Development happens on `dev`, the repository's default branch; `main` receives releases by fast-forward and is the only branch CI signs. Store metadata lives in `fastlane/metadata/android/en-US/`; F-Droid reads it from the repository directly, and the same files are uploaded to Play.
+How a version of Patch Pilot gets from `dev` to GitHub Releases, and, once the app is listed there, to F-Droid and Google Play. Development happens on `dev`; `main`, GitHub's default branch, receives releases by fast-forward and is the only branch CI signs. Store metadata lives in `fastlane/metadata/android/en-US/`; F-Droid reads it from the repository directly, and the same files are uploaded to Play.
 
 ## 1. Prepare the release commit
 
@@ -9,7 +9,8 @@ On `dev`:
 1. In `android/app/build.gradle.kts`, bump `versionName` and increase `versionCode` by one. `versionCode` must never go down or repeat: Play rejects the upload, and F-Droid pins each build to it.
 2. In `CHANGELOG.md`, rename the "Next release" heading to the version and start a fresh "Next release" section above it.
 3. Add `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`, at most 500 characters (Play's limit), condensed from the changelog section.
-4. Refresh the screenshots in `fastlane/metadata/android/en-US/images/` if the UI changed. Play accepts PNG or JPEG without alpha, each side 320 to 3840 px, longest side at most twice the shortest.
+4. Check `fastlane/metadata/android/en-US/full_description.txt` and `short_description.txt` against the release: every supported instrument listed with its status as README states it, and every manufacturer named in the disclaimer.
+5. Refresh the screenshots in `fastlane/metadata/android/en-US/images/` if the UI changed. Play accepts PNG or JPEG without alpha, each side 320 to 3840 px, longest side at most twice the shortest.
 
 ## 2. Build and check
 
@@ -22,13 +23,13 @@ Outputs: `app/build/outputs/apk/release/patchpilot-v<version>.apk`, signed with 
 
 Install the release APK, not a debug build, on a phone, connect a real instrument and run the regression test from the debug menu (five taps on the instrument name). R8 runs only for release builds, so a missing keep rule shows up only there.
 
-`./gradlew lintRelease` passes with warnings only and is worth running before a release; CI does not run it.
+CI also runs `./gradlew spotlessCheck` and `./gradlew lintRelease`; lint passes with warnings only, and an error fails the run.
 
-If this release bumps Gradle, AGP or the build JDK, re-verify reproducibility before tagging: build twice from a clean checkout and confirm `classes.dex` matches byte-for-byte (extract it from both APKs and `cmp`), then once this version is published, `fdroid build --test <appid>:<versionCode>` against the GitHub binary should report a successful comparison. A regression here doesn't fail this build - it fails F-Droid's `Binaries:` check (see below), meaning F-Droid can no longer adopt the GitHub signature for this release.
+A Gradle bump also updates `distributionSha256Sum` in `android/gradle/wrapper/gradle-wrapper.properties` to that version's published checksum. If this release bumps Gradle, AGP or the build JDK, re-verify reproducibility before tagging. The release workflow takes the newest Temurin 17 on the current `ubuntu-latest` image, neither pinned, so compare the JDK its `setup-java` step logs with the previous release's, and count a change as a JDK bump. To re-verify: build twice from a clean checkout and confirm `classes.dex` matches byte-for-byte (extract it from both APKs and `cmp`), then once this version is published, `fdroid build --test <appid>:<versionCode>` against the GitHub binary should report a successful comparison. A regression here doesn't fail this build - it fails F-Droid's `Binaries:` check (see below), meaning F-Droid can no longer adopt the GitHub signature for this release.
 
 ## 3. Tag and publish on GitHub
 
-Fast-forward `main` to the release commit and push both branch and tag. The push to `main` runs the signed CI build (`android.yml`); the tag push runs `release.yml`, which builds its own signed APK and creates the GitHub Release, using the `## <version>` section of `CHANGELOG.md` as the release notes.
+Fast-forward `main` to the release commit and push both branch and tag. The push to `main` runs the signed CI build (`android.yml`); the tag push runs `release.yml`, which checks formatting, tests, lints and builds its own signed APK and bundle, then creates the GitHub Release with the APK and R8's mapping file (`patchpilot-v<version>-mapping.txt`, which only that build produces and without which a stack trace from it cannot be read), using the `## <version>` section of `CHANGELOG.md` as the release notes. The build job has a read-only token; only the publishing job, which never runs the build, can write to the repository.
 
 ```
 git checkout main && git merge --ff-only dev
@@ -58,4 +59,6 @@ for k in RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
 done
 ```
 
-A push to `main` without these secrets fails at the signing step rather than producing an unsigned APK. Pull-request builds never use the key.
+The secrets hold each value as it is. `local.properties` needs a backslash written twice, since `Properties.load` reads one as an escape, so for a value with a backslash in it the snippet above copies the doubled form: set that secret by hand. Both workflows double the backslashes again when they write `local.properties`, and write the key only after formatting, the tests and lint have run.
+
+A push to `main` without these secrets fails at the signing step rather than producing an unsigned APK. Pull-request and manual builds never use the key.

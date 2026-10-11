@@ -7,15 +7,15 @@ import android.content.Context
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
+import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 
 private const val TAG = "InstrumentRegistry"
-
 
 /**
  * Everything the app needs to know about one instrument family: which devices it covers, and how
  * to build an [Instrument] once one of them is open. The whole extension point: a new family adds
  * an implementation of this and a catalog file, and an entry in [InstrumentRegistry], which is a
- * compile-time map rather than a plugin system (see docs/ARCHITECTURE.md, "Catalog and adding a
+ * compile-time list rather than a plugin system (see docs/ARCHITECTURE.md, "Catalog and adding a
  * device family").
  */
 interface InstrumentFamily {
@@ -29,6 +29,14 @@ interface InstrumentFamily {
      * fails loudly here; that is a wiring bug in discovery.
      */
     fun create(context: Context, descriptor: InstrumentDescriptor, transport: Transport): Instrument
+
+    /**
+     * Builds an instrument on this family's protocol for a USB device the catalog does not list,
+     * or null where the family never guesses. Which devices reach this is [UnknownDevicePolicy]'s
+     * decision.
+     */
+    fun createForUnknown(transport: UsbBulkTransport, name: String, vendorId: Int, productId: Int): Instrument? =
+        null
 }
 
 /**
@@ -42,6 +50,8 @@ object InstrumentRegistry {
             de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFamily,
             de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Family,
             de.thewolfwalkexperience.software.patchpilot.devices.motifxs.MotifXsFamily,
+            de.thewolfwalkexperience.software.patchpilot.devices.axefx3.AxeFx3Family,
+            de.thewolfwalkexperience.software.patchpilot.devices.subsequent37.Subsequent37Family,
         )
     }
 
@@ -63,4 +73,15 @@ object InstrumentRegistry {
 
     fun create(context: Context, descriptor: InstrumentDescriptor, transport: Transport): Instrument =
         family(descriptor.family).create(context, descriptor, transport)
+
+    /** [InstrumentFamily.createForUnknown] of the family [UnknownDevicePolicy.familyFor] names. */
+    fun createForUnknown(
+        familyId: String,
+        transport: UsbBulkTransport,
+        name: String,
+        vendorId: Int,
+        productId: Int,
+    ): Instrument =
+        family(familyId).createForUnknown(transport, name, vendorId, productId)
+            ?: error("The '$familyId' family does not open unrecognised devices.")
 }

@@ -4,32 +4,35 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import android.content.Context
+import android.util.Log
+import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
+import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.FamilyCatalog
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentFamily
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
+import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExFramer
-import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.transport.MidiTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbMidiBulkTransport
 import de.thewolfwalkexperience.software.patchpilot.transport.transportScope
 import kotlinx.coroutines.CoroutineScope
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryTaxonomy
-import de.thewolfwalkexperience.software.patchpilot.core.MainCategory
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
+
+private const val TAG = "MotifXsFamily"
 
 private const val CATALOG_ASSET = "yamaha_motif_xs.json"
 
 /**
  * The factory voice-name table - see [MotifXsFactoryVoices]. A separate asset from the catalog:
- * 94 kB of transcribed reference data rather than configuration, and bundling them would carry
+ * 277 kB of transcribed reference data rather than configuration, and bundling them would carry
  * the whole table through every `InstrumentDescriptor.familyConfig`.
  */
 private const val FACTORY_VOICES_ASSET = "motifxs_factory_voices.json"
@@ -80,7 +83,10 @@ data class MotifXsBank(
      * separating them, and an unrecognised pair is ignored rather than refused.
      */
     val selectMsb: Int = MotifXsSysEx.BANK_MSB,
-)
+) {
+    /** What the app calls this bank: [displayLabel], or [label] where the catalog gives none. */
+    val shownLabel: String get() = displayLabel.ifEmpty { label }
+}
 
 /**
  * The per-model configuration for this family. The bank table is catalog data, so a model that
@@ -90,8 +96,10 @@ data class MotifXsBank(
  */
 @Serializable
 data class MotifXsConfig(
-    /** The device number in the SysEx status byte. This app always uses 0; whether the
-     * instrument answers others is untested. */
+    /**
+     * The device number in the SysEx status byte. This app always uses 0; whether the
+     * instrument answers others is untested.
+     */
     val deviceNumber: Int = 0,
     val banks: List<MotifXsBank> = emptyList(),
     /**
@@ -100,6 +108,11 @@ data class MotifXsConfig(
      * leaves the app without a tagging facet.
      */
     val categoryEncoding: MotifXsCategoryEncoding? = null,
+    /**
+     * Firmware versions this app has been tested against, as [MotifXsSysEx.firmwareVersionOf]
+     * names them; empty skips the check.
+     */
+    val supportedFirmwareVersions: Set<String> = setOf("1.60"),
 )
 
 /**
@@ -116,10 +129,16 @@ data class MotifXsCategoryEncoding(
     /** Sub-categories by byte value, keyed by main-category name. */
     val subByValuePerMain: Map<String, List<String>> = emptyMap(),
 ) {
-    /** The taxonomy as everything above wants it: by index, in the main table's own order. */
+    /**
+     * The taxonomy as everything above wants it: by index, in the main table's own order, so an
+     * index is still the byte value. Ends before [NO_ASSIGNMENT]: "no assignment" is a null
+     * [CategoryRef], and offered as a category of its own it would be written as one and read
+     * back as null.
+     */
     val taxonomy: CategoryTaxonomy by lazy {
         CategoryTaxonomy(
-            mainByValue.map { name -> MainCategory(name, subByValuePerMain[name].orEmpty()) },
+            mainByValue.takeWhile { it != NO_ASSIGNMENT }
+                .map { name -> MainCategory(name, subByValuePerMain[name].orEmpty()) },
         )
     }
 
@@ -153,6 +172,13 @@ internal fun resolvedConfig(
     return own.copy(
         banks = own.banks.ifEmpty { shared.banks },
         categoryEncoding = own.categoryEncoding ?: shared.categoryEncoding,
+        // By presence in the device's own block: the field has a default, so an unset one reads
+        // the same as a device that names the default.
+        supportedFirmwareVersions = if ("supportedFirmwareVersions" in deviceFamilyConfig) {
+            own.supportedFirmwareVersions
+        } else {
+            shared.supportedFirmwareVersions
+        },
     )
 }
 
@@ -162,8 +188,10 @@ data class MotifXsBlanks(val normal: ByteArray, val drum: ByteArray) {
 
     // A data class over ByteArray needs these written out; the default ones compare identity.
     override fun equals(other: Any?): Boolean =
-        this === other || (other is MotifXsBlanks &&
-            normal.contentEquals(other.normal) && drum.contentEquals(other.drum))
+        this === other || (
+            other is MotifXsBlanks &&
+                normal.contentEquals(other.normal) && drum.contentEquals(other.drum)
+            )
 
     override fun hashCode(): Int = 31 * normal.contentHashCode() + drum.contentHashCode()
 }
@@ -237,8 +265,13 @@ object MotifXsFamily : InstrumentFamily {
      * connect, while a missing table only drops the factory listing. Delete and move genuinely
      * cannot work without the blanks.
      */
-    private fun loadFactoryVoices(context: Context): MotifXsFactoryVoices =
-        runCatching { factoryVoices.load(context) }.getOrElse { MotifXsFactoryVoices() }
+    private fun loadFactoryVoices(context: Context): MotifXsFactoryVoices = try {
+        factoryVoices.load(context)
+    } catch (e: Exception) {
+        // Logged, since the only other symptom is a factory listing that is missing.
+        Log.w(TAG, "The Motif XS factory voice table could not be loaded; the factory listing is unavailable", e)
+        MotifXsFactoryVoices()
+    }
 
     /**
      * The instrument speaks MIDI SysEx over raw bulk endpoints: it declares a single
@@ -252,12 +285,16 @@ object MotifXsFamily : InstrumentFamily {
         scope: CoroutineScope,
     ): MidiTransport = when (transport) {
         is MidiTransport -> transport
+
         is UsbBulkTransport -> {
             val cable = (descriptor.match as? DeviceMatch.Usb)?.midiCable
-                ?: error("${descriptor.name} is on USB but its catalog entry sets no midiCable, " +
-                    "so there is no way to know which cable its SysEx is on.")
+                ?: error(
+                    "${descriptor.name} is on USB but its catalog entry sets no midiCable, " +
+                        "so there is no way to know which cable its SysEx is on.",
+                )
             UsbMidiBulkTransport(transport, cable, scope)
         }
+
         else -> error("A Motif XS speaks MIDI SysEx, not ${transport::class.simpleName}.")
     }
 }

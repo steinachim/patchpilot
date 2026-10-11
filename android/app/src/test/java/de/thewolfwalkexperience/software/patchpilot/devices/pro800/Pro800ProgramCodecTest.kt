@@ -3,11 +3,12 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
+import kotlin.random.Random
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.random.Random
 
 class Pro800ProgramCodecTest {
 
@@ -66,8 +67,9 @@ class Pro800ProgramCodecTest {
         assertEquals(6, Pro800ProgramCodec.denseIndexOf(7))
         assertEquals(7, Pro800ProgramCodec.denseIndexOf(9))
         assertEquals(4, Pro800ProgramCodec.denseIndexOf(5))
-        // The name field's start, per Pro800ProgramConstants.h (the markdown says 173; see
-        // Pro800ProgramFields.NAME_DENSE_OFFSET for why the header wins).
+        // The name field's start: raw 172, as the reference implementation's
+        // Pro800ProgramConstants.h gives it. Its markdown says 173; a dumped program's name
+        // decodes at 172 (Pro800DecodingTest).
         assertEquals(150, Pro800ProgramCodec.denseIndexOf(172))
     }
 
@@ -90,12 +92,22 @@ class Pro800ProgramCodecTest {
         assertThrows(IllegalArgumentException::class.java) { Pro800ProgramCodec.denseIndexOf(16) }
     }
 
+    /** The ported offset table: no two fields overlap, and the name comes after the version. */
     @Test
-    fun `values are little-endian and can be sign-extended`() {
+    fun `the record's fields do not overlap`() {
+        val fields = listOf(Pro800ProgramFields.STORAGE_CODE, Pro800ProgramFields.VERSION).sortedBy { it.denseOffset }
+        assertTrue(fields.all { it.denseOffset >= 0 })
+        fields.zipWithNext { a, b ->
+            assertTrue("${a.name} and ${b.name} overlap", a.denseOffset + a.byteCount <= b.denseOffset)
+        }
+        assertTrue(Pro800ProgramFields.NAME_DENSE_OFFSET > Pro800ProgramFields.VERSION.denseOffset)
+    }
+
+    @Test
+    fun `values are little-endian and unsigned`() {
         val dense = byteArrayOf(0x34, 0x12, 0xFF.toByte(), 0xFF.toByte())
         assertEquals(0x1234, Pro800ProgramCodec.readValue(dense, 0, 2))
         assertEquals(0xFFFF, Pro800ProgramCodec.readValue(dense, 2, 2))
-        assertEquals(-1, Pro800ProgramCodec.readValue(dense, 2, 2, signed = true))
     }
 
     @Test
@@ -112,8 +124,10 @@ class Pro800ProgramCodecTest {
         assertEquals(0xBEEF, Pro800ProgramCodec.readValue(dense, 2, 2))
     }
 
-    /** A preset name is device-supplied text rendered straight into a list row, so control bytes
-     * are stripped rather than passed through. */
+    /**
+     * A preset name is device-supplied text rendered straight into a list row, so control bytes
+     * are stripped rather than passed through.
+     */
     @Test
     fun `strings drop NULs and other control bytes wherever they fall`() {
         val dense = "Fat Saw\u0000Bass\u0000\u0000".toByteArray(Charsets.US_ASCII)

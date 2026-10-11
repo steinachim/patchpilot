@@ -3,8 +3,11 @@
 
 package de.thewolfwalkexperience.software.patchpilot.core
 
+import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+
+private const val TAG = "RegressionTester"
 
 enum class Status { PASS, FAIL, SKIPPED }
 
@@ -34,8 +37,9 @@ data class RegressionReport(val results: List<RegressionResult>, val summary: St
 }
 
 /**
- * Exercises every feature the app enables for the connected instrument, without destroying
- * anything, and says what worked.
+ * Exercises loading, reading, every edit and the device report the app enables for the connected
+ * instrument, without destroying anything, and says what worked. Categories and favorites are
+ * listed among what the instrument declares, not set.
  *
  * In `core/` because it tests the facets rather than a family: an operation the instrument does
  * not declare is skipped and said to be skipped, so one engine covers every family.
@@ -61,7 +65,16 @@ class RegressionTester(
     private val onConfirmRealSlotMutation: suspend (OccupiedSlotReason) -> Boolean,
     /** Keeps the app's own cached listing in step with what the tests changed. */
     private val refreshEdited: suspend (List<SlotAddress>) -> Unit,
+    /**
+     * The names stored on the instrument, by slot, as the listing shows them: the test name is
+     * chosen not to clash with one (a Nord makes a clashing name unique by changing it), and a
+     * copy an interrupted run left behind is pointed out.
+     */
+    private val presetNames: () -> Map<SlotAddress, String> = { emptyMap() },
 ) {
+
+    /** Anything this run changed about the instrument's state, for the summary to disclose. */
+    private val remediesApplied = linkedSetOf<String>()
 
     suspend fun run(progress: (String) -> Unit): RegressionReport {
         val results = facetInventory() +
@@ -78,7 +91,7 @@ class RegressionTester(
     private fun facetInventory(): List<RegressionResult> = listOf(
         "Loads presets" to instrument.selector,
         "Edits presets" to instrument.editor,
-        "Reads and writes preset data" to instrument.transfer,
+        "Reads preset data" to instrument.transfer,
         "Describes itself" to instrument.report,
         "Categorises and favorites presets" to instrument.tagger,
     ).map { (what, facet) ->
@@ -162,16 +175,34 @@ class RegressionTester(
 
     private suspend fun editorChecks(progress: (String) -> Unit): List<RegressionResult> {
         val editor = instrument.editor ?: return emptyList()
+        val leftovers = leftoverCheck()
         val occupied = occupiedInOrder()
         if (occupied.isEmpty()) {
-            return listOf(RENAME, MOVE, SWAP, COPY, DELETE).map { skip(it, NOTHING_STORED) }
+            return listOf(leftovers) + listOf(RENAME, MOVE, SWAP, COPY, DELETE).map { skip(it, NOTHING_STORED) }
         }
         val free = allSlots().filterNot { it in occupiedSlots() }
-        return if (EditOp.COPY in editor.supported && free.isNotEmpty()) {
+        return listOf(leftovers) + if (EditOp.COPY in editor.supported && free.isNotEmpty()) {
             sandboxChecks(editor, occupied, free, progress)
         } else {
             occupiedSlotChecks(editor, occupied, free, progress)
         }
+    }
+
+    /**
+     * Points out presets named as this run names its copies: a run interrupted before its
+     * clean-up (an unplug, a force-stop) leaves one behind. They are left alone, since a preset of
+     * the user's own could carry the name, and failing this step is what gets them noticed.
+     */
+    private fun leftoverCheck(): RegressionResult {
+        val found = presetNames().filterValues(::looksLikeTestCopy)
+        if (found.isEmpty()) return RegressionResult(LEFTOVERS, Status.PASS, "None found.")
+        val listed = found.entries.joinToString { (slot, name) -> "${display(slot)} \"$name\"" }
+        return RegressionResult(
+            LEFTOVERS,
+            Status.FAIL,
+            "$listed look${if (found.size == 1) "s" else ""} like a copy an interrupted run left " +
+                "behind. This run leaves ${if (found.size == 1) "it" else "them"} alone; delete by hand.",
+        )
     }
 
     /**
@@ -192,9 +223,13 @@ class RegressionTester(
         val source = occupied.first()
         var sandbox = free.first()
         var sandboxName: String? = null
+        // Set as soon as the copy returns, before its checks: a copy that landed but failed them
+        // is still on the instrument, and the clean-up has to know about it.
+        var copied: String? = null
 
-        results += step(COPY, progress) {
+        val copyResult = step(COPY, progress) {
             val copyName = editor.copyProgram(source, sandbox)
+            copied = copyName
             refreshEdited(listOf(sandbox))
             check(instrument.browser.refresh(sandbox).name == copyName) {
                 "${display(sandbox)} does not hold \"$copyName\" after the copy."
@@ -202,22 +237,31 @@ class RegressionTester(
             check(instrument.browser.refresh(source).name != null) {
                 "${display(source)} was emptied by a copy, which must leave its source alone."
             }
-            sandboxName = copyName
             "Copied ${display(source)} to ${display(sandbox)}; the instrument named it \"$copyName\"."
         }
-        val copyName = sandboxName
+        results += copyResult
+        val copyName = copied
             ?: return results + listOf(RENAME, MOVE, SWAP, DELETE).map { skip(it, NO_SANDBOX) }
+        if (copyResult.status != Status.PASS) {
+            return results + listOf(RENAME, MOVE, SWAP).map { skip(it, NO_SANDBOX) } +
+                cleanUp(editor, listOf(sandbox to copyName), progress)
+        }
+        sandboxName = copyName
 
         results += when {
             EditOp.RENAME !in editor.supported -> skip(RENAME, UNSUPPORTED)
+
             else -> step(RENAME, progress) {
                 val newName = testName(editor)
                 editor.rename(sandbox, newName)
                 refreshEdited(listOf(sandbox))
-                check(instrument.browser.refresh(sandbox).name == newName) {
+                // Whatever it is called now, so the steps after this and the clean-up still find
+                // the copy if the check below fails.
+                val stored = instrument.browser.refresh(sandbox).name
+                if (stored != null) sandboxName = stored
+                check(stored == newName) {
                     "${display(sandbox)} still does not read back as \"$newName\"."
                 }
-                sandboxName = newName
                 "Renamed the copy in ${display(sandbox)} from \"$copyName\" to \"$newName\"."
             }
         }
@@ -225,11 +269,15 @@ class RegressionTester(
         val moveTarget = free.getOrNull(1)
         results += when {
             EditOp.MOVE !in editor.supported -> skip(MOVE, UNSUPPORTED)
+
             moveTarget == null -> skip(MOVE, "only one free slot, so there is nowhere to move the copy")
+
             else -> step(MOVE, progress) {
                 val name = sandboxName
                 val from = sandbox
                 editor.move(from, moveTarget)
+                // Moved, whatever the checks below find: from here on the copy is looked for there.
+                sandbox = moveTarget
                 refreshEdited(listOf(from, moveTarget))
                 check(instrument.browser.refresh(moveTarget).name == name) {
                     "${display(moveTarget)} does not hold \"$name\" after the move."
@@ -237,7 +285,6 @@ class RegressionTester(
                 check(instrument.browser.refresh(from).name == null) {
                     "${display(from)} is still occupied after moving out of it."
                 }
-                sandbox = moveTarget
                 "Moved the copy from ${display(from)} to ${display(moveTarget)}."
             }
         }
@@ -249,6 +296,7 @@ class RegressionTester(
         var partnerName: String? = null
         results += when {
             EditOp.SWAP !in editor.supported -> skip(SWAP, UNSUPPORTED)
+
             partnerSlot != null -> step(SWAP, progress) {
                 val name = sandboxName
                 val copyName = editor.copyProgram(source, partnerSlot)
@@ -261,9 +309,11 @@ class RegressionTester(
                 "Copied ${display(source)} to ${display(partnerSlot)} as \"$copyName\", swapped " +
                     "it with the copy in ${display(sandbox)} and back."
             }
+
             // No room for a second copy, so the only slot to swap with holds real data: the same
             // question the no-sandbox path asks, narrowed to this one test.
             !onConfirmRealSlotMutation(OccupiedSlotReason.NO_SECOND_FREE_SLOT) -> skip(SWAP, DECLINED)
+
             else -> step(SWAP, progress) {
                 val name = sandboxName
                 val sourceName = instrument.browser.refresh(source).name
@@ -300,6 +350,8 @@ class RegressionTester(
         check(instrument.browser.refresh(a).name == bName) {
             "${display(a)} does not hold \"$bName\" after the swap."
         }
+        // Until the swap-back lands, an interrupted run leaves the two presets exchanged.
+        Log.i(TAG, "Swapped ${display(a)} and ${display(b)}; swapping back")
         delay(STEP_PAUSE_MS)
         editor.swap(a, b)
         refreshEdited(listOf(a, b))
@@ -318,6 +370,10 @@ class RegressionTester(
      * that did not swap back) the address held here may hold a real preset, so a slot is erased
      * only if it reads back as one of the run's copies - either name, since an interrupted swap
      * leaves the two copies exchanged - and anything else is left alone and said so.
+     *
+     * A slot that cannot be read is left alone too, and fails this step rather than the run: this
+     * is the last test, and an instrument misbehaving here is when the rest of the report matters
+     * most.
      */
     private suspend fun cleanUp(
         editor: PresetEditor,
@@ -329,14 +385,25 @@ class RegressionTester(
             return skip(DELETE, "$UNSUPPORTED - the copies are left in ${slots.joinToString { display(it) }}")
         }
         val copyNames = copies.mapNotNull { it.second }.toSet()
-        val (ours, theirs) = slots.partition { instrument.browser.refresh(it).name in copyNames }
-        val leftAlone = theirs.joinToString { display(it) }
+        val unreadable = mutableListOf<SlotAddress>()
+        val ours = slots.filter { slot ->
+            try {
+                instrument.browser.refresh(slot).name in copyNames
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                unreadable += slot
+                false
+            }
+        }
+        val gone = slots.filterNot { it in ours || it in unreadable }
+        val leftAlone = listOfNotNull(
+            describe(gone, "no longer holds a copy"),
+            describe(unreadable, "could not be read"),
+        ).joinToString("; ")
         if (ours.isEmpty()) {
-            return skip(
-                DELETE,
-                "$leftAlone no longer holds a copy, so nothing was deleted - " +
-                    "check the instrument by hand before running this again",
-            )
+            val detail = "$leftAlone, so nothing was deleted - $CHECK_BY_HAND"
+            return if (unreadable.isEmpty()) skip(DELETE, detail) else RegressionResult(DELETE, Status.FAIL, detail)
         }
         return step(DELETE, progress) {
             ours.forEach { slot ->
@@ -348,14 +415,18 @@ class RegressionTester(
             }
             val deleted = (if (ours.size == 1) "the copy from " else "the copies from ") +
                 ours.joinToString { display(it) }
-            if (theirs.isEmpty()) {
+            check(unreadable.isEmpty()) { "Deleted $deleted, but $leftAlone - $CHECK_BY_HAND." }
+            if (gone.isEmpty()) {
                 "Deleted $deleted; the instrument is as it was."
             } else {
-                "Deleted $deleted. $leftAlone no longer holds a copy and was left alone - " +
-                    "check the instrument by hand before running this again."
+                "Deleted $deleted. $leftAlone and was left alone - $CHECK_BY_HAND."
             }
         }
     }
+
+    /** "A:1:2, A:1:3 [what]", or null where [slots] is empty. */
+    private fun describe(slots: List<SlotAddress>, what: String): String? =
+        slots.takeIf { it.isNotEmpty() }?.let { "${it.joinToString { slot -> display(slot) }} $what" }
 
     /**
      * The path with no sandbox to work in - either nothing is free or this family cannot copy.
@@ -378,20 +449,20 @@ class RegressionTester(
         val deleteResult = skip(DELETE, "$NO_SANDBOX - delete is never run against a stored preset")
 
         val mutating = listOf(EditOp.RENAME, EditOp.MOVE, EditOp.SWAP).filter { it in editor.supported }
+        // In the sandbox path's order, so the two reports read alike: copy first, delete last.
         if (mutating.isEmpty()) {
-            return listOf(copyResult, deleteResult) +
-                listOf(RENAME, MOVE, SWAP).map { skip(it, UNSUPPORTED) }
+            return listOf(copyResult) + listOf(RENAME, MOVE, SWAP).map { skip(it, UNSUPPORTED) } + deleteResult
         }
         if (!onConfirmRealSlotMutation(reason)) {
-            return listOf(copyResult, deleteResult) +
-                listOf(RENAME, MOVE, SWAP).map { skip(it, DECLINED) }
+            return listOf(copyResult) + listOf(RENAME, MOVE, SWAP).map { skip(it, DECLINED) } + deleteResult
         }
 
         val target = occupied.first()
-        val results = mutableListOf(copyResult, deleteResult)
+        val results = mutableListOf(copyResult)
 
         results += when {
             EditOp.RENAME !in editor.supported -> skip(RENAME, UNSUPPORTED)
+
             else -> step(RENAME, progress) {
                 val original = instrument.browser.refresh(target).name
                 checkNotNull(original) { "${display(target)} holds no preset to rename." }
@@ -414,7 +485,9 @@ class RegressionTester(
         val moveTarget = free.firstOrNull()
         results += when {
             EditOp.MOVE !in editor.supported -> skip(MOVE, UNSUPPORTED)
+
             moveTarget == null -> skip(MOVE, "no free slot to move into")
+
             else -> step(MOVE, progress) {
                 val name = instrument.browser.refresh(target).name
                 editor.move(target, moveTarget)
@@ -435,7 +508,9 @@ class RegressionTester(
         val partner = occupied.getOrNull(1)
         results += when {
             EditOp.SWAP !in editor.supported -> skip(SWAP, UNSUPPORTED)
+
             partner == null -> skip(SWAP, "only one preset is stored, so there is nothing to swap with")
+
             else -> step(SWAP, progress) {
                 val targetName = instrument.browser.refresh(target).name
                 val partnerName = instrument.browser.refresh(partner).name
@@ -453,7 +528,7 @@ class RegressionTester(
                 "Swapped ${display(target)} with ${display(partner)} - real data ($why) - and back."
             }
         }
-        return results
+        return results + deleteResult
     }
 
     // ---- Plumbing ----
@@ -512,9 +587,6 @@ class RegressionTester(
         }
     }
 
-    /** Anything this run changed about the instrument's state, for the summary to disclose. */
-    private val remediesApplied = linkedSetOf<String>()
-
     private fun skip(name: String, reason: String) = RegressionResult(name, Status.SKIPPED, reason)
 
     /** Occupied addresses in device order, which [occupiedSlots] alone does not carry. */
@@ -525,10 +597,30 @@ class RegressionTester(
 
     private fun display(address: SlotAddress): String = instrument.layout.format.format(address)
 
-    /** Capped to what the instrument will actually store, so a rename is not verified against a
-     * name the instrument silently truncated (see [PresetEditor.maxNameLength]). */
-    private fun testName(editor: PresetEditor): String =
-        editor.maxNameLength?.let { TEST_NAME.take(it) } ?: TEST_NAME
+    /**
+     * The name this run gives its copy: [TEST_NAME], or a numbered form of it where a preset
+     * already carries that. Capped to what the instrument will actually store, so a rename is not
+     * verified against a name the instrument silently truncated (see [PresetEditor.maxNameLength]).
+     */
+    private fun testName(editor: PresetEditor): String {
+        val taken = presetNames().values.toSet()
+        val max = editor.maxNameLength
+        return generateSequence(1) { it + 1 }
+            .map { n ->
+                val suffix = if (n == 1) "" else " $n"
+                val room = (max ?: (TEST_NAME.length + suffix.length)) - suffix.length
+                TEST_NAME.take(room).trimEnd() + suffix
+            }
+            .first { it !in taken }
+    }
+
+    /** [TEST_NAME], or a numbered form of it as [testName] or a Nord's own renaming makes one. */
+    private fun looksLikeTestCopy(name: String): Boolean {
+        if (name == TEST_NAME) return true
+        val numbered = Regex("^(.+) \\d+$").matchEntire(name) ?: return false
+        val stem = numbered.groupValues[1]
+        return stem.length >= TEST_NAME_MIN_STEM && TEST_NAME.startsWith(stem)
+    }
 
     private fun summarize(results: List<RegressionResult>): String {
         val passed = results.count { it.status == Status.PASS }
@@ -536,8 +628,11 @@ class RegressionTester(
         val skipped = results.count { it.status == Status.SKIPPED }
         val summary = "${instrument.identity.name}: $passed passed, $failed failed, $skipped skipped"
         // In the headline: the run left the instrument in a state the user did not put it in.
-        return if (remediesApplied.isEmpty()) summary
-        else "$summary. Changed on the instrument to run: ${remediesApplied.joinToString(", ")}"
+        return if (remediesApplied.isEmpty()) {
+            summary
+        } else {
+            "$summary. Changed on the instrument to run: ${remediesApplied.joinToString(", ")}"
+        }
     }
 
     private companion object {
@@ -554,10 +649,16 @@ class RegressionTester(
         const val NOTHING_STORED = "the instrument holds no presets to test against"
         const val NO_SANDBOX = "no sandbox copy to test against"
         const val DECLINED = "declined by the user"
+        const val CHECK_BY_HAND = "check the instrument by hand before running this again"
 
         /** Between steps, so the instrument's display does not flip presets in a rapid, silent burst. */
         const val STEP_PAUSE_MS = 500L
 
         const val TEST_NAME = "PatchPilot Test"
+
+        /** How much of [TEST_NAME] a numbered form keeps, at the least, to count as one. */
+        const val TEST_NAME_MIN_STEM = 8
+
+        const val LEFTOVERS = "Copies left by an earlier run"
     }
 }

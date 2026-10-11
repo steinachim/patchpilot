@@ -3,6 +3,9 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
+import androidx.annotation.VisibleForTesting
+import de.thewolfwalkexperience.software.patchpilot.core.printableAscii
+
 /**
  * The Pro-800's 7-bit-safe encoding. SysEx cannot carry a byte above `0x7F`, so Behringer inserts
  * an overflow byte at every position that is a multiple of 8; bit *n* of that byte is the
@@ -20,15 +23,17 @@ object Pro800ProgramCodec {
 
     /** Encoded (7-bit + overflow bytes) -> dense 8-bit bytes. */
     fun decode(encoded: ByteArray): ByteArray {
-        val dense = ArrayList<Byte>(encoded.size)
+        // One overflow byte per group of GROUP, a partial last group included.
+        val dense = ByteArray(encoded.size - (encoded.size + GROUP - 1) / GROUP)
+        var d = 0
         for (position in encoded.indices) {
             if (position % GROUP == 0) continue // the overflow byte itself carries no value
             val overflowByte = encoded[(position / GROUP) * GROUP].toInt() and 0xFF
             val overflowBit = (position % GROUP) - 1
             val high = if (overflowByte and (1 shl overflowBit) != 0) 0x80 else 0
-            dense.add(((encoded[position].toInt() and 0x7F) or high).toByte())
+            dense[d++] = ((encoded[position].toInt() and 0x7F) or high).toByte()
         }
-        return dense.toByteArray()
+        return dense
     }
 
     /**
@@ -37,19 +42,21 @@ object Pro800ProgramCodec {
      * real dump never ends on one.
      */
     fun encode(dense: ByteArray): ByteArray {
-        val encoded = ArrayList<Byte>(dense.size + dense.size / (GROUP - 1) + 1)
+        // One overflow byte ahead of every GROUP - 1 values, a partial last group included.
+        val encoded = ByteArray(dense.size + (dense.size + GROUP - 2) / (GROUP - 1))
+        var e = 0
         var index = 0
         while (index < dense.size) {
-            val chunk = dense.copyOfRange(index, minOf(index + GROUP - 1, dense.size))
+            val end = minOf(index + GROUP - 1, dense.size)
             var overflow = 0
-            chunk.forEachIndexed { i, byte ->
-                if (byte.toInt() and 0x80 != 0) overflow = overflow or (1 shl i)
+            for (i in index until end) {
+                if (dense[i].toInt() and 0x80 != 0) overflow = overflow or (1 shl (i - index))
             }
-            encoded.add(overflow.toByte())
-            chunk.forEach { encoded.add((it.toInt() and 0x7F).toByte()) }
-            index += GROUP - 1
+            encoded[e++] = overflow.toByte()
+            for (i in index until end) encoded[e++] = (dense[i].toInt() and 0x7F).toByte()
+            index = end
         }
-        return encoded.toByteArray()
+        return encoded
     }
 
     /**
@@ -62,6 +69,7 @@ object Pro800ProgramCodec {
     }
 
     /** How many dense bytes an encoded buffer of [encodedSize] holds. */
+    @VisibleForTesting
     fun denseSizeOf(encodedSize: Int): Int = encodedSize - (encodedSize + GROUP - 1) / GROUP
 
     /**
@@ -95,8 +103,8 @@ object Pro800ProgramCodec {
         return patched
     }
 
-    /** [byteCount] little-endian bytes at [denseOffset], optionally sign-extended. */
-    fun readValue(dense: ByteArray, denseOffset: Int, byteCount: Int, signed: Boolean = false): Int {
+    /** [byteCount] little-endian bytes at [denseOffset], unsigned. */
+    fun readValue(dense: ByteArray, denseOffset: Int, byteCount: Int): Int {
         require(byteCount in 1..4) { "only 1..4 byte values are defined, asked for $byteCount" }
         require(denseOffset >= 0 && denseOffset + byteCount <= dense.size) {
             "value at $denseOffset..${denseOffset + byteCount - 1} runs past a ${dense.size}-byte record"
@@ -105,13 +113,11 @@ object Pro800ProgramCodec {
         for (i in 0 until byteCount) {
             value = value or ((dense[denseOffset + i].toInt() and 0xFF) shl (i * 8))
         }
-        if (signed) {
-            val signBit = 1 shl (byteCount * 8 - 1)
-            if (value and signBit != 0) value = value or (-1 shl (byteCount * 8))
-        }
         return value
     }
 
+    /** [byteCount] little-endian bytes of [value] at [denseOffset]; the inverse of [readValue]. */
+    @VisibleForTesting
     fun writeValue(dense: ByteArray, denseOffset: Int, byteCount: Int, value: Int) {
         require(denseOffset >= 0 && denseOffset + byteCount <= dense.size) {
             "value at $denseOffset..${denseOffset + byteCount - 1} runs past a ${dense.size}-byte record"
@@ -129,13 +135,13 @@ object Pro800ProgramCodec {
     fun readString(dense: ByteArray, denseOffset: Int, length: Int): String {
         if (denseOffset >= dense.size) return ""
         val end = minOf(denseOffset + length, dense.size)
-        return String(dense, denseOffset, end - denseOffset, Charsets.US_ASCII)
-            .filter { it.code in 0x20..0x7E }
-            .trim()
+        return printableAscii(String(dense, denseOffset, end - denseOffset, Charsets.US_ASCII)).trim()
     }
 
-    /** Writes [value] into a fixed span, NUL-padding the remainder and truncating an over-long
-     * name rather than running past the field. */
+    /**
+     * Writes [value] into a fixed span, NUL-padding the remainder and truncating an over-long
+     * name rather than running past the field.
+     */
     fun writeString(dense: ByteArray, denseOffset: Int, length: Int, value: String) {
         require(denseOffset + length <= dense.size) {
             "string at $denseOffset..${denseOffset + length - 1} runs past a ${dense.size}-byte record"

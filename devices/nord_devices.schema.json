@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/nord_usb/devices/nord_devices.schema.json",
+  "$id": "https://raw.githubusercontent.com/steinachim/patchpilot/dev/devices/nord_devices.schema.json",
   "title": "Nord USB device catalog",
   "description": "Source of truth for per-instrument USB/protocol constants. See devices/README.md for how to add a new instrument, and docs/PROTOCOLS.md for the wire protocol these values are used by.",
   "type": "object",
@@ -39,11 +39,16 @@
         "id": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*$",
-          "description": "Stable machine id, e.g. 'nord_grand'. Not currently read by either app, but a device needs one so profiles can be referenced (test fixtures, future tooling) without depending on array order."
+          "description": "Stable machine id, e.g. 'nord_grand'. The app keys a session's identity and its listing cache on it, so a shipped id must not change; it also lets profiles be referenced without depending on array order."
         },
         "name": {
           "type": "string",
           "description": "Human-readable name shown to the user, e.g. 'Nord Grand'."
+        },
+        "variant": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "The trailing part of 'name' that tells this model from its siblings, e.g. '2 EX' for 'Nord Stage 2 EX'. Optional. Models whose names differ only in it share one line of the connect screen's supported-instrument list ('Nord Stage 2 EX / 4')."
         },
         "vendorId": { "type": "integer", "minimum": 0, "maximum": 65535, "description": "USB idVendor, decimal (e.g. 4092 for 0x0FFC)." },
         "productId": { "type": "integer", "minimum": 0, "maximum": 65535, "description": "USB idProduct, decimal." },
@@ -71,7 +76,7 @@
           "type": ["object", "null"],
           "propertyNames": { "pattern": "^(0|[1-9][0-9]*)$" },
           "additionalProperties": { "type": "string", "minLength": 1 },
-          "description": "Ids from 'programCategoryIds' that this instrument displays under a different name than the master list gives them, id -> name. Both current instruments relabel 23/24 ('EPiano'/'Wurl' in the master list) as 'EPiano1'/'EPiano2'. An id here that is absent from 'programCategoryIds' is ignored."
+          "description": "Ids from 'programCategoryIds' that this instrument displays under a different name than the master list gives them, id -> name. The Nord Grand and Stage 2 EX, for example, relabel 23/24 ('EPiano'/'Wurl' in the master list) as 'EPiano1'/'EPiano2'. An id here that is absent from 'programCategoryIds' is ignored."
         }
       }
     }

@@ -3,12 +3,15 @@
 
 package de.thewolfwalkexperience.software.patchpilot.demo
 
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
+import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
@@ -17,34 +20,37 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTagger
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTags
-import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.PresetTransfer
+import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
+import de.thewolfwalkexperience.software.patchpilot.core.ReportIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 
 /**
  * A fictitious instrument, implemented directly against [Instrument] with an in-memory library
  * rather than a fake transport, so showing the UI needs no fake wire protocol per family. Mirrors
  * a Nord: grouped addressing, one category per preset, native edits, no favorites.
  *
- * `DemoUsbTransport` and `core.NoCopyFixtureInstrument` in the test source set are the fixtures
+ * `FakeNordTransport` and `core.NoCopyFixtureInstrument` in the test source set are the fixtures
  * that do fabricate wire bytes and a second facet shape.
  */
 class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, DeviceReporter {
-
-    private val library = DemoLibrary(
-        NAMES,
-        slotsPerBank = SLOTS_PER_BANK,
-        categoryByName = DemoCategories.BY_PRESET,
-    )
 
     override val layout: SlotLayout = SlotLayout.uniform(
         bankCount = BANK_COUNT,
         slotsPerBank = SLOTS_PER_BANK,
         format = GroupedBankAddressFormat(groupsPerBank = GROUPS_PER_BANK, slotsPerGroup = SLOTS_PER_GROUP),
+    )
+
+    private val library = DemoLibrary(
+        NAMES,
+        slotsPerBank = SLOTS_PER_BANK,
+        format = layout.format,
+        categoryByName = DemoCategories.BY_PRESET,
     )
 
     override val identity = InstrumentIdentity(
@@ -59,6 +65,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
     override val browser: PresetBrowser get() = this
     override val selector: PresetSelector get() = this
     override val editor: PresetEditor get() = this
+
     /** Categories, shaped like a Nord's - see [DemoCategories]. No favorites: nothing here models the per-bank table one lives in. */
     override val tagger: PresetTagger = DemoTagger()
 
@@ -99,11 +106,22 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
     /** A limit, so the rename field behaves here as it does against a real instrument. 16, matching the Nord shape this mirrors. */
     override val maxNameLength = MAX_NAME_LENGTH
 
-    override suspend fun rename(address: SlotAddress, newName: String) = library.rename(address, newName)
-    override suspend fun move(from: SlotAddress, to: SlotAddress) = library.move(from, to)
-    override suspend fun swap(a: SlotAddress, b: SlotAddress) = library.swap(a, b)
+    override suspend fun rename(address: SlotAddress, newName: String) {
+        nameProblem(newName)?.let { throw IllegalArgumentException(it) }
+        library.rename(address, newName)
+    }
+    override suspend fun move(from: SlotAddress, to: SlotAddress) {
+        if (from != to) library.move(from, to)
+    }
+
+    override suspend fun swap(a: SlotAddress, b: SlotAddress) {
+        if (a != b) library.swap(a, b)
+    }
     override suspend fun delete(address: SlotAddress) = library.delete(address)
-    override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String = library.copy(src, dst)
+    override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String {
+        require(src != dst) { "A preset cannot be copied onto itself." }
+        return library.copy(src, dst, maxNameLength)
+    }
 
     // ---- PresetTagger ----
 
@@ -129,7 +147,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
         override suspend fun setCategories(address: SlotAddress, categories: List<CategoryRef?>) {
             val wanted = categories.firstOrNull()
                 ?: throw IllegalArgumentException(
-                    "This instrument always files a preset under a category; there is none to clear."
+                    "This instrument always files a preset under a category; there is none to clear.",
                 )
             val name = DemoCategories.nameOf(wanted)
                 ?: throw IllegalArgumentException("No category ${wanted.main} on this instrument.")
@@ -137,7 +155,7 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
         }
 
         override suspend fun setFavorite(address: SlotAddress, under: Set<Int>): Unit =
-            throw UnsupportedOperationException("Demo mode has no favorites.")
+            throw InstrumentException.NotSupported("mark a favorite")
     }
 
     // ---- DeviceReporter ----
@@ -150,15 +168,17 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
 
     override suspend fun buildReport(progress: ((String) -> Unit)?): DeviceReportResult {
         progress?.invoke("Building report...")
-        val json = """
-            {
-              "note": "This is demo mode. No instrument was read; nothing here describes real hardware.",
-              "instrument": "${identity.name}"
-            }
-        """.trimIndent()
+        val report = DemoReport(
+            note = "This is demo mode. No instrument was read; nothing here describes real hardware.",
+            identity = ReportIdentity.of(identity),
+        )
         // Nothing was read, so nothing can have failed to read.
-        return DeviceReportResult(json, emptyMap())
+        return DeviceReportResult(REPORT_JSON.encodeToString(report), emptyMap())
     }
+
+    /** The shape every family's report opens with, and nothing else: there is nothing to read. */
+    @Serializable
+    private data class DemoReport(val reportVersion: Int = 1, val note: String, val identity: ReportIdentity)
 
     companion object {
         const val DEMO_DESCRIPTOR_ID = "demo"

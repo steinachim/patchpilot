@@ -8,9 +8,12 @@ import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -77,26 +80,45 @@ class CachingBrowserTest {
     }
 
     /**
-     * A run with an unreadable address is not cached.
-     *
-     * Today a transient failure is retried on the next reconnect. Caching a run that contained one
-     * would freeze it for the session - and a missing address is indistinguishable from an empty
-     * slot, since `PresetSlot.isEmpty` is `name == null`.
+     * A run with an unreadable address is cached with that address, and a replay reads only it
+     * again: one slot that will not read would otherwise cost every reconnect the whole listing.
      */
     @Test
-    fun `a run with a failed address is not cached`() = runTest {
+    fun `a run with a failed address is cached, and a replay re-reads only that address`() = runTest {
         val cache = PresetIndexCache()
         val delegate = CountingBrowser(
             slots = listOf(slot(0, 0, "One")),
             failures = listOf(SlotAddress(0, 1)),
         )
         val browser = CachingBrowser(delegate, cache, key)
-
         browser.index().toList()
-        assertFalse(cache.holds(key))
+        assertEquals(setOf(SlotAddress(0, 1)), cache.unreadable(key))
 
+        val replay = browser.index().toList()
+
+        assertEquals("the listing is not read again", 1, delegate.indexRuns)
+        assertEquals(listOf(SlotAddress(0, 1)), delegate.refreshes)
+        assertEquals(
+            listOf("One", "refreshed"),
+            replay.filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }.map { it.name },
+        )
+        assertEquals("read now, so no longer unknown", emptySet<SlotAddress>(), cache.unreadable(key))
+    }
+
+    /** Never left out: a missing row would read as an empty slot, free to copy into. */
+    @Test
+    fun `an address still unreadable on a replay is reported as such`() = runTest {
+        val cache = PresetIndexCache()
+        val delegate = CountingBrowser(slots = listOf(slot(0, 0, "One")), failures = listOf(SlotAddress(0, 1)))
+            .apply { refreshResult = { error("timed out") } }
+        val browser = CachingBrowser(delegate, cache, key)
         browser.index().toList()
-        assertEquals("it must be retried, not served from a partial cache", 2, delegate.indexRuns)
+
+        val replay = browser.index().toList()
+
+        assertEquals(listOf(SlotAddress(0, 1)), replay.filterIsInstance<IndexUpdate.Failed>().map { it.address })
+        assertTrue(replay.last() is IndexUpdate.Complete)
+        assertEquals(setOf(SlotAddress(0, 1)), cache.unreadable(key))
     }
 
     /** An index that never reached Complete is a partial one, whatever it emitted. */
@@ -121,8 +143,11 @@ class CachingBrowserTest {
 
         val cached = cache.get(key)!!
         assertEquals(listOf("One", "refreshed", "Three"), cached.map { it.name })
-        assertEquals("the order the instrument gave must survive a write-through",
-            listOf(0, 1, 2), cached.map { it.address.slot })
+        assertEquals(
+            "the order the instrument gave must survive a write-through",
+            listOf(0, 1, 2),
+            cached.map { it.address.slot },
+        )
     }
 
     /**
@@ -182,6 +207,26 @@ class CachingBrowserTest {
         assertEquals(2, delegate.indexRuns)
     }
 
+    /** An unplug drops what was cached for the device's port, whichever model it was read as. */
+    @Test
+    fun `invalidating a device drops its keys and fences a listing in flight`() {
+        val cache = PresetIndexCache()
+        val otherModel = key.copy(instrument = "inst-b", descriptorId = "desc-b")
+        val otherPort = key.copy(physicalDevice = "usb:/dev/bus/usb/001/005")
+        listOf(key, otherModel, otherPort).forEach { cache.put(it, listOf(slot(0, 0, "Pad"))) }
+        val inFlight = cache.version(key)
+
+        cache.invalidateDevice(key.physicalDevice)
+
+        assertNull(cache.get(key))
+        assertNull(cache.get(otherModel))
+        assertEquals(1, cache.get(otherPort)?.size)
+        assertFalse(
+            "a listing started before the unplug must not be stored",
+            cache.putIfUnchanged(key, emptyList(), inFlight),
+        )
+    }
+
     /**
      * Two instruments must not see each other's presets.
      *
@@ -215,5 +260,34 @@ class CachingBrowserTest {
         cache.update(key, slot(0, 0, "One"))
         assertFalse(cache.holds(key))
         assertNull(cache.get(key))
+    }
+
+    /**
+     * An edit written through while the listing is still collecting keeps that run out of the
+     * cache: the listing may already hold the row from before the edit, and replayed from here
+     * after the next resume, the edit would look undone.
+     */
+    @Test
+    fun `a listing an edit overlapped is not cached`() = runTest {
+        val cache = PresetIndexCache()
+        val midway = CompletableDeferred<Unit>()
+        val delegate = object : PresetBrowser {
+            override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
+                emit(IndexUpdate.Slots(listOf(slot(0, 0, "Before"))))
+                midway.await()
+                emit(IndexUpdate.Complete)
+            }
+
+            override suspend fun refresh(address: SlotAddress) = slot(address.bank, address.slot, "After")
+        }
+        val browser = CachingBrowser(delegate, cache, key)
+
+        val listing = async { browser.index().toList() }
+        runCurrent()
+        browser.refresh(SlotAddress(0, 0))
+        midway.complete(Unit)
+        listing.await()
+
+        assertFalse(cache.holds(key))
     }
 }

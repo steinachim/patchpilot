@@ -28,3 +28,10 @@ fun sanitizeDeviceText(raw: String?): String? {
         if (cleaned.length > MAX_DEVICE_TEXT_LEN) cleaned.take(MAX_DEVICE_TEXT_LEN) + "…" else cleaned
     return truncated.ifBlank { null }
 }
+
+/**
+ * Keeps only the printable ASCII (`0x20`-`0x7E`) of a preset name an instrument supplied: NUL, CR
+ * and LF would otherwise reach the browser, the report JSON and logcat. Strips rather than
+ * rejects, so one odd byte does not fail a listing. Callers trim as their field needs.
+ */
+fun printableAscii(raw: String): String = raw.filter { it.code in 0x20..0x7E }

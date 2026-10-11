@@ -7,12 +7,17 @@ import android.media.midi.MidiDevice
 import android.media.midi.MidiInputPort
 import android.media.midi.MidiOutputPort
 import android.media.midi.MidiReceiver
+import android.os.Process
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
+
+private const val TAG = "AndroidMidiTransport"
 
 /**
  * [MidiTransport] over `android.media.midi`, which handles USB-MIDI enumeration and unpacks the
@@ -23,41 +28,89 @@ import kotlinx.coroutines.withContext
  */
 class AndroidMidiTransport(
     private val device: MidiDevice,
+    private val portIndex: Int,
     private val inputPort: MidiInputPort,
-    private val outputPort: MidiOutputPort,
+    outputPort: MidiOutputPort,
 ) : MidiTransport {
 
+    /** Replaced by [recover]; the service drops the one it has when its socket to this app overflows. */
+    @Volatile
+    private var outputPort: MidiOutputPort = outputPort
+
     /**
-     * DROP_OLDEST rather than suspending: this is fed from [MidiReceiver.onSend], a platform
-     * callback that must return promptly.
+     * DROP_OLDEST rather than suspending: this is fed from [MidiReceiveQueue]'s consumer, which
+     * must not wait on a slow collector either.
+     *
+     * Sized for the fastest large reply any family reads, an Axe-Fx III preset dump: 49 KB at
+     * about 105 bytes per millisecond. Assumed, not measured on this path: a platform that hands
+     * over one USB-MIDI event (three data bytes) per callback makes that ~16,000 elements, so a
+     * 150 ms collector stall (as measured on the Motif XS path) is a backlog of about 5,000.
+     * Dropping any of them corrupts the dump; the family's validation catches that, but only by
+     * reading the whole preset again. The buffer grows only as far as a real backlog takes it.
+     *
+     * The Subsequent 37's 203,800-byte dump is larger, but at about 1.4 bytes per millisecond it
+     * builds a far smaller backlog.
      */
     private val _incoming = MutableSharedFlow<ByteArray>(
         replay = 0,
-        extraBufferCapacity = 256,
+        extraBufferCapacity = 8192,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
     override val incoming: Flow<ByteArray> = _incoming.asSharedFlow()
 
-    /** MIDI has explicit device add/remove callbacks, so there is no reason to rebuild a working
-     * session just because the app was backgrounded. */
+    /** A MIDI port keeps working across a stay in the background - see [Transport.rebuildOnResume]. */
     override val rebuildOnResume = false
+
+    private val scope = transportScope("MIDI port")
+
+    private val queue = MidiReceiveQueue(scope) { _incoming.tryEmit(it) }
+
+    @Volatile
+    private var readerBoosted = false
 
     private val receiver = object : MidiReceiver() {
         override fun onSend(data: ByteArray, offset: Int, count: Int, timestamp: Long) {
-            // Clamped rather than trusted: `android.media.midi` also carries virtual ports
-            // published by other apps, and an out-of-range pair would throw on a platform
-            // callback thread.
-            val start = offset.coerceIn(0, data.size)
-            val end = (offset + count).coerceIn(start, data.size)
-            if (end <= start) return
-            // Copied out of the platform's buffer, which it may reuse the moment this returns.
-            _incoming.tryEmit(data.copyOfRange(start, end))
+            if (!readerBoosted) {
+                readerBoosted = true
+                raiseReaderPriority()
+            }
+            queue.push(data, offset, count)
+        }
+    }
+
+    /**
+     * Called on the platform's reader thread, once: a thread at normal priority is descheduled
+     * for long enough, on a busy phone, to overrun the service's small socket during a dump. A
+     * refusal is only logged; the queue alone is still worth having.
+     */
+    private fun raiseReaderPriority() {
+        try {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Couldn't raise the MIDI reader thread's priority", e)
         }
     }
 
     init {
-        outputPort.connect(receiver)
+        this.outputPort.connect(receiver)
+    }
+
+    /**
+     * Opens the device's output port again and connects the receiver to it: the service reads
+     * `mOutputPortOpenCount=[0]` for a port it has dropped, and a new one is the way back. An
+     * output port can be open in several places, so this also works where nothing was dropped.
+     * The reader thread is the new port's, so it is raised again.
+     */
+    override suspend fun recover() = withContext(Dispatchers.IO) {
+        val fresh = device.openOutputPort(portIndex) ?: return@withContext
+        val old = outputPort
+        fresh.connect(receiver)
+        outputPort = fresh
+        readerBoosted = false
+        runCatching { old.disconnect(receiver) }
+        runCatching { old.close() }
+        Log.w(TAG, "Reopened the MIDI output port after a request went unanswered")
     }
 
     /** [MidiInputPort.send] writes to the MIDI service's socket, so it runs off the caller's thread. */
@@ -65,10 +118,13 @@ class AndroidMidiTransport(
         withContext(Dispatchers.IO) { inputPort.send(bytes, 0, bytes.size) }
     }
 
-    /** Closes in reverse order of acquisition; an early failure must not skip the rest, since a
-     * leaked MidiDevice keeps the port unavailable to every app on the phone. */
+    /**
+     * Closes in reverse order of acquisition; an early failure must not skip the rest, since a
+     * leaked MidiDevice keeps the port unavailable to every app on the phone.
+     */
     override fun close() {
         runCatching { outputPort.disconnect(receiver) }
+        scope.cancel()
         runCatching { outputPort.close() }
         runCatching { inputPort.close() }
         runCatching { device.close() }

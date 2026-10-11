@@ -3,9 +3,12 @@
 
 package de.thewolfwalkexperience.software.patchpilot.ui
 
+import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
+import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,8 +35,12 @@ class ProgramRowsTest {
 
     /** A Pro-800: answers for every address, empty ones included. */
     private val pro800Reported = listOf(
-        slot(0, 0, "Grand"), slot(0, 1, null), slot(0, 2, "Rhodes"),
-        slot(1, 0, null), slot(1, 1, "Pad"), slot(1, 2, null),
+        slot(0, 0, "Grand"),
+        slot(0, 1, null),
+        slot(0, 2, "Rhodes"),
+        slot(1, 0, null),
+        slot(1, 1, "Pad"),
+        slot(1, 2, null),
     )
 
     private fun entries(listing: ProgramListing) =
@@ -58,7 +65,6 @@ class ProgramRowsTest {
         assertTrue(entries(listing).none { it.isEmpty })
     }
 
-    /** A Nord lists only what it holds, so showing empties means *adding* placeholder rows. */
     /**
      * Deleting the last preset in a bank re-reads that address as an empty slot, so the listing
      * still mentions the bank; the rail must not offer a bank the list has no header for.
@@ -73,6 +79,7 @@ class ProgramRowsTest {
         assertEquals(listOf("A", "B"), shown.bankLabels)
     }
 
+    /** A Nord lists only what it holds, so showing empties means *adding* placeholder rows. */
     @Test
     fun `checking the box fills in the gaps a sparse listing leaves`() {
         val listing = buildProgramListing(nordReported, allSlots(), true, false, "")
@@ -99,9 +106,9 @@ class ProgramRowsTest {
 
     @Test
     fun `free slots are every address the layout allows that holds nothing`() {
-        val listing = buildProgramListing(nordReported, allSlots(), false, false, "")
-        assertEquals(3, listing.freeSlots.size)
-        assertTrue(listing.freeSlots.none { it.address in listing.occupied })
+        val free = freeSlots(nordReported, allSlots())
+        assertEquals(3, free.size)
+        assertTrue(free.none { slot -> nordReported.any { it.address == slot.address } })
     }
 
     @Test
@@ -131,7 +138,7 @@ class ProgramRowsTest {
     fun `an empty listing still offers every address as a copy destination`() {
         val listing = buildProgramListing(emptyList(), allSlots(), false, false, "")
         assertTrue(listing.rows.isEmpty())
-        assertEquals(6, listing.freeSlots.size)
+        assertEquals(6, freeSlots(emptyList(), allSlots()).size)
     }
 
     // ---- Bank order ----
@@ -140,10 +147,9 @@ class ProgramRowsTest {
      * **Bank labels come back in device order, not alphabetical order.**
      *
      * `distinct()` already preserves the order the rows arrive in, which is the instrument's own;
-     * sorting them threw that away. It was invisible for as long as every instrument's labels
-     * happened to sort into device order - "A".."D", "USER 1".."USER DR" - and stops being
-     * invisible the moment a bank is called "PRE1" and another "PRE DR", because a space sorts
-     * before a digit. The rail would then offer GM, GM DR, PRE DR, PRE1..PRE8 against a list
+     * sorting would throw that away. That is invisible while every instrument's labels sort into
+     * device order - "A".."D", "USER 1".."USER DR" - and visible once a bank is called "PRE1" and
+     * another "PRE DR", because a space sorts before a digit. The rail would then offer GM, GM DR, PRE DR, PRE1..PRE8 against a list
      * running PRE1..PRE8, GM, PRE DR, GM DR: taps still land, since the jump is a lookup by
      * label, but dragging the rail scrubs through them in order and jumps back and forth.
      */
@@ -205,5 +211,90 @@ class ProgramRowsTest {
             listOf("Grand", "Pad"),
             entries(buildProgramListing(sparse, emptyList(), false, false, "")).map { it.name },
         )
+    }
+
+    /** A slot whose read failed may hold a preset, so a copy is never offered onto it. */
+    @Test
+    fun `an unreadable slot is not offered as free`() {
+        val unreadable = setOf(SlotAddress(0, 1))
+        val listing = buildProgramListing(nordReported, allSlots(), false, true, "", unreadable)
+
+        assertEquals(unreadable, listing.unreadable)
+        assertTrue(freeSlots(nordReported, allSlots(), unreadable).none { it.address in unreadable })
+    }
+
+    /**
+     * A refresh never restarts a listing still arriving: the pull gesture has no `enabled` of its
+     * own, so this rule is the only thing between an over-pull and a 93-second restart.
+     */
+    @Test
+    fun `a refresh waits for the listing to settle and for any edit`() {
+        val arriving = PresetIndexState().plus(IndexUpdate.Slots(listOf(slot(0, 0, "Grand"))))
+        val done = arriving.plus(IndexUpdate.Complete)
+        val failed = PresetIndexState(error = "timed out")
+
+        assertFalse(refreshAllowed(arriving, editRunning = false))
+        assertTrue(refreshAllowed(done, editRunning = false))
+        assertTrue(refreshAllowed(failed, editRunning = false))
+        assertFalse(refreshAllowed(done, editRunning = true))
+        // A pick's targets would turn into unread rows under the finger.
+        assertFalse(refreshAllowed(done, editRunning = false, picking = true))
+    }
+
+    /** A drop goes only where the dragged preset fits, both ways, since a drop onto a preset swaps. */
+    @Test
+    fun `a drag offers only rows the dragged preset fits`() {
+        val listing = buildProgramListing(pro800Reported, allSlots(), true, false, "")
+        val rows = listing.rows
+        fun indexOf(bank: Int, slot: Int) =
+            rows.indexOfFirst { it is ProgramRow.ProgramEntry && it.item.address == SlotAddress(bank, slot) }
+        // Bank B stands in for a drum bank: nothing crosses between A and B.
+        val sameBank = { a: SlotAddress, b: SlotAddress -> a.bank == b.bank }
+
+        val dragged = indexOf(0, 0)
+        assertTrue(canDropOn(rows, dragged, indexOf(0, 2), sameBank))
+        assertFalse(canDropOn(rows, dragged, indexOf(1, 1), sameBank))
+        assertFalse(
+            "a bank header is no target",
+            canDropOn(
+                rows,
+                dragged,
+                rows.indexOfFirst {
+                    it is ProgramRow.BankHeader
+                },
+                sameBank,
+            ),
+        )
+        assertTrue(canDropOn(rows, dragged, indexOf(1, 1)) { _, _ -> true })
+    }
+
+    /**
+     * Where the instrument cannot store "no category", Save waits for a real one: unchanged, the
+     * Nord would refuse it and the Subsequent 37 would overwrite a value it could not name.
+     */
+    @Test
+    fun `categories are savable only once every pick is one the instrument can store`() {
+        val piano = CategoryRef(0)
+        assertFalse(categoriesSavable(listOf(null), allowsUnassigned = false))
+        assertTrue(categoriesSavable(listOf(piano), allowsUnassigned = false))
+        assertTrue(categoriesSavable(listOf(piano, null), allowsUnassigned = true))
+        assertTrue(categoriesSavable(listOf(null, null), allowsUnassigned = true))
+    }
+
+    /**
+     * An edit waits for the listing on screen and for the user listing, which another tab can
+     * leave running, and for whatever already holds the instrument.
+     */
+    @Test
+    fun `an edit waits for both listings, any edit and a device report`() {
+        val arriving = PresetIndexState().plus(IndexUpdate.Slots(listOf(slot(0, 0, "Grand"))))
+        val done = arriving.plus(IndexUpdate.Complete)
+
+        assertTrue(editsAllowed(done, done, editRunning = false, reportRunning = false))
+        assertFalse(editsAllowed(arriving, done, editRunning = false, reportRunning = false))
+        // Favorites done in seconds while a Motif XS's user banks are still being read.
+        assertFalse(editsAllowed(done, arriving, editRunning = false, reportRunning = false))
+        assertFalse(editsAllowed(done, done, editRunning = true, reportRunning = false))
+        assertFalse(editsAllowed(done, done, editRunning = false, reportRunning = true))
     }
 }

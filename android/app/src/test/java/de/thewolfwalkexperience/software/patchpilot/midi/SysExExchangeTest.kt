@@ -5,16 +5,19 @@ package de.thewolfwalkexperience.software.patchpilot.midi
 
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800SysEx
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 class SysExExchangeTest {
 
@@ -24,6 +27,148 @@ class SysExExchangeTest {
             byteArrayOf((programNumber and 0x7F).toByte(), ((programNumber shr 7) and 0x7F).toByte()) +
             payload +
             Pro800SysEx.SYSEX_END
+
+    /** Android's MIDI service drops a receiver that falls behind, and the port is then silent for good. */
+    @Test
+    fun `a request unanswered because the port was dropped is answered after the transport recovers`() = runTest {
+        var dropped = true
+        val transport = FakeMidiTransport { if (dropped) emptyList() else listOf(dump(7)) }
+        transport.onRecover = { dropped = false }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val reply = exchange.exchange(Pro800SysEx.requestDump(7), "reading 7", timeout = 1.seconds, retries = 1) {
+            Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_DUMP
+        }
+
+        assertEquals(7, Pro800SysEx.addressOf(reply))
+        assertEquals(1, transport.recoveries)
+    }
+
+    @Test
+    fun `an answered request does not touch the transport`() = runTest {
+        val transport = FakeMidiTransport { listOf(dump(7)) }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        exchange.exchange(Pro800SysEx.requestDump(7), "reading 7") { true }
+
+        assertEquals(0, transport.recoveries)
+    }
+
+    @Test
+    fun `a sequence that goes silent ends in a timeout after asking the transport to recover`() = runTest {
+        val transport = FakeMidiTransport { emptyList() }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val failure = runCatching {
+            exchange.exchangeSequence(
+                Pro800SysEx.requestDump(0),
+                what = "reading a dump",
+                timeout = 5.seconds,
+                idleTimeout = 1.seconds,
+                done = { false },
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is InstrumentException.Timeout)
+        assertEquals(1, transport.recoveries)
+    }
+
+    /** A failing recovery is logged; what the caller sees is still the request's own timeout. */
+    @Test
+    fun `a recovery that fails does not hide the timeout`() = runTest {
+        val transport = FakeMidiTransport { emptyList() }
+        transport.onRecover = { error("the port cannot be reopened") }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val failure = runCatching {
+            exchange.exchange(Pro800SysEx.requestDump(7), "reading 7", timeout = 1.seconds, retries = 0) { true }
+        }.exceptionOrNull()
+
+        assertTrue(failure is InstrumentException.Timeout)
+    }
+
+    /** Behind another interface everything crosses a DIN cable: the timeout grows by the time that takes. */
+    @Test
+    fun `a slow link allows for the time to send the request and receive a message`() = runTest {
+        // 1,500 bytes at 1,500 B/s is a second out, a full message about 2.7 s back: 5.7 s in all.
+        val request = ByteArray(1_500) { 0x01 }
+        val reply = dump(5)
+
+        val slowTransport = FakeMidiTransport { emptyList() }.apply { slowLink = true }
+        val slow = SysExExchange(slowTransport, backgroundScope)
+        val answered = async {
+            runCatching { slow.exchange(request, "sending", timeout = 1.seconds, retries = 0) { true } }
+        }
+        delay(4.seconds)
+        slowTransport.inject(reply)
+        assertTrue(answered.await().isSuccess)
+
+        val fastTransport = FakeMidiTransport { emptyList() }
+        val fast = SysExExchange(fastTransport, backgroundScope)
+        val timedOut = async {
+            runCatching { fast.exchange(request, "sending", timeout = 1.seconds, retries = 0) { true } }
+        }
+        delay(4.seconds)
+        fastTransport.inject(reply)
+        assertTrue(timedOut.await().exceptionOrNull() is InstrumentException.Timeout)
+    }
+
+    /** A dump behind a MIDI interface trickles in: what counts is that it is still arriving. */
+    @Test
+    fun `a sequence that keeps arriving is not cut off by an idle timeout shorter than the whole`() = runTest {
+        val transport = FakeMidiTransport { emptyList() }
+        val exchange = SysExExchange(transport, backgroundScope)
+        val arrivals = launch {
+            repeat(9) {
+                delay(800.milliseconds)
+                transport.inject(dump(it))
+            }
+            delay(800.milliseconds)
+            transport.inject(dump(99))
+        }
+
+        val collected = exchange.exchangeSequence(
+            Pro800SysEx.requestDump(0),
+            what = "reading a dump",
+            timeout = 60.seconds,
+            idleTimeout = 1.seconds,
+            done = { Pro800SysEx.addressOf(it) == 99 },
+        )
+
+        // Eight seconds in all, against an idle limit of one.
+        assertEquals(10, collected.size)
+        arrivals.join()
+    }
+
+    @Test
+    fun `a sequence that stops arriving ends after the idle time, not the cap`() = runTest {
+        val transport = FakeMidiTransport { emptyList() }
+        val exchange = SysExExchange(transport, backgroundScope)
+        launch {
+            delay(200.milliseconds)
+            transport.inject(dump(1))
+            delay(200.milliseconds)
+            transport.inject(dump(2))
+        }
+        val started = testScheduler.currentTime
+
+        val failure = runCatching {
+            exchange.exchangeSequence(
+                Pro800SysEx.requestDump(0),
+                what = "reading a dump",
+                timeout = 60.seconds,
+                idleTimeout = 1.seconds,
+                done = { false },
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is InstrumentException.Timeout)
+        // The last message arrived 400 ms in; one idle second later it is over, far short of the cap.
+        assertTrue(
+            "took ${testScheduler.currentTime - started} ms",
+            testScheduler.currentTime - started in 1_300L..1_500L,
+        )
+    }
 
     @Test
     fun `an exchange returns the first matching reply`() = runTest {
@@ -37,8 +182,29 @@ class SysExExchangeTest {
         assertArrayEquals(Pro800SysEx.requestDump(7), transport.sent.single())
     }
 
-    /** A reply delivered in pieces is exactly what a real port does; the framer underneath has to
-     * make that invisible here. */
+    /** A send the transport could not complete is a lost connection, whichever family asked. */
+    @Test
+    fun `a failed send is raised as a lost connection with its cause`() = runTest {
+        val transport = FakeMidiTransport { error("USB bulk write failed: sent -1 of 9 bytes") }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val failure = runCatching {
+            exchange.exchange(Pro800SysEx.requestDump(7), "reading 7") { true }
+        }.exceptionOrNull()
+        assertTrue(failure is InstrumentException.TransportLost)
+        assertEquals("USB bulk write failed: sent -1 of 9 bytes", failure!!.message)
+        // Searched along the chain: coroutine stack-trace recovery may rethrow a copy whose
+        // cause is the original.
+        assertTrue(generateSequence(failure) { it.cause }.any { it is IllegalStateException })
+
+        val told = runCatching { exchange.tell(Pro800SysEx.requestDump(7)) }.exceptionOrNull()
+        assertTrue(told is InstrumentException.TransportLost)
+    }
+
+    /**
+     * A reply delivered in pieces is exactly what a real port does; the framer underneath has to
+     * make that invisible here.
+     */
     @Test
     fun `a reply split across chunks still satisfies an exchange`() = runTest {
         val whole = dump(3)
@@ -84,24 +250,50 @@ class SysExExchangeTest {
         assertEquals(9, Pro800SysEx.addressOf(reply))
     }
 
+    /** A matching reply that fails the intact check is asked for again, and reported as damaged if it never arrives intact. */
+    @Test
+    fun `a damaged reply is retried, and one that stays damaged is reported as such`() = runTest {
+        val twoBytes: (ByteArray) -> Boolean = { Pro800SysEx.dumpPayload(it).size == 2 }
+        val isDump: (ByteArray) -> Boolean = { Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_DUMP }
+
+        var answers = 0
+        val recovers = SysExExchange(
+            FakeMidiTransport { listOf(if (answers++ == 0) dump(7, byteArrayOf(0x7F)) else dump(7)) },
+            backgroundScope,
+            defaultTimeout = 20.milliseconds,
+            retries = 1,
+        )
+        val reply = recovers.exchange(Pro800SysEx.requestDump(7), "reading 7", intact = twoBytes, matches = isDump)
+        assertEquals(2, Pro800SysEx.dumpPayload(reply).size)
+        assertEquals(2, answers)
+
+        val staysDamaged = SysExExchange(
+            FakeMidiTransport { listOf(dump(7, byteArrayOf(0x7F))) },
+            backgroundScope,
+            defaultTimeout = 20.milliseconds,
+            retries = 1,
+        )
+        val failure = runCatching {
+            staysDamaged.exchange(Pro800SysEx.requestDump(7), "reading 7", intact = twoBytes, matches = isDump)
+        }.exceptionOrNull()
+        assertTrue("got $failure", failure is InstrumentException.ReplyDamaged)
+    }
+
     @Test
     fun `a silent instrument times out with a message naming what was being done`() = runTest {
         val transport = FakeMidiTransport { emptyList() }
         val exchange = SysExExchange(transport, backgroundScope, defaultTimeout = 20.milliseconds, retries = 0)
 
-        // Caught rather than assertThrows: a runBlocking inside runTest would deadlock, since
-        // the virtual-time scheduler needs the very thread runBlocking parks.
-        val thrown = try {
+        val thrown = thrownBy<InstrumentException.Timeout> {
             exchange.exchange(Pro800SysEx.requestDump(0), "reading preset A00") { true }
-            null
-        } catch (e: InstrumentException.Timeout) {
-            e
         }
-        assertTrue(thrown!!.message!!.contains("reading preset A00"))
+        assertTrue(thrown.message!!.contains("reading preset A00"))
     }
 
-    /** On a stream transport a single dropped message is normal; failing a 400-slot scan on the
-     * first hiccup would make the feature unusable. */
+    /**
+     * On a stream transport a single dropped message is normal; failing a 400-slot scan on the
+     * first hiccup would make the feature unusable.
+     */
     @Test
     fun `a dropped reply is retried`() = runTest {
         var attempt = 0
@@ -116,6 +308,57 @@ class SysExExchangeTest {
         }
         assertEquals(5, Pro800SysEx.addressOf(reply))
         assertEquals(2, transport.sent.size)
+    }
+
+    /**
+     * A reply to an attempt that timed out can still arrive after the retry has started. It is
+     * drained, not taken as the retry's answer: the late reply here carries other data, and
+     * arrives before the retry's own would, which is exactly when taking it would go wrong.
+     */
+    @Test
+    fun `a late reply to a timed-out attempt is not taken as the retry's answer`() = runTest {
+        var attempt = 0
+        lateinit var transport: FakeMidiTransport
+        transport = FakeMidiTransport {
+            attempt++
+            // Attempt 1 is answered 60 ms in, after its 50 ms timeout; the retry 30 ms in.
+            val (after, payload) = if (attempt == 1) 60L to LATE else 30L to FRESH
+            backgroundScope.launch {
+                delay(after)
+                transport.inject(dump(5, payload))
+            }
+            emptyList()
+        }
+        val exchange = SysExExchange(transport, backgroundScope, defaultTimeout = 50.milliseconds, retries = 1)
+
+        val reply = exchange.exchange(Pro800SysEx.requestDump(5), "reading 5") {
+            Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_DUMP
+        }
+
+        assertArrayEquals(FRESH, Pro800SysEx.dumpPayload(reply))
+    }
+
+    /**
+     * One chunk of a multi-message write must reach the instrument once, whatever the exchange's
+     * own retry policy: a re-send would put the chunk into the transfer twice.
+     */
+    @Test
+    fun `a per-call retries of zero never re-sends`() = runTest {
+        var attempt = 0
+        val transport = FakeMidiTransport {
+            attempt++
+            if (attempt == 1) emptyList() else listOf(dump(5))
+        }
+        val exchange = SysExExchange(transport, backgroundScope, defaultTimeout = 50.milliseconds, retries = 1)
+
+        val thrown = try {
+            exchange.exchange(Pro800SysEx.requestDump(5), "writing chunk 1", retries = 0) { true }
+            null
+        } catch (e: InstrumentException.Timeout) {
+            e
+        }
+        assertTrue(thrown != null)
+        assertEquals(1, transport.sent.size)
     }
 
     /**
@@ -161,14 +404,52 @@ class SysExExchangeTest {
     }
 
     /**
-     * **The one that protects the instrument.** A Motif XS left mid-sequence sits on *receiving
-     * midi bulk data* until it is completed or power-cycled, so a cancelled write must still put
-     * every block on the wire - the footer above all, since that is what ends the transaction.
+     * A reply that takes minutes can be read while the exchange still waits for it: [pending]
+     * shows what has arrived, and [receivedBytes] counts everything, SysEx or not.
+     */
+    @Test
+    fun `a slow reply can be read while the exchange still waits for it`() = runTest {
+        val whole = dump(5, payload = ByteArray(40) { it.toByte() })
+        val transport = FakeMidiTransport { emptyList() }
+        val exchange = SysExExchange(transport, backgroundScope)
+
+        val waiting = async {
+            exchange.exchange(Pro800SysEx.requestDump(5), "reading 5", timeout = 10.seconds) {
+                Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_DUMP
+            }
+        }
+        runCurrent()
+        transport.inject(byteArrayOf(0xB0.toByte(), 0x07, 0x64)) // a CC between messages
+        transport.inject(whole.copyOfRange(0, 20))
+        runCurrent()
+
+        val first = exchange.pending(0)
+        assertArrayEquals(whole.copyOfRange(0, 20), first.bytes)
+        assertEquals(20, first.size)
+        assertEquals(23L, exchange.receivedBytes)
+        assertEquals(0, exchange.pending(20).bytes.size)
+
+        transport.inject(whole.copyOfRange(20, 30))
+        runCurrent()
+        val second = exchange.pending(20)
+        assertEquals("the same message", first.start, second.start)
+        assertArrayEquals(whole.copyOfRange(20, 30), second.bytes)
+
+        transport.inject(whole.copyOfRange(30, whole.size))
+        assertArrayEquals(whole, waiting.await())
+        assertEquals(0, exchange.pending(0).size)
+    }
+
+    /**
+     * **The one that protects the instrument.** A Motif XS left mid-sequence shows *receiving
+     * midi bulk data*. The unit measured recovered on its own and discarded the change; whether
+     * every unit does is unconfirmed, so a cancelled write must still put every block on the wire
+     * - the footer above all, since that is what ends the transaction.
      *
-     * Before `exchangeAfterAll` ran its send loop under `NonCancellable`, the `delay(gap)` between
-     * blocks was a cancellation point on every iteration: tapping back during a rename abandoned
-     * the sequence at ~15ms granularity and left the instrument stuck. This drives exactly that -
-     * cancel the caller a couple of blocks in - and asserts the whole sequence went out anyway.
+     * The `delay(gap)` between blocks is a cancellation point on every iteration, so outside
+     * `NonCancellable` tapping back during a rename would abandon the sequence at ~15 ms
+     * granularity. This cancels the caller a couple of blocks in and asserts the whole sequence
+     * went out anyway.
      */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test
@@ -195,5 +476,10 @@ class SysExExchangeTest {
         )
         assertArrayEquals(messages.last(), transport.sent.last())
         assertTrue("the caller itself must still end up cancelled", job.isCancelled)
+    }
+
+    private companion object {
+        val LATE = byteArrayOf(0x11, 0x11)
+        val FRESH = byteArrayOf(0x22, 0x22)
     }
 }

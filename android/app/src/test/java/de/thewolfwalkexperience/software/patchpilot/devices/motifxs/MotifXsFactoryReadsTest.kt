@@ -3,15 +3,13 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
-import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
-import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
-import kotlin.time.Duration.Companion.milliseconds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,13 +20,12 @@ import org.junit.Test
  *
  * The factory listing is free - 1,217 rows and no round trips - because every one of them comes
  * out of the shipped table. That is a property of the whole class rather than of one method, and
- * it is easy to lose one call site at a time: adding categories put three new paths in front of a
- * factory address, and the refresh after a favorite write was reachable with one for the first
- * time, since favoriting is the first edit that can target a read-only bank at all.
+ * it is easy to lose one call site at a time: categories put three paths in front of a factory
+ * address, and favoriting, the one edit that can target a read-only bank, refreshes one.
  *
  * So the device here **refuses** to answer a `0C` request aimed at a read-only bank, exactly as if
- * it did not exist. A path that regresses times out instead of quietly costing seven minutes on
- * real hardware.
+ * it did not exist. A path that dumps a factory voice times out here instead of quietly re-reading
+ * factory banks on real hardware.
  */
 class MotifXsFactoryReadsTest {
 
@@ -68,11 +65,13 @@ class MotifXsFactoryReadsTest {
                 slotCount = 4,
                 voices = listOf(
                     MotifXsFactoryVoice(
-                        1, "Full Concert Grand",
+                        1,
+                        "Full Concert Grand",
                         listOf(MotifXsFactoryCategory("Piano", "APno")),
                     ),
                     MotifXsFactoryVoice(
-                        2, "Ballad Key",
+                        2,
+                        "Ballad Key",
                         listOf(
                             MotifXsFactoryCategory("Piano", "Layer"),
                             MotifXsFactoryCategory("Keys", "EP"),
@@ -96,7 +95,7 @@ class MotifXsFactoryReadsTest {
                 MotifXsSysEx.typeOf(request) != MotifXsSysEx.TYPE_DUMP_REQUEST -> emptyList()
 
                 address?.first == MotifXsSysEx.FAVORITES_ADDRESS_HI ->
-                    listOf(favoritesDump(address.second, byteArrayOf(0, 2, 0, 0)))
+                    listOf(deviceDump(MotifXsSysEx.FAVORITES_ADDRESS_HI, address.second, 0, byteArrayOf(0, 2, 0, 0)))
 
                 // The read-only bank's own address mid. Silence, and remembered.
                 address?.first == 0x0C && address.second == 0x00 -> {
@@ -105,7 +104,7 @@ class MotifXsFactoryReadsTest {
                 }
 
                 address?.first == 0x0C -> listOf(
-                    voiceDump(MotifXsFixtures.namedVoice, address.second, address.third),
+                    dumpAt(MotifXsFixtures.namedVoice, 0x0C, address.second, address.third),
                 )
 
                 else -> emptyList()
@@ -120,9 +119,6 @@ class MotifXsFactoryReadsTest {
             factoryVoices = factoryVoices,
         )
     }
-
-    private fun List<IndexUpdate>.slots(): List<PresetSlot> =
-        filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }
 
     @Test
     fun `the factory listing names and badges every row without a single dump`() = runTest {
@@ -182,21 +178,5 @@ class MotifXsFactoryReadsTest {
     fun `a user row is still read from the instrument`() = runTest {
         val motif = instrument(backgroundScope)
         assertEquals("TWE2 Wolf Walk", motif.browser.refresh(SlotAddress(1, 0)).name)
-    }
-
-    private fun voiceDump(source: ByteArray, mid: Int, lo: Int): ByteArray {
-        val out = source.copyOf()
-        out[MotifXsSysEx.BULK_ADDRESS_INDEX] = 0x0C
-        out[MotifXsSysEx.BULK_ADDRESS_INDEX + 1] = mid.toByte()
-        out[MotifXsSysEx.BULK_ADDRESS_INDEX + 2] = lo.toByte()
-        out[out.size - 2] = MotifXsSysEx.checksumOf(out).toByte()
-        return out
-    }
-
-    private fun favoritesDump(mid: Int, marks: ByteArray): ByteArray {
-        val dump = MotifXsSysEx.bulkDump(0, MotifXsSysEx.FAVORITES_ADDRESS_HI, mid, 0, marks)
-        dump[4] = MotifXsSysEx.MODEL_DEVICE.toByte()
-        dump[dump.size - 2] = MotifXsSysEx.checksumOf(dump).toByte()
-        return dump
     }
 }

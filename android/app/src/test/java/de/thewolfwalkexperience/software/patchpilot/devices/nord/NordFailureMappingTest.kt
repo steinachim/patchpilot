@@ -5,10 +5,16 @@ package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.emptyItemRecord
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.itemRecord
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.rootListPayload
+import de.thewolfwalkexperience.software.patchpilot.devices.nord.NordFixtures.uint32BE
+import de.thewolfwalkexperience.software.patchpilot.thrownBy
+import de.thewolfwalkexperience.software.patchpilot.transport.UsbReadTimeoutException
+import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,26 +27,6 @@ import org.junit.Test
  */
 class NordFailureMappingTest {
 
-    // Same two builders NordDeviceProtocolTest uses; private there, so restated rather than
-    // widened - these tests are about the adapter, not about that class's fixtures.
-    private fun uint32BE(value: Int): ByteArray = byteArrayOf(
-        (value ushr 24).toByte(), (value ushr 16).toByte(), (value ushr 8).toByte(), value.toByte(),
-    )
-
-    private fun rootList(trailerLen: Int = 29): ByteArray {
-        val names = listOf("Piano", "Program", "Settings")
-        val out = mutableListOf<Byte>()
-        repeat(4) { out += 0.toByte() }
-        out += names.size.toByte()
-        for (name in names) {
-            val nameBytes = name.toByteArray(Charsets.US_ASCII)
-            out += uint32BE(nameBytes.size).toList()
-            out += nameBytes.toList()
-            out += List(trailerLen) { 0.toByte() }
-        }
-        return out.toByteArray()
-    }
-
     private fun instrument(responses: List<Pair<Int, ByteArray>>) =
         NordInstrument(NordFixtures.device(ReplayTransport(responses), NordFixtures.GRAND_PROFILE))
 
@@ -49,62 +35,146 @@ class NordFailureMappingTest {
     fun `a refused delete becomes DeviceRejected carrying the instrument's own status`() = runTest {
         val instrument = instrument(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0), // SELECT_CATEGORY
                 21 to (uint32BE(9) + uint32BE(8) + uint32BE(12)), // status 9
                 7 to ByteArray(0), // unlock still runs
             ),
         )
-        val failure = assertThrows(InstrumentException.DeviceRejected::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        val failure = thrownBy<InstrumentException.DeviceRejected> { instrument.delete(SlotAddress(8, 12)) }
         assertEquals(9, failure.status)
-        assertTrue(failure.message!!.contains("delete a preset"))
+        assertTrue(failure.message!!, failure.message!!.contains("refused to delete a preset"))
     }
 
     /**
-     * An echo for a slot other than the one asked for is a refusal too, not a desync: the
-     * instrument answered, it just did not do what was asked.
+     * An echo for a slot other than the one asked for is a desync, not a refusal: the instrument
+     * acted, on another slot, so the user is told the list may be out of date rather than that
+     * nothing happened.
      */
     @Test
-    fun `an echo for the wrong slot becomes DeviceRejected`() = runTest {
+    fun `an echo for the wrong slot becomes ProtocolDesync`() = runTest {
         val instrument = instrument(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 21 to (uint32BE(0) + uint32BE(8) + uint32BE(13)), // status 0, wrong item
                 7 to ByteArray(0),
             ),
         )
-        assertThrows(InstrumentException.DeviceRejected::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        val failure = thrownBy<InstrumentException.ProtocolDesync> { instrument.delete(SlotAddress(8, 12)) }
+        assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
     }
 
-    /** Status 4 is the one code the protocol names - "file exists" (§3.3.12). */
+    /**
+     * Status 4 ("file exists"; `docs/PROTOCOLS.md`, sub-opcode 22/23) means the list is out of
+     * date, which is what the user is told. The code survives in the cause, for the log.
+     */
     @Test
-    fun `copying onto an occupied slot reports status 4`() = runTest {
+    fun `copying onto an occupied slot asks for a refresh`() = runTest {
         val instrument = instrument(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 23 to uint32BE(NordDevice.STATUS_FILE_EXISTS),
                 7 to ByteArray(0),
             ),
         )
-        val failure = assertThrows(InstrumentException.DeviceRejected::class.java) {
-            kotlinx.coroutines.runBlocking {
+        val failure =
+            thrownBy<InstrumentException.SlotStateChanged> {
                 instrument.copyProgram(SlotAddress(0, 0), SlotAddress(0, 1))
             }
-        }
-        assertEquals(NordDevice.STATUS_FILE_EXISTS, failure.status)
-        // The status survives for the log; what the *user* is shown has to be the condition, not
-        // the code. "(status 4)" says something went wrong without saying what or what to do.
-        assertEquals(
-            "Couldn't copy a preset: the instrument says that slot already holds one, though the " +
-                "listing shows it as empty. Refresh the listing.",
-            failure.message,
+        assertEquals(NordDevice.STATUS_FILE_EXISTS, (failure.cause as NordStatusException).status)
+        assertTrue(failure.message!!, failure.message!!.contains("holds a preset"))
+        assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
+    }
+
+    /** As for a copy; status 4 for a move is assumed, not measured - see `NordInstrument.intoEmpty`. */
+    @Test
+    fun `moving onto an occupied slot asks for a refresh`() = runTest {
+        val instrument = instrument(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                25 to uint32BE(NordDevice.STATUS_FILE_EXISTS),
+                7 to ByteArray(0),
+            ),
         )
+        val failure =
+            thrownBy<InstrumentException.SlotStateChanged> { instrument.move(SlotAddress(0, 0), SlotAddress(0, 1)) }
+        assertTrue(failure.message!!, failure.message!!.contains("holds a preset"))
+    }
+
+    /** Read before the write, as on every family: a slot deleted on the panel asks for a refresh. */
+    @Test
+    fun `renaming a slot emptied on the panel asks for a refresh`() = runTest {
+        val instrument = instrument(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                31 to emptyItemRecord(bank = 0, item = 0),
+                7 to ByteArray(0),
+            ),
+        )
+        val failure = thrownBy<InstrumentException.SlotStateChanged> { instrument.rename(SlotAddress(0, 0), "New") }
+        assertTrue(failure.message!!, failure.message!!.contains("is empty"))
+    }
+
+    @Test
+    fun `a rename to the name already stored writes nothing`() = runTest {
+        val transport = ReplayTransport(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                31 to itemRecord(bank = 0, item = 0, categoryId = 21, name = "White Grand"),
+                7 to ByteArray(0),
+            ),
+        )
+        NordInstrument(NordFixtures.device(transport, NordFixtures.GRAND_PROFILE))
+            .rename(SlotAddress(0, 0), "White Grand")
+        assertTrue(transport.sentRequests.none { it.subOp == NordDevice.FileTransferSubOp.SET_NAME.code })
+    }
+
+    /** As on every family: the same slot twice is a no-op for a move or swap, and the caller's mistake for a copy. */
+    @Test
+    fun `a move or swap onto the same slot sends nothing, and a copy onto it is refused`() = runTest {
+        val transport = ReplayTransport(emptyList())
+        val instrument = NordInstrument(NordFixtures.device(transport, NordFixtures.GRAND_PROFILE))
+        instrument.move(SlotAddress(0, 0), SlotAddress(0, 0))
+        instrument.swap(SlotAddress(0, 0), SlotAddress(0, 0))
+        thrownBy<IllegalArgumentException> { instrument.copyProgram(SlotAddress(0, 0), SlotAddress(0, 0)) }
+        assertTrue(transport.sentRequests.isEmpty())
+    }
+
+    /** Measured on a Grand: deleting a slot emptied on the panel answers status 1, not found. */
+    @Test
+    fun `deleting a slot emptied on the panel asks for a refresh`() = runTest {
+        val instrument = instrument(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                21 to (uint32BE(NordDevice.STATUS_NOT_FOUND) + uint32BE(8) + uint32BE(12)),
+                7 to ByteArray(0),
+            ),
+        )
+        val failure = thrownBy<InstrumentException.SlotStateChanged> { instrument.delete(SlotAddress(8, 12)) }
+        assertTrue(failure.message!!, failure.message!!.contains("is empty"))
+    }
+
+    /** A swap needs two presets; status 1 says one slot is empty, though not which. */
+    @Test
+    fun `swapping with an empty slot asks for a refresh`() = runTest {
+        val instrument = instrument(
+            listOf(
+                1 to rootListPayload(),
+                5 to ByteArray(0),
+                27 to uint32BE(NordDevice.STATUS_NOT_FOUND),
+                7 to ByteArray(0),
+            ),
+        )
+        val failure =
+            thrownBy<InstrumentException.SlotStateChanged> { instrument.swap(SlotAddress(0, 0), SlotAddress(0, 1)) }
+        assertEquals(NordDevice.STATUS_NOT_FOUND, (failure.cause as NordStatusException).status)
+        assertTrue(failure.message!!, failure.message!!.contains("Refresh the list"))
     }
 
     /**
@@ -115,15 +185,13 @@ class NordFailureMappingTest {
     fun `a status the protocol does not name keeps the generic wording`() = runTest {
         val instrument = instrument(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 21 to (uint32BE(9) + uint32BE(8) + uint32BE(12)),
                 7 to ByteArray(0),
             ),
         )
-        val failure = assertThrows(InstrumentException.DeviceRejected::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        val failure = thrownBy<InstrumentException.DeviceRejected> { instrument.delete(SlotAddress(8, 12)) }
         assertNull(failure.explanation)
         assertTrue(failure.message!!.contains("status 9"))
     }
@@ -138,9 +206,7 @@ class NordFailureMappingTest {
         val instrument = NordInstrument(
             NordFixtures.device(OutOfStepTransport(), NordFixtures.GRAND_PROFILE),
         )
-        assertThrows(InstrumentException.ProtocolDesync::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        thrownBy<InstrumentException.ProtocolDesync> { instrument.delete(SlotAddress(8, 12)) }
     }
 
     /** Answers every request with a well-formed reply to some other one. */
@@ -160,19 +226,49 @@ class NordFailureMappingTest {
         val instrument = NordInstrument(
             NordFixtures.device(FailingTransport(), NordFixtures.GRAND_PROFILE),
         )
-        assertThrows(InstrumentException.TransportLost::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        thrownBy<InstrumentException.TransportLost> { instrument.delete(SlotAddress(8, 12)) }
     }
 
     /** What a detached device looks like to the protocol layer: every transfer fails at once. */
     private class FailingTransport : de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport {
-        override fun bulkWrite(data: ByteArray) = throw IllegalStateException("USB bulk write failed: sent -1 of ${data.size} bytes")
-        override fun bulkRead(bufferSize: Int): ByteArray = throw IllegalStateException("USB bulk read failed (result=-1)")
+        override fun bulkWrite(data: ByteArray) =
+            throw UsbTransferException("USB bulk write failed: sent -1 of ${data.size} bytes")
+        override fun bulkRead(
+            bufferSize: Int,
+        ): ByteArray = throw UsbTransferException("USB bulk read failed (result=-1)")
         override fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int): ByteArray =
-            throw IllegalStateException("USB control transfer failed")
+            throw UsbTransferException("USB control transfer failed")
         override fun close() = Unit
         override val rebuildOnResume = true
+    }
+
+    /** A read that waits out its timeout is a silent instrument, not a lost link: a retry may work. */
+    @Test
+    fun `a read that times out becomes Timeout`() = runTest {
+        val instrument = NordInstrument(NordFixtures.device(SilentTransport(), NordFixtures.GRAND_PROFILE))
+        val failure = thrownBy<InstrumentException.Timeout> { instrument.delete(SlotAddress(8, 12)) }
+        // The -ing form: "did not answer while delete a preset" is what one label for both gave.
+        assertTrue(failure.message!!, failure.message!!.contains("did not answer while deleting a preset"))
+    }
+
+    /** Takes every request, then never answers within the timeout. */
+    private class SilentTransport : de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport {
+        override fun bulkWrite(data: ByteArray) = Unit
+        override fun bulkRead(bufferSize: Int): ByteArray = throw UsbReadTimeoutException("No reply within 3000 ms")
+        override fun controlTransfer(requestType: Int, request: Int, value: Int, index: Int, length: Int): ByteArray =
+            ByteArray(length)
+        override fun close() = Unit
+        override val rebuildOnResume = true
+    }
+
+    /** A `check()` failing inside this app's own code is a bug, not a cable: it must not read as "connection lost". */
+    @Test
+    fun `an unexpected internal state becomes ProtocolDesync, not TransportLost`() = runTest {
+        val failure =
+            thrownBy<InstrumentException.ProtocolDesync> {
+                mapNordFailure("delete a preset", "deleting a preset") { check(false) { "impossible state" } }
+            }
+        assertTrue(failure.message!!.contains("impossible state"))
     }
 
     /**
@@ -183,14 +279,12 @@ class NordFailureMappingTest {
     fun `an unparseable reply becomes ProtocolDesync`() = runTest {
         val instrument = instrument(
             listOf(
-                1 to rootList(),
+                1 to rootListPayload(),
                 5 to ByteArray(0),
                 21 to uint32BE(0), // too short for the (status, bank, item) triple
                 7 to ByteArray(0),
             ),
         )
-        assertThrows(InstrumentException.ProtocolDesync::class.java) {
-            kotlinx.coroutines.runBlocking { instrument.delete(SlotAddress(8, 12)) }
-        }
+        thrownBy<InstrumentException.ProtocolDesync> { instrument.delete(SlotAddress(8, 12)) }
     }
 }

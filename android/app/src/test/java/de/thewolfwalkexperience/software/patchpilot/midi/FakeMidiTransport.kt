@@ -18,6 +18,11 @@ import kotlinx.coroutines.flow.asSharedFlow
  * the framing bugs live.
  */
 class FakeMidiTransport(
+    /**
+     * Raised by a test that delivers a large reply in many small pieces, as a platform handing
+     * over one USB-MIDI event per callback does.
+     */
+    bufferCapacity: Int = 256,
     private val respond: (request: ByteArray) -> List<ByteArray>,
 ) : MidiTransport {
 
@@ -25,7 +30,7 @@ class FakeMidiTransport(
 
     private val _incoming = MutableSharedFlow<ByteArray>(
         replay = 0,
-        extraBufferCapacity = 256,
+        extraBufferCapacity = bufferCapacity,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
@@ -40,6 +45,20 @@ class FakeMidiTransport(
     /** Pushes bytes nobody asked for - CC echo, another device on a shared bus. */
     fun inject(chunk: ByteArray) {
         _incoming.tryEmit(chunk)
+    }
+
+    override var slowLink = false
+
+    /** How many times the exchange asked for [recover], after a request went unanswered. */
+    var recoveries = 0
+        private set
+
+    /** Runs when the exchange asks the transport to [recover]. */
+    var onRecover: () -> Unit = {}
+
+    override suspend fun recover() {
+        recoveries++
+        onRecover()
     }
 
     var closed = false

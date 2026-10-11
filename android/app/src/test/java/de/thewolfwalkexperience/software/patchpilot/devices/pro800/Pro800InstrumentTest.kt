@@ -3,14 +3,21 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -18,11 +25,10 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
 
 /**
  * The Pro-800 driven end to end against a scripted MIDI device - the SysEx sibling of what
- * `DemoUsbTransport` does for the Nord: real message construction, real framing, real decoding,
+ * `FakeNordTransport` does for the Nord: real message construction, real framing, real decoding,
  * with only the wire replaced.
  */
 class Pro800InstrumentTest {
@@ -36,10 +42,16 @@ class Pro800InstrumentTest {
         val payload = run {
             val dense = ByteArray(Pro800ProgramFields.NAME_DENSE_END)
             Pro800ProgramCodec.writeValue(
-                dense, Pro800ProgramFields.VERSION.denseOffset, Pro800ProgramFields.VERSION.byteCount, 111,
+                dense,
+                Pro800ProgramFields.VERSION.denseOffset,
+                Pro800ProgramFields.VERSION.byteCount,
+                111,
             )
             Pro800ProgramCodec.writeString(
-                dense, Pro800ProgramFields.NAME_DENSE_OFFSET, Pro800ProgramFields.NAME_LENGTH, name,
+                dense,
+                Pro800ProgramFields.NAME_DENSE_OFFSET,
+                Pro800ProgramFields.NAME_LENGTH,
+                name,
             )
             Pro800ProgramCodec.encode(dense)
         }
@@ -60,15 +72,18 @@ class Pro800InstrumentTest {
                     Pro800SysEx.HEADER + byteArrayOf(Pro800SysEx.TYPE_DEVICE_NAME_REPLY.toByte()) +
                         "PRO-800".toByteArray(Charsets.US_ASCII) + Pro800SysEx.SYSEX_END,
                 )
+
                 Pro800SysEx.TYPE_FIRMWARE -> listOf(
                     // 0x00 at index 9 echoes the request's parameter; the version starts at 10.
                     Pro800SysEx.HEADER + byteArrayOf(Pro800SysEx.TYPE_FIRMWARE_REPLY.toByte(), 0x00, 1, 4, 6) +
                         Pro800SysEx.SYSEX_END,
                 )
+
                 Pro800SysEx.TYPE_REQUEST_DUMP -> {
                     val number = Pro800SysEx.addressOf(request)!!
                     listOf(dumpFor(number, names[number]))
                 }
+
                 else -> emptyList()
             }
         }
@@ -159,8 +174,10 @@ class Pro800InstrumentTest {
         }
         val pro800 = Pro800Instrument(
             SysExExchange(
-                transport, backgroundScope,
-                defaultTimeout = kotlin.time.Duration.parse("20ms"), retries = 1,
+                transport,
+                backgroundScope,
+                defaultTimeout = kotlin.time.Duration.parse("20ms"),
+                retries = 1,
             ),
             config,
         )
@@ -173,6 +190,67 @@ class Pro800InstrumentTest {
             slots.single { it.address == SlotAddress(0, 0) }.name,
         )
         assertFalse("the splice was consumed, not left to the next read", firstAnswer)
+    }
+
+    /**
+     * An instrument that stops answering mid-report costs three timeouts, not one per remaining
+     * slot - the rule a listing follows - and the report says what it did not read.
+     */
+    @Test
+    fun `the report stops reading presets once the instrument goes silent`() = runTest {
+        val transport = FakeMidiTransport { request ->
+            val number = Pro800SysEx.addressOf(request)
+            if (Pro800SysEx.typeOf(request) == Pro800SysEx.TYPE_REQUEST_DUMP && number != null && number < 2) {
+                listOf(dumpFor(number, names[number]))
+            } else {
+                emptyList()
+            }
+        }
+        val pro800 = Pro800Instrument(
+            SysExExchange(transport, backgroundScope, defaultTimeout = kotlin.time.Duration.parse("20ms"), retries = 0),
+            config,
+        )
+
+        val result = pro800.report.buildReport()
+
+        val asked = transport.sent.filter { Pro800SysEx.typeOf(it) == Pro800SysEx.TYPE_REQUEST_DUMP }
+            .map { Pro800SysEx.addressOf(it) }.filter { it != Pro800SysEx.SETTINGS_ADDRESS }.distinct()
+        assertEquals("two answered, three silent, then no more", listOf(0, 1, 2, 3, 4), asked)
+        assertTrue(result.failures["dumpsNotRead"]!!, result.failures["dumpsNotRead"]!!.startsWith("5 not read"))
+    }
+
+    /** The report reads as the browser does, so a spliced reply is retried rather than counted. */
+    @Test
+    fun `the report retries a spliced reply rather than counting it`() = runTest {
+        var firstAnswer = true
+        val transport = FakeMidiTransport { request ->
+            if (Pro800SysEx.typeOf(request) != Pro800SysEx.TYPE_REQUEST_DUMP) {
+                emptyList()
+            } else {
+                val number = Pro800SysEx.addressOf(request)!!
+                if (number == 0 && firstAnswer) {
+                    firstAnswer = false
+                    listOf(oversizedDumpFor(number))
+                } else {
+                    listOf(dumpFor(number, names[number]))
+                }
+            }
+        }
+        val pro800 = Pro800Instrument(
+            SysExExchange(
+                transport,
+                backgroundScope,
+                defaultTimeout = kotlin.time.Duration.parse("20ms"),
+                retries = 1,
+            ),
+            config,
+        )
+
+        val json = Json.parseToJsonElement(pro800.report.buildReport().json).jsonObject
+        val lengths = json["messageLengths"]!!.jsonArray.map { it.jsonPrimitive.int }
+        assertFalse("the splice was consumed", firstAnswer)
+        assertEquals(listOf(dumpFor(0, names[0]).size), lengths)
+        assertEquals(3, json["occupiedCount"]!!.jsonPrimitive.int)
     }
 
     /**
@@ -190,8 +268,12 @@ class Pro800InstrumentTest {
                 emptyList()
             } else {
                 val number = Pro800SysEx.addressOf(request)!!
-                if (number == 0) { reads++; listOf(shortDumpFor(number, "Tiny")) }
-                else listOf(dumpFor(number, names[number]))
+                if (number == 0) {
+                    reads++
+                    listOf(shortDumpFor(number, "Tiny"))
+                } else {
+                    listOf(dumpFor(number, names[number]))
+                }
             }
         }
         val pro800 = Pro800Instrument(SysExExchange(transport, backgroundScope), config)
@@ -204,7 +286,7 @@ class Pro800InstrumentTest {
         val slots = updates.filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }
         assertEquals("every slot is still reported", 10, slots.size)
         // It stops before the name field, so it has no name to show - but it is kept.
-        assertEquals(Pro800Instrument.UNNAMED, slots.single { it.address == SlotAddress(0, 0) }.name)
+        assertEquals(UNNAMED_PRESET, slots.single { it.address == SlotAddress(0, 0) }.name)
         assertEquals("the short record was confirmed by a second read", 2, reads)
     }
 
@@ -243,7 +325,10 @@ class Pro800InstrumentTest {
     private fun shortDumpFor(programNumber: Int, marker: String): ByteArray {
         val dense = ByteArray(Pro800ProgramFields.NAME_DENSE_OFFSET - 8)
         Pro800ProgramCodec.writeValue(
-            dense, Pro800ProgramFields.VERSION.denseOffset, Pro800ProgramFields.VERSION.byteCount, 109,
+            dense,
+            Pro800ProgramFields.VERSION.denseOffset,
+            Pro800ProgramFields.VERSION.byteCount,
+            109,
         )
         // Something that differs between the two replies, standing in for a foreign tail.
         marker.forEachIndexed { i, c -> dense[dense.size - marker.length + i] = c.code.toByte() }
@@ -259,10 +344,16 @@ class Pro800InstrumentTest {
         val tooLong = Pro800ProgramFields.maxDenseSizeFor(111) + 16
         val dense = ByteArray(tooLong)
         Pro800ProgramCodec.writeValue(
-            dense, Pro800ProgramFields.VERSION.denseOffset, Pro800ProgramFields.VERSION.byteCount, 111,
+            dense,
+            Pro800ProgramFields.VERSION.denseOffset,
+            Pro800ProgramFields.VERSION.byteCount,
+            111,
         )
         Pro800ProgramCodec.writeString(
-            dense, Pro800ProgramFields.NAME_DENSE_OFFSET, Pro800ProgramFields.NAME_LENGTH, "Wrong Record",
+            dense,
+            Pro800ProgramFields.NAME_DENSE_OFFSET,
+            Pro800ProgramFields.NAME_LENGTH,
+            "Wrong Record",
         )
         return Pro800SysEx.HEADER +
             byteArrayOf(Pro800SysEx.TYPE_DUMP.toByte()) +
@@ -301,9 +392,9 @@ class Pro800InstrumentTest {
      * The whole sequence, in order: read the settings block, write the pointer back, confirm it by
      * reading again, then reload.
      *
-     * **Nothing channel-voice goes out at all.** That is the point of the change: a bank select and
-     * a program change need a channel, nothing acknowledges either, and the channel is not always
-     * knowable - so a mismatch was a Load button that silently did nothing.
+     * **Nothing channel-voice goes out at all.** A bank select and a program change would need a
+     * channel, nothing acknowledges either, and the channel is not always knowable - a mismatch
+     * would be a Load button that silently does nothing.
      */
     @Test
     fun `select writes the settings pointer and then reloads`() = runTest {
@@ -417,6 +508,17 @@ class Pro800InstrumentTest {
         )
     }
 
+    /** A reload the instrument refuses is reported, not taken as a load. */
+    @Test
+    fun `a refused reload fails the selection`() = runTest {
+        val fake = FakePro800(reloadStatus = 1)
+        val pro800 = fullSizeInstrument(fake, backgroundScope)
+
+        val failure = runCatching { pro800.selector!!.select(SlotAddress(bank = 1, slot = 5)) }.exceptionOrNull()
+        assertTrue("expected a refusal, got $failure", failure is InstrumentException.DeviceRejected)
+        assertEquals(1, (failure as InstrumentException.DeviceRejected).status)
+    }
+
     /**
      * "Selected", because the pointer was read back and agreed - which a bank-select and program
      * change could not claim, since nothing acknowledges those. What cannot be confirmed is the
@@ -429,14 +531,13 @@ class Pro800InstrumentTest {
     }
 
     @Test
-    fun `the facets a Pro-800 has no equivalent for are absent`() = runTest {
+    fun `a Pro-800 offers a report, an editor and a transfer`() = runTest {
         val (pro800, _) = instrument(backgroundScope)
-        // The report facet *is* present: it is read-only, and it is where the test fixtures
-        // come from (Pro800Reporter).
+        // Read-only, and the source of the test fixtures (Pro800Reporter).
         assertTrue(pro800.report != null)
-        // The write path exists now, with its read-back verification and undo buffer.
+        // With read-back verification.
         assertTrue(pro800.editor != null)
-        // Present from day one: its browser is built on this.
+        // The browser is built on it.
         assertTrue(pro800.transfer != null)
     }
 
@@ -447,8 +548,10 @@ class Pro800InstrumentTest {
         assertEquals("Fat Saw Bass", Pro800Program.fromEncoded(blob).name)
     }
 
-    /** The settings block shares this address space at 510; a browsable row that overwrites global
-     * settings is not a preset. */
+    /**
+     * The settings block shares this address space at 510; a browsable row that overwrites global
+     * settings is not a preset.
+     */
     @Test
     fun `an address beyond the program count is refused`() = runTest {
         val bigConfig = Pro800Config(bankCount = 6, slotsPerBank = 100)
@@ -475,9 +578,11 @@ class Pro800InstrumentTest {
         val transport = FakeMidiTransport { request ->
             when {
                 Pro800SysEx.typeOf(request) != Pro800SysEx.TYPE_REQUEST_DUMP -> emptyList()
+
                 // Slots 0..4 hold presets; everything above answers the empty reply.
                 Pro800SysEx.addressOf(request)!! < 5 -> // bank A
                     listOf(dumpFor(Pro800SysEx.addressOf(request)!!, "Preset"))
+
                 else -> listOf(byteArrayOf(0xF0.toByte(), 0xF7.toByte()))
             }
         }
@@ -521,7 +626,9 @@ class Pro800InstrumentTest {
                     Pro800SysEx.HEADER + byteArrayOf(Pro800SysEx.TYPE_DEVICE_NAME_REPLY.toByte()) +
                         "PRO-800".toByteArray(Charsets.US_ASCII) + Pro800SysEx.SYSEX_END,
                 )
+
                 Pro800SysEx.typeOf(request) == Pro800SysEx.TYPE_FIRMWARE -> listOfNotNull(firmware)
+
                 else -> listOf(byteArrayOf(0xF0.toByte(), 0xF7.toByte()))
             }
         }
@@ -546,8 +653,10 @@ class Pro800InstrumentTest {
         assertNotNull("an untested firmware must raise an advisory", advisory)
         assertTrue("it must name the version found", advisory!!.contains("1.4.5"))
         assertTrue("and the versions that were tested", advisory.contains("1.4.6"))
-        assertTrue("and point at the report, which is the useful thing to send back",
-            advisory.contains("device report"))
+        assertTrue(
+            "and point at the report, which is the useful thing to send back",
+            advisory.contains("device report"),
+        )
 
         // Usable, not merely connected: the facets have to work, or "continue anyway" is a lie.
         // This fixture answers every address with a bare F0 F7, so the presets are all empty -

@@ -17,9 +17,11 @@ interface Transport {
      *
      * True for USB host, where unrelated bus activity while backgrounded (a USB keyboard being
      * unplugged and replugged, say) can leave the endpoints erroring on every subsequent
-     * transfer, with no clean way to detect or repair that specifically. False for
-     * MIDI, which has explicit device add/remove callbacks and no reason to tear down a working
-     * session on every resume.
+     * transfer, with no clean way to detect or repair that specifically. False for MIDI: a port
+     * opened through Android's MIDI service keeps working across a stay in the background
+     * (measured on a Pro-800), so there is no reason to tear a working session down on every
+     * resume. The app registers no MIDI device callback; a USB-backed MIDI device's unplug is
+     * caught by the USB detach broadcast.
      */
     val rebuildOnResume: Boolean
 }
@@ -69,4 +71,19 @@ interface MidiTransport : Transport {
      */
     suspend fun send(bytes: ByteArray)
     val incoming: Flow<ByteArray>
+
+    /**
+     * Whether the instrument is reached through another MIDI interface, over DIN cables at 31.25
+     * kbit/s, rather than on its own USB connection. A request and a reply then take time that
+     * a USB timeout leaves out: a 3 kB message about two seconds, a preset dump half a minute.
+     */
+    val slowLink: Boolean get() = false
+
+    /**
+     * Called after a request went unanswered, before it is asked again: reopens whatever the
+     * platform may have dropped meanwhile. Android's MIDI service drops an app's receiver for good
+     * when its socket to the app overflows, and nothing says so: the port just stays silent. A
+     * transport with nothing to reopen does nothing, and one that has been fine loses nothing.
+     */
+    suspend fun recover() {}
 }

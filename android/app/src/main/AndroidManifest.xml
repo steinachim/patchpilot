@@ -16,8 +16,8 @@
 
     <!-- Backups are off deliberately. Nothing here is worth restoring onto another phone, and
          some of it is worth not copying off this one: the app stores no credentials and keeps the
-         preset listing in memory only, so a backup would carry little more than the theme
-         preference and the cache directory - which is where shared reports, one of which names
+         preset listing in memory only, so a backup would carry little more than three
+         preferences (the theme, auto-connect and the hidden notices) and the cache directory - which is where shared reports, one of which names
          the user's presets, are staged. allowBackup and fullBackupContent cover Android 11 and
          earlier; dataExtractionRules says the same for Android 12 and later, which read that
          attribute instead (both files are under res/xml/). -->

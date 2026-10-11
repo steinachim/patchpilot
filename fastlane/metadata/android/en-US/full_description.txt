@@ -5,6 +5,8 @@ Supported instruments
 - Nord Grand, Nord Grand 2, Nord Stage 2 EX, Nord Stage 4, Nord Electro 7, Nord Piano 6, Nord Lead A1, Nord Wave 2
 - Behringer Pro-800
 - Yamaha Motif XS6 (the XS7 and XS8 are recognized as well, but not yet confirmed on real hardware)
+- Fractal Audio Axe-Fx III (Mark I; the Mark II is recognized as well, but has not been tested on one)
+- Moog Subsequent 37
 
 Each instrument connects over USB, directly or via USB-MIDI where the instrument supports it. Other Nord keyboards that speak the same protocol can be used with a warning; the app's debug menu can run a regression test and share a report that helps get them officially supported.
 
@@ -14,4 +16,4 @@ Not sure it fits your setup? Open the app without an instrument attached and cho
 
 Free software, licensed under the GNU GPL v3. Source code: https://github.com/steinachim/patchpilot
 
-Patch Pilot is an independent, unofficial project. It is not affiliated with, endorsed by, or supported by Clavia DMI AB (Nord), Music Tribe / Behringer, or Yamaha Corporation. Product and brand names are used solely to identify the hardware this app is compatible with. This software interacts with your instrument's internal storage, including operations that overwrite or delete presets. It is provided "as is", without warranty of any kind. Use with real hardware is at your own risk.
+Patch Pilot is an independent, unofficial project. It is not affiliated with, endorsed by, or supported by Clavia DMI AB (Nord), Music Tribe / Behringer, Yamaha Corporation, Fractal Audio Systems, or Moog Music. Product and brand names are used solely to identify the hardware this app is compatible with. This software interacts with your instrument's internal storage, including operations that overwrite or delete presets. It is provided "as is", without warranty of any kind. Use with real hardware is at your own risk.

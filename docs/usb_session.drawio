@@ -5,9 +5,9 @@
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="trig_group" parent="1" style="swimlane;fontStyle=1;horizontal=1;startSize=26;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;rounded=1;" value="Triggers" vertex="1">
-          <mxGeometry height="640" width="280" x="20" y="20" as="geometry" />
+          <mxGeometry height="680" width="280" x="20" y="20" as="geometry" />
         </mxCell>
-        <mxCell id="T1" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" value="ConnectScreen first shown&#xa;while Disconnected" vertex="1">
+        <mxCell id="T1" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" value="InstrumentViewModel created&#xa;(launch, or after process death)" vertex="1">
           <mxGeometry height="50" width="240" x="20" y="40" as="geometry" />
         </mxCell>
         <mxCell id="T2" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" value="Retry / Retry search tap" vertex="1">
@@ -16,25 +16,25 @@
         <mxCell id="T4" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" value="USB attach intent&lt;br&gt;MainActivity.onNewIntent → onUsbDeviceAttached&lt;br&gt;rescans from NothingFound, Error, PermissionDenied, NeedsManualSetting, Disconnected, the picker (kept),&lt;br&gt;and DeviceLost for the same physical key" vertex="1">
           <mxGeometry height="100" width="240" x="20" y="184" as="geometry" />
         </mxCell>
-        <mxCell id="T3" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" value="MainActivity.onResume&lt;br&gt;when shouldRebuildOnResume:&amp;nbsp;&lt;div&gt;connected over USB, or nothing connected - never from Opening, DeviceLost or PermissionDenied&lt;/div&gt;" vertex="1">
+        <mxCell id="T3" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" value="MainActivity.onResume&lt;br&gt;after the background, if shouldRebuildOnResume:&amp;nbsp;&lt;div&gt;a USB session, or nothing connected - not on Opening, DeviceLost, PermissionDenied or a pending choice&lt;/div&gt;" vertex="1">
           <mxGeometry height="80" width="240" x="20" y="306" as="geometry" />
         </mxCell>
-        <mxCell id="T6" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" value="Back arrow on the preset screen&#xa;disconnect(showPicker = true)" vertex="1">
+        <mxCell id="T6" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" value="Back arrow on the preset screen&#xa;disconnect(): Searching at once" vertex="1">
           <mxGeometry height="50" width="240" x="20" y="408" as="geometry" />
         </mxCell>
         <mxCell id="T5" parent="trig_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" value="USB detach broadcast&#xa;handleUsbDetach, for this session&#39;s device" vertex="1">
           <mxGeometry height="50" width="240" x="20" y="480" as="geometry" />
         </mxCell>
-        <mxCell id="legend" parent="trig_group" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=10;fontColor=#555555;" value="Every teardown waits on instrumentMutex, so an edit, report or regression run in flight finishes before DeviceLost or a rebuild lands." vertex="1">
-          <mxGeometry height="50" width="240" x="20" y="541" as="geometry" />
+        <mxCell id="legend" parent="trig_group" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=10;fontColor=#555555;" value="Every teardown waits on instrumentMutex, so an edit in flight finishes before a rebuild or the picker lands. Back cancels a running device report first. An unplug shows DeviceLost at once and cancels a device report or regression run; the next attempt waits for its teardown. A device plugged in during Searching or Opening is scanned for once that attempt ends with no session." vertex="1">
+          <mxGeometry height="130" width="240" x="20" y="541" as="geometry" />
         </mxCell>
         <mxCell id="C" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="connect()" vertex="1">
           <mxGeometry height="40" width="140" x="380" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="FR" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="forceReconnect()&#xa;teardown, then connect" vertex="1">
+        <mxCell id="FR" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="forceReconnect()&#xa;reopens the session&#39;s device" vertex="1">
           <mxGeometry height="50" width="140" x="380" y="341" as="geometry" />
         </mxCell>
-        <mxCell id="D" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" value="Disconnected" vertex="1">
+        <mxCell id="D" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="teardown" vertex="1">
           <mxGeometry height="40" width="140" x="380" y="433" as="geometry" />
         </mxCell>
         <mxCell id="S" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Searching&#xa;USB scan; MIDI scan only if needed" vertex="1">
@@ -70,7 +70,7 @@
         <mxCell id="CS" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="ConnectScreen&#xa;renders every state&#xa;on this side" vertex="1">
           <mxGeometry height="70" width="150" x="1400" y="95" as="geometry" />
         </mxCell>
-        <mxCell id="PS" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Preset / Debug screen&#xa;stays through the&#xa;Disconnected → Searching&#xa;→ Opening dip" vertex="1">
+        <mxCell id="PS" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Preset / Debug screen&#xa;stays through the&#xa;Searching → Opening dip" vertex="1">
           <mxGeometry height="70" width="150" x="1400" y="410" as="geometry" />
         </mxCell>
         <mxCell id="e_T1_C" edge="1" parent="1" source="T1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.25;fontSize=10;labelBackgroundColor=#ffffff;entryDx=0;entryDy=0;" target="C">
@@ -110,7 +110,7 @@
             <Array as="points" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e_D_S" edge="1" parent="1" source="D" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.75;fontSize=10;labelBackgroundColor=#ffffff;" target="S" value="connect() - ConnectScreen&#xa;connects from here">
+        <mxCell id="e_D_S" edge="1" parent="1" source="D" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.75;fontSize=10;labelBackgroundColor=#ffffff;" target="S" value="rescan: the picker forced after Back;&#xa;a resume reopens its own device">
           <mxGeometry relative="1" x="-0.6492" as="geometry">
             <mxPoint as="offset" />
             <Array as="points">
@@ -168,7 +168,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e_O_PD" edge="1" parent="1" source="O" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.3;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;" target="PD" value="denied">
+        <mxCell id="e_O_PD" edge="1" parent="1" source="O" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.3;entryX=0;entryY=0.5;fontSize=10;labelBackgroundColor=#ffffff;" target="PD" value="denied or&lt;br&gt;unanswered">
           <mxGeometry relative="1" x="0.0795" as="geometry">
             <mxPoint as="offset" />
             <Array as="points">

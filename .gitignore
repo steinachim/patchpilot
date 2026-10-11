@@ -7,14 +7,12 @@ android/.idea/
 android/*.iml
 android/.kotlin/
 
-# Generated at build time from devices/*.json - never hand-edit.
-android/app/src/main/assets/
-
 .DS_Store
 .vscode
 
-# Private planning notes, kept out of the repository.
+# Private planning notes and the hardware run log, kept out of the repository.
 TODO.md
+HARDWARE_TEST_LOG.md
 
 # draw.io backup files, written beside the diagram while it is open in the desktop app.
 .$*.bkp

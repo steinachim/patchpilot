@@ -7,15 +7,14 @@ import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.Probes
+import de.thewolfwalkexperience.software.patchpilot.core.REPORT_JSON
+import de.thewolfwalkexperience.software.patchpilot.core.ReportIdentity
+import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.SlotLayout
 import de.thewolfwalkexperience.software.patchpilot.core.toHex
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-
-/** The report writer's Json. encodeDefaults, so the report spells out every field. */
-private val REPORT_JSON = Json { prettyPrint = true; encodeDefaults = true }
 
 /**
  * Everything the app can read off a Pro-800 without changing anything on it, as JSON: the
@@ -26,7 +25,12 @@ private val REPORT_JSON = Json { prettyPrint = true; encodeDefaults = true }
 class Pro800Reporter(
     private val exchange: SysExExchange,
     private val layout: SlotLayout,
-    private val identity: () -> Pro800ReportIdentity,
+    /**
+     * One address's whole reply, read as the browser reads it (`Pro800Instrument`), so a reply
+     * spliced on a shared port is retried or refused rather than counted.
+     */
+    private val readReply: suspend (SlotAddress) -> ByteArray,
+    private val identity: () -> ReportIdentity,
 ) : DeviceReporter {
 
     override fun suggestedFilename() = "behringer_pro800"
@@ -68,18 +72,12 @@ class Pro800Reporter(
         val total = layout.slotCount
         var done = 0
 
-        for (address in layout.allAddresses()) {
+        val addresses = layout.allAddresses().toList()
+        probes.startLoop()
+        for ((i, address) in addresses.withIndex()) {
+            if (probes.gaveUp("dumpsNotRead", addresses.size - i)) break
             val displayId = layout.format.format(address)
-            val programNumber = address.bank * (total / layout.bankCount) + address.slot
-            val message = probes.probe("dump[$displayId]", ByteArray(0)) {
-                exchangeRaw(Pro800SysEx.requestDump(programNumber), "dump $displayId") { reply ->
-                    Pro800SysEx.isEmptyReply(reply) ||
-                        (
-                            Pro800SysEx.typeOf(reply) == Pro800SysEx.TYPE_DUMP &&
-                                Pro800SysEx.addressOf(reply) == programNumber
-                            )
-                }
-            }
+            val message = probes.probe("dump[$displayId]", ByteArray(0)) { readReply(address) }
             done++
             if (done % 50 == 0) progress?.invoke("Scanning presets ($done/$total)...")
             if (message.isEmpty()) continue
@@ -127,14 +125,6 @@ class Pro800Reporter(
     ): ByteArray = exchange.exchange(request, what, matches = matches)
 }
 
-/** Who answered, as the report records it. */
-@Serializable
-data class Pro800ReportIdentity(
-    val name: String,
-    val firmwareVersion: String,
-    val descriptorId: String,
-)
-
 /** One address, reduced to what the aggregates need; nothing here identifies the preset. */
 private data class Pro800SlotReport(
     val empty: Boolean,
@@ -146,8 +136,10 @@ private data class Pro800SlotReport(
 
 @Serializable
 data class Pro800Report(
+    /** This report's layout, raised when a field changes meaning or goes away; every family's report carries one. */
+    val reportVersion: Int = 1,
     val note: String,
-    val identity: Pro800ReportIdentity,
+    val identity: ReportIdentity,
     val deviceNameReplyHex: String,
     val firmwareReplyHex: String,
     val type02ReplyHex: String,

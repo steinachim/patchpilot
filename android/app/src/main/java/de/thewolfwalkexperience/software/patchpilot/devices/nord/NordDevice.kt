@@ -4,16 +4,20 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.util.Log
+import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressFormat
+import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.printableAscii
+import de.thewolfwalkexperience.software.patchpilot.core.untestedFirmwareAdvisory
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
+import de.thewolfwalkexperience.software.patchpilot.transport.UsbTransferException
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.util.Locale
 
 private const val TAG = "NordDevice"
 
@@ -29,8 +33,13 @@ private object StatusEcho {
     const val ITEM = 8
 }
 
+/** Where a move's or a copy's reply echoes its four request words: source bank and item, destination bank and item. */
+private val TRANSFER_ECHO = listOf(4, 8, 12, 16)
+
 /** The sub-opcode 30/31 reply: an item's metadata record, not its data. */
 private object ItemRecord {
+    /** 0 for a record; otherwise the rest is the previous reply's bytes, name included. */
+    const val STATUS = 0
     const val BANK = 4
     const val ITEM = 8
 
@@ -84,7 +93,7 @@ class UnsupportedProtocolVersionException(message: String) : IllegalStateExcepti
 /**
  * The USB protocol logic shared by every supported Nord instrument. [profile] supplies what
  * differs per model (USB ids, bank layout, name length, known firmware versions), from
- * devices/nord_devices.json or from [DeviceProfile.unknown] for an unrecognized device.
+ * devices/nord_devices.json or from [NordProfile.unknown] for an unrecognized device.
  *
  * Two values are read off the instrument rather than configured: [protocolVersionFileTransfer],
  * advertised in the device-info reply (10 on a Grand, 8 on a Stage 2 EX), and the root-category
@@ -95,20 +104,22 @@ class UnsupportedProtocolVersionException(message: String) : IllegalStateExcepti
  * ENTER_STATUS_MODE and a content-database RESET, none of which is a prerequisite for anything
  * here. Each operation sends the requests it needs and unlocks whatever it locked.
  */
-class NordDevice(private val transport: UsbBulkTransport, initialProfile: DeviceProfile) {
+class NordDevice(private val transport: UsbBulkTransport, initialProfile: NordProfile) {
 
-    /** The transport's own resume policy - see [de.thewolfwalkexperience.software.patchpilot
-     * .core.Instrument.rebuildOnResume], which is what actually consults it. */
+    /**
+     * The transport's own resume policy - see [de.thewolfwalkexperience.software.patchpilot
+     * .core.Instrument.rebuildOnResume], which is what actually consults it.
+     */
     val rebuildOnResume: Boolean get() = transport.rebuildOnResume
 
     /**
      * The per-instrument constants in force. Normally exactly what
      * devices/nord_devices.json declared - the catalog is the configuration, and this class does
      * not second-guess it. The one exception is [applyDerivedBankLayout], which an *unknown*
-     * device uses to replace [DeviceProfile.unknown]'s guessed bank bounds with the
+     * device uses to replace [NordProfile.unknown]'s guessed bank bounds with the
      * instrument's own; see there.
      */
-    var profile: DeviceProfile = initialProfile
+    var profile: NordProfile = initialProfile
         private set
 
     val name: String get() = profile.name
@@ -120,8 +131,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     val supportedFirmwareVersions: Set<Int> get() = profile.supportedFirmwareVersions
 
     /**
-     * The file-transfer protocol version, as read from the instrument by [connect]. `internal`
-     * so tests can drive individual operations without running [connect].
+     * The file-transfer protocol version, as read from the instrument by [connect]; null before
+     * that, which the parse paths tolerate. `internal` so tests can drive individual operations
+     * without running [connect].
      */
     internal var detectedProtocolVersionFileTransfer: Int? = null
 
@@ -131,10 +143,6 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     private var uiProtocolUsable = true
     private var uiProtocolWarned = false
-
-    /** The version if known, for the parse paths, which must not throw before [connect] has run. */
-    private val protocolVersionFileTransferOrNull: Int?
-        get() = detectedProtocolVersionFileTransfer
 
     /** The protocol version every content-database request below carries in its header. */
     val protocolVersionFileTransfer: Int
@@ -161,8 +169,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
     /**
      * ROOT_CATEGORY_LIST and GET_CATEGORY_CHILD need no prerequisites. SELECT_CATEGORY locks the
-     * instrument's panel, and only UNLOCK_CATEGORY_SELECTION releases it. RESET is kept for
-     * reference and never sent.
+     * instrument's panel, and only UNLOCK_CATEGORY_SELECTION releases it. GET_DEPENDENCY,
+     * ENABLE_INVALIDATION, RESET and QUERY_CONTENT_VERSION are kept for reference and never sent.
      */
     enum class FileTransferSubOp(val code: Int) {
         ROOT_CATEGORY_LIST(0), // get root category list (0/1)
@@ -185,13 +193,15 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         QUERY_CONTENT_VERSION(61), // query content version (61/62); reply is 4 zero bytes
     }
 
-    data class BankItem(val bank: Int, val item: Int)
-    /** [categoryId] is null for a record carrying no program category - see [parseItemCategory]. */
-    data class NamedItem(val presetId: String, val name: String, val categoryId: Int? = null)
+    /**
+     * One listed item: where it is, by the (bank, item) pair the wire uses, and what it is called.
+     * [categoryId] is null for a record carrying no program category - see [parseItemCategory].
+     */
+    data class NamedItem(val bank: Int, val item: Int, val name: String, val categoryId: Int? = null)
 
     /**
      * Reads the firmware version, raises [firmwareAdvisory] if it is not in
-     * [supportedFirmwareVersions] (an empty set skips the check - see [DeviceProfile.unknown]),
+     * [supportedFirmwareVersions] (an empty set skips the check - see [NordProfile.unknown]),
      * then reads the protocol version table to learn [protocolVersionFileTransfer]. The only
      * thing that has to happen before every other method can be called.
      */
@@ -275,7 +285,8 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         ) {
             throw UnsupportedProtocolVersionException(
                 "$name reports file-transfer protocol version $fileTransfer, outside the " +
-                    "$MIN_FILE_TRANSFER_VERSION-$MAX_KNOWN_FILE_TRANSFER_VERSION range this app accepts. Refusing to continue: every response layout this app " +
+                    "$MIN_FILE_TRANSFER_VERSION-$MAX_KNOWN_FILE_TRANSFER_VERSION range this app accepts. " +
+                    "Refusing to continue: every response layout this app " +
                     "knows was decoded from that range, and a protocol revision outside it can " +
                     "differ in ways nothing here would detect - including on the writes that " +
                     "move, rename and delete presets.",
@@ -283,25 +294,20 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         }
     }
 
-    /** Set by [validateFirmwareVersion] where the firmware is untested; surfaced as
-     * [de.thewolfwalkexperience.software.patchpilot.core.Instrument.advisory]. */
+    /**
+     * Set by [validateFirmwareVersion] where the firmware is untested; surfaced as
+     * [de.thewolfwalkexperience.software.patchpilot.core.Instrument.advisory].
+     */
     var firmwareAdvisory: String? = null
         private set
 
+    /** Warns, does not refuse - see Instrument.advisory. An empty set (NordProfile.unknown) skips the check. */
     private fun validateFirmwareVersion() {
-        // An empty set (DeviceProfile.unknown) skips the check.
-        if (supportedFirmwareVersions.isNotEmpty() && firmwareVersion !in supportedFirmwareVersions) {
-            val supported = supportedFirmwareVersions.sorted().joinToString(", ") { formatFirmwareVersion(it) }
-            // Warn, do not refuse - see Instrument.advisory.
-            val advisory =
-                "$name reports firmware version ${formatFirmwareVersion(firmwareVersion)}, which " +
-                    "this app has not been tested against (tested: $supported). The app might " +
-                    "still work, but it is not guaranteed that programs will be read or written " +
-                    "correctly. Please consider sending in a device report, so support for this " +
-                    "firmware can be added in future."
-            firmwareAdvisory = advisory
-            Log.w(TAG, advisory)
-        }
+        firmwareAdvisory = untestedFirmwareAdvisory(
+            name,
+            formatFirmwareVersion(firmwareVersion),
+            supportedFirmwareVersions.sorted().map { formatFirmwareVersion(it) },
+        )?.also { Log.w(TAG, it) }
     }
 
     /** Raw USB teardown only; every operation that locks the instrument unlocks it itself. */
@@ -315,8 +321,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     ): NordMessage = withContext(Dispatchers.IO) {
         // This protocol answers one reply per request, so anything still buffered is stale.
         if (readBuffer.isNotEmpty()) {
-            Log.w(TAG, "discarding ${readBuffer.size} unread bytes left over from an earlier " +
-                "exchange before sending protocol=$protocolId version=$protocolVersion sub-op=$subOp")
+            Log.w(
+                TAG,
+                "discarding ${readBuffer.size} unread bytes left over from an earlier " +
+                    "exchange before sending protocol=$protocolId version=$protocolVersion sub-op=$subOp",
+            )
             readBuffer = ByteArray(0)
         }
         transport.bulkWrite(buildMessage(protocolId, protocolVersion, subOp, payload))
@@ -334,9 +343,12 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                         "its replies are out of step with this session's requests",
                 )
             }
-            Log.w(TAG, "discarding a stale reply (protocol=${reply.protocolId} " +
-                "sub-op=${reply.subOp}, ${reply.payload.size} bytes) while waiting for the answer " +
-                "to protocol=$protocolId sub-op=$subOp")
+            Log.w(
+                TAG,
+                "discarding a stale reply (protocol=${reply.protocolId} " +
+                    "sub-op=${reply.subOp}, ${reply.payload.size} bytes) while waiting for the answer " +
+                    "to protocol=$protocolId sub-op=$subOp",
+            )
             reply = readReply()
         }
         reply
@@ -397,7 +409,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 if (++emptyReads >= MAX_EMPTY_READS) {
                     val buffered = readBuffer.size
                     readBuffer = ByteArray(0)
-                    error(
+                    throw UsbTransferException(
                         "the instrument returned $emptyReads empty replies in a row with " +
                             "$buffered bytes buffered; treating the endpoint as dead",
                     )
@@ -433,7 +445,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
     suspend fun getFirmwareVersion(): Int = withContext(Dispatchers.IO) {
         val raw = transport.controlTransfer(
-            FIRMWARE_CTRL_BM_REQUEST_TYPE, FIRMWARE_CTRL_BREQUEST, 0, 0, FIRMWARE_CTRL_WLENGTH,
+            FIRMWARE_CTRL_BM_REQUEST_TYPE,
+            FIRMWARE_CTRL_BREQUEST,
+            0,
+            0,
+            FIRMWARE_CTRL_WLENGTH,
         )
         (raw[0].toInt() and 0xFF) or ((raw[1].toInt() and 0xFF) shl 8) // little-endian u16
     }
@@ -470,7 +486,14 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     private suspend fun reloadPresetForDisplay(bank: Int, item: Int) {
         val payload = fileTransfer(FileTransferSubOp.SELECT_PRESET, uint32BE(bank) + uint32BE(item)).payload
-        requireEcho("display-refresh", payload, bank, item)
+        // The write before this is already stored. An answer that does not confirm the refresh
+        // leaves only the display stale, which is no reason to report the write as failed.
+        // Nothing in requireEcho suspends, so this catches only its verdicts on the reply.
+        try {
+            requireEcho("display-refresh", payload, bank, item, writes = false)
+        } catch (e: Exception) {
+            Log.w(TAG, "The display refresh after a write was not confirmed", e)
+        }
     }
 
     /**
@@ -487,7 +510,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * length did not fit.
      */
     fun rootCategoryTrailerLen(payload: ByteArray): Int? {
-        val version = protocolVersionFileTransferOrNull
+        val version = detectedProtocolVersionFileTransfer
         val expected = rootCategoryTrailerLenForVersion(version)
         if (expected != null && rootCategoryListFits(payload, expected)) return expected
         val detected = detectRootCategoryTrailerLen(payload)
@@ -509,12 +532,12 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      */
     fun itemContentId(payload: ByteArray): Int? {
         val contentId = parseItemContentId(payload)
-        val expected = itemRecordHasContentId(protocolVersionFileTransferOrNull)
+        val expected = itemRecordHasContentId(detectedProtocolVersionFileTransfer)
         if (expected != null && expected != (contentId != null)) {
             Log.w(
                 TAG,
                 "$name reports file-transfer protocol version " +
-                    "$protocolVersionFileTransferOrNull, so its item records " +
+                    "$detectedProtocolVersionFileTransfer, so its item records " +
                     (if (expected) "should" else "should not") + " carry a content id, " +
                     "but this ${payload.size}-byte record " +
                     (if (expected) "has none." else "has one."),
@@ -574,7 +597,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         require(nameLen in 0..MAX_ITEM_NAME_LEN && ItemRecord.NAME_START + nameLen <= payload.size) {
             "implausible item name length $nameLen in a ${payload.size}-byte record"
         }
-        return sanitizeDeviceText(String(payload, ItemRecord.NAME_START, nameLen, Charsets.US_ASCII))
+        return printableAscii(String(payload, ItemRecord.NAME_START, nameLen, Charsets.US_ASCII))
     }
 
     /**
@@ -592,49 +615,88 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         return readUInt32BE(payload, ItemRecord.CATEGORY_ID)
     }
 
-    /**
-     * Strips control characters from a name the instrument chose: US-ASCII decoding already
-     * replaces anything above 0x7F, but NUL, CR and LF would pass through into the browser, the
-     * report JSON and logcat. Strips rather than rejects, so one odd byte does not fail a listing.
-     */
-    private fun sanitizeDeviceText(raw: String): String =
-        raw.filter { it.code in 0x20..0x7E }
-
     fun collectItemNames(itemPayloads: List<ByteArray>): List<NamedItem> = itemPayloads.map { payload ->
         val bank = readUInt32BE(payload, ItemRecord.BANK)
         val item = readUInt32BE(payload, ItemRecord.ITEM)
-        NamedItem(formatPresetId(bank, item), parseItemName(payload), parseItemCategory(payload))
+        NamedItem(bank, item, parseItemName(payload), parseItemCategory(payload))
     }
 
     /**
-     * Checks the `(status, bank, item)` triple most write sub-opcodes answer with: a non-zero
-     * status is a refusal, and an echo that does not match means the instrument acted on a
-     * different slot than the one asked for.
+     * Checks the `(status, bank, item)` triple most write sub-opcodes answer with. A non-zero
+     * status is a refusal ([NordStatusException]). An echo naming another slot means the
+     * instrument acted on that slot instead, so the request was not refused but went astray
+     * ([NordProtocolException]); where [writes], a preset nobody chose may have changed.
      */
-    private fun requireEcho(what: String, payload: ByteArray, bank: Int, item: Int) {
+    private fun requireEcho(what: String, payload: ByteArray, bank: Int, item: Int, writes: Boolean = true) {
         val status = readUInt32BE(payload, StatusEcho.STATUS)
         val echoBank = readUInt32BE(payload, StatusEcho.BANK)
         val echoItem = readUInt32BE(payload, StatusEcho.ITEM)
-        if (status != 0 || echoBank != bank || echoItem != item) {
+        if (status != 0) {
             throw NordStatusException(
-                what, status,
+                what,
+                status,
                 "Unexpected $what response: status=$status bank=$echoBank item=$echoItem " +
                     "(requested bank=$bank item=$item)",
+            )
+        }
+        if (echoBank != bank || echoItem != item) {
+            val answered = "The instrument answered for ${slotLabel(echoBank, echoItem)} instead of " +
+                "${slotLabel(bank, item)}."
+            throw NordProtocolException(
+                if (writes) {
+                    "$answered A preset other than the chosen one may have changed. Refresh the " +
+                        "list to see what the instrument holds."
+                } else {
+                    answered
+                },
             )
         }
     }
 
     /**
+     * Checks a move's or a copy's reply: the status word, then the four request words echoed
+     * back. As in [requireEcho], a non-zero status is a refusal, and an echo of another request
+     * means the instrument acted on other slots.
+     */
+    private fun requireTransferEcho(
+        what: String,
+        payload: ByteArray,
+        srcBank: Int,
+        srcItem: Int,
+        dstBank: Int,
+        dstItem: Int,
+    ) {
+        val status = readUInt32BE(payload, StatusEcho.STATUS)
+        if (status != 0) throw NordStatusException(what, status, "Unexpected $what response status: $status")
+        val echo = TRANSFER_ECHO.map { readUInt32BE(payload, it) }
+        if (echo != listOf(srcBank, srcItem, dstBank, dstItem)) {
+            throw NordProtocolException(
+                "The instrument answered for ${slotLabel(echo[0], echo[1])} to " +
+                    "${slotLabel(echo[2], echo[3])} instead of ${slotLabel(srcBank, srcItem)} to " +
+                    "${slotLabel(dstBank, dstItem)}. A preset other than the chosen ones may have " +
+                    "changed. Refresh the list to see what the instrument holds.",
+            )
+        }
+    }
+
+    /** [formatPresetId], or the raw numbers for an echo naming a slot outside the layout. */
+    private fun slotLabel(bank: Int, item: Int): String =
+        runCatching { formatPresetId(bank, item) }.getOrElse { "bank $bank, item $item" }
+
+    /**
      * Selects [categoryIndex], runs [block], and always unlocks afterwards: a lock left standing
      * makes the instrument's own front panel unresponsive until the session ends.
+     *
+     * The select is inside the `try`, so a select that fails or is cancelled after it went out -
+     * a reply timeout, or the screen locked mid-request - is unlocked too: the instrument may
+     * have taken the lock either way. **Assumption:** an unlock with no lock set is harmless; its
+     * reply is not decoded, and a silent one costs one read timeout on this failure path only.
      */
-    private suspend fun <T> withCategory(categoryIndex: Int, block: suspend () -> T): T {
+    private suspend fun <T> withCategory(categoryIndex: Int, block: suspend () -> T): T = try {
         fileTransfer(FileTransferSubOp.SELECT_CATEGORY, uint32BE(categoryIndex))
-        return try {
-            block()
-        } finally {
-            unlockCategorySelection()
-        }
+        block()
+    } finally {
+        unlockCategorySelection()
     }
 
     /** [withCategory] against the `Program` category; the index is looked up before the lock is taken. */
@@ -690,9 +752,9 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 }
 
                 val cursorPayload = fileTransfer(
-                                        FileTransferSubOp.CURSOR_NEXT_ITEM,
-                                        uint32BE(bank) + uint32BE(prevItem) + uint32BE(0),
-                                    ).payload
+                    FileTransferSubOp.CURSOR_NEXT_ITEM,
+                    uint32BE(bank) + uint32BE(prevItem) + uint32BE(0),
+                ).payload
                 val bankExhausted = readUInt32BE(cursorPayload, CursorReply.BANK_EXHAUSTED)
                 val nextVal = readUInt32BE(cursorPayload, CursorReply.NEXT_ITEM)
 
@@ -709,7 +771,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 }
 
                 val itemIndex = nextVal
-                val itemPayload = fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(bank) + uint32BE(itemIndex)).payload
+                val itemPayload = fileTransfer(
+                    FileTransferSubOp.FETCH_ITEM,
+                    uint32BE(bank) + uint32BE(itemIndex),
+                ).payload
                 items += itemPayload
                 prevItem = itemIndex
                 itemsInBank++
@@ -726,63 +791,72 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     }
 
     /**
-     * Parses a preset id like "A:1:1" (bank letter, then group and slot,
-     * both 1-based, leading zeros accepted) into a (bank, item) pair as
-     * used by sub-opcode 30/32/47.
+     * The program at ([bank], [item]), or null where the slot is empty: one 30/31 fetch at its
+     * address inside the `Program` lock, rather than a walk of the whole category. An edit shows
+     * in the next fetch, a slot it vacated included (measured on a Stage 2 EX, firmware 3.00).
      */
-    fun parsePresetId(presetId: String): BankItem {
-        val m = PRESET_ID_RE.matchEntire(presetId.trim())
-            ?: throw IllegalArgumentException(
-                "Invalid preset id '$presetId'; expected format like 'A:1:1' (bank letter " +
-                    "A-$maxBankLetter, group 1-$maxGroup, slot 1-$slotsPerGroup)",
-            )
-        val (bankLetterStr, groupStr, slotStr) = m.destructured
-        val bankLetter = bankLetterStr.uppercase()[0]
-        val group = groupStr.toInt()
-        val slot = slotStr.toInt()
-        if (bankLetter > maxBankLetter) {
-            throw IllegalArgumentException(
-                "Invalid preset id '$presetId': bank '$bankLetter' is beyond the $name's last bank, '$maxBankLetter'",
-            )
-        }
-        if (group !in 1..maxGroup) {
-            throw IllegalArgumentException(
-                "Invalid preset id '$presetId': group $group is beyond the $name's last group, $maxGroup",
-            )
-        }
-        if (slot !in 1..slotsPerGroup) {
-            throw IllegalArgumentException(
-                "Invalid preset id '$presetId': slot $slot is beyond the $name's last slot, $slotsPerGroup",
-            )
-        }
-        val bank = bankLetter - 'A'
-        val item = (group - 1) * slotsPerGroup + (slot - 1)
-        return BankItem(bank, item)
+    suspend fun readProgram(bank: Int, item: Int): NamedItem? {
+        val record = withProgramCategory { fetchItem(bank, item) }
+        return programFromFetch(record, bank, item)
     }
 
-    fun formatPresetId(bank: Int, item: Int): String {
-        val bankLetter = 'A' + bank
-        val group = item / slotsPerGroup
-        val slot = item % slotsPerGroup
-        return "$bankLetter:${group + 1}:${slot + 1}"
+    private suspend fun fetchItem(bank: Int, item: Int): ByteArray =
+        fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(bank) + uint32BE(item)).payload
+
+    /**
+     * What a 30/31 fetch at ([bank], [item]) answered: status 0 is the record, checked to be that
+     * slot's, and [STATUS_NOT_FOUND] an empty slot. The status is read first, since an empty
+     * slot's reply carries the previous record's bytes, name included.
+     *
+     * Any other status falls back to the walk, which answers the same question on every model:
+     * the Grand's answers to a fetch by address are unmeasured.
+     */
+    private suspend fun programFromFetch(record: ByteArray, bank: Int, item: Int): NamedItem? {
+        val status = if (record.size >= ItemRecord.ITEM + 4) readUInt32BE(record, ItemRecord.STATUS) else null
+        when (status) {
+            0 -> {
+                val read = collectItemNames(listOf(record)).single()
+                if (read.bank != bank || read.item != item) {
+                    throw NordProtocolException(
+                        "Fetched ($bank, $item) but the record is for (${read.bank}, ${read.item})",
+                    )
+                }
+                return read
+            }
+
+            STATUS_NOT_FOUND -> return null
+        }
+        Log.w(TAG, "fetch of ($bank, $item) answered status $status; walking the program list instead")
+        return collectItemNames(fetchCategoryItems(getProgramCategoryIndex()))
+            .firstOrNull { it.bank == bank && it.item == item }
     }
+
+    /**
+     * How this instrument's ids read, e.g. `A:1:1`, from the bounds in force. Built per call,
+     * since [applyDerivedBankLayout] can replace them.
+     */
+    fun addressFormat(): GroupedBankAddressFormat =
+        GroupedBankAddressFormat(groupsPerBank = maxGroup, slotsPerGroup = slotsPerGroup)
+
+    /** Item [item] of bank [bank] as the instrument's own panel names it, e.g. `A:1:1`. */
+    fun formatPresetId(bank: Int, item: Int): String = addressFormat().format(SlotAddress(bank, item))
 
     /** Loads a preset: sub-opcode 47/48 inside the `Program` category lock. The reply echoes (status, bank, item). */
     suspend fun selectPreset(bank: Int, item: Int) {
         withProgramCategory {
             val payload = fileTransfer(FileTransferSubOp.SELECT_PRESET, uint32BE(bank) + uint32BE(item)).payload
-            requireEcho("select-preset", payload, bank, item)
+            requireEcho("select-preset", payload, bank, item, writes = false)
         }
     }
 
     /**
      * Renames the preset at (bank, item): sub-opcode 28/29 inside the `Program` category lock,
      * then a re-select so the panel catches up. An oversized name is accepted and silently
-     * truncated by the instrument; [DeviceProfile.maxProgramNameLen] caps it earlier.
+     * truncated by the instrument; [NordProfile.maxProgramNameLen] caps it earlier.
      */
     suspend fun renamePreset(bank: Int, item: Int, newName: String) {
         require(newName.isNotBlank()) { "New preset name must not be blank" }
-        require(newName.all { it.code in 0..127 }) { "New preset name '$newName' must be ASCII" }
+        require(newName.all { it.code in 0x20..0x7E }) { "New preset name '$newName' must be printable ASCII" }
         val nameBytes = newName.toByteArray(Charsets.US_ASCII)
 
         withProgramCategory {
@@ -816,13 +890,14 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     suspend fun swapPrograms(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int) {
         withProgramCategory {
             val payload = fileTransfer(
-                              FileTransferSubOp.SWAP_PROGRAMS,
-                              uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
-                          ).payload
+                FileTransferSubOp.SWAP_PROGRAMS,
+                uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
+            ).payload
             val status = readUInt32BE(payload, StatusEcho.STATUS)
             if (status != 0) {
                 throw NordStatusException(
-                    "swap-programs", status,
+                    "swap-programs",
+                    status,
                     "Unexpected swap-programs response status: $status",
                 )
             }
@@ -839,23 +914,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     suspend fun moveProgram(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int) {
         withProgramCategory {
             val payload = fileTransfer(
-                              FileTransferSubOp.MOVE_PROGRAM,
-                              uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
-                          ).payload
-            val status = readUInt32BE(payload, StatusEcho.STATUS)
-            if (status != 0) {
-                throw NordStatusException(
-                    "move-program", status,
-                    "Unexpected move-program response status: $status",
-                )
-            }
-            val echo = listOf(4, 8, 12, 16).map { readUInt32BE(payload, it) }
-            if (echo != listOf(srcBank, srcItem, dstBank, dstItem)) {
-                throw NordProtocolException(
-                    "Unexpected move-program echo: $echo " +
-                        "(requested [$srcBank, $srcItem, $dstBank, $dstItem])",
-                )
-            }
+                FileTransferSubOp.MOVE_PROGRAM,
+                uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
+            ).payload
+            requireTransferEcho("move-program", payload, srcBank, srcItem, dstBank, dstItem)
             reloadPresetForDisplay(srcBank, srcItem)
             reloadPresetForDisplay(dstBank, dstItem)
         }
@@ -868,37 +930,20 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * returned. Status 4 ("file exists") is the occupied-destination refusal.
      */
     suspend fun copyProgram(srcBank: Int, srcItem: Int, dstBank: Int, dstItem: Int): String {
-        return withProgramCategory {
+        val record = withProgramCategory {
             val payload = fileTransfer(
-                              FileTransferSubOp.COPY_PROGRAM,
-                              uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
-                          ).payload
-            val status = readUInt32BE(payload, StatusEcho.STATUS)
-            if (status == STATUS_FILE_EXISTS) {
-                throw NordStatusException(
-                    "copy-program", status,
-                    "Cannot copy onto an occupied slot: the instrument answered status 4 (file " +
-                        "exists). A copy needs an empty destination.",
-                )
-            }
-            if (status != 0) {
-                throw NordStatusException(
-                    "copy-program", status,
-                    "Unexpected copy-program response status: $status",
-                )
-            }
-            val echo = listOf(4, 8, 12, 16).map { readUInt32BE(payload, it) }
-            if (echo != listOf(srcBank, srcItem, dstBank, dstItem)) {
-                throw NordProtocolException(
-                    "Unexpected copy-program echo: $echo " +
-                        "(requested [$srcBank, $srcItem, $dstBank, $dstItem])",
-                )
-            }
-            val record = fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(dstBank) + uint32BE(dstItem)).payload
-            val newName = parseItemName(record)
-            reloadPresetForDisplay(dstBank, dstItem)
-            newName
+                FileTransferSubOp.COPY_PROGRAM,
+                uint32BE(srcBank) + uint32BE(srcItem) + uint32BE(dstBank) + uint32BE(dstItem),
+            ).payload
+            requireTransferEcho("copy-program", payload, srcBank, srcItem, dstBank, dstItem)
+            fetchItem(dstBank, dstItem).also { reloadPresetForDisplay(dstBank, dstItem) }
         }
+        val copy = programFromFetch(record, dstBank, dstItem)
+            ?: throw NordProtocolException(
+                "Copied to ${slotLabel(dstBank, dstItem)}, but the instrument reports that slot as " +
+                    "empty. Refresh the list to see what it holds.",
+            )
+        return copy.name
     }
 
     /**
@@ -965,8 +1010,12 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "Category $categoryIndex's child list could not be read, so its bank " +
-                "count is unknown; the walk will rely on the item count and the empty-bank rule", e)
+            Log.w(
+                TAG,
+                "Category $categoryIndex's child list could not be read, so its bank " +
+                    "count is unknown; the walk will rely on the item count and the empty-bank rule",
+                e,
+            )
             null
         }
     }
@@ -988,7 +1037,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         if (children.isEmpty()) return null
         // The largest, so nothing addressable falls outside the range.
         val slotsPerBank = children.maxOf { it.capacity }
-        // This feeds InstrumentViewModel.allSlots, so it has to be plausible - a guard against a
+        // This feeds PresetListings.allSlots, so it has to be plausible - a guard against a
         // malfunctioning device, not an observed one.
         if (slotsPerBank !in 1..MAX_PLAUSIBLE_CHILD_CAPACITY) {
             throw NordProtocolException(
@@ -1005,7 +1054,7 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
     }
 
     /**
-     * Replaces an unrecognized device's guessed bank bounds ([DeviceProfile.unknown]'s generous
+     * Replaces an unrecognized device's guessed bank bounds ([NordProfile.unknown]'s generous
      * 'Z' and 100 groups) with the ones the instrument reports. A catalog device keeps its
      * configured values. The wire does not announce how a bank's slots are grouped, so this sets
      * `maxGroup = 1` and `slotsPerGroup` to the whole bank: a Nord Grand bank reads
@@ -1029,7 +1078,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         return index
     }
 
-    suspend fun getProgramCategoryIndex(): Int = getCategoryIndexByName("Program")
+    /** The `Program` category's root-list index, read once per session: the root list does not change. */
+    private var programCategoryIndex: Int? = null
+
+    suspend fun getProgramCategoryIndex(): Int =
+        programCategoryIndex ?: getCategoryIndexByName("Program").also { programCategoryIndex = it }
 
     // ---- Storage figures and read-only unit calibration ----
 
@@ -1054,179 +1107,30 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
      * [CategorySpace.itemCount] is reported as the instrument gave it, 0 for a non-empty
      * category included.
      */
-    suspend fun fetchCategorySpace(categoryIndex: Int): CategorySpace {
-        return withCategory(categoryIndex) {
-            val payload = fileTransfer(FileTransferSubOp.GET_ITEM_COUNT, uint32BE(categoryIndex)).payload
-            if (payload.size < 24) {
-                throw NordProtocolException(
-                    "Item-count reply for category $categoryIndex is ${payload.size} bytes, " +
-                        "too short for the six fields this reply is expected to carry",
-                )
-            }
-            val status = readUInt32BE(payload, ItemCountReply.STATUS)
-            if (status != 0) {
-                throw NordStatusException(
-                    "item-count query", status,
-                    "Item-count query for category $categoryIndex answered status $status",
-                )
-            }
-            CategorySpace(
-                itemCount = readUInt32BE(payload, ItemCountReply.ITEM_COUNT),
-                free = readUInt32BE(payload, ItemCountReply.FREE),
-                used = readUInt32BE(payload, ItemCountReply.USED),
-                reclaimable = readUInt32BE(payload, ItemCountReply.RECLAIMABLE),
-                unitCode = readUInt32BE(payload, ItemCountReply.UNIT_CODE),
+    suspend fun fetchCategorySpace(categoryIndex: Int): CategorySpace = withCategory(categoryIndex) {
+        val payload = fileTransfer(FileTransferSubOp.GET_ITEM_COUNT, uint32BE(categoryIndex)).payload
+        if (payload.size < 24) {
+            throw NordProtocolException(
+                "Item-count reply for category $categoryIndex is ${payload.size} bytes, " +
+                    "too short for the six fields this reply is expected to carry",
             )
         }
-    }
-
-    /** One storage area and everything measured about it - see [calibrateStorageUnits]. */
-    data class StorageArea(
-        val names: List<String>,
-        val indexes: List<Int>,
-        /** The shared storage figures - identical across [names], which is what groups them. */
-        val space: CategorySpace,
-        /** Each category's own item count, aligned to [names]. These *do* differ within an area. */
-        val itemCounts: List<Int>,
-        val recordCount: Int,
-        val totalBytes: Long,
-        val unitBytes: Int?,
-        val residual: Int?,
-        val candidateRange: Pair<Int, Int>?,
-        val reason: String,
-        /**
-         * The same overhead measured at the unit the instrument reports rather than at the fitted
-         * one (the roundest value in the admissible range): a Grand's piano area leaves 0 at the
-         * reported 130,816 and 33 at the fitted 131,072.
-         */
-        val reportedResidual: Int? = null,
-    ) {
-        val solved: Boolean get() = unitBytes != null && !space.countedInBytes
-    }
-
-    /**
-     * Every storage area's allocation unit, fitted from the instrument's own item records as a
-     * read-only cross-check on the unit the root category list states: every record carries its
-     * blob's byte length, so the unit is the U for which `sum(ceil(size / U))` lands on the
-     * area's `used`. A fit only narrows U to a range; the test is whether the reported figure
-     * falls inside it.
-     *
-     * Categories reporting an identical (free, used, reclaimable, unitCode) share one area. A
-     * category is dropped only if it lists exactly the same records as one already kept: `Samp
-     * Lib` and `Samp Lib (Native)` are two views of the same items, while `Program`, `Live` and
-     * `Settings` are different content in one area. Whole listings are compared, not items: on a
-     * Nord Grand every `Live` slot holds a byte-identical copy of a program.
-     *
-     * Two round trips per item, so slow on a large instrument; [progress] is called as
-     * `progress(name, index)` before each category walk.
-     */
-    suspend fun calibrateStorageUnits(
-        progress: ((String, Int) -> Unit)? = null,
-        onFailure: ((String, Exception) -> Unit)? = null,
-    ): List<StorageArea> {
-        // The names to walk, and the allocation unit each category states in its trailer.
-        val rootCategories = parseRootCategories(rootCategoryListPayload())
-        val names = rootCategories.map { it.name }
-        val reportedUnits = rootCategories.map { it.unitBytes }
-
-        // Per category, so one that will not answer does not abandon the rest.
-        val spaces = LinkedHashMap<Int, CategorySpace>()
-        names.indices.forEach { index ->
-            try {
-                spaces[index] = fetchCategorySpace(index)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Couldn't read storage figures for '${names[index]}'", e)
-                onFailure?.invoke(names[index], e)
-            }
-        }
-
-        // Group by the storage triple: identical figures mean one shared area.
-        val grouped = LinkedHashMap<List<Int>, MutableList<Int>>()
-        spaces.forEach { (index, s) ->
-            grouped.getOrPut(listOf(s.free, s.used, s.reclaimable, s.unitCode)) { mutableListOf() }.add(index)
-        }
-
-        return grouped.values.map { indexes ->
-            calibrateArea(
-                indexes.map { names[it] }, indexes, spaces.getValue(indexes.first()),
-                indexes.map { spaces.getValue(it).itemCount },
-                // Every category in an area states the same unit; the first tolerates a short trailer.
-                indexes.firstNotNullOfOrNull { reportedUnits.getOrNull(it) },
-                progress,
-                onFailure,
+        val status = readUInt32BE(payload, ItemCountReply.STATUS)
+        if (status != 0) {
+            throw NordStatusException(
+                "item-count query",
+                status,
+                "Item-count query for category $categoryIndex answered status $status",
             )
         }
-    }
-
-    private suspend fun calibrateArea(
-        names: List<String>,
-        indexes: List<Int>,
-        space: CategorySpace,
-        itemCounts: List<Int>,
-        reportedUnitBytes: Int?,
-        progress: ((String, Int) -> Unit)?,
-        onFailure: ((String, Exception) -> Unit)?,
-    ): StorageArea {
-        if (space.countedInBytes) {
-            return StorageArea(
-                names, indexes, space, itemCounts, space.itemCount, 0L, 1, null, null,
-                "counted in bytes, not blocks (unit code 0) - nothing to calibrate",
-            )
-        }
-
-        val listings = ArrayList<Map<Any, Int>>()     // per category: identity -> times listed
-        val sizeOf = HashMap<Any, Int>()
-        for ((name, index) in names.zip(indexes)) {
-            progress?.invoke(name, index)
-            val payloads = try {
-                fetchCategoryItems(index)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Both the area's note and the report's top-level failure map, so an interrupted
-                // report does not read as complete.
-                onFailure?.invoke(name, e)
-                return StorageArea(
-                    names, indexes, space, itemCounts, 0, 0L, null, null, null,
-                    "couldn't walk '$name', so the records are incomplete (${e.message})",
-                )
-            }
-            val here = HashMap<Any, Int>()
-            for (payload in payloads) {
-                val identity = itemIdentity(payload)
-                here[identity] = (here[identity] ?: 0) + 1
-                sizeOf[identity] = parseItemDataSize(payload)
-            }
-            if (listings.none { it == here }) listings.add(here)
-        }
-
-        val sizes = listings.flatMap { here ->
-            here.flatMap { (identity, count) -> List(count) { sizeOf.getValue(identity) } }
-        }
-        val solved = solveStorageUnit(sizes, space.used)
-        val reportedResidual = if (sizes.isNotEmpty() && reportedUnitBytes != null && reportedUnitBytes > 0) {
-            (space.used - storageUnitsAt(sizes, reportedUnitBytes)).toInt()
-        } else {
-            null
-        }
-        return StorageArea(
-            names, indexes, space, itemCounts, sizes.size, sizes.sumOf { it.toLong() },
-            solved.unitBytes, solved.residual, solved.candidateRange, solved.reason,
-            reportedResidual,
+        CategorySpace(
+            itemCount = readUInt32BE(payload, ItemCountReply.ITEM_COUNT),
+            free = readUInt32BE(payload, ItemCountReply.FREE),
+            used = readUInt32BE(payload, ItemCountReply.USED),
+            reclaimable = readUInt32BE(payload, ItemCountReply.RECLAIMABLE),
+            unitCode = readUInt32BE(payload, ItemCountReply.UNIT_CODE),
         )
     }
-
-    /**
-     * A key identifying an item record by what it is, for recognising the same item listed under
-     * two categories: the content id where the instrument provides one, `(tag, name, size)` where
-     * it does not (a Stage 2 EX). Not `(bank, item)`: a Nord Grand's two `Samp Lib` views list the
-     * same 235 samples at different addresses.
-     */
-    fun itemIdentity(payload: ByteArray): Any =
-        itemContentId(payload)
-            ?: listOf(payload.copyOfRange(16, 20).toList(), parseItemName(payload), parseItemDataSize(payload))
 
     companion object {
         /**
@@ -1258,11 +1162,12 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         /**
          * Runaway guard for a bank walk whose category could not be asked how many banks it has.
          * Not a device property: the walk is still ended by the item count or an empty bank. The
-         * most banks any category on a supported instrument has is 16.
+         * most banks any category on a supported instrument has is 20, a Nord Electro 7's
+         * programs (A-T, per the catalog).
          */
         internal const val FALLBACK_MAX_BANKS = 256
 
-        // internal: DemoUsbTransport in the test sources answers on these ids.
+        // internal: FakeNordTransport in the test sources answers on these ids.
         internal const val PROTOCOL_CTRL = 7 // version 0 - device info query
         internal const val PROTOCOL_UI = 6 // version 1 - capability query, status display
         internal const val PROTOCOL_FILE_TRANSFER = 12 // version per device - content database
@@ -1276,8 +1181,11 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         private const val FIRMWARE_CTRL_BREQUEST = 4
         private const val FIRMWARE_CTRL_WLENGTH = 2
 
-        /** The instrument's "file exists" status, answered by a copy onto an occupied slot. The only status code the protocol names. */
+        /** The instrument's "file exists" status, answered by a copy onto an occupied slot. */
         const val STATUS_FILE_EXISTS = 4
+
+        /** "Not found": an empty slot, answered by a fetch inside the area ([readProgram]) and by a swap. */
+        const val STATUS_NOT_FOUND = 1
 
         // Upper bounds for detectRootCategoryTrailerLen's search, far above anything real
         // (trailers are 28-29 bytes, the longest known category name 17), so a corrupt payload
@@ -1329,8 +1237,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
 
         /**
          * Upper bound on a category-child's `capacity` where it becomes an addressing bound
-         * ([deriveBankLayout], which feeds `InstrumentViewModel.allSlots`). Real instruments
-         * report 25 or 100; this guards against a malfunctioning device. Not applied when parsing
+         * ([deriveBankLayout], which feeds `PresetListings.allSlots`). The catalog's models hold
+         * 25 to 100 programs per bank (**assumption:** the reported capacity is groups times slots
+         * per group, as measured on a Grand and a Stage 2 EX); this guards against a
+         * malfunctioning device. Not applied when parsing
          * a child list, where a Stage 2 EX legitimately reports 0xFFFE for its "(Native)"
          * categories.
          */
@@ -1394,8 +1304,6 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
             return off == payload.size
         }
 
-        private val PRESET_ID_RE = Regex("^([A-Za-z]):(\\d+):(\\d+)$")
-
         /**
          * Reads a big-endian u32, checking the buffer is long enough first, so a short reply is a
          * protocol error rather than an [ArrayIndexOutOfBoundsException].
@@ -1411,7 +1319,10 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
         }
 
         private fun uint32BE(value: Int): ByteArray = byteArrayOf(
-            (value ushr 24).toByte(), (value ushr 16).toByte(), (value ushr 8).toByte(), value.toByte(),
+            (value ushr 24).toByte(),
+            (value ushr 16).toByte(),
+            (value ushr 8).toByte(),
+            value.toByte(),
         )
 
         /** A sub-opcode 31 item record's data-size field: the exact byte length of the item's blob. */
@@ -1466,121 +1377,6 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: Device
                 "child list left ${payload.size - off} bytes unconsumed - layout is not as assumed"
             }
             return children
-        }
-
-        /** Total allocation units `sizes` occupy at a candidate unit size. */
-        fun storageUnitsAt(sizes: List<Int>, unitBytes: Int): Long =
-            sizes.sumOf { ((it + unitBytes - 1) / unitBytes).toLong() }
-
-        /**
-         * How far `used` may exceed the computed sum and still count as a fit. The residual (the
-         * instrument's per-item overhead) ran under 0.3% on every area measured; wrong candidates
-         * miss by 25-98%.
-         */
-        private const val CALIBRATION_TOLERANCE = 0.01
-        private const val CALIBRATION_MIN_TOLERANCE = 2
-
-        /**
-         * Below this many units per item on average, nearly every item fits in one unit and every
-         * candidate at or above the largest item fits equally well: a Nord Grand's slot-counted
-         * `Program` area (ratio 1.05), where the block-counted areas run from 9 to 159.
-         */
-        private const val CALIBRATION_MIN_UNITS_PER_ITEM = 1.5
-
-        data class SolvedUnit(
-            val unitBytes: Int?,
-            val residual: Int?,
-            val candidateRange: Pair<Int, Int>?,
-            val reason: String,
-        )
-
-        /**
-         * Solve for the allocation unit that explains `used` given every item's byte size.
-         *
-         * `sum(ceil(size / U))` is non-increasing in U, so the units that fit form one
-         * contiguous range: its lower edge is the smallest U whose sum has fallen to `used` or
-         * below, its upper edge the largest still within tolerance. Both are found by binary
-         * search, so this is a few dozen sums however large the area is. The value reported out
-         * of that range is the one divisible by the largest power of two: real units are round
-         * numbers (64/128/192/256 KB across the instruments measured so far) while the range's
-         * edges are wherever the arithmetic happened to cross.
-         */
-        fun solveStorageUnit(rawSizes: List<Int>, used: Int): SolvedUnit {
-            val sizes = rawSizes.filter { it > 0 }
-            val count = sizes.size
-            if (count == 0) return SolvedUnit(null, null, null, "no item records to measure against")
-            if (used <= 0) {
-                return SolvedUnit(null, null, null, "the area reports used=$used, which nothing can be fitted to")
-            }
-            if (used < count) {
-                return SolvedUnit(
-                    null, null, null,
-                    "$count records against a reported used of $used - fewer units than items, so " +
-                        "these records are not (only) what this area is accounting for",
-                )
-            }
-            if (used < count * CALIBRATION_MIN_UNITS_PER_ITEM) {
-                // Locale.ROOT, not the device's locale: this string is machine-readable output
-                // that goes into a shared JSON report, and a German phone renders "1.05" as "1,05".
-                val perItem = String.format(Locale.ROOT, "%.2f", used.toDouble() / count)
-                return SolvedUnit(
-                    null, null, null,
-                    "$used units over $count items is $perItem per item - at barely one unit each, " +
-                        "every candidate at or above the largest item explains the figures equally " +
-                        "well, so these records cannot separate a block size from a per-item slot " +
-                        "count",
-                )
-            }
-
-            val tolerance = maxOf(CALIBRATION_MIN_TOLERANCE, (used * CALIBRATION_TOLERANCE).toInt())
-            val largest = sizes.max()
-
-            // Smallest unit whose total has come down to `used` - the range's lower edge.
-            var lo = 1
-            var hi = largest
-            while (lo < hi) {
-                val mid = lo + (hi - lo) / 2
-                if (storageUnitsAt(sizes, mid) <= used) hi = mid else lo = mid + 1
-            }
-            val unitLo = lo
-            if (storageUnitsAt(sizes, unitLo) < used - tolerance) {
-                return SolvedUnit(
-                    null, null, null,
-                    "no unit size reproduces a used of $used from these $count records " +
-                        "(the closest total is ${storageUnitsAt(sizes, unitLo)})",
-                )
-            }
-
-            // ...and the largest still within tolerance, the upper edge.
-            lo = unitLo
-            hi = largest
-            while (lo < hi) {
-                val mid = lo + (hi - lo + 1) / 2
-                if (used - storageUnitsAt(sizes, mid) <= tolerance) lo = mid else hi = mid - 1
-            }
-            val unitHi = lo
-
-            val unit = roundestInRange(unitLo, unitHi)
-            val residual = (used - storageUnitsAt(sizes, unit)).toInt()
-            return SolvedUnit(
-                unit, residual, unitLo to unitHi,
-                "$count records, $used units used, $residual unaccounted for; any unit from " +
-                    "$unitLo to $unitHi bytes fits as well",
-            )
-        }
-
-        /**
-         * The value in [lo]..[hi] divisible by the largest power of two, smallest first on a tie
-         * - see [solveStorageUnit] for why that is the one worth reporting. Falls back to [lo]
-         * for a range holding nothing rounder.
-         */
-        fun roundestInRange(lo: Int, hi: Int): Int {
-            for (shift in (31 - Integer.numberOfLeadingZeros(hi)) downTo 1) {
-                val step = 1 shl shift
-                val first = ((lo + step - 1) / step) * step
-                if (first <= hi) return first
-            }
-            return lo
         }
     }
 }

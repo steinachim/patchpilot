@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
+import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.devices.pro800.Pro800Fixtures.bytes
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
 import de.thewolfwalkexperience.software.patchpilot.midi.SysExExchange
@@ -45,7 +46,7 @@ class Pro800DecodingTest {
     }
 
     @Test
-    fun `the undocumented replies match what the protocol notes record`() {
+    fun `the undocumented replies match what the instrument was measured to send`() {
         // 0x02 -> "03 00"
         val two = bytes(Pro800Fixtures.TYPE_02_REPLY)
         assertEquals(0x03, Pro800SysEx.typeOf(two))
@@ -60,8 +61,8 @@ class Pro800DecodingTest {
     /**
      * A value of 4 here is front-panel channel 3, which is wire channel 2.
      *
-     * Nothing depends on this any more - selection needs no channel - but it is still read and
-     * still reported in the device report, so it still has to decode correctly.
+     * Selection needs no channel, but the device report reports it, so it has to decode
+     * correctly.
      */
     @Test
     fun `the settings block yields the instrument's MIDI receive channel`() {
@@ -157,8 +158,10 @@ class Pro800DecodingTest {
         assertTrue(Pro800Program.fromEncoded(ByteArray(0)).isEmpty)
     }
 
-    /** Whatever the instrument sent, the codec must be able to hand back unchanged - the
-     * precondition for a write path that does not corrupt a preset it merely renamed. */
+    /**
+     * Whatever the instrument sent, the codec must be able to hand back unchanged - the
+     * precondition for a write path that does not corrupt a preset it merely renamed.
+     */
     @Test
     fun `every record survives a decode-encode round trip`() {
         listOf(
@@ -198,7 +201,9 @@ class Pro800DecodingTest {
         val transport = FakeMidiTransport { request ->
             when (Pro800SysEx.typeOf(request)) {
                 Pro800SysEx.TYPE_DEVICE_NAME -> listOf(bytes(Pro800Fixtures.DEVICE_NAME_REPLY))
+
                 Pro800SysEx.TYPE_FIRMWARE -> listOf(bytes(Pro800Fixtures.FIRMWARE_REPLY))
+
                 Pro800SysEx.TYPE_REQUEST_DUMP -> {
                     val number = Pro800SysEx.addressOf(request)!!
                     if (number == Pro800SysEx.SETTINGS_ADDRESS) {
@@ -210,17 +215,20 @@ class Pro800DecodingTest {
                             ?: listOf(bytes(Pro800Fixtures.DUMP_EMPTY_REPLY))
                     }
                 }
+
                 Pro800SysEx.TYPE_DUMP -> {
                     if (Pro800SysEx.addressOf(request) == Pro800SysEx.SETTINGS_ADDRESS) {
                         settings = request
                     }
                     emptyList()
                 }
+
                 Pro800SysEx.TYPE_RESET_MODE -> listOf(
                     Pro800SysEx.HEADER +
                         byteArrayOf(Pro800SysEx.TYPE_STATUS.toByte(), 0x00, Pro800SysEx.STATUS_OK.toByte()) +
                         Pro800SysEx.SYSEX_END,
                 )
+
                 else -> emptyList()
             }
         }
@@ -237,7 +245,7 @@ class Pro800DecodingTest {
         assertEquals("RandomTest", slots[0].name)
         assertEquals("RandomTest 109L", slots[1].name)
         assertEquals("Rand", slots[2].name)
-        assertEquals(Pro800Instrument.UNNAMED, slots[3].name)
+        assertEquals(UNNAMED_PRESET, slots[3].name)
         assertNull(slots[4].name)
 
         // And selection moves the pointer in the real captured settings block. The capture was
@@ -327,9 +335,13 @@ class Pro800DecodingTest {
         // Stated outright: the two replies differ only at offset 10.
         assertEquals(
             "offset 9 is identical in both, which is why reading it there sees nothing",
-            ok[9], failure[9],
+            ok[9],
+            failure[9],
         )
-        assertTrue("they differ at offset 10", ok[Pro800SysEx.STATUS_CODE_INDEX] != failure[Pro800SysEx.STATUS_CODE_INDEX])
+        assertTrue(
+            "they differ at offset 10",
+            ok[Pro800SysEx.STATUS_CODE_INDEX] != failure[Pro800SysEx.STATUS_CODE_INDEX],
+        )
     }
 
     /** Anything that is not a status reply has no status code - a dump must not look like one. */
@@ -455,7 +467,10 @@ class Pro800DecodingTest {
     fun `suspicion begins exactly below the start of the name field`() {
         val filler = ByteArray(Pro800ProgramFields.NAME_DENSE_OFFSET)
         Pro800ProgramCodec.writeValue(
-            filler, Pro800ProgramFields.VERSION.denseOffset, Pro800ProgramFields.VERSION.byteCount, 109,
+            filler,
+            Pro800ProgramFields.VERSION.denseOffset,
+            Pro800ProgramFields.VERSION.byteCount,
+            109,
         )
         assertFalse(
             "a record reaching the name field is taken at face value",
@@ -467,8 +482,10 @@ class Pro800DecodingTest {
         )
     }
 
-    /** No false positives: a record within its own version's declared limit must never be flagged
-     * as corrupt. */
+    /**
+     * No false positives: a record within its own version's declared limit must never be flagged
+     * as corrupt.
+     */
     @Test
     fun `every record is within the length its version declares`() {
         listOf(

@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
 import android.content.Context
+import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentFamily
@@ -12,13 +13,12 @@ import de.thewolfwalkexperience.software.patchpilot.transport.Transport
 import de.thewolfwalkexperience.software.patchpilot.transport.UsbBulkTransport
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
-import de.thewolfwalkexperience.software.patchpilot.catalog.CatalogLoader
 
 private const val DEVICE_CATALOG_ASSET = "nord_devices.json"
 
 /**
  * The Nord family: `devices/nord_devices.json` plus a factory for [NordDevice]/[NordInstrument].
- * The catalog file keeps its own shape; each [DeviceProfile] becomes a descriptor whose
+ * The catalog file keeps its own shape; each [NordProfile] becomes a descriptor whose
  * `familyConfig` is that profile serialized, which the factory reads straight back. List order
  * decides which device is preferred if more than one is connected.
  */
@@ -26,15 +26,16 @@ object NordFamily : InstrumentFamily {
 
     override val id = NordInstrument.FAMILY
 
-    private val catalog = CatalogLoader(DEVICE_CATALOG_ASSET, DeviceCatalog.serializer())
+    private val catalog = CatalogLoader(DEVICE_CATALOG_ASSET, NordCatalog.serializer())
 
     override fun descriptors(context: Context): List<InstrumentDescriptor> =
         catalog.load(context).devices.map { it.toDescriptor() }
 
-    private fun DeviceProfile.toDescriptor() = InstrumentDescriptor(
+    private fun NordProfile.toDescriptor() = InstrumentDescriptor(
         id = id,
         family = NordInstrument.FAMILY,
         name = name,
+        variant = variant,
         match = DeviceMatch.Usb(vendorId, productId),
         familyConfig = catalog.format.encodeToJsonElement(this).jsonObject,
     )
@@ -53,7 +54,19 @@ object NordFamily : InstrumentFamily {
         )
     }
 
+    /**
+     * A Clavia device the catalog does not list, on [NordProfile.unknown]'s guessed bounds;
+     * [NordInstrument.connect] replaces them with the ones the device reports.
+     */
+    override fun createForUnknown(
+        transport: UsbBulkTransport,
+        name: String,
+        vendorId: Int,
+        productId: Int,
+    ): Instrument =
+        NordInstrument(NordDevice(transport, NordProfile.unknown(name, vendorId, productId)))
+
     /** The profile [toDescriptor] stashed, read back with no field mapping. */
-    private fun InstrumentDescriptor.profile(): DeviceProfile =
-        catalog.format.decodeFromJsonElement(DeviceProfile.serializer(), familyConfig)
+    private fun InstrumentDescriptor.profile(): NordProfile =
+        catalog.format.decodeFromJsonElement(NordProfile.serializer(), familyConfig)
 }

@@ -3,19 +3,18 @@
 
 package de.thewolfwalkexperience.software.patchpilot.core
 
+import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoLibrary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import de.thewolfwalkexperience.software.patchpilot.core.Bus
 
 /**
  * A fictitious instrument shaped like a family with no copy of its own - flat `A00` addressing, no
  * categories, no display, emulated edits, and a slow index that arrives in batches - kept as a
  * **test fixture only**, never reachable from the app.
  *
- * Two things exercise it, and both are the reason it exists rather than being deleted alongside
- * `DemoInstrument`'s old `Profile.ANALOG`:
+ * Two things exercise it:
  *
  * - `InstrumentFacetTest` needs an instrument shaped differently from a Nord to check the
  *   screens' facet-gating - `report`/`transfer` absent, edits emulated, a batched index -
@@ -23,22 +22,18 @@ import de.thewolfwalkexperience.software.patchpilot.core.Bus
  * - `RegressionTesterTest` needs an instrument that declares no [EditOp.COPY], to exercise the
  *   debug menu's regression test's fallback path for a family that has no sandbox to work in.
  *
- * **Not modeled on either real family today.** Both the real `Pro800Editor` and the real
- * `MotifXsInstrument` gained `copyProgram` after this shape was first written as
- * `DemoInstrument.Profile.ANALOG`; nothing this app currently talks to actually lacks copy. The
- * name says what it is for rather than which instrument it mirrors, so it stays meaningful even
- * if that stops being true of every family, and doesn't need renaming if a fourth family without
- * copy shows up.
+ * **Not modeled on any real family.** Every family the app talks to has copy; the name says
+ * what the fixture is for rather than which instrument it mirrors.
  */
 class NoCopyFixtureInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor {
-
-    private val library = DemoLibrary(NAMES, slotsPerBank = SLOTS_PER_BANK)
 
     override val layout: SlotLayout = SlotLayout.uniform(
         bankCount = 4,
         slotsPerBank = SLOTS_PER_BANK,
         format = FlatBankAddressFormat(slotDigits = 2),
     )
+
+    private val library = DemoLibrary(NAMES, slotsPerBank = SLOTS_PER_BANK, format = layout.format)
 
     override val identity = InstrumentIdentity(
         descriptorId = "no-copy-fixture",
@@ -87,8 +82,7 @@ class NoCopyFixtureInstrument : Instrument, PresetBrowser, PresetSelector, Prese
         library.requireOccupied(address)
     }
 
-    /** Mirrors what a fire-and-forget instrument can honestly claim - see
-     * NordInstrument.confirmationFor for the contrast. */
+    /** What a fire-and-forget instrument can honestly claim, against the default "Selected" of `PresetSelector.confirmationFor`. */
     override fun confirmationFor(displayId: String) = "Sent $displayId."
 
     // ---- PresetEditor ----

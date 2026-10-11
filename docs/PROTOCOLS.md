@@ -55,7 +55,7 @@ Presets are addressed as `(bank, item)` pairs within named root categories. All 
 | 24/25 | Move program | `srcBank`, `srcItem`, `dstBank`, `dstItem` | `status` plus the echoed request. The destination must be empty. |
 | 26/27 | Swap programs | `srcBank`, `srcItem`, `dstBank`, `dstItem` | `status` only. Both positions must be occupied; an empty one answers status 1. |
 | 28/29 | Set name | `bank`, `item`, name length, ASCII name | `status`, echoed `bank`, echoed `item`. An oversized name is accepted with status 0 and silently truncated to the instrument's stored maximum (16 characters on every model measured). |
-| 30/31 | Fetch item | `bank`, `item` | The item's metadata record (below), not its program data. |
+| 30/31 | Fetch item | `bank`, `item` | The item's metadata record (below), not its program data. An empty slot answers status 1, and an address past the area status 3, each with the previous record's bytes after it, name included: the status is read first. |
 | 32/33 | Cursor next item | `bank`, previous item index (`-1` to start), direction `0` | A "bank exhausted" flag at offset 0 and the next item index at offset 8; walks a category one item at a time. |
 | 47/48 | Select preset | `bank`, `item` | `status` plus echoed `bank`/`item`. Loads the preset. Sent inside the category lock it also refreshes the instrument's display after a write; see "Operations". |
 | 51/52 | Set category | `bank`, `item`, `categoryId` | `status` plus echoed `bank`/`item`. Writes the category tag alone and leaves the name untouched. Every id 0..31 is accepted and stored; one the instrument cannot name displays as `No Cat`. |
@@ -84,13 +84,15 @@ Storage accounting: the cursor (32/33) is the authority on how many items a cate
 
 ### Operations
 
-Every preset operation runs inside a category lock: `SELECT_CATEGORY` for the `Program` category, the operation, then `UNLOCK_CATEGORY_SELECTION`. The unlock always runs, on failure too, because a lock left standing makes the instrument's panel unresponsive until the session ends. The `Program` category's index is looked up by name in the root category list before the lock is taken.
+Every preset operation runs inside a category lock: `SELECT_CATEGORY` for the `Program` category, the operation, then `UNLOCK_CATEGORY_SELECTION`. The unlock always runs, on failure too and after a select that failed or was cancelled once sent, because a lock left standing makes the instrument's panel unresponsive until the session ends. The `Program` category's index is looked up by name in the root category list before the lock is taken.
 
 Listing walks the `Program` category with the cursor and fetches each item's record. The bank count for the walk is the category's own child count (2/3), not the program bank letters: a Nord Stage 2 EX addresses programs in four banks while giving `Piano` six children. A category that reports itself exhausted having yielded nothing ends the walk unless a non-zero item count says more is to come.
 
-After a rename, move, swap or category change the app re-selects the affected slot(s) with 47/48 while still inside the lock. On a Nord Stage 2 EX none of those writes refreshes the panel on its own, and a 47/48 sent outside the lock does nothing there; on a Nord Grand a 47/48 outside the lock changes the active preset. Every reply carrying `(status, bank, item)` is checked on all three: a non-zero status is a refusal, and an echo naming a different slot means the instrument acted on the wrong one.
+Re-reading one slot after an edit fetches it by address (30/31 inside the lock) instead of walking: status 0 is the record and 1 an empty slot. Measured on a Nord Stage 2 EX, including slots a copy, swap, rename, delete or move had just changed; each agreed with a fresh walk. Any other status falls back to the walk, since the Nord Grand's answers to a fetch by address are unmeasured.
 
-A delete frees no space until the instrument's own reclaim runs: the units move from `used` to `reclaimable`.
+After a rename, move, swap or category change the app re-selects the affected slot(s) with 47/48 while still inside the lock. On a Nord Stage 2 EX none of those writes refreshes the panel on its own, and a 47/48 sent outside the lock does nothing there; on a Nord Grand a 47/48 outside the lock changes the active preset. Every reply carrying `(status, bank, item)` is checked on all three: a non-zero status is a refusal, and an echo naming a different slot means the instrument acted on the wrong one, which the app reports as a desync rather than a refusal. A re-select that does not confirm is only logged, since the write before it is already stored.
+
+A delete in a block-counted area (samples) frees no space until the instrument's own reclaim runs: the units move from `used` to `reclaimable`. The program areas are counted in bytes (Nord Stage 2 EX) or in slots (Nord Grand), and a deleted program's space returns to `free` at once.
 
 ### Reliability
 
@@ -104,7 +106,7 @@ Class-compliant USB-MIDI through Android's `MidiManager`, which opens the port w
 
 ### Identification
 
-The instrument enumerates with USB vendor id `0x1397`, product id `0x125F`, but the app does not match on them: every MIDI port Android's MIDI service publishes is probed, and a port is identified by sending the device-name request (type `0x06`) and checking that the reply starts with the Pro-800 header and type `0x07`. Port names are never used. The catalog format allows a `usbHint` that would restrict the probe to ports backed by a given USB device; the Pro-800 entry sets none, so a Pro-800 reached through a separate USB-MIDI interface is found as well. The same ids are listed as `launchOnUsbAttach`, which only puts them into the app's USB attach filter so that Android offers the app when the instrument is plugged in. Accepting that dialog grants a USB permission this path does not use.
+The instrument enumerates with USB vendor id `0x1397`, product id `0x125F`, but the app does not match on them: every MIDI port Android's MIDI service publishes is probed, except virtual ports other apps provide and the MIDI interface of an instrument matched over USB (a Nord's), and a port is identified by sending the device-name request (type `0x06`) and checking that the reply starts with the Pro-800 header and type `0x07`. Port names are never used. The catalog format allows a `usbHint` that would restrict the probe to ports backed by a given USB device; the Pro-800 entry sets none, so a Pro-800 reached through a separate USB-MIDI interface is found as well. The same ids are listed as `launchOnUsbAttach`, which puts them into the app's USB attach filter so that Android offers the app when the instrument is plugged in, and has a port with these ids probed first. Accepting that dialog grants a USB permission this path does not use.
 
 ### Framing
 
@@ -139,11 +141,11 @@ Selection writes the instrument's own selection pointer; no MIDI channel message
 1. Read the settings block (`0x77` at 510).
 2. Patch both fields in one `0x78` at 510, changing only those value bytes and the overflow bits that carry their high bits. The block is 46 raw bytes and ends mid-group, so its last overflow byte governs five value bytes; a decode/re-encode round trip would zero the two unowned bits, whose meaning is unknown, so the block is patched in place.
 3. Poll the read-back every 200 ms for up to 2.5 s until both fields match. Most writes are visible on the next read; some take over a second.
-4. Send `0x32 0x00`. The settings write moves the pointer, and the display and every readable field follow it, while the voice engine keeps playing the previous preset until this recall.
+4. Send `0x32 0x00` and wait for its status; a failure status is reported as a refusal to load. The settings write moves the pointer, and the display and every readable field follow it, while the voice engine keeps playing the previous preset until this recall.
 
 Ordinary channel messages (Bank Select, Program Change) are not used because nothing acknowledges them and the receive channel is not always knowable: the instrument can take it from its rear DIP switches, can be set to ignore MIDI entirely, and has a separate `MIDI PC Mode` that disables Program Change reception. The SysEx sequence works in every one of those configurations, including `MIDI RX Channel = OFF`, and was confirmed audibly on hardware: the instrument's sound changes, not only its display. Nothing readable reports the audible recall, so a regression in step 4 is invisible to every check the app can make.
 
-Rename, move, swap, delete and copy are composed from `0x77` reads and `0x78` writes; the instrument has none of them as commands. Every write is followed by a read-back that is compared byte for byte over the common prefix (the instrument truncates trailing padding, so the stored record may be shorter than what was sent). A rename preserves the record's format version rather than upgrading it, and grows the record to the end of the name field where the stored record ended earlier; the name field ends one byte before format 110's first appended field. A move writes the destination before erasing the source; a swap rolls the first write back if the second fails; the previous contents of every overwritten address are kept in memory for the session.
+Rename, move, swap, delete and copy are composed from `0x77` reads and `0x78` writes; the instrument has none of them as commands. Every write is followed by a read-back that is compared byte for byte over the common prefix (the instrument truncates trailing padding, so the stored record may be shorter than what was sent). A rename preserves the record's format version rather than upgrading it, and grows the record to the end of the name field where the stored record ended earlier; the name field ends one byte before format 110's first appended field. A move writes the destination before erasing the source; a swap puts the first slot back if either write fails, the first included, since a write can land and still fail its read-back.
 
 ### Hazards
 
@@ -175,7 +177,7 @@ The instrument paces its output at about 12,468 bytes per second in full 64-byte
 
 USB vendor id `0x0499` (Yamaha), product id `0x1042` for the XS6. **Assumption:** `0x1043` and `0x1044` are catalogued as the XS7 and XS8. Yamaha's Windows driver package ships `yum1043.inf` and `yum1044.inf` alongside the XS6's `yum1042.inf`, and the two previous Motif generations assigned sequential product ids by keybed size, but no Yamaha text ties these ids to the model names and neither has been confirmed on a unit. All three share one catalog configuration, since Yamaha's combined MIDI implementation chart documents one protocol for the three.
 
-On connect the app sends a Universal Device Inquiry, `F0 7E 00 06 01 F7` (device id `0x00`, which is what the vendor's editor uses; whether the `7F` broadcast id is answered is untested), and accepts any reply whose second byte is `7E` and fifth byte is `02` (`F0 7E nn 06 02 ... F7`). Only the four bytes before `F7` are read, as the firmware version; the manufacturer, family and model fields are not checked, and the session continues if no reply arrives. The reply distinguishes the three models (family member code `35 06` / `36 06` / `37 06`), but the product id already has.
+On connect the app sends a Universal Device Inquiry, `F0 7E 00 06 01 F7` (device id `0x00`, which is what the vendor's editor uses; whether the `7F` broadcast id is answered is untested), and accepts any reply whose second byte is `7E` and fifth byte is `02` (`F0 7E nn 06 02 ... F7`). Of the four version bytes before `F7`, only the first is read: `06` is firmware 1.60 (measured on a unit running 1.60, the latest release), and the other three read `00 00 7F`. How other releases are numbered is unmeasured, so another value is shown as its code (`code 0x05`) and, not being the tested 1.60, raises the untested-firmware warning. The manufacturer, family and model fields are not checked, and the session continues if no reply arrives. The reply distinguishes the three models (family member code `35 06` / `36 06` / `37 06`), but the product id already has.
 
 ### MIDI routing
 
@@ -221,7 +223,7 @@ An unmapped middle byte in a dump request is not merely refused: it puts an *Ill
 
 The payload's first two bytes are not decoded. From offset 2 it is MSB-packed: groups of 8 bytes, the first carrying the high bits of the seven that follow it (bit *j* for the *j*-th byte), unpacked into a dense stream.
 
-The dense stream opens with an ASCII figure pair, two decimal numbers of 1..4 digits each, colon-separated and colon-terminated (`256:256:`, `227:146:`, `0:0:`). They are the voice's two category assignments, each `main × 16 + sub`; `256` (`16 × 16`) is `NoAsg`, no assignment. Because the figures are variable width, the name that follows does not start at a fixed offset, and a category can never be written by patching the figures in place. The name is the printable run after the pair, bounded at 64 bytes, and its true length is settled by a repeat of the name 6 bytes after its end: a greedy printable read overshoots by one when the first byte after the name happens to be printable, and the repeat sits one byte early in that case. A name that is not corroborated by its repeat reads as empty, which is how an empty slot presents; the wire has no emptiness flag. The rest of the payload is not decoded.
+The dense stream opens with an ASCII figure pair, two decimal numbers of 1..4 digits each, colon-separated and colon-terminated (`256:256:`, `227:146:`, `0:0:`). They are the voice's two category assignments, each `main × 16 + sub`; `256` (`16 × 16`) is `NoAsg`, no assignment. Because the figures are variable width, the name that follows does not start at a fixed offset, and a category can never be written by patching the figures in place. The name is the printable run after the pair, bounded at 64 bytes, and its true length is settled by a repeat of the name 6 bytes after its end: a greedy printable read overshoots by one when the first byte after the name happens to be printable, and the repeat sits one byte early in that case. A name that is not corroborated by its repeat reads as empty, which is how an empty slot presents; the wire has no emptiness flag. A voice whose name was cleared on the panel keeps its sound and its figures and stores no name byte (measured on an XS6, `114:256:` followed by no name). Such a slot reads as empty only where its figures are `256:256:` (never written) or `0:0:` or `192:192:` (the app's own blanks); with any other pair it is listed as `(unnamed)`. A nameless voice carrying one of those pairs still reads as empty. The rest of the payload is not decoded.
 
 The categories decoded this way were checked against the shipped factory table on 205 user voices whose names match factory voices, with no mismatches.
 
@@ -229,18 +231,18 @@ The categories decoded this way were checked against the shipped factory table o
 
 Listing reads the four user banks (416 voices, about 93 s measured) with one `0C` dump request each, matched on the echoed address and accepted only if well-formed (count and checksum), so a truncated dump is retried rather than accepted. The eleven factory banks (1,217 voices) are never read for a listing: at the measured per-voice times that walk would take several minutes (an extrapolation; it has not been timed end to end) for data that is identical on every Motif XS, so their names and categories ship with the app in `devices/motifxs_factory_voices.json`, transcribed from Yamaha's published voice lists (the two drum banks' categories were read off an instrument, since the drum voice list publishes none). The debug menu can read one factory bank and diff it against the shipped table.
 
-Selection sends the three `65 00 0x` messages in the order the vendor's editor does and waits for the echo of the third only. It takes effect in Voice mode only; in Performance and Song mode the messages draw no echo and change nothing, so the app reads the mode first and refuses with an offer to switch. The switch is a documented parameter change to `0A 00 01`, sent only after the user confirms, since it audibly changes what the instrument plays; it draws no reply, so the app polls the mode every 250 ms for up to 3 s until Voice is read back. Bank-select pairs are per bank: every normal bank uses MSB `0x3F` except GM (`0x00`), and GM DR uses `0x7F`; PRE1, GM and GM DR all use LSB `0x00` and are told apart only by the MSB. An unrecognised pair is ignored rather than refused, so a wrong value loads a voice from whatever bank was current and reports success.
+Selection sends the three `65 00 0x` messages in the order the vendor's editor does, under one lock so that a listing's dump request cannot land between them, and waits for the echo of the third, which must carry the program number sent; a missing echo sends all three again, up to twice. It takes effect in Voice mode only; in Performance and Song mode the messages draw no echo and change nothing, so the app reads the mode first and refuses with an offer to switch. The switch is a documented parameter change to `0A 00 01`, sent only after the user confirms, since it audibly changes what the instrument plays; it draws no reply, so the app polls the mode every 250 ms for up to 3 s until Voice is read back. Bank-select pairs are per bank: every normal bank uses MSB `0x3F` except GM (`0x00`), and GM DR uses `0x7F`; PRE1, GM and GM DR all use LSB `0x00` and are told apart only by the MSB. An unrecognised pair is ignored rather than refused, so a wrong value loads a voice from whatever bank was current and reports success.
 
-Rename and category change use the documented path: read the stored voice at `0E mm nn`, patch the Common block's name bytes (`0x00`..`0x13`) or category bytes (`0x18`..`0x1B`) on a copy, and send every block back between a freshly built header and footer with a 15 ms gap between blocks, matching the vendor editor's pacing. The footer commits to flash; no store marker is needed. Every block is checked for well-formedness before anything is sent, and exactly one Common block must be present, because once the header is on the wire the instrument is in a transaction: left mid-sequence it waits on "receiving midi bulk data" until the sequence is completed or it is power-cycled. The app therefore never stops a sequence part way. Editing the edit buffer's Common block with parameter changes does not reach the stored slot; only the panel's own Store does, and that is not a message a host can send. The name is NUL-padded (revision C0 of the Data List; revision B0 says space-padded and does not match the instrument). After a rename, if the instrument is in Voice mode and its edit buffer still shows the old name, the app re-selects the slot so the panel catches up.
+Rename and category change use the documented path: read the stored voice at `0E mm nn`, patch the Common block's name bytes (`0x00`..`0x13`) or category bytes (`0x18`..`0x1B`) on a copy, and send every block back between a freshly built header and footer with a 15 ms gap between blocks, matching the vendor editor's pacing. The footer commits to flash; no store marker is needed. Every block is checked for well-formedness before anything is sent, and exactly one Common block must be present, because once the header is on the wire the instrument is in a transaction: left mid-sequence it shows "receiving midi bulk data". The unit measured, killed mid-sequence, recovered on its own and discarded the change; whether every unit does, or some wait until power-cycled, is unconfirmed. The app therefore never stops a sequence part way. Editing the edit buffer's Common block with parameter changes does not reach the stored slot; only the panel's own Store does, and that is not a message a host can send. The name is NUL-padded (revision C0 of the Data List; revision B0 says space-padded and does not match the instrument). After a rename, if the instrument is in Voice mode and its edit buffer still shows the old name, the app re-selects the slot so the panel catches up. That reload drops unsaved panel changes to the loaded voice (measured on an XS6), so the instrument carries a connect-time notice saying so; no other edit touches the panel.
 
-Delete, copy, move and swap are composed from one primitive: write a whole voice payload as a bulk dump to a `0C` address, then commit with `11 00 00`. An acknowledged write is held, not applied; the commit writes every held dump to flash, takes about 160 ms against about 19 ms for a data dump, and is idempotent (the vendor's editor sends two). Each operation issues all of its writes before its single commit, which is what makes it atomic: a refused write is answered with silence and is not held, so if a later write in an operation is refused nothing has been committed. Every operation then reads the affected slots back and compares the bytes exactly.
+Delete, copy, move and swap are composed from one primitive: write a whole voice payload as a bulk dump to a `0C` address, then commit with `11 00 00`. An acknowledged write is held, not applied; the commit writes every held dump to flash, takes about 160 ms against about 19 ms for a data dump, and is idempotent (the vendor's editor sends two). Each operation issues all of its writes before its single commit: a refused write is answered with silence and is not held, so if a later write in an operation is refused nothing has been committed yet. The operation is atomic only until the next commit, though: a write accepted earlier in the same operation stays held, and the next commit, from any later edit, would apply it. A later write to the same address replaces a held one (measured on an XS6, for a single address and for a swap whose second write was refused), so the editor offers the originals of the slots already written again and commits, which puts them back. If that fails too, the error says the write is still held, and that switching the instrument off and on discards it. Every operation then reads the affected slots back and compares the bytes exactly.
 
 - Delete: write a blank payload, commit, verify.
 - Copy: read the source (refusing an empty source or an occupied destination, which the instrument does not), write it to the destination, commit, verify. The copy carries the source's name unchanged.
-- Move: read the source, write it to the destination and the blank to the source, one commit, verify both.
+- Move: read the source (refusing an empty source or an occupied destination, as copy does), write it to the destination and the blank to the source, one commit, verify both.
 - Swap: read both, write each to the other's address, one commit, verify both.
 
-The blank payloads ship with the app (`devices/blanks/`): one initialized Normal Voice and one initialized Drum Voice, each read off an instrument with its name bytes cleared through the documented path. A drum kit and a normal voice are different objects (about 12.6 kB against 1.9 kB, with different block sequences), and the instrument acknowledges a payload of the wrong kind at either address without complaint, so the app refuses any copy or move between a drum bank and a normal bank itself.
+The blank payloads ship with the app (`devices/blanks/`): one initialized Normal Voice and one initialized Drum Voice, each read off an instrument with its name bytes cleared through the documented path. A drum kit and a normal voice are different objects (about 12.6 kB against 1.9 kB, with different block sequences), and the instrument acknowledges a payload of the wrong kind at either address without complaint, so the app refuses any copy, move or swap between a drum bank and a normal bank itself, and offers no slot of the other kind when a destination is picked or a preset dragged.
 
 Favorites are read with one dump request per catalogued bank at `71 mm 00`. The reply is one byte per slot, not MSB-packed, and as long as the bank (128 for a normal bank, 64 for PRE DR, 32 for USER DR, 1 for GM DR): `0` unmarked, `1` filed under both of the voice's category assignments, `2` under the first only, `3` under the second only. A fourth value is stored verbatim and lists the voice under neither, so the byte is neither a boolean nor a bitmask; the app writes only 0..3. A voice with no category assignment can still be a favorite: marking a category-less user voice from the instrument's own Category Search → FAVORITE writes `2`, and the voice then appears in the FAVORITE bank under no category (43 of the 128 voices in one user bank measured carry no category). Writing a mark means reading the bank's whole table, changing one byte and sending the whole table back with `writeFavorites`, so the declared length is always the instrument's own; an ill-formed write to this instrument has been observed to hang its MIDI handling until a power cycle. The write differs from the `0C` path in four ways: it needs no store marker and reaches non-volatile storage on its own (sending `11 00 00` anyway would commit unrelated held writes); it applies on a delay, so the app polls the table every 150 ms for up to 3 s rather than reading back once; the read-only-bank rule does not apply (PRE1's table accepts a write, because a favorite is the user's data about factory content); and out-of-range values are kept rather than clamped. A category, by contrast, lives inside the voice, so setting one in a factory bank would rewrite a factory voice and is refused.
 
@@ -251,3 +253,137 @@ Sub-categories: Yamaha documents the main category byte and refers to a category
 The instrument sends no unsolicited SysEx apart from Active Sensing on cable 0. A bulk dump acknowledgement means the message was well-formed and accepted, not that anything reached flash; only the commit or the footer does that. Dumps dropped or truncated on the bus are ordinary rather than exceptional (the transport buffers deep enough to ride out a garbage-collection pause of about 150 ms at the instrument's transfer rate), so every read is retried twice and matched on well-formedness.
 
 Yamaha's documentation for the Motif XS: <https://usa.yamaha.com/products/contents/music_production/downloads/manuals/index.html?l=en&c=music_production&k=Motif+XS>
+
+## Fractal Audio Axe-Fx III
+
+Measured on a Mark I (512 presets) running firmware 32.06. Nothing has been run on a Mark II yet.
+
+### Transport
+
+Class-compliant USB-MIDI through Android's `MidiManager`, as for the Pro-800; no USB host permission is asked for. The instrument is a composite device whose other interfaces are USB Audio Class 2.0.
+
+### Identification
+
+Vendor id `0x2466` (Fractal Audio Systems), product id `0x8010`. **Assumption:** the Mark II and Mark II Turbo use the same ids (reported by owners, not seen here), so the ids name the family rather than the model. They are listed as `launchOnUsbAttach` only, so that Android offers the app when the unit is plugged in. A port is identified by Fractal's documented firmware query `F0 00 01 74 10 08 1D F7`, addressed to model `10`; **assumption:** other Fractal models, which have model bytes of their own, do not answer it. The reply starts `F0 00 01 74 10 08` and carries the version (`20 06` is 32.06) and an ASCII build stamp.
+
+The model is read at connect from the reply to command `0x47`, which Axe-Edit III sends at every startup: five 14-bit values, two bytes each, low seven bits first. The fifth is 512 on the Mark I measured, whose presets run 0..511. **Assumption:** it is the preset count, so a Mark II, which has 1,024 presets, reports 1024 (`00 08`) there, and a Mark II Turbo reports as a Mark II; no Mark II has been seen. The app treats exactly 1024 as a Mark II and anything else, a missing reply included, as a Mark I, so a unit it cannot classify is never offered slots it may not have. The other four values (336, 2048, 2048 and 16 on a Mark I) are not decoded.
+
+### Framing
+
+`F0 00 01 74 10 cc … cs F7`: the 3-byte Fractal manufacturer id, model `10`, a command byte, its payload, then a checksum: the XOR of every byte from `F0` through the last payload byte, masked to 7 bits.
+
+Text and preset data use Fractal's own packing, not the flag-byte scheme of the Yamaha family: the low seven bits of every wire byte form one bitstream, most significant bit first, which is cut into 8-bit bytes, a final partial byte being padding. The command byte and sub-function are inside the packed region of such a message, so building one means packing a fixed 2-byte artifact (`02 A0` for a rename) followed by the payload, never the command bytes themselves.
+
+### Messages
+
+| Command | Name | Payload | Reply |
+|---|---|---|---|
+| `0x08` | Firmware version | *(none)* | Major, minor, five undecoded bytes, the build stamp. Also the discovery probe. |
+| `0x47` | Model record | *(none)* | Five 14-bit values; the fifth is the preset count. A `64 47` acknowledgement in its place is taken as no record. |
+| `0x0D` | Preset name (public) | Preset number, low 7 bits first; `7F 7F` for the loaded preset | The number (**assumption,** from Fractal's documentation and not yet seen live: the loaded preset's own where `7F 7F` was asked) and a 32-byte name field: a C string in a fixed buffer, with stale bytes after the terminator. An empty slot reads `<EMPTY>`. |
+| `01 27` | Select | 5 zero bytes, preset number low first, 7 zero bytes | The same shape with the number zeroed. |
+| `01 28` | Rename the loaded preset | Packed: artifact, 12 reserved bytes, 32-byte space-padded name | Acknowledged. Changes only the edit buffer. |
+| `01 26` | Store | Same shape as select | Acknowledged after about 600 ms, a flash write. Writes the edit buffer into the slot. |
+| `0x03` | Read a preset | Preset number **high** 7 bits first, then `00` | `77 hi lo 00 00 01`, 16 packed chunks `78 00 …` of 3,082 bytes each (2,688 data bytes), then `79 a b c`. |
+| `0x77` / `0x78` / `0x79` | Write the edit buffer | Begin `7F 7F 00 00 01`, the 16 chunks, the end marker | Each answered `64 <step> <status>`; status `00` is success. |
+| `F0 00 01 74 7F 00 7A F7` | Who is there | *(model `7F` addresses any Fractal device)* | `64 00 00` from model `10`. Sent only by the device report. |
+
+### Addressing
+
+Presets are one run of numbers, `000`..`511` on a Mark I (`0000`..`1023` on a Mark II, by the assumption under "Identification"); the instrument has no banks. The app groups them into virtual banks of 128 (`presetsPerBank` in the catalog) only so that the index rail has something to jump to; the ids carry no bank, and a virtual bank's header shows its range alone.
+
+### Operations
+
+Listing is one `0x0D` per preset, each answered within about a millisecond, matched on the echoed number.
+
+Selection is `01 27`. Where the instrument answers `0x0D 7F 7F` with a number (checked once at connect), a selection is confirmed by asking which preset is loaded.
+
+**Every write goes through the edit buffer.** A rename or a dump write changes the loaded preset only, and `01 26 N` then writes it to slot N, so writing a preset means loading it first, which the user hears and which discards unsaved panel edits to whatever was loaded. The app says so once per run when a session connects, and, where the loaded-preset query works, loads the previously loaded preset again after each edit (following it to its new slot after a move or swap).
+
+- **Rename** is the instrument's own: select, `01 28`, store, then a `0x0D` read-back. A failure at any step, the read-back included, selects the preset again, so the edit buffer does not keep a name that was never stored.
+- **Copy** reads the source dump, selects the destination, writes the dump, stores it and reads it back; the read-back must match the written data apart from decoded bytes 0, 1 and 5..8, which every store rewrites. A preset the instrument holds in an older form, such as a factory preset never saved since, comes back converted from its first store: copying preset 000 to 384 read back with 5,968 bytes different, from offset 95 (Mark I, firmware 32.06). The converted form is stable, so after a difference the app stores the instrument's own version once more and requires that to read back unchanged. A store the instrument converts differently every time is an error.
+- **Move** is a copy and then a delete of the source. **Swap** reads both dumps before writing either, and writes the first slot back if either write fails, the first included, since a write can land and still fail its read-back. An empty side is moved as the empty slot's own dump, which the instrument stores as empty.
+- **Delete** writes the dump Axe-Edit III writes to delete a preset (`devices/blanks/axefx3_empty_preset.bin`, recorded from the editor), and stores it. The instrument takes it as an erase: the slot then reads `<EMPTY>`, while some of its old data stays in place.
+
+A write is never re-sent: each step's acknowledgement is awaited once, and the begin-to-store sequence runs to completion even when the operation is cancelled, since stopping between chunks would leave the loaded preset's edit buffer half-written. A failed transfer selects the target again, which reloads its stored preset, and sends no store.
+
+### Hazards
+
+- **A dump is replayed, never rebuilt.** The end marker `79 a b c` is a checksum over the chunks' wire bytes, padding bits included, and its algorithm is unknown. Those padding bits are not always zero, so a decoded and re-encoded dump differs on the wire; the instrument then answers the end with status `0x13` and stores nothing, while still acknowledging every step and the store that follows. The app keeps dumps as the raw messages and checks every acknowledgement's status. It cannot write an edited preset or build an empty one, which is why the delete payload is shipped.
+- `01 28` carries no preset number: it renames whatever is loaded.
+
+### Reliability
+
+A dump read accepts nothing until the acknowledgement that echoes its own preset number, so an end marker still arriving from an earlier read is not taken for this one. It is validated as exactly 16 chunk messages of 3,082 bytes and one end message, each with a closing checksum, and is read once more after a pause if anything is missing or damaged. A dump arrives at about 70 to 105 bytes per millisecond. Measured on a Pixel 6, `MidiManager` delivers it as about 2,000 callbacks of 25 bytes. Android's MIDI service writes to the app through a socket that holds only a few packets, and when a write fails it drops the receiver for good: the port then stays silent, mid-dump, for every later request. The transport therefore does nothing in the callback but copy and queue, passes batches on from a coroutine, and raises the priority of the platform's reader thread. Even so, the service sometimes drops the receiver anyway (system log: `MidiInputPort failed to send data ... EAGAIN`; `dumpsys midi` then shows `mOutputPortOpenCount=[0]` for the device), about one dump read in several on an Axe-Fx III. The port is then silent for every later request. A request or sequence that goes unanswered therefore makes the transport open the output port again (`MidiTransport.recover`) before it is asked a second time, and a dump read gives up after a silence of 2 s rather than waiting out a total. Separately, a read can arrive damaged (14 messages instead of 17, one over-long message dropped); the validation catches it and the read is repeated.
+
+## Moog Subsequent 37
+
+Measured on one Subsequent 37 running firmware 1.2.0. The Sub 37 and the Subsequent 37 CV are different instruments; nothing here was run on either.
+
+### Transport
+
+Class-compliant USB-MIDI through Android's `MidiManager`, as for the Pro-800; no USB host permission is asked for. One cable in each direction. The instrument transmits at about 1,435 bytes per second whatever it sends, about half of MIDI's own rate, so the size of a reply sets how long it takes.
+
+### Identification
+
+Vendor id `0x2662`, product id `0x0FFC`, listed as `launchOnUsbAttach` only. The USB product string reads `Moog Sub 37`. **Assumption:** the Sub 37 and the Subsequent 37 CV report the same ids and string, so the USB layer cannot tell the three apart, and a Sub 37 would be probed like a Subsequent 37. A port is identified by the ping `F0 04 0C 32` + 12 × `00` + `F7`, answered `F0 04 0C 32 7F 7F F7`; it is read-only and needs nothing sent first.
+
+The firmware version is read at connect from the standard Identity Reply, which the instrument sends only to the broadcast inquiry `F0 7E 7F 06 01 F7`: manufacturer `04`, family `00 0C`, model `00 00`, software revision `00 01 02 00`, read as 1.2.0 from its last three bytes. The panel shows two versions, M and P; which of them the reply carries is unknown, since both read 1.2.0 on the unit measured.
+
+### Framing
+
+`F0 04 0C <command> … F7`: Moog's manufacturer id, then a constant `0C`. Every short request is 13 command bytes, zero-padded. A message carrying data has an 18-byte address block after its two command bytes, so its body starts at offset 23. The body is a run of 3-byte records, each one 16-bit big-endian word split 4 + 6 + 6 bits: `0x40 | d15..d12`, `d11..d6`, `d5..d0`. A record's first byte is `0x40`–`0x4F` and the other two are below `0x40`, which is how a lost byte shows.
+
+A program is 244 words, a 488-byte payload:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 24 | Name: printable ASCII, space-padded. The panel shows it as two lines of 12. |
+| 50 | 1 | Category; see below. |
+| 51 | 1 | Stored as given. A save on the panel writes `7`. |
+| 486 | 2 | Checksum: the 244 words sum to zero modulo 2^16. |
+
+The other 460 bytes are the sound and are not decoded, nor is byte 51; the app writes them back as it read them.
+
+Byte 50 is the category's position in the panel's list counted from the end: the panel lists User, Percussion, Sequence, Arp, Vox, Distorted, Evolving, Pads, Strings, Sync, Organs, Keys, Sound FX, Woodwind, Brass, Lead, Bass, Noise, Drone, Duo, Classic, Misc, and byte 50 holds Misc as `0x00` and User as `0x15`. `0x77` is uncategorised, what Initialize leaves; the panel shows it as Misc, like `0x00`. **Assumption:** only Vox (`0x11`) and Misc (`0x00`) were read off the panel; the other values follow from the panel's order and agree with every name in one 256-program library.
+
+### Messages
+
+| Command | Name | Reply |
+|---|---|---|
+| `32` | Ping, the discovery probe | `32 7F 7F` |
+| `06 04`, sent with `06 00` | Settings | `07 02`, 828 bytes: 268 words. Word 2 is the selected program, word 30 the MIDI IN CHANNEL (0–15, 16 = ALL), word 31 the OUT CHANNEL. `06 00` draws no reply of its own. A shorter reply lost bytes and is discarded. |
+| `06 01 <hi> <lo>` | Read program `hi << 7 \| lo` | Two messages of 756 bytes: `04 07` addressed `00 00`, the selected program's edit buffer, then `02 07` addressed `<hi> <lo>`, the stored program asked for. Nothing is selected. About a second at the instrument's rate. |
+| `06 03` | Read every program | `01 07`: the header, then one 796-byte block per program (its 732 bytes of records and a 64-byte separator, zero but for a final `01`), then `F7`; 203,800 bytes in about 142 s. Block *i* is program *i*. |
+| `05 01 <hi> <lo> 00×15 01` + one program | Write program | None, ever. 756 bytes. |
+| CC0 = 0, CC32 = *n* / 128, Program Change *n* % 128 | Select program *n* | `36 <cc32> <pc>`, within about 20 ms. |
+
+### Addressing
+
+Programs 0..255: `n = bank × 16 + slot`, both 0-based, displayed `B01/P01`..`B16/P16` after the panel's BANK and PRESET buttons. Every program is writable; there are no factory banks.
+
+### Operations
+
+**Listing** is one `06 03`. The reply is decoded while it arrives: each block's 732 bytes of records are checked (record markers, checksum) and shown as soon as they are in. Where the platform hands the reply over only once whole, it is decoded then, and progress is estimated from the time. Blocks from the first damaged one on are read one by one with `06 01` once the instrument has stopped sending. A program is listed as empty where its name is `Init Preset`, which is what both a never-written slot and the panel's Initialize hold; a preset saved under that name counts as empty too. The connect-time notices say so, and that a listing takes about 2½ minutes.
+
+**Selection** sends Bank Select and Program Change on the IN channel the settings name (channel 1 where it is ALL) and waits for `36`. Where none comes, the settings are read again and the selection repeated if the channel changed. **Assumption:** a selection still unacknowledged means RCV PGM CHG (MIDI MENU 1.4) is OFF; the app shows that step.
+
+Every **edit** is a read of the stored program with `06 01` and a whole-program `05 01`, so all are emulated, and none selects anything or is heard. Every write is read back with `06 01` until the slot holds exactly the bytes sent: up to three reads a second apart, since one read too soon may still show the old program. A mismatch is reported only where every read that arrived disagreed. **Assumption:** three reads and a one-second pause are enough; every write measured was confirmed by the first read.
+
+- **Rename** changes the name field and the checksum. Up to 24 printable ASCII characters; `Init Preset` is refused, since it would read as empty.
+- **Set category** changes byte 50 and the checksum. Uncategorised (`0x77`) is read but not offered, since the panel shows it as Misc. The dialog opens on the category last read for that slot, usually the listing's; the write reads the slot again first.
+- **Copy** writes the source's stored bytes to an empty slot. **Move** is a copy and then the panel's Initialize written over the source, once the copy is confirmed.
+- **Swap** reads both programs before writing either and writes the first back if either write fails, the first included, since a write can land and still fail its read-back.
+- **Delete** writes the program the panel's Initialize produces (`devices/blanks/subsequent37_panel_initialized.bin`, stored by the instrument and read back). A slot always holds a program.
+
+The transfer facet reads a program as its `02 07` message.
+
+### Hazards
+
+- A `05 01` is not acknowledged, validated or bounded: a wrong number lands on a real slot and a wrong payload is stored whole. The app refuses anything but 488 bytes and programs 0..255, and closes the checksum itself.
+- Never sent: the replies `01 07`, `02 07`, `04 07`, `07 02` and the export `04 08`. A file of a `04 07` sent to the instrument is stored at the selected slot, and one of all programs overwrites all 256. Also never sent: `35`, which is never answered, and `1D`, `12 48 74`, `13` and `18 7D`, whose effects are unknown; `1D` is probably a reset of the global settings.
+- While a bulk dump is being sent the instrument answers nothing else, including the discovery ping, and an interrupted dump goes on being sent to its end. Every other operation is refused while a listing runs.
+
+### Reliability
+
+A dump that lost bytes in transit still ends in `F7`, with every block after the loss shifted. Only the per-block check finds it, so nothing from the first failing block on is used, even a block that happens to pass. About one read in 200 has been seen to lose bytes; a damaged reply to `06 01` fails its checksum and is asked for again. A `02 07` is matched on its command and address together, since the `04 07` before it is addressed `00 00` whatever it holds. A channel message arriving inside the dump aborts it at the framer; the app then waits for the instrument to fall silent and reads the remaining programs one by one. **Assumption:** the instrument sends none during a dump; whether a knob turned meanwhile does is untested.

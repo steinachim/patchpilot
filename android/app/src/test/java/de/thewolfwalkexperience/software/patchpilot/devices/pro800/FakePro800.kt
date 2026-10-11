@@ -34,7 +34,15 @@ class FakePro800(
      * over a second to commit. Zero is the common case; anything above it exercises the poll loop.
      */
     var staleSettingsReads: Int = 0,
+    /** The status the preset reload answers with; anything but OK is a refusal. */
+    var reloadStatus: Int = Pro800SysEx.STATUS_OK,
 ) {
+    /** Called with the program number after each write lands - where a test cancels mid-edit. */
+    var onWrite: (Int) -> Unit = {}
+
+    /** Program number -> how many more dump requests for it go unanswered, as if each reply were lost. */
+    val unansweredReads = mutableMapOf<Int, Int>()
+
     /** Program number -> the encoded payload stored there. Absent means an empty address. */
     private val stored = initial.toMutableMap()
 
@@ -68,23 +76,37 @@ class FakePro800(
                 Pro800SysEx.HEADER + byteArrayOf(Pro800SysEx.TYPE_DEVICE_NAME_REPLY.toByte()) +
                     "PRO-800".toByteArray(Charsets.US_ASCII) + Pro800SysEx.SYSEX_END,
             )
+
             Pro800SysEx.TYPE_FIRMWARE -> listOf(
                 Pro800SysEx.HEADER +
                     byteArrayOf(Pro800SysEx.TYPE_FIRMWARE_REPLY.toByte(), 0x00, 1, 4, 6) +
                     Pro800SysEx.SYSEX_END,
             )
-            Pro800SysEx.TYPE_REQUEST_DUMP -> listOf(dumpFor(Pro800SysEx.addressOf(request)!!))
+
+            Pro800SysEx.TYPE_REQUEST_DUMP -> {
+                val programNumber = Pro800SysEx.addressOf(request)!!
+                val lost = unansweredReads[programNumber] ?: 0
+                if (lost > 0) {
+                    unansweredReads[programNumber] = lost - 1
+                    emptyList()
+                } else {
+                    listOf(dumpFor(programNumber))
+                }
+            }
+
             // A write. The instrument answers nothing, which is exactly the point.
             Pro800SysEx.TYPE_DUMP -> {
                 applyWrite(request)
                 emptyList()
             }
-            // The preset reload. Answers a plain OK status, like every other command.
+
+            // The preset reload. Answers a status, as every other command does.
             Pro800SysEx.TYPE_RESET_MODE -> listOf(
                 Pro800SysEx.HEADER +
-                    byteArrayOf(Pro800SysEx.TYPE_STATUS.toByte(), 0x00, Pro800SysEx.STATUS_OK.toByte()) +
+                    byteArrayOf(Pro800SysEx.TYPE_STATUS.toByte(), 0x00, reloadStatus.toByte()) +
                     Pro800SysEx.SYSEX_END,
             )
+
             else -> emptyList()
         }
     }
@@ -100,6 +122,7 @@ class FakePro800(
             return
         }
         if (payload.isEmpty()) stored.remove(programNumber) else stored[programNumber] = payload
+        onWrite(programNumber)
     }
 
     private fun dumpFor(programNumber: Int): ByteArray {
@@ -153,11 +176,17 @@ class FakePro800(
         fun preset(name: String?, version: Int = 111): ByteArray {
             val dense = ByteArray(Pro800ProgramFields.NAME_DENSE_END)
             Pro800ProgramCodec.writeValue(
-                dense, Pro800ProgramFields.VERSION.denseOffset, Pro800ProgramFields.VERSION.byteCount, version,
+                dense,
+                Pro800ProgramFields.VERSION.denseOffset,
+                Pro800ProgramFields.VERSION.byteCount,
+                version,
             )
             if (name != null) {
                 Pro800ProgramCodec.writeString(
-                    dense, Pro800ProgramFields.NAME_DENSE_OFFSET, Pro800ProgramFields.NAME_LENGTH, name,
+                    dense,
+                    Pro800ProgramFields.NAME_DENSE_OFFSET,
+                    Pro800ProgramFields.NAME_LENGTH,
+                    name,
                 )
             }
             return Pro800ProgramCodec.encode(dense)
