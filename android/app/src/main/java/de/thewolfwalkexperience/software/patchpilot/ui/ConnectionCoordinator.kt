@@ -436,14 +436,14 @@ internal class ConnectionCoordinator(
         val catalog = catalog()
         val autoConnect = autoConnect()
 
-        val usbCandidates = discoveries.filter { it.bus == Bus.USB }.flatMap { it.scan(catalog) }
+        val usbCandidates = alphabetically(discoveries.filter { it.bus == Bus.USB }.flatMap { it.scan(catalog) })
         if (autoConnect && !forcePicker && usbCandidates.isNotEmpty()) {
             connectCandidate(usbCandidates.first())
             return
         }
 
         val otherScans = discoveries.filterNot { it.bus == Bus.USB }.map { it.scan(catalog) }
-        val known = mergeCandidates(listOf(usbCandidates) + otherScans)
+        val known = alphabetically(mergeCandidates(listOf(usbCandidates) + otherScans))
         when {
             // Nothing recognised: reconnect a device already accepted through the "at your own
             // risk" gate this session if it is still attached, otherwise offer whatever else is
@@ -460,6 +460,14 @@ internal class ConnectionCoordinator(
             else -> _state.value = ConnectionState.DeviceSelection(pickerEntries(known))
         }
     }
+
+    /**
+     * [candidates] sorted by name, as the list of supported instruments on the empty search screen
+     * is, with ties kept in the order they came: the platform lists USB devices in a hash map's
+     * order, which differs between replugs, and the picker and auto-connect would otherwise
+     * follow it.
+     */
+    private fun alphabetically(candidates: List<Candidate>): List<Candidate> = candidates.sortedBy { it.displayName }
 
     /** Opens a recognized candidate on whichever bus found it and builds its family's instrument. */
     private suspend fun connectCandidate(candidate: Candidate) {

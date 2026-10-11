@@ -120,11 +120,12 @@ class ConnectionCoordinatorTest {
         events: MutableList<String> = mutableListOf(),
         create: () -> Instrument = { DemoInstrument() },
         onSessionEnding: suspend () -> Unit = { events += "ending" },
+        catalog: List<InstrumentDescriptor> = listOf(nordStage),
     ) = ConnectionCoordinator(
         scope = scope,
         usb = usb,
         discoveries = listOf(discovery),
-        catalog = { listOf(nordStage) },
+        catalog = { catalog },
         create = { _, _ -> create() },
         createForUnknown = { _, _, _ -> DemoInstrument() },
         autoConnect = { autoConnect },
@@ -308,14 +309,14 @@ class ConnectionCoordinatorTest {
         assertTrue("got ${coordinator.state.value}", coordinator.state.value !is ConnectionState.Opening)
     }
 
-    /** Retry asks about the first instrument a scan finds, so another one needs the picker. */
+    /** Retry asks about the first instrument a scan finds (the Grand, alphabetically), so another one needs the picker. */
     @Test
     fun `after a refusal, the picker offers every instrument even with auto-connect on`() = runSession { session ->
         val coordinator = coordinator(
             session,
             FakeUsbHost(),
             FakeDiscovery(listOf(stageCandidate, grandCandidate)) { candidate ->
-                if (candidate == stageCandidate) throw SecurityException("denied") else FakeTransport()
+                if (candidate == grandCandidate) throw SecurityException("denied") else FakeTransport()
             },
         )
         coordinator.connect()
@@ -326,7 +327,7 @@ class ConnectionCoordinatorTest {
         advanceUntilIdle()
         val picker = coordinator.state.value as ConnectionState.DeviceSelection
         assertEquals(
-            listOf(stageKey, grandKey),
+            listOf(grandKey, stageKey),
             picker.entries.map { (it as PickerEntry.Known).candidate.physicalKey },
         )
     }
@@ -406,18 +407,54 @@ class ConnectionCoordinatorTest {
     @Test
     fun `retry after the failed instrument was unplugged does not open another one`() = runSession { session ->
         val discovery = FakeDiscovery(listOf(stageCandidate, grandCandidate)) { candidate ->
-            if (candidate == stageCandidate) throw SecurityException("denied") else FakeTransport()
+            if (candidate == grandCandidate) throw SecurityException("denied") else FakeTransport()
         }
         val coordinator = coordinator(session, FakeUsbHost(), discovery, autoConnect = true)
         coordinator.connect()
         advanceUntilIdle()
         assertTrue(coordinator.state.value is ConnectionState.PermissionDenied)
 
-        discovery.candidates = listOf(grandCandidate)
+        discovery.candidates = listOf(stageCandidate)
         coordinator.retry()
         advanceUntilIdle()
 
         assertTrue("got ${coordinator.state.value}", coordinator.state.value is ConnectionState.DeviceSelection)
+    }
+
+    /** The platform lists USB devices in a hash map's order, which changes between replugs. */
+    @Test
+    fun `instruments are offered alphabetically whatever order the platform lists them`() = runSession { session ->
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate, grandCandidate)) { FakeTransport() },
+            autoConnect = false,
+        )
+        coordinator.connect()
+        advanceUntilIdle()
+
+        val picker = coordinator.state.value as ConnectionState.DeviceSelection
+        assertEquals(
+            listOf(grandKey, stageKey),
+            picker.entries.map { (it as PickerEntry.Known).candidate.physicalKey },
+        )
+    }
+
+    @Test
+    fun `auto-connect takes the first instrument alphabetically`() = runSession { session ->
+        val opened = mutableListOf<String>()
+        val coordinator = coordinator(
+            session,
+            FakeUsbHost(),
+            FakeDiscovery(listOf(stageCandidate, grandCandidate)) { candidate ->
+                opened += candidate.physicalKey
+                FakeTransport()
+            },
+        )
+        coordinator.connect()
+        advanceUntilIdle()
+
+        assertEquals(listOf(grandKey), opened)
     }
 
     /** One unplug that fails to be handled must not end detection for the rest of the session. */
