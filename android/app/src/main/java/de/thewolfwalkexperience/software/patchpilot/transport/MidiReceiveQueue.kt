@@ -54,7 +54,7 @@ internal class MidiReceiveQueue(scope: CoroutineScope, private val emit: (ByteAr
                 single == null -> single = chunk
 
                 else -> {
-                    val out = joined ?: ByteArrayOutputStream().also { it.write(single!!) }
+                    val out = joined ?: ByteArrayOutputStream().also { it.write(single) }
                     joined = out
                     out.write(chunk)
                 }
