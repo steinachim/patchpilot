@@ -2,9 +2,11 @@
 
 ## Next release
 
+## 2.0
+
 ### Added
-- The Fractal Audio Axe-Fx III is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted. Every operation was verified on a Mark I, but the app itself has not yet been run on one. A Mark II is recognized and lists all 1,024 presets, but has not been tested yet.
-- The Moog Subsequent 37 is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted, and their categories shown and set. Reading its preset list takes about 2½ minutes, the instrument's own transfer time. Every operation was verified on a unit, but the app itself has not yet been run on one.
+- The Fractal Audio Axe-Fx III is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted. Verified on a Mark I. A Mark II is recognized and lists all 1,024 presets, but has not been tested yet.
+- The Moog Subsequent 37 is supported: its presets can be browsed, loaded, renamed, copied, moved, swapped and deleted, and their categories shown and set. Reading its preset list takes about 2½ minutes, the instrument's own transfer time. Verified on a unit.
 - An instrument can show a notice when it connects, with a “Don't show this again” option; Settings → “Show Hidden Messages Again” brings hidden notices back.
 - Each GitHub release also carries the R8 mapping file for its APK, so a stack trace from that build can be read.
 - On a Nord, a notice on connecting says that every edit loads the program it changes, so unsaved changes on the panel should be stored first.

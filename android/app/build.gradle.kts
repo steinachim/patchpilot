@@ -48,8 +48,8 @@ android {
         applicationId = "de.thewolfwalkexperience.software.patchpilot"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1"
+        versionCode = 4
+        versionName = "2.0"
     }
 
     // Play's dependency-metadata block goes into the APK's signing block, unreadable outside

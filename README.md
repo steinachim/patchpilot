@@ -17,11 +17,11 @@ Patch Pilot is a native Android app for browsing, organizing and editing the pre
 | Behringer Pro-800 | USB-MIDI (class compliant) | Verified on hardware |
 | Yamaha Motif XS6 | USB (USB-MIDI packets on a vendor interface) | Verified on hardware |
 | Yamaha Motif XS7, XS8 | as XS6 | **Assumed.** Their USB product ids are inferred from Yamaha's driver files and have not been confirmed on a unit. |
-| Fractal Audio Axe-Fx III (Mark I) | USB-MIDI (class compliant) | **Not yet run in the app.** Every operation the app uses was verified on a Mark I outside it; the app's own hardware run is pending. |
+| Fractal Audio Axe-Fx III (Mark I) | USB-MIDI (class compliant) | Verified on hardware |
 | Fractal Audio Axe-Fx III Mark II, Mark II Turbo | as Mark I | **Assumed.** Recognized by the model record the unit sends, and listed with its 1,024 presets behind a warning; never run on one. |
-| Moog Subsequent 37 | USB-MIDI (class compliant) | **Not yet run in the app.** Every operation the app uses was verified on one unit (firmware 1.2.0) outside it; the app's own hardware run is pending. The Sub 37 and the Subsequent 37 CV are different instruments and are not supported. |
+| Moog Subsequent 37 | USB-MIDI (class compliant) | Verified on hardware. The Sub 37 and the Subsequent 37 CV are different instruments and are not supported. |
 
-"Verified on hardware" means the app has been run against that model. The device catalog under [devices/](devices/) lists the firmware versions the app was run with for the Nord models, the Pro-800 and the Motif XS, and the firmware versions the protocol was verified on for the Axe-Fx III and the Subsequent 37. Connecting with a firmware version that is not listed shows a warning but is allowed.
+"Verified on hardware" means the app has been run against that model. The device catalog under [devices/](devices/) lists the firmware versions the app was run with. Connecting with a firmware version that is not listed shows a warning but is allowed.
 
 ### Other Nord instruments
 

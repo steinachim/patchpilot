@@ -5,8 +5,8 @@ Supported instruments
 - Nord Grand, Nord Grand 2, Nord Stage 2 EX, Nord Stage 4, Nord Electro 7, Nord Piano 6, Nord Lead A1, Nord Wave 2
 - Behringer Pro-800
 - Yamaha Motif XS6 (the XS7 and XS8 are recognized as well, but not yet confirmed on real hardware)
-- Fractal Audio Axe-Fx III (every operation was verified on a unit, but the app itself has not yet been run on one; the Mark II is recognized as well, but has not been tested on one)
-- Moog Subsequent 37 (every operation was verified on a unit, but the app itself has not yet been run on one)
+- Fractal Audio Axe-Fx III (Mark I; the Mark II is recognized as well, but has not been tested on one)
+- Moog Subsequent 37
 
 Each instrument connects over USB, directly or via USB-MIDI where the instrument supports it. Other Nord keyboards that speak the same protocol can be used with a warning; the app's debug menu can run a regression test and share a report that helps get them officially supported.
 

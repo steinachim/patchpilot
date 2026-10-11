@@ -1,0 +1,6 @@
+- New instruments: Fractal Audio Axe-Fx III and Moog Subsequent 37.
+- Instruments can show a notice on connecting; Settings brings hidden ones back.
+- Clearer messages: an edit cut off by a lost connection says what may be affected; an attached instrument that does not answer is no longer "not recognised".
+- MIDI instruments behind another MIDI interface get longer timeouts.
+- Settings links to the source code.
+- Many fixes: edits, reconnecting, USB permission hangs, rotation.
