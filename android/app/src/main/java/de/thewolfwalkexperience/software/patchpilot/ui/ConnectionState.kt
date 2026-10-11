@@ -24,8 +24,12 @@ sealed interface PickerEntry {
         override val label: String get() = candidate.displayName
     }
 
-    /** An attached USB device nothing in the catalog matched. */
-    data class Unknown(val device: AttachedUsbDevice) : PickerEntry {
+    /**
+     * An attached USB device nothing in the catalog matched. [looksLike] names the catalog
+     * instrument that has this device's USB ids but did not answer its probe: attached, and
+     * busy or misrouted, rather than not a supported instrument at all.
+     */
+    data class Unknown(val device: AttachedUsbDevice, val looksLike: String? = null) : PickerEntry {
         override val label: String get() = device.label
     }
 }

@@ -22,6 +22,7 @@
 - The screens that ask about one instrument (untested firmware, unknown device, USB permission, a setting to change, a connection error) no longer offer demo mode; the device list they lead back to does.
 - Searching for instruments skips the virtual MIDI ports other apps provide and a Nord's own MIDI port, which cost about 2 seconds each; an instrument plugged in directly is tried first.
 - Instruments found on the device list, and the one auto-connect picks, are now ordered alphabetically instead of in the order Android lists USB devices.
+- A MIDI instrument that is attached but did not answer is listed as "Looks like <name>, which did not answer. It may be busy: wait a moment, then retry." instead of "Not recognised", under a heading that says a supported instrument is attached.
 
 ### Fixed
 - Unplugging an instrument that had failed to open no longer interrupts a session started afterwards, such as demo mode.

@@ -230,7 +230,13 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                             Spacer(Modifier.height(8.dp))
                             Text(stringResource(R.string.connect_pick_one))
                         } else {
-                            Text(stringResource(R.string.connect_none_found))
+                            // A catalog instrument that is attached but silent is not "none found".
+                            val silent = s.entries.any { it is PickerEntry.Unknown && it.looksLike != null }
+                            Text(
+                                stringResource(
+                                    if (silent) R.string.connect_silent_found else R.string.connect_none_found,
+                                ),
+                            )
                             Spacer(Modifier.height(8.dp))
                             // Every attached device, including the ones that cannot be opened: hiding
                             // those would be indistinguishable from the device not being plugged in.
@@ -252,7 +258,10 @@ fun ConnectScreen(viewModel: InstrumentViewModel, onOpenSettings: () -> Unit) {
                                     }
                                 }
 
-                                is PickerEntry.Unknown -> stringResource(R.string.connect_entry_unknown)
+                                is PickerEntry.Unknown ->
+                                    entry.looksLike
+                                        ?.let { stringResource(R.string.connect_entry_silent, it) }
+                                        ?: stringResource(R.string.connect_entry_unknown)
                             }
                             theme.DeviceRow(
                                 label = entry.label,

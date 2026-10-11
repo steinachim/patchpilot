@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 
 import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
+import de.thewolfwalkexperience.software.patchpilot.catalog.UsbIds
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
@@ -802,6 +803,39 @@ class ConnectionCoordinatorTest {
             coordinator.selectEntry((coordinator.state.value as ConnectionState.DeviceSelection).entries.single())
             advanceUntilIdle()
             assertTrue(coordinator.state.value is ConnectionState.AdvisoryWarning)
+        }
+
+    /** A catalog instrument that is attached but did not answer its probe is not "not recognised". */
+    @Test
+    fun `an attached device with a catalog instrument's USB ids says which instrument it looks like`() =
+        runSession { session ->
+            val subsequent = InstrumentDescriptor(
+                id = "moog_subsequent37",
+                family = "subsequent37",
+                name = "Moog Subsequent 37",
+                match = DeviceMatch.MidiIdentity(
+                    probeHex = "f0 f7",
+                    replyPrefixHex = "f0 7f",
+                    launchOnUsbAttach = UsbIds(vendorId = 9826, productId = 4092),
+                ),
+            )
+            val moog = FakeDevice("usb:9826:4092", vendorId = 9826, productId = 4092, label = "Moog Sub 37")
+            val keyboard = FakeDevice("usb:1234:1", vendorId = 0x1234, label = "Keyboard")
+            val usb = FakeUsbHost(attached = listOf(moog, keyboard))
+
+            val coordinator = coordinator(
+                session,
+                usb,
+                FakeDiscovery(emptyList()) { FakeTransport() },
+                catalog = listOf(subsequent),
+            )
+            coordinator.connect()
+            advanceUntilIdle()
+
+            val entries = (coordinator.state.value as ConnectionState.DeviceSelection).entries
+                .associate { (it as PickerEntry.Unknown).device.physicalKey to it.looksLike }
+            assertEquals("Moog Subsequent 37", entries[moog.physicalKey])
+            assertEquals(null, entries[keyboard.physicalKey])
         }
 
     @Test

@@ -6,8 +6,10 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 import android.hardware.usb.UsbDevice
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.R
+import de.thewolfwalkexperience.software.patchpilot.catalog.DeviceMatch
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentDescriptor
 import de.thewolfwalkexperience.software.patchpilot.catalog.UnknownDevicePolicy
+import de.thewolfwalkexperience.software.patchpilot.catalog.UsbIds
 import de.thewolfwalkexperience.software.patchpilot.catalog.supportedModelLines
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
@@ -571,10 +573,11 @@ internal class ConnectionCoordinator(
      */
     private fun pickerEntries(known: List<Candidate>): List<PickerEntry> {
         val claimed = known.map { it.physicalKey }.toSet()
+        val descriptors = catalog()
         return known.map { PickerEntry.Known(it) } +
             usb.attachedDevices()
                 .filter { it.physicalKey !in claimed }
-                .map { PickerEntry.Unknown(it) }
+                .map { PickerEntry.Unknown(it, looksLike = descriptors.instrumentWithIdsOf(it)) }
     }
 
     /**
@@ -848,6 +851,12 @@ private fun ConnectionState.logLabel(): String = when (this) {
     is ConnectionState.UnknownDeviceWarning -> "UnknownDeviceWarning(${device.label})"
     is ConnectionState.DeviceSelection -> "DeviceSelection(${entries.size} entries)"
     else -> toString()
+}
+
+/** The MIDI instrument whose catalog `launchOnUsbAttach` ids are [device]'s, if any. */
+private fun List<InstrumentDescriptor>.instrumentWithIdsOf(device: AttachedUsbDevice): String? {
+    val ids = UsbIds(device.vendorId, device.productId)
+    return firstOrNull { (it.match as? DeviceMatch.MidiIdentity)?.launchOnUsbAttach == ids }?.name
 }
 
 /** The physical device a row refers to, in the same form a detach reports. */

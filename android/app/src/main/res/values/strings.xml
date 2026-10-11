@@ -99,12 +99,14 @@
     <string name="connect_one_found">An instrument is connected.</string>
     <string name="connect_pick_one">Select the one to use:</string>
     <string name="connect_none_found">No supported instrument was found.</string>
+    <string name="connect_silent_found">A supported instrument is attached but did not answer.</string>
     <string name="connect_supported_heading">Supported instruments:</string>
     <string name="connect_pick_unknown">Select a connected USB device to try anyway:</string>
     <string name="connect_entry_known">Recognised — %1$s</string>
     <!-- %1$s: the bus; %2$s: the MIDI interface or hub the instrument was found through. -->
     <string name="connect_entry_known_via">Recognised — %1$s, via %2$s</string>
     <string name="connect_entry_unknown">Not recognised</string>
+    <string name="connect_entry_silent">Looks like %1$s, which did not answer. It may be busy: wait a moment, then retry.</string>
     <string name="connect_advisory_title">Untested firmware or model</string>
     <string name="action_disconnect">Disconnect</string>
     <string name="connect_unknown_title">Unknown device</string>
