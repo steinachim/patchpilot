@@ -13,6 +13,9 @@
 - Don't make references to private repositories.
 - Mark assumptions clearly as such.
 
+## Hardware tests
+- Before a test step that needs the user (a cable, a panel control, reading the display), ask whether they are ready, and start the run only after they confirm.
+
 ## Reviews
 - A full review follows `.claude/skills/full-review/SKILL.md`: a coverage ledger, then the review passes it lists.
 - Build the coverage ledger from `git ls-files` and mark every file read, partly read or not read. Report each gap as an open risk. Never claim full coverage without the ledger.
