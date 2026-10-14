@@ -131,3 +131,33 @@ jobs:
               "patchpilot-$GITHUB_REF_NAME-mapping.txt" \
               --title "$GITHUB_REF_NAME" \
               --notes-file release-notes.md
+
+  # A tag whose gate failed has no release, so it is deleted: the name is free for a retag once
+  # the cause is fixed. Its own job, so `build` keeps its read-only token; it runs nothing from
+  # the repository. Only after a failed build (not a cancelled one, not a failed `publish`), and
+  # never for a tag that already has a release, such as a re-run of an old one.
+  remove-failed-tag:
+    needs: build
+    if: needs.build.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Delete the tag unless it has a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if out=$(gh release view "$GITHUB_REF_NAME" 2>&1); then
+            echo "::warning::$GITHUB_REF_NAME has a release: the tag stays."
+            exit 0
+          fi
+          # Delete only on a definite "not found"; any other error leaves the tag alone.
+          case "$out" in
+            *"release not found"*) ;;
+            *) echo "::error::Could not tell whether $GITHUB_REF_NAME has a release: $out"; exit 1 ;;
+          esac
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$GITHUB_REF_NAME"
+          echo "::notice::$GITHUB_REF_NAME deleted after a failed release build. Retag once fixed; locally: git tag -d $GITHUB_REF_NAME"
