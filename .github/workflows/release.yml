@@ -136,9 +136,11 @@ jobs:
   # the cause is fixed. Its own job, so `build` keeps its read-only token; it runs nothing from
   # the repository. Only after a failed build (not a cancelled one, not a failed `publish`), and
   # never for a tag that already has a release, such as a re-run of an old one.
+  # `always()` because a job's `if` without a status function implies `success()`, which a failed
+  # `build` makes false.
   remove-failed-tag:
     needs: build
-    if: needs.build.result == 'failure'
+    if: always() && needs.build.result == 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
