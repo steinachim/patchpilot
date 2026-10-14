@@ -29,7 +29,7 @@ A Gradle bump also updates `distributionSha256Sum` in `android/gradle/wrapper/gr
 
 ## 3. Tag and publish on GitHub
 
-Fast-forward `main` to the release commit and push both branch and tag. The push to `main` runs the signed CI build (`android.yml`); the tag push runs `release.yml`, which checks formatting, tests, lints and builds its own signed APK and bundle, then creates the GitHub Release with the APK and R8's mapping file (`patchpilot-v<version>-mapping.txt`, which only that build produces and without which a stack trace from it cannot be read), using the `## <version>` section of `CHANGELOG.md` as the release notes. The build job has a read-only token; only the publishing job, which never runs the build, can write to the repository.
+Fast-forward `main` to the release commit and push both branch and tag. The push to `main` runs the signed CI build (`android.yml`); the tag push runs `release.yml`, which checks formatting, tests, lints and builds its own signed APK and bundle, then creates the GitHub Release with the APK and R8's mapping file (`patchpilot-v<version>-mapping.txt`, which only that build produces and without which a stack trace from it cannot be read), using the `## <version>` section of `CHANGELOG.md` as the release notes. A failed run uploads its test and lint reports as the `reports` artifact. The build job has a read-only token; only the publishing job, which never runs the build, can write to the repository.
 
 ```
 git checkout main && git merge --ff-only dev
