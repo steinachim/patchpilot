@@ -30,6 +30,9 @@ plugins {
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+        // A new warning fails the build, in the app and in the tests, so none accumulates. A
+        // Kotlin, AGP or dependency bump that adds one needs it fixed in the same change.
+        allWarningsAsErrors = true
     }
 }
 

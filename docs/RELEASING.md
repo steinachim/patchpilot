@@ -23,7 +23,7 @@ Outputs: `app/build/outputs/apk/release/patchpilot-v<version>.apk`, signed with 
 
 Install the release APK, not a debug build, on a phone, connect a real instrument and run the regression test from the debug menu (five taps on the instrument name). R8 runs only for release builds, so a missing keep rule shows up only there.
 
-CI also runs `./gradlew spotlessCheck` and `./gradlew lintRelease`; lint passes with warnings only, and an error fails the run.
+CI also runs `./gradlew spotlessCheck` and `./gradlew lintRelease`; lint passes with warnings only, and an error fails the run. The Kotlin compiler is stricter: `allWarningsAsErrors` in `android/app/build.gradle.kts` fails the build on any warning, in the app and the tests. A Kotlin, AGP or dependency bump that introduces one needs it fixed in the same change.
 
 A Gradle bump also updates `distributionSha256Sum` in `android/gradle/wrapper/gradle-wrapper.properties` to that version's published checksum. If this release bumps Gradle, AGP or the build JDK, re-verify reproducibility before tagging. The release workflow takes the newest Temurin 17 on the current `ubuntu-latest` image, neither pinned, so compare the JDK its `setup-java` step logs with the previous release's, and count a change as a JDK bump. To re-verify: build twice from a clean checkout and confirm `classes.dex` matches byte-for-byte (extract it from both APKs and `cmp`), then once this version is published, `fdroid build --test <appid>:<versionCode>` against the GitHub binary should report a successful comparison. A regression here doesn't fail this build - it fails F-Droid's `Binaries:` check (see below), meaning F-Droid can no longer adopt the GitHub signature for this release.
 
