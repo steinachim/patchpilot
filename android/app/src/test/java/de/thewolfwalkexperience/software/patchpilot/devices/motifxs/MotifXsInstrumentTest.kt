@@ -286,7 +286,7 @@ class MotifXsInstrumentTest {
         // Header/Footer sequence.
         assertEquals(
             setOf(EditOp.RENAME, EditOp.MOVE, EditOp.SWAP, EditOp.DELETE, EditOp.COPY),
-            motif.editor!!.supported,
+            motif.editor.supported,
         )
         // Still nothing anywhere about these.
         assertNull(motif.transfer)
@@ -354,7 +354,7 @@ class MotifXsInstrumentTest {
             // scheduler and stop the fake's mode reply from ever being delivered - the check
             // would then "pass" by timing out, which is the failure it exists to replace.
             val failure = try {
-                motif.selector!!.select(SlotAddress(0, 0))
+                motif.selector.select(SlotAddress(0, 0))
                 null
             } catch (e: InstrumentException.BlockedByDeviceState) {
                 e
@@ -394,7 +394,7 @@ class MotifXsInstrumentTest {
             ),
         )
         val blocked = try {
-            motif.selector!!.select(SlotAddress(0, 0))
+            motif.selector.select(SlotAddress(0, 0))
             null
         } catch (e: InstrumentException.BlockedByDeviceState) {
             e
@@ -409,7 +409,7 @@ class MotifXsInstrumentTest {
         assertEquals(MotifXsMode.VOICE.value, sentModeChange[8].toInt())
 
         // And the operation the block interrupted now succeeds.
-        motif.selector!!.select(SlotAddress(0, 0))
+        motif.selector.select(SlotAddress(0, 0))
         assertEquals(3, transport.sent.count { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_SELECT })
     }
 
@@ -432,7 +432,7 @@ class MotifXsInstrumentTest {
             ),
         )
         val blocked = try {
-            motif.selector!!.select(SlotAddress(0, 0))
+            motif.selector.select(SlotAddress(0, 0))
             null
         } catch (e: InstrumentException.BlockedByDeviceState) {
             e
@@ -442,7 +442,7 @@ class MotifXsInstrumentTest {
         // Must not throw: the instrument gets there, just not on the first read.
         blocked!!.remedy!!.invoke()
         // And the operation it was blocking now works.
-        motif.selector!!.select(SlotAddress(0, 0))
+        motif.selector.select(SlotAddress(0, 0))
     }
 
     /** A switch the instrument ignores is reported, not assumed. */
@@ -456,7 +456,7 @@ class MotifXsInstrumentTest {
             ),
         )
         val blocked = try {
-            motif.selector!!.select(SlotAddress(0, 0))
+            motif.selector.select(SlotAddress(0, 0))
             null
         } catch (e: InstrumentException.BlockedByDeviceState) {
             e
@@ -477,7 +477,7 @@ class MotifXsInstrumentTest {
     @Test
     fun `selection proceeds in voice mode`() = runTest {
         val (motif, transport) = instrument(backgroundScope, fake = FakeMotifXs(mode = MotifXsMode.VOICE))
-        motif.selector!!.select(SlotAddress(0, 0))
+        motif.selector.select(SlotAddress(0, 0))
         assertEquals(3, transport.sent.count { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_SELECT })
     }
 
@@ -491,7 +491,7 @@ class MotifXsInstrumentTest {
     @Test
     fun `an unreadable mode does not block a selection`() = runTest {
         val (motif, transport) = instrument(backgroundScope, fake = FakeMotifXs(mode = null))
-        motif.selector!!.select(SlotAddress(0, 0))
+        motif.selector.select(SlotAddress(0, 0))
         assertEquals(3, transport.sent.count { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_SELECT })
     }
 
@@ -505,7 +505,7 @@ class MotifXsInstrumentTest {
     @Test
     fun `rename writes a documented sequence and the new name reads back`() = runTest {
         val (motif, transport) = instrument(backgroundScope)
-        motif.editor!!.rename(SlotAddress(0, 0), "Renamed In Place")
+        motif.editor.rename(SlotAddress(0, 0), "Renamed In Place")
 
         val documented = transport.sent.filter {
             MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP &&
@@ -549,7 +549,7 @@ class MotifXsInstrumentTest {
                 loadedVoiceName = "TWE2 Wolf Walk",
             ),
         )
-        motif.editor!!.rename(SlotAddress(0, 0), "Renamed In Place")
+        motif.editor.rename(SlotAddress(0, 0), "Renamed In Place")
 
         // A selection went out *after* the write, to reload the slot that was just renamed.
         val selects = transport.sent.filter { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_SELECT }
@@ -573,7 +573,7 @@ class MotifXsInstrumentTest {
                 loadedVoiceName = "Something Else",
             ),
         )
-        motif.editor!!.rename(SlotAddress(0, 0), "Renamed In Place")
+        motif.editor.rename(SlotAddress(0, 0), "Renamed In Place")
         assertTrue(
             "no selection should be sent for a voice the panel is not showing",
             transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_SELECT },
@@ -584,7 +584,7 @@ class MotifXsInstrumentTest {
     @Test
     fun `rename alters the name bytes and nothing else`() = runTest {
         val (motif, transport) = instrument(backgroundScope)
-        motif.editor!!.rename(SlotAddress(0, 0), "Short")
+        motif.editor.rename(SlotAddress(0, 0), "Short")
 
         val common = transport.sent.single {
             MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP && MotifXsSysEx.isCommonBlock(it)
@@ -602,7 +602,7 @@ class MotifXsInstrumentTest {
     @Test
     fun `rename refuses a name the instrument cannot store`() = runTest {
         val (motif, transport) = instrument(backgroundScope)
-        val editor = motif.editor!!
+        val editor = motif.editor
         thrownBy<IllegalArgumentException> { editor.rename(SlotAddress(0, 0), "x".repeat(21)) }
         thrownBy<IllegalArgumentException> { editor.rename(SlotAddress(0, 0), "   ") }
         thrownBy<IllegalArgumentException> { editor.rename(SlotAddress(0, 0), "Grüße") }
@@ -622,7 +622,7 @@ class MotifXsInstrumentTest {
     fun `rename refuses an empty slot`() = runTest {
         val (motif, transport) = instrument(backgroundScope)
         val failure = try {
-            motif.editor!!.rename(SlotAddress(0, 1), "Not A Voice")
+            motif.editor.rename(SlotAddress(0, 1), "Not A Voice")
             null
         } catch (e: InstrumentException.SlotStateChanged) {
             e
@@ -658,7 +658,7 @@ class MotifXsInstrumentTest {
             withConfig = drumConfig,
             fake = FakeMotifXs(drumShape = true),
         )
-        motif.editor!!.rename(SlotAddress(0, 0), "Renamed Kit")
+        motif.editor.rename(SlotAddress(0, 0), "Renamed Kit")
 
         val sent = transport.sent.filter {
             MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP &&
@@ -722,7 +722,7 @@ class MotifXsInstrumentTest {
             val (name, run) = op
             val (motif, transport) = instrument(backgroundScope, withConfig = mixed)
             val failure = try {
-                run(motif.editor!!)
+                run(motif.editor)
                 null
             } catch (e: InstrumentException.NotSupported) {
                 e
@@ -760,7 +760,7 @@ class MotifXsInstrumentTest {
                 ),
             ),
         )
-        val editor = instrument(backgroundScope, withConfig = mixed).first.editor!!
+        val editor = instrument(backgroundScope, withConfig = mixed).first.editor
         assertTrue(editor.fits(SlotAddress(0, 0), SlotAddress(0, 2)))
         assertTrue(editor.fits(SlotAddress(1, 0), SlotAddress(1, 2)))
         assertFalse(editor.fits(SlotAddress(0, 0), SlotAddress(1, 1)))
@@ -771,7 +771,7 @@ class MotifXsInstrumentTest {
     @Test
     fun `copy within a bank still works`() = runTest {
         val (motif, _) = instrument(backgroundScope)
-        val name = motif.editor!!.copyProgram(SlotAddress(0, 0), SlotAddress(0, 1))
+        val name = motif.editor.copyProgram(SlotAddress(0, 0), SlotAddress(0, 1))
         assertEquals("TWE2 Wolf Walk", name)
     }
 
@@ -815,7 +815,7 @@ class MotifXsInstrumentTest {
             fullBank,
             shipped,
         )
-        motif.editor!!.delete(SlotAddress(0, 0))
+        motif.editor.delete(SlotAddress(0, 0))
 
         // The drum blank went out, not the normal one, and not a payload scavenged from a slot.
         val written = transport.sent.single {
@@ -844,7 +844,7 @@ class MotifXsInstrumentTest {
             ),
         )
         val (motif, transport) = instrument(backgroundScope, withConfig = readOnly)
-        thrownBy<IllegalArgumentException> { motif.editor!!.rename(SlotAddress(0, 0), "Nope") }
+        thrownBy<IllegalArgumentException> { motif.editor.rename(SlotAddress(0, 0), "Nope") }
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
     }
 
@@ -852,7 +852,7 @@ class MotifXsInstrumentTest {
     @Test
     fun `delete writes an initialised voice over the slot`() = runTest {
         val (motif, transport) = instrument(backgroundScope)
-        motif.editor!!.delete(SlotAddress(0, 0))
+        motif.editor.delete(SlotAddress(0, 0))
 
         val dumps = transport.sent.filter {
             MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP
@@ -918,7 +918,7 @@ class MotifXsInstrumentTest {
         val before = motif.browser.refresh(a).name to motif.browser.refresh(b).name
         assertNotEquals(before.first, before.second)
 
-        motif.editor!!.swap(a, b)
+        motif.editor.swap(a, b)
 
         assertEquals(before.second, motif.browser.refresh(a).name)
         assertEquals(before.first, motif.browser.refresh(b).name)
@@ -938,7 +938,7 @@ class MotifXsInstrumentTest {
         val moving = motif.browser.refresh(from).name
         assertNotNull(moving)
 
-        motif.editor!!.move(from, to)
+        motif.editor.move(from, to)
 
         assertEquals(moving, motif.browser.refresh(to).name)
         assertNull("the source slot must read empty after a move", motif.browser.refresh(from).name)
@@ -959,7 +959,7 @@ class MotifXsInstrumentTest {
         val source = motif.browser.refresh(from).name
         assertNotNull(source)
 
-        val stored = motif.editor!!.copyProgram(from, to)
+        val stored = motif.editor.copyProgram(from, to)
 
         assertEquals(source, stored)
         assertEquals(source, motif.browser.refresh(to).name)
@@ -980,7 +980,7 @@ class MotifXsInstrumentTest {
         // blocking the test thread stops the fake device's replies from ever being delivered - the
         // call then fails on a timeout, which would pass an `assertThrows` for the wrong reason.
         val refusal = runCatching {
-            motif.editor!!.copyProgram(SlotAddress(0, 0), SlotAddress(1, 0))
+            motif.editor.copyProgram(SlotAddress(0, 0), SlotAddress(1, 0))
         }.exceptionOrNull()
 
         assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.SlotStateChanged)
@@ -992,7 +992,7 @@ class MotifXsInstrumentTest {
     fun `copy of an empty slot is refused without writing`() = runTest {
         val (motif, transport) = instrument(backgroundScope)
         val refusal = runCatching {
-            motif.editor!!.copyProgram(SlotAddress(0, 1), SlotAddress(1, 1))
+            motif.editor.copyProgram(SlotAddress(0, 1), SlotAddress(1, 1))
         }.exceptionOrNull()
 
         assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.SlotStateChanged)
@@ -1009,7 +1009,7 @@ class MotifXsInstrumentTest {
         val occupant = motif.browser.refresh(SlotAddress(1, 0)).name
         assertNotNull(occupant)
         val refusal = runCatching {
-            motif.editor!!.move(SlotAddress(0, 0), SlotAddress(1, 0))
+            motif.editor.move(SlotAddress(0, 0), SlotAddress(1, 0))
         }.exceptionOrNull()
 
         assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.SlotStateChanged)
@@ -1021,7 +1021,7 @@ class MotifXsInstrumentTest {
     fun `move of an empty slot is refused without writing`() = runTest {
         val (motif, transport) = instrument(backgroundScope)
         val refusal = runCatching {
-            motif.editor!!.move(SlotAddress(0, 1), SlotAddress(1, 1))
+            motif.editor.move(SlotAddress(0, 1), SlotAddress(1, 1))
         }.exceptionOrNull()
 
         assertTrue("expected a refusal, got $refusal", refusal is InstrumentException.SlotStateChanged)
@@ -1032,8 +1032,8 @@ class MotifXsInstrumentTest {
     @Test
     fun `an operation onto the same slot writes nothing`() = runTest {
         val (motif, transport) = instrument(backgroundScope)
-        motif.editor!!.move(SlotAddress(0, 0), SlotAddress(0, 0))
-        motif.editor!!.swap(SlotAddress(0, 1), SlotAddress(0, 1))
+        motif.editor.move(SlotAddress(0, 0), SlotAddress(0, 0))
+        motif.editor.swap(SlotAddress(0, 1), SlotAddress(0, 1))
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
     }
 
@@ -1062,7 +1062,7 @@ class MotifXsInstrumentTest {
             ),
         )
         val (motif, transport) = instrument(backgroundScope, withFactory)
-        thrownBy<IllegalArgumentException> { motif.editor!!.swap(SlotAddress(0, 0), SlotAddress(1, 0)) }
+        thrownBy<IllegalArgumentException> { motif.editor.swap(SlotAddress(0, 0), SlotAddress(1, 0)) }
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
     }
 
@@ -1228,10 +1228,10 @@ class MotifXsInstrumentTest {
         job = launch(start = CoroutineStart.LAZY) {
             runCatching { motif.editor.delete(SlotAddress(0, 0)) }
         }
-        job!!.start()
-        job!!.join()
+        job.start()
+        job.join()
 
-        assertTrue("cancelled as its write went out", job!!.isCancelled)
+        assertTrue("cancelled as its write went out", job.isCancelled)
 
         val committed = sent.any { MotifXsSysEx.addressOf(it)?.first == MotifXsSysEx.STORE_HI }
         assertTrue(
@@ -1265,11 +1265,11 @@ class MotifXsInstrumentTest {
         val moving = motif.browser.refresh(from).name
         assertNotNull(moving)
 
-        job = launch(start = CoroutineStart.LAZY) { motif.editor!!.move(from, to) }
-        job!!.start()
-        job!!.join()
+        job = launch(start = CoroutineStart.LAZY) { motif.editor.move(from, to) }
+        job.start()
+        job.join()
 
-        assertTrue(job!!.isCancelled)
+        assertTrue(job.isCancelled)
         assertEquals(moving, motif.browser.refresh(to).name)
         assertNull("the source must be cleared in the same commit", motif.browser.refresh(from).name)
     }
@@ -1283,11 +1283,11 @@ class MotifXsInstrumentTest {
         val to = SlotAddress(1, 1)
         val copying = motif.browser.refresh(from).name
 
-        job = launch(start = CoroutineStart.LAZY) { motif.editor!!.copyProgram(from, to) }
-        job!!.start()
-        job!!.join()
+        job = launch(start = CoroutineStart.LAZY) { motif.editor.copyProgram(from, to) }
+        job.start()
+        job.join()
 
-        assertTrue(job!!.isCancelled)
+        assertTrue(job.isCancelled)
         assertEquals(copying, motif.browser.refresh(to).name)
     }
 
@@ -1301,11 +1301,11 @@ class MotifXsInstrumentTest {
         val nameA = motif.browser.refresh(a).name
         val nameB = motif.browser.refresh(b).name
 
-        job = launch(start = CoroutineStart.LAZY) { motif.editor!!.swap(a, b) }
-        job!!.start()
-        job!!.join()
+        job = launch(start = CoroutineStart.LAZY) { motif.editor.swap(a, b) }
+        job.start()
+        job.join()
 
-        assertTrue(job!!.isCancelled)
+        assertTrue(job.isCancelled)
         assertEquals(nameB, motif.browser.refresh(a).name)
         assertEquals(nameA, motif.browser.refresh(b).name)
     }
@@ -1325,14 +1325,14 @@ class MotifXsInstrumentTest {
     fun `a rename to the name already stored writes nothing`() = runTest {
         val (motif, transport) = instrument(backgroundScope)
         val name = motif.browser.refresh(SlotAddress(0, 0)).name!!
-        motif.editor!!.rename(SlotAddress(0, 0), name)
+        motif.editor.rename(SlotAddress(0, 0), name)
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
     }
 
     @Test
     fun `swapping two empty slots writes nothing`() = runTest {
         val (motif, transport) = instrument(backgroundScope)
-        motif.editor!!.swap(SlotAddress(0, 1), SlotAddress(1, 1))
+        motif.editor.swap(SlotAddress(0, 1), SlotAddress(1, 1))
         assertTrue(transport.sent.none { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_BULK_DUMP })
     }
 
@@ -1350,7 +1350,7 @@ class MotifXsInstrumentTest {
         val to = SlotAddress(1, 1)
         val sourceBefore = motif.browser.refresh(from).name
 
-        val failure = runCatching { motif.editor!!.move(from, to) }.exceptionOrNull()
+        val failure = runCatching { motif.editor.move(from, to) }.exceptionOrNull()
 
         assertTrue("expected a timeout, got $failure", failure is InstrumentException.Timeout)
         assertTrue(failure!!.message!!, !failure.message!!.contains("accepted-but-uncommitted"))
@@ -1375,7 +1375,7 @@ class MotifXsInstrumentTest {
         val b = SlotAddress(0, 2)
         val before = motif.browser.refresh(a).name
 
-        val failure = runCatching { motif.editor!!.swap(a, b) }.exceptionOrNull()
+        val failure = runCatching { motif.editor.swap(a, b) }.exceptionOrNull()
 
         assertTrue("expected a timeout, got $failure", failure is InstrumentException.Timeout)
         assertTrue(failure!!.message!!, !failure.message!!.contains("accepted-but-uncommitted"))
@@ -1398,7 +1398,7 @@ class MotifXsInstrumentTest {
         val a = SlotAddress(1, 0)
         val b = SlotAddress(0, 2)
 
-        val failure = runCatching { motif.editor!!.swap(a, b) }.exceptionOrNull()
+        val failure = runCatching { motif.editor.swap(a, b) }.exceptionOrNull()
 
         assertTrue("expected a partly applied edit, got $failure", failure is InstrumentException.PartlyApplied)
         assertTrue(failure!!.message!!, failure.message!!.contains("accepted-but-uncommitted"))
@@ -1409,7 +1409,7 @@ class MotifXsInstrumentTest {
     fun `a commit the instrument does not confirm says to re-read the bank`() = runTest {
         val (motif, _) = instrument(backgroundScope, fake = FakeMotifXs(silentCommit = true))
 
-        val failure = runCatching { motif.editor!!.delete(SlotAddress(0, 0)) }.exceptionOrNull()
+        val failure = runCatching { motif.editor.delete(SlotAddress(0, 0)) }.exceptionOrNull()
 
         assertTrue("expected a timeout, got $failure", failure is InstrumentException.Timeout)
         assertTrue(failure!!.message!!, failure.message!!.contains("Re-read the bank"))
@@ -1419,7 +1419,7 @@ class MotifXsInstrumentTest {
     fun `a read-back that differs from the write is reported`() = runTest {
         val (motif, _) = instrument(backgroundScope, fake = FakeMotifXs(misstore = true))
 
-        val failure = runCatching { motif.editor!!.delete(SlotAddress(0, 0)) }.exceptionOrNull()
+        val failure = runCatching { motif.editor.delete(SlotAddress(0, 0)) }.exceptionOrNull()
 
         assertTrue("expected a desync, got $failure", failure is InstrumentException.ProtocolDesync)
         assertTrue(failure!!.message!!, failure.message!!.contains("read back something different"))

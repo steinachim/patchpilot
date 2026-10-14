@@ -33,6 +33,14 @@ kotlin {
     }
 }
 
+// The tests drive virtual time (`advanceTimeBy`, `advanceUntilIdle`, `runCurrent`), which
+// kotlinx-coroutines-test still marks experimental. Opted in for the test compilations only.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    if (name.endsWith("UnitTestKotlin")) {
+        compilerOptions.optIn.add("kotlinx.coroutines.ExperimentalCoroutinesApi")
+    }
+}
+
 android {
     namespace = "de.thewolfwalkexperience.software.patchpilot"
     // Compile-time only: `minSdk` still decides which devices can install this, and `targetSdk`
