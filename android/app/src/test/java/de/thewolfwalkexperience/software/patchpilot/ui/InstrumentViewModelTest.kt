@@ -13,7 +13,9 @@ import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
@@ -49,10 +51,21 @@ class InstrumentViewModelTest {
         // A launch or a rotation: resumed without having been in the background.
         viewModel.onAppForegrounded()
         assertTrue(viewModel.state.value is ConnectionState.NothingFound)
+        assertFalse(viewModel.attemptRunning())
 
-        viewModel.onAppBackgrounded()
-        viewModel.onAppForegrounded()
-        assertEquals(ConnectionState.Searching, viewModel.state.value)
+        // The rebuild's Searching lasts microseconds and its attempt then ends, so state alone
+        // cannot show it. Holding the operation mutex stalls the attempt at its teardown, where
+        // it stays visible as a running job until released.
+        val mutex = viewModel.coordinatorField("instrumentMutex") as Mutex
+        runBlocking { mutex.lock() }
+        try {
+            viewModel.onAppBackgrounded()
+            viewModel.onAppForegrounded()
+            assertTrue(viewModel.attemptRunning())
+        } finally {
+            mutex.unlock()
+        }
+        viewModel.awaitAttemptEnded()
     }
 
     /** The preset screen's state lives in the ViewModel, so leaving the session has to clear it. */
@@ -186,17 +199,20 @@ class InstrumentViewModelTest {
         assertEquals(null, viewModel.reportNaming())
     }
 
+    private fun InstrumentViewModel.coordinatorField(name: String): Any? =
+        ConnectionCoordinator::class.java.getDeclaredField(name).apply { isAccessible = true }.get(connection)
+
+    private fun InstrumentViewModel.attemptRunning(): Boolean =
+        (coordinatorField("connectJob") as Job?)?.isActive == true
+
     /**
      * Waits for the connection attempt's job to finish. The attempt publishes its state before it
      * returns, and a resume in that window is turned away by the coordinator's single-flight
      * guard, so [awaitSettled] alone leaves a rebuild on resume to chance.
      */
     private fun InstrumentViewModel.awaitAttemptEnded() {
-        val job = ConnectionCoordinator::class.java.getDeclaredField("connectJob").apply {
-            isAccessible = true
-        }.get(connection) as Job?
         val deadline = System.nanoTime() + 10_000_000_000
-        while (job?.isActive == true) {
+        while (attemptRunning()) {
             check(System.nanoTime() < deadline) { "The attempt is still running after 10 s (${state.value})" }
             shadowOf(Looper.getMainLooper()).idle()
             Thread.sleep(10)
