@@ -1,6 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Achim Stein
 // SPDX-License-Identifier: GPL-3.0-only
 
+// The theme's Modifier functions take the modifier as `base` and return it, called as
+// `.let { theme.screenFrame(it) }`: they dispatch on the theme, so they are interface members, and
+// as member extensions each call site would need `with(theme)`.
+@file:Suppress("ModifierFactoryExtensionFunction")
+
 package de.thewolfwalkexperience.software.patchpilot.ui.theme
 
 import androidx.compose.foundation.Image
