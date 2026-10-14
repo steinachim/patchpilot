@@ -10,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.demo.DemoInstrument
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -40,7 +41,10 @@ class InstrumentViewModelTest {
 
     @Test
     fun `the session is rebuilt on resume only after a stay in the background`() {
-        val viewModel = viewModel().apply { awaitSettled() }
+        val viewModel = viewModel().apply {
+            awaitSettled()
+            awaitAttemptEnded()
+        }
 
         // A launch or a rotation: resumed without having been in the background.
         viewModel.onAppForegrounded()
@@ -180,6 +184,23 @@ class InstrumentViewModelTest {
     fun `with no session, a report is not named`() {
         val viewModel = viewModel().apply { awaitSettled() }
         assertEquals(null, viewModel.reportNaming())
+    }
+
+    /**
+     * Waits for the connection attempt's job to finish. The attempt publishes its state before it
+     * returns, and a resume in that window is turned away by the coordinator's single-flight
+     * guard, so [awaitSettled] alone leaves a rebuild on resume to chance.
+     */
+    private fun InstrumentViewModel.awaitAttemptEnded() {
+        val job = ConnectionCoordinator::class.java.getDeclaredField("connectJob").apply {
+            isAccessible = true
+        }.get(connection) as Job?
+        val deadline = System.nanoTime() + 10_000_000_000
+        while (job?.isActive == true) {
+            check(System.nanoTime() < deadline) { "The attempt is still running after 10 s (${state.value})" }
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(10)
+        }
     }
 
     /**
