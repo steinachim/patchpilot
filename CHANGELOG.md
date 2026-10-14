@@ -2,6 +2,9 @@
 
 ## Next release
 
+### Added
+- On Android 13 and later, the launcher icon has a monochrome layer, so themed icons show the badge instead of the plain icon.
+
 ## 2.0
 
 ### Added
