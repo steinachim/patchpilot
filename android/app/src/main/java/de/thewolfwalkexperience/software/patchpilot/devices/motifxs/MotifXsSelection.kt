@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.motifxs
 
 import android.util.Log
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSelector
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import kotlinx.coroutines.CancellationException
@@ -64,6 +65,13 @@ internal suspend fun MotifXsInstrument.readEditBufferName(): String? {
  * to Voice mode as the remedy.
  */
 internal class MotifXsSelector(private val motif: MotifXsInstrument) : PresetSelector {
+
+    /** The bank-select pair and program [select] sends; null where the bank's LSB is unknown. */
+    override fun midiSelection(address: SlotAddress): MidiSelection? {
+        val bank = motif.config.banks.getOrNull(address.bank) ?: return null
+        val lsb = bank.selectLsb ?: return null
+        return MidiSelection(bankMsb = bank.selectMsb, bankLsb = lsb, program = address.slot)
+    }
 
     override suspend fun select(address: SlotAddress) {
         requireVoiceMode()

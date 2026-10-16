@@ -3,7 +3,6 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.nord
 
-import de.thewolfwalkexperience.software.patchpilot.core.FavoriteModel
 import java.io.File
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -12,6 +11,8 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+
+private val catalogJson = Json { ignoreUnknownKeys = true }
 
 /**
  * The **shipped** catalog produces a working tagger for every Nord this app profiles.
@@ -28,7 +29,7 @@ class NordCatalogTaggerTest {
     private val catalog: NordCatalog by lazy {
         val dir = System.getProperty("deviceCatalogDir")
             ?: error("deviceCatalogDir is not set; see the Test task config in app/build.gradle.kts")
-        Json { ignoreUnknownKeys = true }.decodeFromString(
+        catalogJson.decodeFromString(
             NordCatalog.serializer(),
             File(dir).resolve("nord_devices.json").readText(),
         )
@@ -60,7 +61,7 @@ class NordCatalogTaggerTest {
         val tagger = assertNotNull(instrument.tagger).let { instrument.tagger!! }
 
         assertEquals(1, tagger.assignmentCount)
-        assertNull("a Nord has no favorites", tagger.favorites as FavoriteModel?)
+        assertNull("a Nord has no favorites", tagger.favorites)
         assertFalse("None is a category, not the absence of one", tagger.allowsUnassigned)
         assertEquals(21, tagger.taxonomy.mains.size)
         assertEquals(NordCategories.NONE, tagger.taxonomy.mains.last().name)

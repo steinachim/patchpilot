@@ -430,6 +430,10 @@ fun ProgramsScreen(
         )
     }
 
+    ops.infoTarget?.let { info ->
+        PresetInfoDialog(info, onDismiss = { ops.infoTarget = null })
+    }
+
     ops.blocked?.let { pending ->
         BlockedOperationDialog(
             pending = pending,

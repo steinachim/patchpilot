@@ -11,6 +11,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentNotice
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
@@ -396,6 +397,9 @@ class Subsequent37Instrument(
             )
         }
     }
+
+    override fun midiSelection(address: SlotAddress): MidiSelection =
+        Subsequent37SysEx.midiSelection(numberOf(address))
 
     private suspend fun trySelect(channel: Int, number: Int, displayId: String): Boolean = try {
         device.select(channel, number, displayId)

@@ -5,7 +5,9 @@ package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
@@ -401,7 +403,7 @@ class Pro800InstrumentTest {
         val fake = FakePro800()
         val pro800 = fullSizeInstrument(fake, backgroundScope)
 
-        pro800.selector!!.select(SlotAddress(bank = 1, slot = 5))
+        pro800.selector.select(SlotAddress(bank = 1, slot = 5))
 
         assertTrue(
             "selection must be pure SysEx - no channel-voice message may be sent",
@@ -430,7 +432,7 @@ class Pro800InstrumentTest {
         val fake = FakePro800()
         val pro800 = fullSizeInstrument(fake, backgroundScope)
 
-        pro800.selector!!.select(SlotAddress(bank = 3, slot = 5))
+        pro800.selector.select(SlotAddress(bank = 3, slot = 5))
 
         assertEquals(305, fake.currentSettings().currentPresetNumber)
         assertEquals(3, fake.currentSettings().currentBank)
@@ -450,7 +452,7 @@ class Pro800InstrumentTest {
         val before = fake.settingsPayload().copyOf()
         val pro800 = fullSizeInstrument(fake, backgroundScope)
 
-        pro800.selector!!.select(SlotAddress(bank = 1, slot = 5))
+        pro800.selector.select(SlotAddress(bank = 1, slot = 5))
 
         val after = fake.settingsPayload()
         assertEquals("the block must keep its length", before.size, after.size)
@@ -473,7 +475,7 @@ class Pro800InstrumentTest {
         val fake = FakePro800(staleSettingsReads = 2)
         val pro800 = fullSizeInstrument(fake, backgroundScope)
 
-        pro800.selector!!.select(SlotAddress(bank = 1, slot = 5))
+        pro800.selector.select(SlotAddress(bank = 1, slot = 5))
 
         val types = fake.requestLog.map { Pro800SysEx.typeOf(it) }
         val reload = types.indexOf(Pro800SysEx.TYPE_RESET_MODE)
@@ -497,7 +499,7 @@ class Pro800InstrumentTest {
         val pro800 = fullSizeInstrument(fake, backgroundScope)
 
         try {
-            pro800.selector!!.select(SlotAddress(bank = 1, slot = 5))
+            pro800.selector.select(SlotAddress(bank = 1, slot = 5))
             throw AssertionError("a select that never landed reported success")
         } catch (expected: InstrumentException.ProtocolDesync) {
             assertTrue(expected.message!!.contains("B05"))
@@ -514,7 +516,7 @@ class Pro800InstrumentTest {
         val fake = FakePro800(reloadStatus = 1)
         val pro800 = fullSizeInstrument(fake, backgroundScope)
 
-        val failure = runCatching { pro800.selector!!.select(SlotAddress(bank = 1, slot = 5)) }.exceptionOrNull()
+        val failure = runCatching { pro800.selector.select(SlotAddress(bank = 1, slot = 5)) }.exceptionOrNull()
         assertTrue("expected a refusal, got $failure", failure is InstrumentException.DeviceRejected)
         assertEquals(1, (failure as InstrumentException.DeviceRejected).status)
     }
@@ -527,24 +529,25 @@ class Pro800InstrumentTest {
     @Test
     fun `the selection confirmation says selected`() = runTest {
         val (pro800, _) = instrument(backgroundScope)
-        assertEquals("Selected A00.", pro800.selector!!.confirmationFor("A00"))
+        assertEquals("Selected A00.", pro800.selector.confirmationFor("A00"))
     }
 
     @Test
     fun `a Pro-800 offers a report, an editor and a transfer`() = runTest {
-        val (pro800, _) = instrument(backgroundScope)
+        // Through the interface, where each facet is optional.
+        val (pro800: Instrument, _) = instrument(backgroundScope)
         // Read-only, and the source of the test fixtures (Pro800Reporter).
-        assertTrue(pro800.report != null)
+        assertNotNull(pro800.report)
         // With read-back verification.
-        assertTrue(pro800.editor != null)
+        assertNotNull(pro800.editor)
         // The browser is built on it.
-        assertTrue(pro800.transfer != null)
+        assertNotNull(pro800.transfer)
     }
 
     @Test
     fun `transfer hands back the raw encoded blob the browser was built on`() = runTest {
         val (pro800, _) = instrument(backgroundScope)
-        val blob = pro800.transfer!!.read(SlotAddress(0, 0))
+        val blob = pro800.transfer.read(SlotAddress(0, 0))
         assertEquals("Fat Saw Bass", Pro800Program.fromEncoded(blob).name)
     }
 
@@ -558,7 +561,7 @@ class Pro800InstrumentTest {
         val transport = FakeMidiTransport { emptyList() }
         val pro800 = Pro800Instrument(SysExExchange(transport, backgroundScope), bigConfig)
         try {
-            pro800.transfer!!.read(SlotAddress(bank = 5, slot = 99)) // 599, past 400
+            pro800.transfer.read(SlotAddress(bank = 5, slot = 99)) // 599, past 400
             throw AssertionError("an out-of-range address was accepted")
         } catch (expected: IllegalArgumentException) {
             assertTrue(expected.message!!.contains("outside"))
@@ -702,5 +705,16 @@ class Pro800InstrumentTest {
 
         pro800.close()
         assertTrue("the MIDI port must be released", transport.closed)
+    }
+
+    /** The channel-voice equivalent of a selection: CC 0 is the bank, the Program Change the slot, CC 32 is inert. */
+    @Test
+    fun `the MIDI selection is the bank in CC0 and the slot in the Program Change`() = runTest {
+        val pro800 = fullSizeInstrument(FakePro800(), backgroundScope)
+
+        assertEquals(MidiSelection(0, null, 0), pro800.selector.midiSelection(SlotAddress(0, 0)))
+        assertEquals(MidiSelection(1, null, 5), pro800.selector.midiSelection(SlotAddress(1, 5)))
+        assertEquals(MidiSelection(3, null, 99), pro800.selector.midiSelection(SlotAddress(3, 99)))
+        assertTrue(runCatching { pro800.selector.midiSelection(SlotAddress(4, 0)) }.isFailure)
     }
 }

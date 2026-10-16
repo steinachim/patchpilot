@@ -11,6 +11,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private val catalogJson = Json { ignoreUnknownKeys = true }
+
 /**
  * A program's category tag: decoding it out of the item record, and resolving ids to names.
  *
@@ -74,7 +76,7 @@ class NordCategoryTest {
         // fixture has.
         val dir = System.getProperty("deviceCatalogDir")
             ?: error("deviceCatalogDir is not set; see the Test task config in app/build.gradle.kts")
-        Json { ignoreUnknownKeys = true }.decodeFromString(
+        catalogJson.decodeFromString(
             NordCatalog.serializer(),
             File(dir).resolve("nord_devices.json").readText(),
         )

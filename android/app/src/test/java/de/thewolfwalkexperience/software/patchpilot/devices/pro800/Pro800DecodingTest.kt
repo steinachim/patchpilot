@@ -251,7 +251,7 @@ class Pro800DecodingTest {
         // And selection moves the pointer in the real captured settings block. The capture was
         // taken with the instrument on A06; A01 is where this asks it to go.
         assertEquals(6, Pro800Settings.fromEncoded(Pro800SysEx.dumpPayload(settings)).currentPresetNumber)
-        pro800.selector!!.select(SlotAddress(0, 1))
+        pro800.selector.select(SlotAddress(0, 1))
 
         val after = Pro800Settings.fromEncoded(Pro800SysEx.dumpPayload(settings))
         assertEquals(1, after.currentPresetNumber)

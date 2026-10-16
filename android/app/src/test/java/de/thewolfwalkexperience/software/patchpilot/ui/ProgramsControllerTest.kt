@@ -97,6 +97,11 @@ class ProgramsControllerTest {
         override suspend fun moveProgram(source: PresetSlot, target: PresetSlot, targetIsEmpty: Boolean) =
             answer("move(${source.displayId}->${target.displayId},empty=$targetIsEmpty)", "Moved")
         override suspend fun presetTags(slot: PresetSlot) = answer("tags(${slot.displayId})", tagsToReturn)
+        override suspend fun presetInfo(slot: PresetSlot) =
+            answer(
+                "info(${slot.displayId})",
+                PresetInfo(title = slot.displayId, subtitle = "", rows = emptyList(), midi = null),
+            )
         override suspend fun setFavorite(slot: PresetSlot, under: Set<Int>) =
             answer("favorite(${slot.displayId},$under)", "Favorited")
         override suspend fun setCategories(slot: PresetSlot, categories: List<CategoryRef?>) =
@@ -412,6 +417,7 @@ class ProgramsControllerTest {
         controller.beginPicking(slot(0, 1))
         controller.renameTarget = slot(0, 2)
         controller.deleteTarget = slot(0, 3)
+        controller.infoTarget = PresetInfo(title = "A5", subtitle = "", rows = emptyList(), midi = null)
         controller.operationError = "earlier failure"
         controller.onDeleteConfirmed(slot(0, 4))
 
@@ -420,6 +426,7 @@ class ProgramsControllerTest {
         assertFalse(controller.picking)
         assertNull(controller.renameTarget)
         assertNull(controller.deleteTarget)
+        assertNull(controller.infoTarget)
         assertNull(controller.operationError)
         assertNotNull("an edit in flight keeps its line until it ends", controller.busy)
     }
@@ -553,6 +560,32 @@ class ProgramsControllerTest {
         testScheduler.advanceUntilIdle()
 
         assertNull(controller.categoriesTarget)
+        assertNotNull(controller.operationError)
+    }
+    // ---- Info ----
+
+    @Test
+    fun `opening Info asks the instrument once and opens the dialog with nothing to announce`() = runTest {
+        val (controller, ops) = controller()
+        controller.openInfo(slot(0, 1))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(listOf("info(A1)"), ops.calls)
+        assertEquals("A1", controller.infoTarget?.title)
+        assertNull(controller.statusMessage)
+        assertEquals("a read stores nothing, so nothing is re-listed", 0, ops.reloads)
+        assertNull(controller.busy)
+    }
+
+    @Test
+    fun `a failed Info read opens no dialog`() = runTest {
+        val (controller, ops) = controller()
+        ops.failWith = InstrumentException.Timeout("reading A1")
+
+        controller.openInfo(slot(0, 1))
+        testScheduler.advanceUntilIdle()
+
+        assertNull(controller.infoTarget)
         assertNotNull(controller.operationError)
     }
 }

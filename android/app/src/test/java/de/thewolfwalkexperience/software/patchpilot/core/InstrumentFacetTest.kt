@@ -151,7 +151,7 @@ class InstrumentFacetTest {
     fun `every edit a Nord declares completes against the wire-level fake`() = runTest {
         val instrument = nord()
         instrument.connect()
-        val editor = instrument.editor!!
+        val editor = instrument.editor
 
         assertTrue(EditOp.RENAME in editor.supported)
         editor.rename(SlotAddress(0, 0), "Renamed")
@@ -199,7 +199,7 @@ class InstrumentFacetTest {
      */
     @Test
     fun `an undeclared edit throws rather than silently working`() = runTest {
-        val editor = NoCopyFixtureInstrument().editor!!
+        val editor = NoCopyFixtureInstrument().editor
         assertFalse("the fixture deliberately does not copy", EditOp.COPY in editor.supported)
         try {
             editor.copyProgram(SlotAddress(0, 0), SlotAddress(0, 1))
@@ -240,11 +240,11 @@ class InstrumentFacetTest {
     /** Every family that declares DELETE implements it. */
     @Test
     fun `delete is declared by every family that can do it`() = runTest {
-        val nordOps = nord().also { it.connect() }.editor!!.supported
+        val nordOps = nord().also { it.connect() }.editor.supported
         assertTrue("a Nord deletes with sub-opcode 20/21", EditOp.DELETE in nordOps)
         assertTrue(
             "the Motif XS erases the slot the way a move clears its source",
-            EditOp.DELETE in motifXs(backgroundScope).editor!!.supported,
+            EditOp.DELETE in motifXs(backgroundScope).editor.supported,
         )
         assertTrue(
             "an Axe-Fx III writes the editor's own empty preset",
@@ -301,10 +301,10 @@ class InstrumentFacetTest {
 
     @Test
     fun `emulated edits are declared as such, native ones are not`() {
-        val nordEditor = nord().editor!!
+        val nordEditor = nord().editor
         EditOp.entries.forEach { assertFalse(nordEditor.isEmulated(it)) }
 
-        val fixtureEditor = NoCopyFixtureInstrument().editor!!
+        val fixtureEditor = NoCopyFixtureInstrument().editor
         EditOp.entries.forEach { assertTrue(fixtureEditor.isEmulated(it)) }
     }
 
@@ -338,8 +338,8 @@ class InstrumentFacetTest {
      */
     @Test
     fun `a selector's confirmation reflects what its instrument can honestly claim`() {
-        assertEquals("Selected A:1:1.", nord().selector!!.confirmationFor("A:1:1"))
-        assertEquals("Sent A00.", NoCopyFixtureInstrument().selector!!.confirmationFor("A00"))
+        assertEquals("Selected A:1:1.", nord().selector.confirmationFor("A:1:1"))
+        assertEquals("Sent A00.", NoCopyFixtureInstrument().selector.confirmationFor("A00"))
     }
 
     /** Every report opens the same way, whatever the family reads after it. */

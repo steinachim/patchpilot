@@ -32,10 +32,14 @@
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.PatchPilot">
 
+        <!-- fullUser: all four orientations, including upside-down portrait (which the default
+             leaves off on most phones), unless the user has locked rotation. Upside down, the USB
+             port faces away from the player with the phone lying on a keyboard. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop">
+            android:launchMode="singleTop"
+            android:screenOrientation="fullUser">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

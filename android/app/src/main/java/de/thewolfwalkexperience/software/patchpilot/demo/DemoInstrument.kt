@@ -13,6 +13,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
@@ -95,6 +96,10 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
     override suspend fun select(address: SlotAddress) {
         library.requireOccupied(address)
     }
+
+    /** A made-up mapping, so the Info dialog can show its MIDI block: one LSB per bank, the slot as Program Change. */
+    override fun midiSelection(address: SlotAddress) =
+        MidiSelection(bankMsb = 0, bankLsb = address.bank, program = address.slot)
 
     // ---- PresetEditor ----
 
