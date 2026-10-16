@@ -50,46 +50,38 @@ class PresetInfoTest {
         extras: List<InfoRow> = emptyList(),
     ) = buildPresetInfo(slot, bank, tagInfo, canSelect, midi, extras, strings)
 
-    private fun PresetInfo.rows(): Map<String, String> =
-        sections.flatMap { it.rows }.associate { it.label to it.value }
+    private fun PresetInfo.rowMap(): Map<String, String> = rows.associate { it.label to it.value }
 
     @Test
-    fun `the generic rows state name, location, bank, position and memory`() {
+    fun `the name is the title and the id the subtitle, with no row repeating either`() {
         val info = build()
 
         assertEquals("Warm Brass", info.title)
-        val rows = info.rows()
-        assertEquals("Warm Brass", rows[text(R.string.info_row_name)])
-        assertEquals("B05", rows[text(R.string.info_row_location)])
-        assertEquals("B", rows[text(R.string.info_row_bank)])
-        assertEquals(text(R.string.info_slot_value, 5, 16), rows[text(R.string.info_row_slot)])
-        assertEquals(text(R.string.info_memory_user), rows[text(R.string.info_row_memory)])
+        assertEquals("B05", info.subtitle)
+        assertTrue(info.rows.none { it.value == "Warm Brass" || it.value == "B05" })
     }
 
     @Test
-    fun `a read-only bank is called factory memory`() {
-        val rows = build(bank = bank.copy(readOnly = true)).rows()
-        assertEquals(text(R.string.info_memory_factory), rows[text(R.string.info_row_memory)])
+    fun `only a factory preset is called factory`() {
+        assertEquals("B05", build().subtitle)
+        assertEquals(text(R.string.info_subtitle_factory, "B05"), build(bank = bank.copy(readOnly = true)).subtitle)
     }
 
     @Test
-    fun `a slot with no bank in the layout still gets its identity rows`() {
-        val rows = build(bank = null).rows()
-        assertEquals("B05", rows[text(R.string.info_row_location)])
-        assertNull(rows[text(R.string.info_row_slot)])
-        assertNull(rows[text(R.string.info_row_memory)])
+    fun `an unnamed slot is titled by its id`() {
+        assertEquals("B05", build(slot = slot.copy(name = null)).title)
     }
 
     @Test
     fun `badges are listed where the family has no tagger`() {
-        val rows = build(slot = slot.copy(badges = listOf("v2", "Lead"))).rows()
+        val rows = build(slot = slot.copy(badges = listOf("v2", "Lead"))).rowMap()
         assertEquals("v2, Lead", rows[text(R.string.info_row_tags)])
     }
 
     @Test
     fun `a single-assignment family shows one category and a flag favorite`() {
         val tags = PresetTags(categories = listOf(CategoryRef(1)), favoriteUnder = setOf(0))
-        val rows = build(tagInfo = TagInfo(tags, taxonomy, 1, FavoriteModel.FLAG)).rows()
+        val rows = build(tagInfo = TagInfo(tags, taxonomy, 1, FavoriteModel.FLAG)).rowMap()
 
         assertEquals("Bass", rows[text(R.string.info_row_category)])
         assertEquals(text(R.string.info_yes), rows[text(R.string.info_row_favorite)])
@@ -99,7 +91,7 @@ class PresetInfoTest {
     @Test
     fun `a two-assignment family numbers its categories and names the favorite's assignment`() {
         val tags = PresetTags(categories = listOf(CategoryRef(0, 1), null), favoriteUnder = setOf(0))
-        val rows = build(tagInfo = TagInfo(tags, taxonomy, 2, FavoriteModel.PER_ASSIGNMENT)).rows()
+        val rows = build(tagInfo = TagInfo(tags, taxonomy, 2, FavoriteModel.PER_ASSIGNMENT)).rowMap()
 
         assertEquals("Pads / Cold", rows[text(R.string.info_row_category_n, 1)])
         assertEquals(text(R.string.programs_no_category), rows[text(R.string.info_row_category_n, 2)])
@@ -109,56 +101,46 @@ class PresetInfoTest {
     @Test
     fun `a favorite is no where none is set, and absent where the family has none`() {
         val tags = PresetTags(categories = listOf(CategoryRef(0)))
-        val withFavorites = build(tagInfo = TagInfo(tags, taxonomy, 1, FavoriteModel.FLAG)).rows()
-        val without = build(tagInfo = TagInfo(tags, taxonomy, 1, null)).rows()
+        val withFavorites = build(tagInfo = TagInfo(tags, taxonomy, 1, FavoriteModel.FLAG)).rowMap()
+        val without = build(tagInfo = TagInfo(tags, taxonomy, 1, null)).rowMap()
 
         assertEquals(text(R.string.info_no), withFavorites[text(R.string.info_row_favorite)])
         assertNull(without[text(R.string.info_row_favorite)])
     }
 
     @Test
-    fun `the MIDI section lists the wire values and says where a controller is not used`() {
-        val info = build(canSelect = true, midi = MidiSelection(bankMsb = 63, bankLsb = null, program = 29))
-        val midi = info.sections.single { it.title == text(R.string.info_section_midi) }
+    fun `the MIDI block has the three values, with null where a controller is not used`() {
+        val midi = build(canSelect = true, midi = MidiSelection(bankMsb = 63, bankLsb = null, program = 29)).midi!!
 
         assertEquals(
             listOf(
-                InfoRow(text(R.string.info_row_midi_msb), text(R.string.info_midi_value, 63, "3F")),
-                InfoRow(text(R.string.info_row_midi_lsb), text(R.string.info_midi_not_used)),
-                InfoRow(text(R.string.info_row_midi_program), text(R.string.info_midi_value, 29, "1D")),
+                MidiCell(text(R.string.info_midi_msb), text(R.string.info_midi_cc, 0), 63),
+                MidiCell(text(R.string.info_midi_lsb), text(R.string.info_midi_cc, 32), null),
+                MidiCell(text(R.string.info_midi_program), text(R.string.info_midi_pc), 29),
             ),
-            midi.rows,
+            midi.cells,
         )
         assertEquals(text(R.string.info_midi_note), midi.note)
     }
 
     @Test
     fun `a family that can select but states no values says so`() {
-        val midi = build(canSelect = true, midi = null).sections
-            .single { it.title == text(R.string.info_section_midi) }
+        val midi = build(canSelect = true, midi = null).midi!!
 
-        assertTrue(midi.rows.isEmpty())
+        assertTrue(midi.cells.isEmpty())
         assertEquals(text(R.string.info_midi_unknown), midi.note)
     }
 
     @Test
-    fun `an instrument that cannot select has no MIDI section`() {
-        val info = build(canSelect = false, midi = null)
-        assertTrue(info.sections.none { it.title == text(R.string.info_section_midi) })
+    fun `an instrument that cannot select has no MIDI block`() {
+        assertNull(build(canSelect = false, midi = null).midi)
     }
 
     @Test
     fun `the family's own rows come last, in their order`() {
         val extras = listOf(InfoRow("Voice size", "1.9 kB"), InfoRow("Type", "Normal"))
-        val info = build(canSelect = true, midi = MidiSelection(0, 0, 1), extras = extras)
+        val info = build(extras = extras)
 
-        val last = info.sections.last()
-        assertEquals(text(R.string.info_section_device), last.title)
-        assertEquals(extras, last.rows)
-    }
-
-    @Test
-    fun `no extras means no details section`() {
-        assertTrue(build().sections.none { it.title == text(R.string.info_section_device) })
+        assertEquals(extras, info.rows.takeLast(2))
     }
 }

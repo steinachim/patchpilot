@@ -43,6 +43,7 @@
     <string name="action_details">Details</string>
     <string name="action_hide_details">Hide</string>
     <string name="action_ok">OK</string>
+    <string name="action_close">Close</string>
 
     <!-- The checkbox in an instrument's notice dialog, shown when a session connects. -->
     <string name="notice_hide_forever">Don\'t show this again</string>
@@ -314,14 +315,7 @@
     </plurals>
 
     <!-- The Info dialog for one preset. -->
-    <string name="info_row_name">Name</string>
-    <string name="info_row_location">Location</string>
-    <string name="info_row_bank">Bank</string>
-    <string name="info_row_slot">Slot</string>
-    <string name="info_slot_value">%1$d of %2$d</string>
-    <string name="info_row_memory">Memory</string>
-    <string name="info_memory_user">User</string>
-    <string name="info_memory_factory">Factory, read-only</string>
+    <string name="info_subtitle_factory">%1$s \u00b7 Factory, read-only</string>
     <string name="info_row_tags">Tags</string>
     <string name="info_row_category">Category</string>
     <string name="info_row_category_n">Category %1$d</string>
@@ -329,13 +323,12 @@
     <string name="info_yes">Yes</string>
     <string name="info_no">No</string>
     <string name="info_favorite_under">Yes, under %1$s</string>
-    <string name="info_section_midi">MIDI selection</string>
-    <string name="info_row_midi_msb">Bank Select MSB (CC 0)</string>
-    <string name="info_row_midi_lsb">Bank Select LSB (CC 32)</string>
-    <string name="info_row_midi_program">Program Change</string>
-    <string name="info_midi_not_used">Not used</string>
-    <string name="info_midi_value">%1$d (0x%2$s)</string>
-    <string name="info_midi_note">Values as sent on the wire, 0\u2013127. Some manuals count Program Change from 1.</string>
-    <string name="info_midi_unknown">Not known for this instrument.</string>
-    <string name="info_section_device">Details</string>
+    <string name="info_midi_heading">MIDI selection</string>
+    <string name="info_midi_msb">Bank MSB</string>
+    <string name="info_midi_lsb">Bank LSB</string>
+    <string name="info_midi_program">Program</string>
+    <string name="info_midi_cc">CC %1$d</string>
+    <string name="info_midi_pc">PC</string>
+    <string name="info_midi_note">Wire values, 0\u2013127. Some manuals count Program Change from 1.</string>
+    <string name="info_midi_unknown">MIDI selection: not known for this instrument.</string>
 </resources>

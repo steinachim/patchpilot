@@ -98,7 +98,10 @@ class ProgramsControllerTest {
             answer("move(${source.displayId}->${target.displayId},empty=$targetIsEmpty)", "Moved")
         override suspend fun presetTags(slot: PresetSlot) = answer("tags(${slot.displayId})", tagsToReturn)
         override suspend fun presetInfo(slot: PresetSlot) =
-            answer("info(${slot.displayId})", PresetInfo(title = slot.displayId, sections = emptyList()))
+            answer(
+                "info(${slot.displayId})",
+                PresetInfo(title = slot.displayId, subtitle = "", rows = emptyList(), midi = null),
+            )
         override suspend fun setFavorite(slot: PresetSlot, under: Set<Int>) =
             answer("favorite(${slot.displayId},$under)", "Favorited")
         override suspend fun setCategories(slot: PresetSlot, categories: List<CategoryRef?>) =
@@ -414,7 +417,7 @@ class ProgramsControllerTest {
         controller.beginPicking(slot(0, 1))
         controller.renameTarget = slot(0, 2)
         controller.deleteTarget = slot(0, 3)
-        controller.infoTarget = PresetInfo(title = "A5", sections = emptyList())
+        controller.infoTarget = PresetInfo(title = "A5", subtitle = "", rows = emptyList(), midi = null)
         controller.operationError = "earlier failure"
         controller.onDeleteConfirmed(slot(0, 4))
 

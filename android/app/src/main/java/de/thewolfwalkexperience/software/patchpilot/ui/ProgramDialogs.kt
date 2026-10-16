@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -226,44 +227,90 @@ internal fun InstrumentNoticeDialog(
 
 /**
  * What the app knows about one preset - see [buildPresetInfo]. Read-only, so it has a single
- * button; long content (a family with many rows, a large font) scrolls.
+ * button; the content scrolls where a family with many rows or a large font does not fit.
+ *
+ * The name is the title and the id the subtitle; facts are label/value pairs on one line, and the
+ * MIDI values sit side by side in one block, since they are read together and sent together.
  */
 @Composable
 internal fun PresetInfoDialog(info: PresetInfo, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(info.title) },
+        title = {
+            Column {
+                Text(info.title)
+                Text(
+                    info.subtitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                info.sections.forEachIndexed { index, section ->
-                    if (index > 0) Spacer(Modifier.height(16.dp))
-                    section.title?.let {
-                        Text(it, style = MaterialTheme.typography.titleSmall)
-                        Spacer(Modifier.height(4.dp))
-                    }
-                    section.rows.forEach { row ->
-                        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Text(
-                                row.label,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(row.value, style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
-                    section.note?.let {
-                        Spacer(Modifier.height(4.dp))
+                info.rows.forEach { row ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                         Text(
-                            it,
-                            style = MaterialTheme.typography.bodySmall,
+                            "${row.label}:",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(0.38f),
+                        )
+                        Text(
+                            row.value,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(0.62f),
                         )
                     }
+                }
+                info.midi?.let { midi ->
+                    if (info.rows.isNotEmpty()) {
+                        HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                    }
+                    MidiBlockContent(midi)
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_ok)) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
         },
     )
+}
+
+@Composable
+private fun MidiBlockContent(midi: MidiBlock) {
+    if (midi.cells.isEmpty()) {
+        midi.note?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
+    Text(stringResource(R.string.info_midi_heading), style = MaterialTheme.typography.titleSmall)
+    Spacer(Modifier.height(8.dp))
+    Row(Modifier.fillMaxWidth()) {
+        midi.cells.forEach { cell ->
+            Column(Modifier.weight(1f)) {
+                Text(
+                    cell.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    cell.caption,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(cell.value?.toString() ?: "\u2013", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    cell.value?.let { "0x" + it.toString(16).uppercase().padStart(2, '0') }.orEmpty(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+    midi.note?.let {
+        Spacer(Modifier.height(8.dp))
+        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
