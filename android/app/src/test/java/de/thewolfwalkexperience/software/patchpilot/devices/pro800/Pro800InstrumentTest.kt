@@ -7,6 +7,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNNAMED_PRESET
 import de.thewolfwalkexperience.software.patchpilot.midi.FakeMidiTransport
@@ -704,5 +705,16 @@ class Pro800InstrumentTest {
 
         pro800.close()
         assertTrue("the MIDI port must be released", transport.closed)
+    }
+
+    /** The channel-voice equivalent of a selection: CC 0 is the bank, the Program Change the slot, CC 32 is inert. */
+    @Test
+    fun `the MIDI selection is the bank in CC0 and the slot in the Program Change`() = runTest {
+        val pro800 = fullSizeInstrument(FakePro800(), backgroundScope)
+
+        assertEquals(MidiSelection(0, null, 0), pro800.selector.midiSelection(SlotAddress(0, 0)))
+        assertEquals(MidiSelection(1, null, 5), pro800.selector.midiSelection(SlotAddress(1, 5)))
+        assertEquals(MidiSelection(3, null, 99), pro800.selector.midiSelection(SlotAddress(3, 99)))
+        assertTrue(runCatching { pro800.selector.midiSelection(SlotAddress(4, 0)) }.isFailure)
     }
 }

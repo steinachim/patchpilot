@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.cache
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.InfoRow
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
@@ -32,6 +33,9 @@ class CachingBrowser(
 
     /** The delegate's: inheriting the default would hide every scope but the user one. */
     override val scopes: List<PresetScope> get() = delegate.scopes
+
+    /** The delegate's: inheriting the default would drop the family's rows from the Info dialog. */
+    override fun details(address: SlotAddress): List<InfoRow> = delegate.details(address)
 
     override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
         // Only the user listing is cached ([CacheKey] carries no scope). A factory listing costs

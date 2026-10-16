@@ -8,8 +8,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -217,6 +220,50 @@ internal fun InstrumentNoticeDialog(
         },
         confirmButton = {
             TextButton(onClick = { onDismiss(hideForever) }) { Text(stringResource(R.string.action_ok)) }
+        },
+    )
+}
+
+/**
+ * What the app knows about one preset - see [buildPresetInfo]. Read-only, so it has a single
+ * button; long content (a family with many rows, a large font) scrolls.
+ */
+@Composable
+internal fun PresetInfoDialog(info: PresetInfo, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(info.title) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                info.sections.forEachIndexed { index, section ->
+                    if (index > 0) Spacer(Modifier.height(16.dp))
+                    section.title?.let {
+                        Text(it, style = MaterialTheme.typography.titleSmall)
+                        Spacer(Modifier.height(4.dp))
+                    }
+                    section.rows.forEach { row ->
+                        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            Text(
+                                row.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(row.value, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                    section.note?.let {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_ok)) }
         },
     )
 }

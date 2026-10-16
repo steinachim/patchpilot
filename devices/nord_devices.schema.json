@@ -61,6 +61,16 @@
         "slotsPerGroup": { "type": "integer", "minimum": 1, "description": "Slots per group - the divisor used to translate group/slot into a flat item index." },
         "maxDisplayTextLen": { "type": "integer", "minimum": 1, "description": "Character width of the instrument's status-message display." },
         "maxProgramNameLen": { "type": "integer", "minimum": 1, "description": "Longest program name the instrument actually stores. Measured, not guessed: an oversized SET_NAME is accepted with status 0 and the instrument silently keeps this many characters. Separate from maxDisplayTextLen even though both are 16 on every instrument measured so far - they are different limits that happen to coincide, and conflating them would hide the day one of them moves." },
+        "midiProgramSelect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["msb", "banksPerLsb"],
+          "properties": {
+            "msb": { "type": "integer", "minimum": 0, "maximum": 127, "description": "Bank Select MSB (CC 0) that addresses the Program banks." },
+            "banksPerLsb": { "type": "integer", "minimum": 1, "description": "How many of the panel's banks one Bank Select LSB (CC 32) value covers. Every Program Change value is a position within that LSB group, so banksPerLsb x (maxGroup x slotsPerGroup) must not exceed 128." }
+          },
+          "description": "How a Program preset's address becomes Bank Select + Program Change on the wire. With N = maxGroup x slotsPerGroup: MSB = msb, LSB = bank div banksPerLsb, Program Change = (bank mod banksPerLsb) x N + slot, a 0-based wire value. Programs only. Optional: omitting it means 'not established', and the app states no MIDI values. From the instruments' manuals; not measured on an instrument."
+        },
         "supportedFirmwareVersions": {
           "type": "array",
           "items": { "type": "integer", "minimum": 0 },

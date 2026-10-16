@@ -422,9 +422,9 @@ private fun ProgramRowItem(
             // any row until the pick resolves. Favorites and categories are
             // asked of the facet rather than derived from `rowWritable`: a
             // Motif XS can favorite a factory voice but not re-categorise one.
-            if (ops.picking || isEmpty ||
-                (!rowRename && !rowDelete && !rowCopy && !canSetFavorite && !canSetCategories)
-            ) {
+            // Info applies to every stored preset, so a row that offers nothing
+            // else still has a menu.
+            if (ops.picking || isEmpty) {
                 null
             } else {
                 {
@@ -438,6 +438,7 @@ private fun ProgramRowItem(
                         canSetCategories = canSetCategories,
                         categoryCount = rules.categoryCount,
                         enabled = rules.editsEnabled,
+                        onInfo = { ops.openInfo(program) },
                         onRename = {
                             ops.renameTarget = program
                             ops.renameText = program.name.orEmpty()
@@ -551,7 +552,7 @@ private fun DragGhost(program: PresetSlot, offsetY: Int) {
 }
 
 /**
- * Per-row actions (Rename, Copy, Move, Delete, favorite and categories), behind one overflow button: in a 128-row bank always-visible
+ * Per-row actions (Info, Rename, Copy, Move, Delete, favorite and categories), behind one overflow button: in a 128-row bank always-visible
  * buttons would be hundreds of controls competing with the preset names, with a destructive
  * action permanently a few dp from a benign one. Copy gets no confirmation of its own, being as
  * safe as Rename; choosing a destination in the list is the only decision it needs.
@@ -570,6 +571,7 @@ private fun RowActionsMenu(
      * Decides whether the menu offers "Set category" or "Set categories".
      */
     categoryCount: Int,
+    onInfo: () -> Unit,
     onRename: () -> Unit,
     onCopy: () -> Unit,
     onMove: () -> Unit,
@@ -596,6 +598,14 @@ private fun RowActionsMenu(
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            // First and always offered: it changes nothing, so no edit rule or read-only bank applies.
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_info)) },
+                onClick = {
+                    expanded = false
+                    onInfo()
+                },
+            )
             if (canRename) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_rename)) },

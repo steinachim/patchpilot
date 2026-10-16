@@ -327,6 +327,26 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
     }
 
     /**
+     * Everything the app can say about [slot] for the Info dialog. Reads the tags from the
+     * instrument where it has any; the rest is derived from the facets.
+     */
+    override suspend fun presetInfo(slot: PresetSlot): PresetInfo = connection.exclusive { instrument ->
+        val tagger = instrument.tagger
+        val tagInfo = tagger?.let {
+            TagInfo(it.read(slot.address), it.taxonomy, it.assignmentCount, it.favorites)
+        }
+        buildPresetInfo(
+            slot = slot,
+            bank = instrument.layout.banks.getOrNull(slot.address.bank),
+            tagInfo = tagInfo,
+            canSelect = instrument.selector != null,
+            midi = instrument.selector?.midiSelection(slot.address),
+            extras = instrument.browser.details(slot.address),
+            strings = strings,
+        )
+    }
+
+    /**
      * Files [slot] under the categories named by [under], or removes the favorite mark. Drops the
      * favorites listing rather than patching the row in: favoriting adds a voice to a listing it
      * was absent from, and `PresetIndexState.withSlot` grows only the user listing. Dropped after a

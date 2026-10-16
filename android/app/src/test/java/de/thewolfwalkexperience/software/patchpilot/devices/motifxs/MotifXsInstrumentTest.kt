@@ -8,6 +8,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
@@ -1437,5 +1438,39 @@ class MotifXsInstrumentTest {
 
         assertTrue("expected a timeout, got $failure", failure is InstrumentException.Timeout)
         assertEquals(9, transport.sent.count { MotifXsSysEx.typeOf(it) == MotifXsSysEx.TYPE_SELECT })
+    }
+
+    /** The pair separating PRE1, GM and GM DR, which share LSB 0, is the MSB. */
+    @Test
+    fun `the MIDI selection carries the bank's own MSB and LSB`() = runTest {
+        val banks = listOf(
+            MotifXsBank(label = "PRE1", slotCount = 128, addressHi = 0x0C, addressMid = 0x00, selectLsb = 0x00),
+            MotifXsBank(
+                label = "GM",
+                slotCount = 128,
+                addressHi = 0x0C,
+                addressMid = 0x08,
+                selectLsb = 0x00,
+                selectMsb = 0x00,
+            ),
+            MotifXsBank(label = "USR1", slotCount = 128, addressHi = 0x0C, addressMid = 0x0A, selectLsb = 0x08),
+            MotifXsBank(
+                label = "GMDR",
+                slotCount = 1,
+                addressHi = 0x0C,
+                addressMid = 0x28,
+                selectLsb = 0x00,
+                selectMsb = 0x7F,
+            ),
+            MotifXsBank(label = "UNKNOWN", slotCount = 1, addressHi = 0x0C, addressMid = 0x30),
+        )
+        val (motif, _) = instrument(backgroundScope, withConfig = MotifXsConfig(banks = banks))
+
+        assertEquals(MidiSelection(0x3F, 0, 0), motif.selector.midiSelection(SlotAddress(0, 0)))
+        assertEquals(MidiSelection(0x00, 0, 5), motif.selector.midiSelection(SlotAddress(1, 5)))
+        assertEquals(MidiSelection(0x3F, 8, 127), motif.selector.midiSelection(SlotAddress(2, 127)))
+        assertEquals(MidiSelection(0x7F, 0, 0), motif.selector.midiSelection(SlotAddress(3, 0)))
+        assertNull("an unconfirmed LSB is not guessed", motif.selector.midiSelection(SlotAddress(4, 0)))
+        assertNull(motif.selector.midiSelection(SlotAddress(99, 0)))
     }
 }

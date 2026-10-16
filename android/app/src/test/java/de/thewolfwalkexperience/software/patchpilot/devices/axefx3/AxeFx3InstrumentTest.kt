@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.axefx3
 
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import de.thewolfwalkexperience.software.patchpilot.core.PresetSlot
 import de.thewolfwalkexperience.software.patchpilot.core.SlotAddress
 import de.thewolfwalkexperience.software.patchpilot.core.UNKNOWN_FIRMWARE
@@ -224,5 +225,16 @@ class AxeFx3InstrumentTest {
         val fake = FakeAxeFx3()
         axeFx3(fake).close()
         assertTrue(fake.transport.closed)
+    }
+
+    /** Assumption: CC 0 carries the bank and the Program Change the slot, matching the preset number. */
+    @Test
+    fun `the MIDI selection is the virtual bank in CC0 and the slot in the Program Change`() = runTest {
+        val instrument = axeFx3(FakeAxeFx3()).apply { connect() }
+
+        assertEquals(MidiSelection(0, null, 0), instrument.selector.midiSelection(SlotAddress(0, 0)))
+        assertEquals(MidiSelection(2, null, 100), instrument.selector.midiSelection(SlotAddress(2, 100)))
+        assertEquals(MidiSelection(3, null, 127), instrument.selector.midiSelection(SlotAddress(3, 127)))
+        assertTrue(runCatching { instrument.selector.midiSelection(SlotAddress(4, 0)) }.isFailure)
     }
 }

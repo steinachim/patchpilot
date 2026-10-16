@@ -12,6 +12,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentNotice
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
@@ -173,6 +174,20 @@ class NordInstrument(
 
     override suspend fun select(address: SlotAddress) =
         exclusive("load a preset", "loading a preset") { device.selectPreset(address.bank, address.slot) }
+
+    /**
+     * The values a controller sends to load [address]'s Program, from the profile's
+     * [NordProfile.midiProgramSelect]; null where the catalog has none or the result does not
+     * fit 7 bits. Not what [select] sends, which is the vendor protocol.
+     */
+    override fun midiSelection(address: SlotAddress): MidiSelection? {
+        val select = device.profile.midiProgramSelect ?: return null
+        val perBank = device.maxGroup * device.slotsPerGroup
+        val lsb = address.bank / select.banksPerLsb
+        val program = address.bank % select.banksPerLsb * perBank + address.slot
+        if (select.msb !in 0..127 || lsb !in 0..127 || program !in 0..127) return null
+        return MidiSelection(bankMsb = select.msb, bankLsb = lsb, program = program)
+    }
 
     // ---- PresetEditor ----
 

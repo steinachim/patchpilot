@@ -12,6 +12,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentNotice
 import de.thewolfwalkexperience.software.patchpilot.core.LinearAddressFormat
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
@@ -253,6 +254,16 @@ class AxeFx3Instrument(
             )
         }
         selectionConfirmed = loaded == number
+    }
+
+    /**
+     * CC 0 carries the bank, the Program Change the preset within it. Assumption: taken from
+     * community reports and matching [numberOf]; not confirmed against the vendor's table. Not
+     * used by [select], which goes over SysEx.
+     */
+    override fun midiSelection(address: SlotAddress): MidiSelection {
+        numberOf(address)
+        return MidiSelection(bankMsb = address.bank, bankLsb = null, program = address.slot)
     }
 
     /** "Selected" only where the instrument named the preset it loaded; the acknowledgement does not. */

@@ -27,6 +27,7 @@
     <string name="programs_blocked_title">The instrument is not ready</string>
     <string name="action_retry">Retry</string>
     <string name="action_delete">Delete</string>
+    <string name="action_info">Info</string>
     <string name="action_rename">Rename</string>
     <string name="action_save">Save</string>
     <string name="action_set_favorite">Set favorite</string>
@@ -311,4 +312,30 @@
         <item quantity="one">Category</item>
         <item quantity="other">Category %1$d</item>
     </plurals>
+
+    <!-- The Info dialog for one preset. -->
+    <string name="info_row_name">Name</string>
+    <string name="info_row_location">Location</string>
+    <string name="info_row_bank">Bank</string>
+    <string name="info_row_slot">Slot</string>
+    <string name="info_slot_value">%1$d of %2$d</string>
+    <string name="info_row_memory">Memory</string>
+    <string name="info_memory_user">User</string>
+    <string name="info_memory_factory">Factory, read-only</string>
+    <string name="info_row_tags">Tags</string>
+    <string name="info_row_category">Category</string>
+    <string name="info_row_category_n">Category %1$d</string>
+    <string name="info_row_favorite">Favorite</string>
+    <string name="info_yes">Yes</string>
+    <string name="info_no">No</string>
+    <string name="info_favorite_under">Yes, under %1$s</string>
+    <string name="info_section_midi">MIDI selection</string>
+    <string name="info_row_midi_msb">Bank Select MSB (CC 0)</string>
+    <string name="info_row_midi_lsb">Bank Select LSB (CC 32)</string>
+    <string name="info_row_midi_program">Program Change</string>
+    <string name="info_midi_not_used">Not used</string>
+    <string name="info_midi_value">%1$d (0x%2$s)</string>
+    <string name="info_midi_note">Values as sent on the wire, 0\u2013127. Some manuals count Program Change from 1.</string>
+    <string name="info_midi_unknown">Not known for this instrument.</string>
+    <string name="info_section_device">Details</string>
 </resources>
