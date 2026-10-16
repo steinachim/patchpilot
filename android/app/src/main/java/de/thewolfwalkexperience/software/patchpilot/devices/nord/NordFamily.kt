@@ -51,6 +51,7 @@ object NordFamily : InstrumentFamily {
         return NordInstrument(
             NordDevice(bulk, descriptor.profile()),
             catalog.load(context).programCategories,
+            contentVersionScales = catalog.load(context).contentVersionScales,
         )
     }
 

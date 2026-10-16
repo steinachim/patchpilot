@@ -35,7 +35,7 @@ class CachingBrowser(
     override val scopes: List<PresetScope> get() = delegate.scopes
 
     /** The delegate's: inheriting the default would drop the family's rows from the Info dialog. */
-    override fun details(address: SlotAddress): List<InfoRow> = delegate.details(address)
+    override suspend fun details(address: SlotAddress): List<InfoRow> = delegate.details(address)
 
     override fun index(scope: PresetScope): Flow<IndexUpdate> = flow {
         // Only the user listing is cached ([CacheKey] carries no scope). A factory listing costs

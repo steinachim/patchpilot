@@ -107,4 +107,9 @@ data class NordCatalog(
      * instrument's subset - [NordCategories] builds that direction.
      */
     val programCategories: Map<String, String> = emptyMap(),
+    /**
+     * Content tag -> divisor for an item record's content-version field, for the tags that are not
+     * the default `100` (`312` is `3.12`): a Stage 2 EX's are unscaled. See [NordItemInfo].
+     */
+    val contentVersionScales: Map<String, Int> = emptyMap(),
 )

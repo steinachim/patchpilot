@@ -81,6 +81,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | N11 | Edits load programs | Connect; then, with an unsaved change on the panel, rename the loaded program, and rename another one | The "Edits load programs" notice shows; each edit loads the program it changes, which reverts the unsaved change, as the notice says | 2026-10-14, Nord Grand | ✓ (the notice showed on every connect; renaming the loaded program discarded an unsaved Delay change, and renaming another program loaded that one) |
 | N12 | Home as a listing starts | Tap Re-read and press Home within a fraction of a second, a few times; check the panel each time | The panel is never left locked; no unlock warning in the log | 2026-10-09, Nord Grand | ✓ |
 | N13 | Info: bank select | Open Info on A:1:1, a mid-bank program and the last program of a bank; send the dialog's CC 0, CC 32 and Program Change from a MIDI tool (Program Change Mode on Receive), or load each from the panel and read what it sends | The instrument loads the program named in the dialog, or sends the values shown. On a Grand 2, Piano 6 or Electro 7 also try Program Change one higher, to settle whether the wire value is 0-based (**assumption** until run) | – | – not run |
+| N14 | Info: version and date | Open Info on a user program and a factory one, on a Grand and a Stage 2 EX; compare with Nord Sound Manager's version and date columns | Version matches (Grand `1.01`, Stage 2 EX `7.00` style); a factory program says "Factory content"; the Stage 2 EX shows no date (assumption: UTC dates) | – | – not run |
 
 ## 4. Yamaha Motif XS
 
@@ -115,6 +116,7 @@ Needs a hand at the hardware: plugging and unplugging, the instrument's own pane
 | P8 | Unplug mid listing | As X11 | The drop is noticed; no partial listing is cached | 2026-09-20, Pro-800 | ✓ |
 | P9 | Firmware advisory | Firmware other than 1.4.6 (simulate in the catalog) | The advisory shows; the session connects and works | 2026-09-20, Pro-800 | ✓ |
 | P10 | Info: bank select | Open Info on A00, B05 and D99; change to each on the panel with MIDI PC Mode on TX and read the messages on a MIDI monitor | CC 0 and Program Change match the dialog; the LSB shows "Not used" | – | – not run |
+| P11 | Info: format version | Open Info on presets saved by different firmware or editors | "Format version" shows 109, 110 or 111 as the record declares | – | – not run |
 
 ## 6. Fractal Audio Axe-Fx III
 

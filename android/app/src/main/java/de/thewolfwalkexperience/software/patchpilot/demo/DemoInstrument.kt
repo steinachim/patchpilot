@@ -10,6 +10,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.InfoRow
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
@@ -90,6 +91,10 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
     }
 
     override suspend fun refresh(address: SlotAddress): PresetSlot = library.slot(address, layout)
+
+    /** A made-up version, so the Info dialog's family rows can be seen. */
+    override suspend fun details(address: SlotAddress): List<InfoRow> =
+        listOf(InfoRow("Demo version", "1.${address.bank}.${address.slot}"))
 
     // ---- PresetSelector ----
 

@@ -168,10 +168,11 @@ interface PresetBrowser {
     suspend fun refresh(address: SlotAddress): PresetSlot
 
     /**
-     * Family-specific rows for the Info dialog, after the ones every preset gets. No device I/O:
-     * derived from [address] and what the family already holds.
+     * Family-specific rows for the Info dialog, after the ones every preset gets: what a family
+     * can say about one stored preset that the listing does not carry, such as its version. May
+     * read the instrument, once; the caller treats a failure as "no extra rows".
      */
-    fun details(address: SlotAddress): List<InfoRow> = emptyList()
+    suspend fun details(address: SlotAddress): List<InfoRow> = emptyList()
 }
 
 sealed interface IndexUpdate {

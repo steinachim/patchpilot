@@ -1,6 +1,12 @@
 {
   "$schema": "./nord_devices.schema.json",
   "schemaVersion": 1,
+  "contentVersionScales": {
+    "ns2l": 1,
+    "ns2p": 1,
+    "ns2s": 1,
+    "ns2y": 1
+  },
   "programCategories": {
     "0": "Acoustic",
     "1": "Bass",

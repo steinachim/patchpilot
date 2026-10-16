@@ -8,6 +8,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.InfoRow
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
@@ -44,6 +45,8 @@ class NordInstrument(
      * gives an instrument without categories.
      */
     programCategories: Map<String, String> = emptyMap(),
+    /** The catalog's [NordCatalog.contentVersionScales]; empty means every tag is scaled by 100. */
+    private val contentVersionScales: Map<String, Int> = emptyMap(),
     private val bus: Bus = Bus.USB,
 ) : Instrument, PresetBrowser, PresetSelector, PresetEditor {
 
@@ -149,6 +152,14 @@ class NordInstrument(
         exclusive("re-read a preset", "re-reading a preset") { device.readProgram(address.bank, address.slot) }
             ?.toPresetSlot()
             ?: emptySlot(address)
+
+    /** The program's content version, save date, data size and content id, from its item record. */
+    override suspend fun details(address: SlotAddress): List<InfoRow> {
+        val record = exclusive("read preset details", "reading preset details") {
+            device.readProgramRecord(address.bank, address.slot)
+        } ?: return emptyList()
+        return NordItemInfo.rows(record, contentVersionScales, device.itemContentId(record))
+    }
 
     private fun NordDevice.NamedItem.toPresetSlot(): PresetSlot {
         val address = SlotAddress(bank, item)

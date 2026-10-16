@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.devices.pro800
 
 import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.InfoRow
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
@@ -716,5 +717,18 @@ class Pro800InstrumentTest {
         assertEquals(MidiSelection(1, null, 5), pro800.selector.midiSelection(SlotAddress(1, 5)))
         assertEquals(MidiSelection(3, null, 99), pro800.selector.midiSelection(SlotAddress(3, 99)))
         assertTrue(runCatching { pro800.selector.midiSelection(SlotAddress(4, 0)) }.isFailure)
+    }
+    // ---- Info ----
+
+    /** Formats 110 and 111 add fields after the name; the version is what says which. */
+    @Test
+    fun `details give the record's format version, and nothing for an empty slot`() = runTest {
+        val (pro800, _) = instrument(backgroundScope)
+
+        assertEquals(
+            listOf(InfoRow("Format version", "111")),
+            pro800.browser.details(SlotAddress(bank = 0, slot = 0)),
+        )
+        assertTrue(pro800.browser.details(SlotAddress(bank = 0, slot = 1)).isEmpty())
     }
 }

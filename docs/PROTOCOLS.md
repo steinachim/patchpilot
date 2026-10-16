@@ -94,6 +94,10 @@ After a rename, move, swap or category change the app re-selects the affected sl
 
 A delete in a block-counted area (samples) frees no space until the instrument's own reclaim runs: the units move from `used` to `reclaimable`. The program areas are counted in bytes (Nord Stage 2 EX) or in slots (Nord Grand), and a deleted program's space returns to `free` at once.
 
+### Item record details
+
+The Info dialog fetches the program's item record (30/31, inside the `Program` lock) and shows the content version (offset 20), the save date (offset 24), the data size (offset 12) and, from file-transfer protocol 10, the content id. The version is divided by a per-tag scale: 100 by default (`101` is `1.01`), 1 for the Stage 2 EX's tags (`7` is `7.00`), listed in the catalog's `contentVersionScales`. A timestamp of 0 is factory content; `0xFFFFFFFF` in either field means none and the row is left out. **Assumption:** the timestamp is Unix seconds, shown as a UTC date.
+
 ### MIDI program selection
 
 The app selects over the vendor protocol (47/48, above); the Info dialog states what a controller sends over MIDI instead: Bank Select MSB (CC 0), Bank Select LSB (CC 32), then Program Change. **Assumption:** every figure is taken from the instruments' manuals and none has been measured on an instrument.
@@ -138,7 +142,7 @@ Data bytes above `0x7F` are carried with an overflow byte at every position that
 
 Presets occupy addresses 0..399, displayed as `A00`..`D99`. Address 510 holds a settings block, read and written with the same `0x77`/`0x78` mechanism, which is never listed as a preset.
 
-A record's length varies with the format version stored at raw offset 5: formats 110 and 111 append fields after the name, and the instrument truncates trailing padding, so records of 155 to 173 dense bytes are all valid. The name is 16 characters at raw offsets 172..189 (dense 150..165), NUL-padded; a preset may carry no name at all. A bare `F0 F7` reply is the only signal that a slot is empty; length says nothing about it.
+The Info dialog reads one preset and shows that format version. A record's length varies with the format version stored at raw offset 5: formats 110 and 111 append fields after the name, and the instrument truncates trailing padding, so records of 155 to 173 dense bytes are all valid. The name is 16 characters at raw offsets 172..189 (dense 150..165), NUL-padded; a preset may carry no name at all. A bare `F0 F7` reply is the only signal that a slot is empty; length says nothing about it.
 
 ### Operations
 

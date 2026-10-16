@@ -13,6 +13,11 @@
       "const": 1,
       "description": "Bump only on a breaking change to this shape. New optional fields with safe defaults don't need a bump."
     },
+    "contentVersionScales": {
+      "type": "object",
+      "description": "Content tag -> divisor for that tag's content-version field in an item record. Only the exceptions are listed; anything absent uses the default of 100, e.g. 312 -> '3.12'. Keyed by content tag rather than nested per device because tags are globally unique across instruments. The Stage 2 EX's tags are unscaled: confirmed against Nord Sound Manager's version column for ns2p and ns2s, inferred for ns2l and ns2y.",
+      "additionalProperties": { "type": "integer", "minimum": 1 }
+    },
     "programCategories": {
       "type": "object",
       "description": "The master preset-category-tag catalog, id -> name, shared across the whole Nord product line (54 ids, 0-53). No instrument implements all of it: each device entry picks its own subset via 'programCategoryIds'. Keyed by id rather than by name because the master list is not injective - ids 2 and 37 are both 'Wind', 14 and 43 both 'User' - so a name -> id map cannot represent it.",

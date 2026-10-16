@@ -8,6 +8,7 @@ import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.FlatBankAddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.InfoRow
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
@@ -154,6 +155,12 @@ class Pro800Instrument(
 
     override suspend fun refresh(address: SlotAddress): PresetSlot =
         readSlot(address, layout.format.format(address))
+
+    /** The record's format version: 110 and 111 add fields after the name. Nothing for an empty slot. */
+    override suspend fun details(address: SlotAddress): List<InfoRow> =
+        Pro800Program.fromEncoded(read(address)).version
+            ?.let { listOf(InfoRow("Format version", it.toString())) }
+            .orEmpty()
 
     private suspend fun readSlot(address: SlotAddress, displayId: String): PresetSlot {
         val program = Pro800Program.fromEncoded(read(address))

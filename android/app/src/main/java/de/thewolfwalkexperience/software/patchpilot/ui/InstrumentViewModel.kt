@@ -5,6 +5,7 @@ package de.thewolfwalkexperience.software.patchpilot.ui
 
 import android.app.Application
 import android.hardware.usb.UsbDevice
+import android.util.Log
 import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
@@ -13,6 +14,7 @@ import de.thewolfwalkexperience.software.patchpilot.R
 import de.thewolfwalkexperience.software.patchpilot.catalog.InstrumentRegistry
 import de.thewolfwalkexperience.software.patchpilot.core.CategoryRef
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReportResult
+import de.thewolfwalkexperience.software.patchpilot.core.InfoRow
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentNotice
@@ -30,6 +32,7 @@ import de.thewolfwalkexperience.software.patchpilot.discovery.UsbHostDiscovery
 import de.thewolfwalkexperience.software.patchpilot.usb.AndroidUsbDevice
 import de.thewolfwalkexperience.software.patchpilot.usb.AndroidUsbHost
 import de.thewolfwalkexperience.software.patchpilot.usb.UsbConnectionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -39,6 +42,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+private const val TAG = "InstrumentViewModel"
 
 /**
  * The app's one session, for its lifetime: [connection] holds the connected [Instrument],
@@ -341,9 +346,22 @@ class InstrumentViewModel(application: Application, savedStateHandle: SavedState
             tagInfo = tagInfo,
             canSelect = instrument.selector != null,
             midi = instrument.selector?.midiSelection(slot.address),
-            extras = instrument.browser.details(slot.address),
+            extras = detailsOrEmpty(instrument, slot),
             strings = strings,
         )
+    }
+
+    /**
+     * The family's extra Info rows for [slot]. A failed read gives none rather than failing the
+     * dialog: they are extras, and the rest of the dialog needs no instrument.
+     */
+    private suspend fun detailsOrEmpty(instrument: Instrument, slot: PresetSlot): List<InfoRow> = try {
+        instrument.browser.details(slot.address)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "Couldn't read the details of ${slot.displayId}", e)
+        emptyList()
     }
 
     /**

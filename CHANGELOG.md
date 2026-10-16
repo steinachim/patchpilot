@@ -5,7 +5,7 @@
 ### Added
 - On Android 13 and later, the launcher icon has a monochrome layer, so themed icons show the badge instead of the plain icon.
 - The app can be shown upside down in portrait, so the USB cable can point away from the player when the phone lies on a keyboard.
-- Each preset's row menu has an Info entry showing its name, location, categories and favorite status, and the Bank Select and Program Change values that select it.
+- Each preset's row menu has an Info entry showing its name, location, categories and favorite status, the Bank Select and Program Change values that select it, and, on a Nord and a Pro-800, the preset's version.
 
 ## 2.0
 
