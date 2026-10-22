@@ -2,6 +2,8 @@
 
 ## Next release
 
+## 2.1
+
 ### Added
 - On Android 13 and later, the launcher icon has a monochrome layer, so themed icons show the badge instead of the plain icon.
 - The app can be shown upside down in portrait, so the USB cable can point away from the player when the phone lies on a keyboard.
