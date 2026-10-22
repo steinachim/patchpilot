@@ -75,11 +75,11 @@ class DemoInstrumentTest {
         val longest = demo.index().toList().filterIsInstance<IndexUpdate.Slots>().flatMap { it.slots }
             .filterNot { it.isEmpty }
             .maxBy { it.name!!.length }
-        assertTrue("needs a name the number would push over", longest.name!!.length > demo.maxNameLength!! - 2)
+        assertTrue("needs a name the number would push over", longest.name!!.length > demo.maxNameLength - 2)
 
         val copyName = demo.copyProgram(longest.address, empty)
 
-        assertTrue(copyName, copyName.length <= demo.maxNameLength!!)
+        assertTrue(copyName, copyName.length <= demo.maxNameLength)
         assertTrue(copyName, copyName.endsWith(" 2"))
         assertEquals(null, demo.nameProblem(copyName))
     }

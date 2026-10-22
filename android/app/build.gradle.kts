@@ -30,6 +30,17 @@ plugins {
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+        // A new warning fails the build, in the app and in the tests, so none accumulates. A
+        // Kotlin, AGP or dependency bump that adds one needs it fixed in the same change.
+        allWarningsAsErrors = true
+    }
+}
+
+// The tests drive virtual time (`advanceTimeBy`, `advanceUntilIdle`, `runCurrent`), which
+// kotlinx-coroutines-test still marks experimental. Opted in for the test compilations only.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    if (name.endsWith("UnitTestKotlin")) {
+        compilerOptions.optIn.add("kotlinx.coroutines.ExperimentalCoroutinesApi")
     }
 }
 
@@ -47,9 +58,9 @@ android {
     defaultConfig {
         applicationId = "de.thewolfwalkexperience.software.patchpilot"
         minSdk = 26
-        targetSdk = 36
-        versionCode = 4
-        versionName = "2.0"
+        targetSdk = 37
+        versionCode = 5
+        versionName = "2.1"
     }
 
     // Play's dependency-metadata block goes into the APK's signing block, unreadable outside

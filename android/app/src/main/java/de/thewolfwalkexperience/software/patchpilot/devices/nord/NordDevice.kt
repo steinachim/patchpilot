@@ -49,6 +49,12 @@ private object ItemRecord {
     /** ASCII, e.g. `ngp `, `npno`, `nsmp` - what makes [CATEGORY_ID] meaningful or not. */
     const val CONTENT_TAG = 16
 
+    /** The content version, scaled per tag (see [NordItemInfo]); `0xFFFFFFFF` is none. */
+    const val CONTENT_VERSION = 20
+
+    /** Unix seconds; `0` is factory content and `0xFFFFFFFF` none. */
+    const val TIMESTAMP = 24
+
     /**
      * Tag-specific. A category id on an `ngp ` program record; two 2-byte halves on an `nsmp`
      * sample record, which is why it is only read once the tag has been checked.
@@ -800,6 +806,18 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: NordPr
         return programFromFetch(record, bank, item)
     }
 
+    /**
+     * The raw record of the program at ([bank], [item]), or null where the slot is empty or the
+     * instrument answers anything but that slot's record. One 30/31 fetch inside the `Program`
+     * lock, like [readProgram], but with no fallback walk: the caller wants extras, not the listing.
+     */
+    suspend fun readProgramRecord(bank: Int, item: Int): ByteArray? {
+        val record = withProgramCategory { fetchItem(bank, item) }
+        if (record.size < ItemRecord.ITEM + 4 || readUInt32BE(record, ItemRecord.STATUS) != 0) return null
+        if (readUInt32BE(record, ItemRecord.BANK) != bank || readUInt32BE(record, ItemRecord.ITEM) != item) return null
+        return record
+    }
+
     private suspend fun fetchItem(bank: Int, item: Int): ByteArray =
         fileTransfer(FileTransferSubOp.FETCH_ITEM, uint32BE(bank) + uint32BE(item)).payload
 
@@ -1324,6 +1342,25 @@ class NordDevice(private val transport: UsbBulkTransport, initialProfile: NordPr
             (value ushr 8).toByte(),
             value.toByte(),
         )
+
+        /** A sub-opcode 31 item record's content tag, e.g. `ngp`, with the NUL padding dropped. */
+        fun parseItemTag(payload: ByteArray): String {
+            require(payload.size >= ItemRecord.CONTENT_TAG + 4) {
+                "item record is only ${payload.size} bytes, too short for a tag"
+            }
+            return String(payload, ItemRecord.CONTENT_TAG, 4, Charsets.US_ASCII).trimEnd('\u0000')
+        }
+
+        /** The unscaled content version of an item record, or null where the instrument gives none. */
+        fun parseItemContentVersion(payload: ByteArray): Long? = unsignedOrNull(payload, ItemRecord.CONTENT_VERSION)
+
+        /** An item record's timestamp in Unix seconds: `0` for factory content, null where the instrument gives none. */
+        fun parseItemTimestamp(payload: ByteArray): Long? = unsignedOrNull(payload, ItemRecord.TIMESTAMP)
+
+        private fun unsignedOrNull(payload: ByteArray, offset: Int): Long? {
+            val value = readUInt32BE(payload, offset).toLong() and 0xFFFFFFFFL
+            return if (value == 0xFFFFFFFFL) null else value
+        }
 
         /** A sub-opcode 31 item record's data-size field: the exact byte length of the item's blob. */
         fun parseItemDataSize(payload: ByteArray): Int = readUInt32BE(payload, ItemRecord.DATA_SIZE)

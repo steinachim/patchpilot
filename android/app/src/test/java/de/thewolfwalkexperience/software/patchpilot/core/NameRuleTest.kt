@@ -43,7 +43,7 @@ class NameRuleTest {
     /** The default every family without a rule of its own inherits, demo mode included. */
     @Test
     fun `an editor applies the shared rule with its own limit`() {
-        val editor = DemoInstrument().editor!!
+        val editor = DemoInstrument().editor
         assertNull(editor.nameProblem("Concert Grand 2"))
         assertNotNull(editor.nameProblem("x".repeat(editor.maxNameLength!! + 1)))
         assertNotNull(editor.nameProblem("Flügel"))

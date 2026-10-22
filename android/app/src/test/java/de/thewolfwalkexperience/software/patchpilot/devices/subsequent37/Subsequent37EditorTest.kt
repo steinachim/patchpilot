@@ -188,10 +188,10 @@ class Subsequent37EditorTest {
         fake.onWrite = { job?.cancel() }
 
         job = launch(start = CoroutineStart.LAZY) { editor.move(address(0), address(empty)) }
-        job!!.start()
-        job!!.join()
+        job.start()
+        job.join()
 
-        assertTrue(job!!.isCancelled)
+        assertTrue(job.isCancelled)
         assertEquals(name, fake.programAt(empty).name)
         assertTrue(fake.programAt(0).isEmpty)
     }
@@ -211,10 +211,10 @@ class Subsequent37EditorTest {
         fake.onWrite = { job?.cancel() }
 
         job = launch(start = CoroutineStart.LAZY) { editor.swap(address(0), address(1)) }
-        job!!.start()
-        job!!.join()
+        job.start()
+        job.join()
 
-        assertTrue(job!!.isCancelled)
+        assertTrue(job.isCancelled)
         assertEquals(nameB, fake.programAt(0).name)
         assertEquals(nameA, fake.programAt(1).name)
     }

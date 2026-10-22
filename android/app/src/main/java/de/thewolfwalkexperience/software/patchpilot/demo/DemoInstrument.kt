@@ -10,9 +10,11 @@ import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.GroupedBankAddressFormat
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.InfoRow
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
@@ -90,11 +92,19 @@ class DemoInstrument : Instrument, PresetBrowser, PresetSelector, PresetEditor, 
 
     override suspend fun refresh(address: SlotAddress): PresetSlot = library.slot(address, layout)
 
+    /** A made-up version, so the Info dialog's family rows can be seen. */
+    override suspend fun details(address: SlotAddress): List<InfoRow> =
+        listOf(InfoRow("Demo version", "1.${address.bank}.${address.slot}"))
+
     // ---- PresetSelector ----
 
     override suspend fun select(address: SlotAddress) {
         library.requireOccupied(address)
     }
+
+    /** A made-up mapping, so the Info dialog can show its MIDI block: one LSB per bank, the slot as Program Change. */
+    override fun midiSelection(address: SlotAddress) =
+        MidiSelection(bankMsb = 0, bankLsb = address.bank, program = address.slot)
 
     // ---- PresetEditor ----
 

@@ -51,6 +51,11 @@ data class NordProfile(
      * list's, id -> name: the Grand relabels 23/24 as EPiano1/EPiano2, the Stage 4 ten ids.
      */
     val programCategoryNameOverrides: Map<String, String>? = null,
+    /**
+     * How a Program preset becomes Bank Select and Program Change; null where the instrument's
+     * manual does not say, which leaves Info without MIDI values. See [MidiProgramSelect].
+     */
+    val midiProgramSelect: MidiProgramSelect? = null,
 ) {
     companion object {
         /** The [id] [unknown] stamps on a device the catalog does not recognise - see `InstrumentIdentity.isGuessed`. */
@@ -74,6 +79,22 @@ data class NordProfile(
     }
 }
 
+/**
+ * The Program banks' Bank Select / Program Change layout. Taken from the manuals; not measured on
+ * an instrument. A panel bank holds `N = maxGroup x slotsPerGroup` presets and [banksPerLsb]
+ * consecutive banks share one LSB value, the Program Change counting through all of them:
+ * `LSB = bank / banksPerLsb`, `PC = (bank % banksPerLsb) x N + slot`.
+ *
+ * [msb] is the Program content type's Bank Select MSB. The Program Change is the 0-based wire
+ * value; three manuals number theirs from 1 (assumption: that is the panel's numbering, not the wire's).
+ */
+@Serializable
+data class MidiProgramSelect(val msb: Int, val banksPerLsb: Int) {
+    init {
+        require(banksPerLsb >= 1) { "banksPerLsb must be positive, was $banksPerLsb" }
+    }
+}
+
 /** The parsed contents of devices/nord_devices.json - see [InstrumentRegistry]. */
 @Serializable
 data class NordCatalog(
@@ -86,4 +107,9 @@ data class NordCatalog(
      * instrument's subset - [NordCategories] builds that direction.
      */
     val programCategories: Map<String, String> = emptyMap(),
+    /**
+     * Content tag -> divisor for an item record's content-version field, for the tags that are not
+     * the default `100` (`312` is `3.12`): a Stage 2 EX's are unscaled. See [NordItemInfo].
+     */
+    val contentVersionScales: Map<String, Int> = emptyMap(),
 )

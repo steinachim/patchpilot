@@ -13,6 +13,11 @@
       "const": 1,
       "description": "Bump only on a breaking change to this shape. New optional fields with safe defaults don't need a bump."
     },
+    "contentVersionScales": {
+      "type": "object",
+      "description": "Content tag -> divisor for that tag's content-version field in an item record. Only the exceptions are listed; anything absent uses the default of 100, e.g. 312 -> '3.12'. Keyed by content tag rather than nested per device because tags are globally unique across instruments. The Stage 2 EX's tags are unscaled: confirmed against Nord Sound Manager's version column for ns2p and ns2s, inferred for ns2l and ns2y.",
+      "additionalProperties": { "type": "integer", "minimum": 1 }
+    },
     "programCategories": {
       "type": "object",
       "description": "The master preset-category-tag catalog, id -> name, shared across the whole Nord product line (54 ids, 0-53). No instrument implements all of it: each device entry picks its own subset via 'programCategoryIds'. Keyed by id rather than by name because the master list is not injective - ids 2 and 37 are both 'Wind', 14 and 43 both 'User' - so a name -> id map cannot represent it.",
@@ -61,6 +66,16 @@
         "slotsPerGroup": { "type": "integer", "minimum": 1, "description": "Slots per group - the divisor used to translate group/slot into a flat item index." },
         "maxDisplayTextLen": { "type": "integer", "minimum": 1, "description": "Character width of the instrument's status-message display." },
         "maxProgramNameLen": { "type": "integer", "minimum": 1, "description": "Longest program name the instrument actually stores. Measured, not guessed: an oversized SET_NAME is accepted with status 0 and the instrument silently keeps this many characters. Separate from maxDisplayTextLen even though both are 16 on every instrument measured so far - they are different limits that happen to coincide, and conflating them would hide the day one of them moves." },
+        "midiProgramSelect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["msb", "banksPerLsb"],
+          "properties": {
+            "msb": { "type": "integer", "minimum": 0, "maximum": 127, "description": "Bank Select MSB (CC 0) that addresses the Program banks." },
+            "banksPerLsb": { "type": "integer", "minimum": 1, "description": "How many of the panel's banks one Bank Select LSB (CC 32) value covers. Every Program Change value is a position within that LSB group, so banksPerLsb x (maxGroup x slotsPerGroup) must not exceed 128." }
+          },
+          "description": "How a Program preset's address becomes Bank Select + Program Change on the wire. With N = maxGroup x slotsPerGroup: MSB = msb, LSB = bank div banksPerLsb, Program Change = (bank mod banksPerLsb) x N + slot, a 0-based wire value. Programs only. Optional: omitting it means 'not established', and the app states no MIDI values. From the instruments' manuals; not measured on an instrument."
+        },
         "supportedFirmwareVersions": {
           "type": "array",
           "items": { "type": "integer", "minimum": 0 },

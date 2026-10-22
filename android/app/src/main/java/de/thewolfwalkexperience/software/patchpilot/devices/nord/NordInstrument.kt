@@ -8,10 +8,12 @@ import de.thewolfwalkexperience.software.patchpilot.core.Bus
 import de.thewolfwalkexperience.software.patchpilot.core.DeviceReporter
 import de.thewolfwalkexperience.software.patchpilot.core.EditOp
 import de.thewolfwalkexperience.software.patchpilot.core.IndexUpdate
+import de.thewolfwalkexperience.software.patchpilot.core.InfoRow
 import de.thewolfwalkexperience.software.patchpilot.core.Instrument
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentException
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentIdentity
 import de.thewolfwalkexperience.software.patchpilot.core.InstrumentNotice
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import de.thewolfwalkexperience.software.patchpilot.core.PresetBrowser
 import de.thewolfwalkexperience.software.patchpilot.core.PresetEditor
 import de.thewolfwalkexperience.software.patchpilot.core.PresetScope
@@ -43,6 +45,8 @@ class NordInstrument(
      * gives an instrument without categories.
      */
     programCategories: Map<String, String> = emptyMap(),
+    /** The catalog's [NordCatalog.contentVersionScales]; empty means every tag is scaled by 100. */
+    private val contentVersionScales: Map<String, Int> = emptyMap(),
     private val bus: Bus = Bus.USB,
 ) : Instrument, PresetBrowser, PresetSelector, PresetEditor {
 
@@ -149,6 +153,14 @@ class NordInstrument(
             ?.toPresetSlot()
             ?: emptySlot(address)
 
+    /** The program's content version, save date, data size and content id, from its item record. */
+    override suspend fun details(address: SlotAddress): List<InfoRow> {
+        val record = exclusive("read preset details", "reading preset details") {
+            device.readProgramRecord(address.bank, address.slot)
+        } ?: return emptyList()
+        return NordItemInfo.rows(record, contentVersionScales, device.itemContentId(record))
+    }
+
     private fun NordDevice.NamedItem.toPresetSlot(): PresetSlot {
         val address = SlotAddress(bank, item)
         val format = device.addressFormat()
@@ -173,6 +185,20 @@ class NordInstrument(
 
     override suspend fun select(address: SlotAddress) =
         exclusive("load a preset", "loading a preset") { device.selectPreset(address.bank, address.slot) }
+
+    /**
+     * The values a controller sends to load [address]'s Program, from the profile's
+     * [NordProfile.midiProgramSelect]; null where the catalog has none or the result does not
+     * fit 7 bits. Not what [select] sends, which is the vendor protocol.
+     */
+    override fun midiSelection(address: SlotAddress): MidiSelection? {
+        val select = device.profile.midiProgramSelect ?: return null
+        val perBank = device.maxGroup * device.slotsPerGroup
+        val lsb = address.bank / select.banksPerLsb
+        val program = address.bank % select.banksPerLsb * perBank + address.slot
+        if (select.msb !in 0..127 || lsb !in 0..127 || program !in 0..127) return null
+        return MidiSelection(bankMsb = select.msb, bankLsb = lsb, program = program)
+    }
 
     // ---- PresetEditor ----
 

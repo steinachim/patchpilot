@@ -28,7 +28,7 @@ class NameLengthTest {
     fun `the demo instrument caps names, because every real family does`() {
         val editor = DemoInstrument().editor
         assertNotNull(editor)
-        assertTrue("demo offers rename", EditOp.RENAME in editor!!.supported)
+        assertTrue("demo offers rename", EditOp.RENAME in editor.supported)
         assertNotNull("a family offering rename must declare a limit", editor.maxNameLength)
     }
 

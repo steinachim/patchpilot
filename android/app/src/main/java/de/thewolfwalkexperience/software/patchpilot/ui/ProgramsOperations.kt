@@ -39,6 +39,9 @@ internal interface ProgramsOperations {
     suspend fun copyProgram(source: PresetSlot, destination: PresetSlot): String
     suspend fun moveProgram(source: PresetSlot, target: PresetSlot, targetIsEmpty: Boolean): String
     suspend fun presetTags(slot: PresetSlot): PresetTags
+
+    /** What the Info dialog shows for [slot]. */
+    suspend fun presetInfo(slot: PresetSlot): PresetInfo
     suspend fun setFavorite(slot: PresetSlot, under: Set<Int>): String
     suspend fun setCategories(slot: PresetSlot, categories: List<CategoryRef?>): String
 }

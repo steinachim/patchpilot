@@ -62,7 +62,7 @@ class Pro800EditorTest {
     fun `copy duplicates the preset and leaves the source alone`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        val name = pro800.editor!!.copyProgram(a(1), b(3))
+        val name = pro800.editor.copyProgram(a(1), b(3))
 
         assertEquals("Strings", name)
         assertEquals("Strings", fake.nameAt(8))
@@ -79,7 +79,7 @@ class Pro800EditorTest {
     fun `copy preserves the preset format version`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        pro800.editor!!.copyProgram(a(1), b(3))
+        pro800.editor.copyProgram(a(1), b(3))
         assertEquals(109, Pro800Program.fromEncoded(fake.contentsOf(8)!!).version)
     }
 
@@ -97,7 +97,7 @@ class Pro800EditorTest {
         val before = fake.contentsOf(0)
 
         try {
-            pro800.editor!!.copyProgram(a(1), a(0))
+            pro800.editor.copyProgram(a(1), a(0))
             throw AssertionError("expected a refusal")
         } catch (e: InstrumentException.SlotStateChanged) {
             assertTrue(e.message!!.contains("holds a preset"))
@@ -111,7 +111,7 @@ class Pro800EditorTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
         try {
-            pro800.editor!!.copyProgram(a(3), b(3))
+            pro800.editor.copyProgram(a(3), b(3))
             throw AssertionError("expected a refusal")
         } catch (e: InstrumentException.SlotStateChanged) {
             assertTrue(e.message!!.contains("empty"))
@@ -123,7 +123,7 @@ class Pro800EditorTest {
     fun `copy onto itself is refused as the caller's mistake`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        val e = thrownBy<IllegalArgumentException> { pro800.editor!!.copyProgram(a(1), a(1)) }
+        val e = thrownBy<IllegalArgumentException> { pro800.editor.copyProgram(a(1), a(1)) }
         assertTrue(e.message!!.contains("itself"))
         assertEquals("Strings", fake.nameAt(1))
     }
@@ -138,7 +138,7 @@ class Pro800EditorTest {
     fun `copying an unnamed preset reports the same label the browser shows`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        val name = pro800.editor!!.copyProgram(a(2), b(3))
+        val name = pro800.editor.copyProgram(a(2), b(3))
 
         assertEquals(UNNAMED_PRESET, name)
         assertEquals(
@@ -152,8 +152,8 @@ class Pro800EditorTest {
     @Test
     fun `copy is declared as a supported edit`() = runTest {
         val pro800 = instrument(fake(), backgroundScope)
-        assertTrue(EditOp.COPY in pro800.editor!!.supported)
-        assertTrue("it is composed from reads and writes like the rest", pro800.editor!!.isEmulated(EditOp.COPY))
+        assertTrue(EditOp.COPY in pro800.editor.supported)
+        assertTrue("it is composed from reads and writes like the rest", pro800.editor.isEmulated(EditOp.COPY))
     }
 
     // ---- Rename ----
@@ -162,7 +162,7 @@ class Pro800EditorTest {
     fun `rename changes the name and leaves the preset format alone`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        pro800.editor!!.rename(a(1), "Warm Pad")
+        pro800.editor.rename(a(1), "Warm Pad")
 
         assertEquals("Warm Pad", fake.nameAt(1))
         // Format 109 must stay 109: the reference implementation silently upgrades a short record
@@ -175,7 +175,7 @@ class Pro800EditorTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
         try {
-            pro800.editor!!.rename(a(3), "New")
+            pro800.editor.rename(a(3), "New")
             throw AssertionError("renamed a slot that holds nothing")
         } catch (expected: InstrumentException.SlotStateChanged) {
             assertTrue(fake.isEmptyAt(3))
@@ -192,10 +192,10 @@ class Pro800EditorTest {
     fun `a name longer than the field is refused before anything is written`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        assertEquals(16, pro800.editor!!.maxNameLength)
+        assertEquals(16, pro800.editor.maxNameLength)
 
         try {
-            pro800.editor!!.rename(a(0), "I don't know my name")
+            pro800.editor.rename(a(0), "I don't know my name")
             throw AssertionError("accepted a 20-character name")
         } catch (expected: IllegalArgumentException) {
             assertTrue(expected.message!!.contains("16"))
@@ -209,7 +209,7 @@ class Pro800EditorTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
         val exactly16 = "ABCDEFGHIJKLMNOP"
-        pro800.editor!!.rename(a(0), exactly16)
+        pro800.editor.rename(a(0), exactly16)
         assertEquals(exactly16, fake.nameAt(0))
     }
 
@@ -219,7 +219,7 @@ class Pro800EditorTest {
         val pro800 = instrument(fake, backgroundScope)
         listOf("", "   ", "Café").forEach { bad ->
             try {
-                pro800.editor!!.rename(a(0), bad)
+                pro800.editor.rename(a(0), bad)
                 throw AssertionError("accepted '$bad'")
             } catch (expected: IllegalArgumentException) {
                 // and nothing went to the instrument
@@ -235,7 +235,7 @@ class Pro800EditorTest {
     fun `delete clears the slot`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        pro800.editor!!.delete(a(0))
+        pro800.editor.delete(a(0))
         assertTrue(fake.isEmptyAt(0))
     }
 
@@ -243,7 +243,7 @@ class Pro800EditorTest {
     fun `deleting an already-empty slot is a no-op, not an error`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        pro800.editor!!.delete(a(4))
+        pro800.editor.delete(a(4))
         assertTrue(fake.isEmptyAt(4))
         assertTrue("nothing needed writing", fake.writeLog.isEmpty())
     }
@@ -254,7 +254,7 @@ class Pro800EditorTest {
     fun `move copies to the destination and clears the source`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        pro800.editor!!.move(a(0), b(3))
+        pro800.editor.move(a(0), b(3))
 
         assertEquals("Organ I", fake.nameAt(8))
         assertTrue(fake.isEmptyAt(0))
@@ -268,7 +268,7 @@ class Pro800EditorTest {
     fun `move writes the destination before erasing the source`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        pro800.editor!!.move(a(0), b(3))
+        pro800.editor.move(a(0), b(3))
 
         val writes = fake.writeLog
         assertEquals("destination first", 8, writes.first().first)
@@ -285,7 +285,7 @@ class Pro800EditorTest {
         val pro800 = instrument(fake, backgroundScope)
 
         try {
-            pro800.editor!!.move(a(0), b(3))
+            pro800.editor.move(a(0), b(3))
             throw AssertionError("a move onto a slot that refused the write reported success")
         } catch (expected: InstrumentException.ProtocolDesync) {
             assertEquals("Organ I", fake.nameAt(0))
@@ -300,7 +300,7 @@ class Pro800EditorTest {
         fake.failWritesTo = setOf(0)
         val pro800 = instrument(fake, backgroundScope)
 
-        val failure = runCatching { pro800.editor!!.move(a(0), b(3)) }.exceptionOrNull()
+        val failure = runCatching { pro800.editor.move(a(0), b(3)) }.exceptionOrNull()
 
         assertTrue("got $failure", failure is InstrumentException.PartlyApplied)
         assertTrue(failure!!.message!!, failure.message!!.contains("in both slots"))
@@ -314,7 +314,7 @@ class Pro800EditorTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
         try {
-            pro800.editor!!.move(a(0), a(1))
+            pro800.editor.move(a(0), a(1))
             throw AssertionError("moved onto an occupied slot")
         } catch (expected: InstrumentException.SlotStateChanged) {
             assertEquals("Organ I", fake.nameAt(0))
@@ -328,7 +328,7 @@ class Pro800EditorTest {
     fun `swap exchanges two presets`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        pro800.editor!!.swap(a(0), a(1))
+        pro800.editor.swap(a(0), a(1))
 
         assertEquals("Strings", fake.nameAt(0))
         assertEquals("Organ I", fake.nameAt(1))
@@ -338,7 +338,7 @@ class Pro800EditorTest {
     fun `swapping with an empty slot moves the preset and empties the source`() = runTest {
         val fake = fake()
         val pro800 = instrument(fake, backgroundScope)
-        pro800.editor!!.swap(a(0), a(3))
+        pro800.editor.swap(a(0), a(3))
 
         assertTrue(fake.isEmptyAt(0))
         assertEquals("Organ I", fake.nameAt(3))
@@ -351,7 +351,7 @@ class Pro800EditorTest {
         val pro800 = instrument(fake, backgroundScope)
         var swap: Job? = null
         fake.onWrite = { swap?.cancel() }
-        swap = launch(start = CoroutineStart.LAZY) { pro800.editor!!.swap(a(0), a(1)) }
+        swap = launch(start = CoroutineStart.LAZY) { pro800.editor.swap(a(0), a(1)) }
         swap.start()
         // Joined rather than run to idle: the replies arrive through the exchange's collector in
         // backgroundScope, which advanceUntilIdle does not wait for.
@@ -374,7 +374,7 @@ class Pro800EditorTest {
         val pro800 = instrument(fake, backgroundScope)
 
         try {
-            pro800.editor!!.swap(a(0), a(1))
+            pro800.editor.swap(a(0), a(1))
             throw AssertionError("a half-completed swap reported success")
         } catch (expected: InstrumentException.ProtocolDesync) {
             // Both presets survive, in their original places.
@@ -401,7 +401,7 @@ class Pro800EditorTest {
         val pro800 = instrument(fake, backgroundScope)
 
         try {
-            pro800.editor!!.swap(a(0), a(1))
+            pro800.editor.swap(a(0), a(1))
             throw AssertionError("a swap whose first write was never confirmed reported success")
         } catch (expected: InstrumentException.Timeout) {
             assertEquals("Organ I", fake.nameAt(0))
@@ -422,7 +422,7 @@ class Pro800EditorTest {
         val pro800 = instrument(fake, backgroundScope)
 
         try {
-            pro800.editor!!.rename(a(0), "Warm Pad")
+            pro800.editor.rename(a(0), "Warm Pad")
             throw AssertionError("a dropped write reported success")
         } catch (expected: InstrumentException.ProtocolDesync) {
             assertTrue(expected.message!!.contains("A00"))

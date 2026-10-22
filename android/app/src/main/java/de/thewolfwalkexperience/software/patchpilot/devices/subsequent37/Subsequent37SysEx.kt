@@ -3,6 +3,8 @@
 
 package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
 
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
+
 /**
  * The Moog Subsequent 37's SysEx messages: `F0 04 0C <command…> F7`, Moog's manufacturer id then
  * a constant `0C`. Builders, matchers and the record packing every message body shares, with no
@@ -118,17 +120,23 @@ object Subsequent37SysEx {
      */
     fun select(channel: Int, number: Int): ByteArray {
         require(channel in 0..15) { "MIDI channel $channel is outside 0..15." }
-        requireProgram(number)
+        val selection = midiSelection(number)
         return bytes(
             0xB0 or channel,
             0x00,
-            0x00,
+            requireNotNull(selection.bankMsb),
             0xB0 or channel,
             0x20,
-            number shr 7,
+            requireNotNull(selection.bankLsb),
             0xC0 or channel,
-            number and 0x7F,
+            selection.program,
         )
+    }
+
+    /** The values [select] sends for program [number]. */
+    fun midiSelection(number: Int): MidiSelection {
+        requireProgram(number)
+        return MidiSelection(bankMsb = 0, bankLsb = number shr 7, program = number and 0x7F)
     }
 
     // ---- Matchers ----

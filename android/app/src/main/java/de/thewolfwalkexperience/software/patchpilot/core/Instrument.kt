@@ -166,6 +166,13 @@ interface PresetBrowser {
 
     /** One slot, re-read after an edit, so the UI need not rebuild the whole index. */
     suspend fun refresh(address: SlotAddress): PresetSlot
+
+    /**
+     * Family-specific rows for the Info dialog, after the ones every preset gets: what a family
+     * can say about one stored preset that the listing does not carry, such as its version. May
+     * read the instrument, once; the caller treats a failure as "no extra rows".
+     */
+    suspend fun details(address: SlotAddress): List<InfoRow> = emptyList()
 }
 
 sealed interface IndexUpdate {
@@ -281,6 +288,12 @@ interface PresetSelector {
      * loaded-preset query goes unanswered says it asked.
      */
     fun confirmationFor(displayId: String): String = "Selected $displayId."
+
+    /**
+     * The Bank Select and Program Change values that select [address], or null where the family
+     * has none to state. Computed, never read from the instrument.
+     */
+    fun midiSelection(address: SlotAddress): MidiSelection? = null
 }
 
 enum class EditOp { RENAME, MOVE, SWAP, DELETE, COPY }

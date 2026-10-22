@@ -95,6 +95,9 @@ internal class ProgramsController(
     var favoriteTarget by mutableStateOf<TagTarget?>(null)
     var categoriesTarget by mutableStateOf<TagTarget?>(null)
 
+    /** The Info dialog's content: null while closed. */
+    var infoTarget by mutableStateOf<PresetInfo?>(null)
+
     /** Share-report dialog: null while closed, otherwise what is about to be shared. */
     var pendingShare by mutableStateOf<PendingShare?>(null)
 
@@ -125,6 +128,7 @@ internal class ProgramsController(
         deleteTarget = null
         favoriteTarget = null
         categoriesTarget = null
+        infoTarget = null
         pendingShare = null
         pickSource = null
         pickIntent = PickIntent.COPY
@@ -276,6 +280,21 @@ internal class ProgramsController(
             val target = TagTarget(slot, tags)
             if (forFavorite) favoriteTarget = target else categoriesTarget = target
             // Nothing to report: the dialog that just opened is the result.
+            null
+        }
+    }
+
+    /**
+     * Reads what the Info dialog needs, then opens it. Nothing is stored, so nothing is re-listed
+     * and no progress line is drawn.
+     */
+    fun openInfo(slot: PresetSlot) {
+        runEdit(
+            strings.get(R.string.programs_busy_reading_tags, slot.displayId),
+            reloadAfter = false,
+            showProgress = false,
+        ) {
+            infoTarget = viewModel.presetInfo(slot)
             null
         }
     }

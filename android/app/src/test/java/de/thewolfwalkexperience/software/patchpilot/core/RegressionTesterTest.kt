@@ -220,7 +220,7 @@ class RegressionTesterTest {
     @Test
     fun `a copy an earlier run left is pointed out, and the new copy is named around it`() = runTest {
         val instrument = nord()
-        instrument.editor!!.rename(listing(instrument).keys.first(), "PatchPilot Test")
+        instrument.editor.rename(listing(instrument).keys.first(), "PatchPilot Test")
         val before = listing(instrument)
 
         val report = RegressionTester(
@@ -247,10 +247,10 @@ class RegressionTesterTest {
         val real = nord()
         val before = listing(real)
         val instrument = object : Instrument by real {
-            override val editor = object : PresetEditor by real.editor!! {
+            override val editor = object : PresetEditor by real.editor {
                 // As a Nord does with a name already in use.
                 override suspend fun rename(address: SlotAddress, newName: String) =
-                    real.editor!!.rename(address, "Renamed Else")
+                    real.editor.rename(address, "Renamed Else")
             }
         }
 
@@ -344,10 +344,10 @@ class RegressionTesterTest {
         val before = listing(real)
         val swapped = mutableListOf<Pair<SlotAddress, SlotAddress>>()
         val instrument = object : Instrument by real {
-            override val editor = object : PresetEditor by real.editor!! {
+            override val editor = object : PresetEditor by real.editor {
                 override suspend fun swap(a: SlotAddress, b: SlotAddress) {
                     swapped += a to b
-                    real.editor!!.swap(a, b)
+                    real.editor.swap(a, b)
                 }
             }
         }
@@ -390,10 +390,10 @@ class RegressionTesterTest {
         var copies = 0
         var checkFailed = false
         val instrument = object : Instrument by real {
-            override val editor = object : PresetEditor by real.editor!! {
+            override val editor = object : PresetEditor by real.editor {
                 override suspend fun copyProgram(src: SlotAddress, dst: SlotAddress): String {
                     copies++
-                    return real.editor!!.copyProgram(src, dst)
+                    return real.editor.copyProgram(src, dst)
                 }
             }
             override val browser = object : PresetBrowser by real.browser {
@@ -437,10 +437,10 @@ class RegressionTesterTest {
         var swaps = 0
         var readsAfterSwapBack = 0
         val instrument = object : Instrument by real {
-            override val editor = object : PresetEditor by real.editor!! {
+            override val editor = object : PresetEditor by real.editor {
                 override suspend fun swap(a: SlotAddress, b: SlotAddress) {
                     swaps++
-                    real.editor!!.swap(a, b)
+                    real.editor.swap(a, b)
                 }
             }
             override val browser = object : PresetBrowser by real.browser {

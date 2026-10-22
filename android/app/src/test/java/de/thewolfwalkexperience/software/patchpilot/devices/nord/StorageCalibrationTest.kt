@@ -34,7 +34,7 @@ class StorageCalibrationTest {
         assertEquals(solved.reason, unit, solved.unitBytes)
         assertEquals(overhead, solved.residual)
         assertTrue("$unit outside ${solved.candidateRange}", solved.candidateRange!!.first <= unit)
-        assertTrue("$unit outside ${solved.candidateRange}", solved.candidateRange!!.second >= unit)
+        assertTrue("$unit outside ${solved.candidateRange}", solved.candidateRange.second >= unit)
     }
 
     @Test

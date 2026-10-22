@@ -4,6 +4,7 @@
 package de.thewolfwalkexperience.software.patchpilot.devices.subsequent37
 
 import de.thewolfwalkexperience.software.patchpilot.catalog.hexToBytes
+import de.thewolfwalkexperience.software.patchpilot.core.MidiSelection
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -151,5 +152,16 @@ class Subsequent37SysExTest {
                 assertFalse(Subsequent37SysEx.isCommand(message, *command.toIntArray()))
             }
         }
+    }
+
+    /** The values [Subsequent37SysEx.select] sends, stated without a channel. */
+    @Test
+    fun `the MIDI selection of a program is CC0 0, CC32 n over 128 and Program Change n modulo 128`() {
+        assertEquals(MidiSelection(0, 0, 0), Subsequent37SysEx.midiSelection(0))
+        assertEquals(MidiSelection(0, 0, 127), Subsequent37SysEx.midiSelection(127))
+        assertEquals(MidiSelection(0, 1, 0), Subsequent37SysEx.midiSelection(128))
+        assertEquals(MidiSelection(0, 1, 124), Subsequent37SysEx.midiSelection(252))
+        assertEquals(MidiSelection(0, 1, 127), Subsequent37SysEx.midiSelection(255))
+        assertTrue(runCatching { Subsequent37SysEx.midiSelection(256) }.isFailure)
     }
 }
