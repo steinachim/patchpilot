@@ -74,7 +74,7 @@
       "slotsPerGroup": 5,
       "maxDisplayTextLen": 16,
       "maxProgramNameLen": 16,
-      "midiProgramSelect": { "msb": 0, "banksPerLsb": 1 },
+      "midiProgramSelect": { "msb": 0, "banksPerLsb": 5 },
       "supportedFirmwareVersions": [168],
       "programCategoryIds": [0, 1, 2, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 17, 21, 22, 23, 24, 27, 28, 30],
       "programCategoryNameOverrides": {

@@ -16,8 +16,8 @@ private val catalogJson = Json { ignoreUnknownKeys = true }
 
 /**
  * The Bank Select / Program Change values Info states for a Nord, against the **shipped**
- * catalog. The expected figures are worked out from each manual's own ranges; none has been
- * measured on an instrument.
+ * catalog. The expected figures are worked out from each manual's own ranges, except the Stage 2
+ * EX's and the Grand's, which were measured on units.
  */
 class NordMidiSelectionTest {
 
@@ -44,12 +44,15 @@ class NordMidiSelectionTest {
         assertEquals(MidiSelection(0, 3, 99), nord.midi(3, 99))
     }
 
+    /** Measured on a Grand: 0/1/0 loads F:1:1, 0/0/25 loads B:1:1, 0/1/74 loads H:5:5, 0/3/7 loads P:2:3. */
     @Test
-    fun `a Grand has sixteen LSB values of twenty-five programs`() {
+    fun `a Grand puts five banks on one LSB`() {
         val nord = instrument("nord_grand")
         assertEquals(MidiSelection(0, 0, 0), nord.midi(0, 0))
-        assertEquals(MidiSelection(0, 1, 0), nord.midi(1, 0))
-        assertEquals(MidiSelection(0, 15, 24), nord.midi(15, 24))
+        assertEquals(MidiSelection(0, 0, 25), nord.midi(1, 0))
+        assertEquals(MidiSelection(0, 1, 0), nord.midi(5, 0))
+        assertEquals(MidiSelection(0, 1, 74), nord.midi(7, 24))
+        assertEquals(MidiSelection(0, 3, 7), nord.midi(15, 7))
     }
 
     /** "Banks A-E ... Bank LSB 0, banks F-J with Bank LSB 1": the Program Change counts through the group. */

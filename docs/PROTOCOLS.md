@@ -100,9 +100,9 @@ The Info dialog fetches the program's item record (30/31, inside the `Program` l
 
 ### MIDI program selection
 
-The app selects over the vendor protocol (47/48, above); the Info dialog states what a controller sends over MIDI instead: Bank Select MSB (CC 0), Bank Select LSB (CC 32), then Program Change. **Assumption:** every figure is taken from the instruments' manuals and none has been measured on an instrument.
+The app selects over the vendor protocol (47/48, above); the Info dialog states what a controller sends over MIDI instead: Bank Select MSB (CC 0), Bank Select LSB (CC 32), then Program Change. **Assumption:** every figure is taken from the instruments' manuals, except the Stage 2 EX and the Grand, which were measured on units: a MIDI tool's Bank Select and Program Change loaded the program the dialog names.
 
-Per model, the catalog's `midiProgramSelect` gives `msb` and `banksPerLsb`. With `N` = `maxGroup` × `slotsPerGroup` presets per bank: MSB = `msb`, LSB = bank ÷ `banksPerLsb`, Program Change = (bank mod `banksPerLsb`) × `N` + slot, the 0-based wire value. `banksPerLsb` is 1 on the Stage 2 EX (LSB 0..3, Program Change 0..99), Grand and Lead A1; 5 on the Wave 2 and Electro 7; 3 on the Grand 2 and Piano 6; 2 on the Stage 4. MSB is 0 on all, Programs only.
+Per model, the catalog's `midiProgramSelect` gives `msb` and `banksPerLsb`. With `N` = `maxGroup` × `slotsPerGroup` presets per bank: MSB = `msb`, LSB = bank ÷ `banksPerLsb`, Program Change = (bank mod `banksPerLsb`) × `N` + slot, the 0-based wire value. `banksPerLsb` is 1 on the Stage 2 EX (LSB 0..3, Program Change 0..99) and Lead A1; 5 on the Grand (measured: LSB 1 with Program Change 0 loads F:1:1, LSB 1 with 74 loads H:5:5), Wave 2 and Electro 7; 3 on the Grand 2 and Piano 6; 2 on the Stage 4. MSB is 0 on all, Programs only.
 
 The Grand 2, Piano 6 and Electro 7 manuals number the Program Change from 1. **Assumption:** that is the panel's numbering and the wire value is 0-based, as on the models whose manuals say so. The grouping on the Grand 2, Piano 6, Electro 7 and Stage 4 is inferred from the manuals' ranges. A model whose manual does not say has no `midiProgramSelect`, and Info states no values.
 
